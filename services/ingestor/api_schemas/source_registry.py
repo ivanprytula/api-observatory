@@ -3,41 +3,29 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_validator
 
 from services.ingestor.constants import (
     SOURCE_HEALTH_UNHEALTHY_THRESHOLD_MS,
-    SOURCE_PROFILE_DESCRIPTION_MAX,
     SOURCE_PROFILE_NAME_MAX,
-    SOURCE_PROFILE_OWNER_MAX,
-    SOURCE_PROFILE_SCHEMA_VERSION_MAX,
     SOURCE_PROFILE_URL_MAX,
 )
 
 
-SourceType = Literal["rest", "webhook", "file", "graphql", "grpc"]
-
-
 class SourceProfileCreate(BaseModel):
-    """Request schema for registering a new source profile."""
+    """Request schema for registering a source profile."""
 
     model_config = ConfigDict(
         json_schema_extra={
             "examples": [
                 {
                     "name": "openweather-current",
-                    "url": "https://api.openweathermap.org/data/2.5/weather",
-                    "source_type": "rest",
-                    "description": "Current weather from OpenWeatherMap free tier.",
-                    "auth_policy": {"type": "apikey", "header": "X-Api-Key"},
-                    "quota_per_minute": 60,
-                    "cost_per_call_usd": 0.0,
-                    "expected_schema_version": "2.5",
-                    "sla_ms": 800,
-                    "tags": ["weather", "free-tier"],
-                    "owner_team": "data-platform",
+                    "base_url": "https://api.openweathermap.org",
+                    "health_check_path": "/data/2.5/weather",
+                    "probe_interval_seconds": 60,
+                    "is_active": True,
                 }
             ]
         }
@@ -50,122 +38,65 @@ class SourceProfileCreate(BaseModel):
         description="Unique human-readable identifier for this source (slug-style).",
         examples=["openweather-current"],
     )
-    url: str = Field(
+    base_url: AnyHttpUrl = Field(
         ...,
-        min_length=1,
         max_length=SOURCE_PROFILE_URL_MAX,
-        description="Base URL or endpoint of the source.",
-        examples=["https://api.openweathermap.org/data/2.5/weather"],
+        description="Base URL used by server-side probes.",
+        examples=["https://api.openweathermap.org"],
     )
-    source_type: SourceType = Field(
-        ...,
-        description="Protocol/transport type.",
-        examples=["rest"],
+    health_check_path: str = Field(
+        "/health",
+        min_length=1,
+        max_length=255,
+        description="Path appended to base_url for health probes.",
+        examples=["/data/2.5/weather"],
     )
-    description: str | None = Field(
-        None,
-        max_length=SOURCE_PROFILE_DESCRIPTION_MAX,
-        description="Human-readable description of what this source provides.",
-        examples=["Current weather from OpenWeatherMap free tier."],
-    )
-    auth_policy: dict[str, Any] = Field(
-        default_factory=dict,
-        description=(
-            "Authentication metadata. "
-            "Shape: {type: bearer|apikey|none, header: str}. "
-            "Secrets are NOT stored here."
-        ),
-        examples=[{"type": "apikey", "header": "X-Api-Key"}],
-    )
-    quota_per_minute: int | None = Field(
-        None,
+    probe_interval_seconds: int = Field(
+        60,
         ge=1,
-        description="Maximum allowed requests per minute for this source.",
+        description="How often this source should be probed by schedulers.",
         examples=[60],
     )
-    cost_per_call_usd: float | None = Field(
-        None,
-        ge=0.0,
-        description="Estimated monetary cost per API call in USD.",
-        examples=[0.0],
-    )
-    expected_schema_version: str | None = Field(
-        None,
-        max_length=SOURCE_PROFILE_SCHEMA_VERSION_MAX,
-        description="The schema/API version this profile targets (used for drift detection).",
-        examples=["2.5"],
-    )
-    sla_ms: int | None = Field(
-        None,
-        ge=1,
-        description="Target SLA in milliseconds. Responses above this threshold are flagged.",
-        examples=[800],
-    )
-    tags: list[str] = Field(
-        default_factory=list,
-        description="Free-form labels for grouping and filtering.",
-        examples=[["weather", "free-tier"]],
-    )
-    owner_team: str | None = Field(
-        None,
-        max_length=SOURCE_PROFILE_OWNER_MAX,
-        description="Team responsible for this source.",
-        examples=["data-platform"],
+    is_active: bool = Field(
+        True,
+        description="Whether this source should be included in probe scheduling.",
     )
 
-    @field_validator("tags")
+    @field_validator("health_check_path")
     @classmethod
-    def lowercase_tags(cls, v: list[str]) -> list[str]:
-        """Normalise tags to lowercase for consistent filtering."""
-        return [t.lower().strip() for t in v]
+    def validate_health_check_path(cls, v: str) -> str:
+        """Require an absolute path for safe URL joining."""
+        if not v.startswith("/"):
+            raise ValueError("health_check_path must start with '/'.")
+        return v
 
 
 class SourceProfileUpdate(BaseModel):
     """Partial update schema — all fields optional."""
 
-    url: str | None = Field(
+    base_url: AnyHttpUrl | None = Field(
         None,
-        min_length=1,
         max_length=SOURCE_PROFILE_URL_MAX,
         description="Updated base URL.",
     )
-    source_type: SourceType | None = Field(None, description="Updated source type.")
-    description: str | None = Field(
+    health_check_path: str | None = Field(
         None,
-        max_length=SOURCE_PROFILE_DESCRIPTION_MAX,
-        description="Updated description.",
+        min_length=1,
+        max_length=255,
+        description="Updated health check path.",
     )
-    auth_policy: dict[str, Any] | None = Field(
-        None,
-        description="Replacement auth policy.",
-    )
-    quota_per_minute: int | None = Field(
-        None, ge=1, description="Updated quota per minute."
-    )
-    cost_per_call_usd: float | None = Field(
-        None, ge=0.0, description="Updated cost per call."
-    )
-    expected_schema_version: str | None = Field(
-        None,
-        max_length=SOURCE_PROFILE_SCHEMA_VERSION_MAX,
-        description="Updated schema version target.",
-    )
-    sla_ms: int | None = Field(None, ge=1, description="Updated SLA target in ms.")
-    tags: list[str] | None = Field(None, description="Replacement tag list.")
-    owner_team: str | None = Field(
-        None,
-        max_length=SOURCE_PROFILE_OWNER_MAX,
-        description="Updated owner team.",
-    )
+    probe_interval_seconds: Annotated[int | None, Field(ge=1)] = None
     is_active: bool | None = Field(None, description="Enable or disable this source.")
 
-    @field_validator("tags")
+    @field_validator("health_check_path")
     @classmethod
-    def lowercase_tags(cls, v: list[str] | None) -> list[str] | None:
-        """Normalise tags to lowercase."""
+    def validate_health_check_path(cls, v: str | None) -> str | None:
+        """Require an absolute path for safe URL joining."""
         if v is None:
             return v
-        return [t.lower().strip() for t in v]
+        if not v.startswith("/"):
+            raise ValueError("health_check_path must start with '/'.")
+        return v
 
 
 class SourceProfileResponse(BaseModel):
@@ -175,21 +106,10 @@ class SourceProfileResponse(BaseModel):
 
     id: int = Field(..., description="Auto-assigned primary key.")
     name: str = Field(..., description="Unique source identifier.")
-    url: str = Field(..., description="Base URL of the source.")
-    source_type: str = Field(..., description="Protocol/transport type.")
-    description: str | None = Field(None, description="Human-readable description.")
-    auth_policy: dict[str, Any] = Field(..., description="Auth metadata (no secrets).")
-    quota_per_minute: int | None = Field(None, description="Max requests per minute.")
-    cost_per_call_usd: float | None = Field(
-        None, description="Estimated cost per call (USD)."
-    )
-    expected_schema_version: str | None = Field(
-        None, description="Target API/schema version."
-    )
-    sla_ms: int | None = Field(None, description="Target SLA in ms.")
-    tags: list[str] = Field(..., description="Labels for grouping.")
+    base_url: str = Field(..., description="Base URL of the source.")
+    health_check_path: str = Field(..., description="Path used for health checks.")
+    probe_interval_seconds: int = Field(..., description="Probe cadence in seconds.")
     is_active: bool = Field(..., description="Whether the source is enabled.")
-    owner_team: str | None = Field(None, description="Owning team.")
     created_at: datetime = Field(..., description="Registration timestamp (UTC).")
     updated_at: datetime | None = Field(None, description="Last modification (UTC).")
 
@@ -209,7 +129,7 @@ class SourceHealthResponse(BaseModel):
     """Result of a live health probe against a source URL."""
 
     source_id: int = Field(..., description="ID of the probed source profile.")
-    url: str = Field(..., description="URL that was probed.")
+    target_url: str = Field(..., description="Resolved URL that was probed.")
     reachable: bool = Field(
         ..., description="True if the source responded within the timeout."
     )
@@ -219,12 +139,11 @@ class SourceHealthResponse(BaseModel):
     latency_ms: float | None = Field(
         None, description="Round-trip latency in milliseconds."
     )
-    sla_ms: int | None = Field(None, description="Configured SLA target in ms.")
     sla_breach: bool = Field(
         False,
         description=(
-            f"True when latency_ms exceeds sla_ms "
-            f"(or {SOURCE_HEALTH_UNHEALTHY_THRESHOLD_MS} ms default)."
+            f"True when latency_ms exceeds "
+            f"{SOURCE_HEALTH_UNHEALTHY_THRESHOLD_MS} ms threshold."
         ),
     )
     error: str | None = Field(
@@ -238,15 +157,6 @@ class SourceSummaryResponse(BaseModel):
     total_sources: int = Field(..., description="Total registered source profiles.")
     active_sources: int = Field(..., description="Currently active source profiles.")
     inactive_sources: int = Field(..., description="Deactivated source profiles.")
-    sources_by_type: dict[str, int] = Field(
-        ..., description="Count of sources grouped by source_type."
-    )
-    avg_sla_ms: float | None = Field(
-        None, description="Average SLA target across sources that have one set."
-    )
-    total_estimated_cost_per_minute_usd: float = Field(
-        ...,
-        description=(
-            "Sum of (cost_per_call_usd * quota_per_minute) across all active sources."
-        ),
+    avg_probe_interval_seconds: float | None = Field(
+        None, description="Average probe interval across all source profiles."
     )

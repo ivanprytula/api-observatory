@@ -8,9 +8,27 @@
 
 ## TL;DR
 
-Build the repo with ~13 atomic commits, starting from a full `services/ingestor/` baseline import in Commit 1, then hardening each vertical slice (DB → repo → route → test). Start applying to jobs after commit 2 (docs + runnable demo). Then layer in auth normalization, observability polish, and a full ECS deployment as portfolio depth. Zero alembic migrations until MVP ships; docker volumes removed from default stack.
+Build the repo with ~13 atomic commits, starting from a full `services/ingestor/` baseline import in Commit 1, then hardening each vertical slice (DB → repo → route → test). Start applying to jobs after commit 2 (docs + runnable demo). Then layer in auth normalization, observability polish, and a full ECS deployment as portfolio depth. During MVP, keep schema churn minimal; after MVP ship, switch to migration-first DB changes with clean incremental history. Docker volumes removed from default stack.
 
 **Overengineering guard** (read before every commit): prefer the stdlib or a well-known PyPI package over a custom implementation. The simplest solution that satisfies the functional requirement is the correct solution. Custom abstractions only when the same pattern repeats 3+ times.
+
+**Test Gate policy (required from first test-bearing commit onward):**
+- During MVP stabilization: do not require Alembic-backed Postgres integration/e2e gates.
+- On every PR/feature commit during MVP: run lane 1 (`unit`) and optional SQLite-backed API smoke tests for touched slices.
+- After MVP ships: enable lane 2 (`integration or e2e`) as a required release/deploy gate on real PostgreSQL/Redis via `testcontainers[postgres,redis]`.
+
+**Canonical test commands:**
+```bash
+# Lane 1: fast unit tests (SQLite/aiosqlite)
+DATABASE_URL_TEST=sqlite+aiosqlite:///:memory: uv run pytest tests/ services/ingestor/tests/ -q -m "unit"
+
+# Optional MVP smoke (SQLite-backed API slice checks)
+DATABASE_URL_TEST=sqlite+aiosqlite:///:memory: uv run pytest services/ingestor/tests/integration/test_source_registry_api.py -q
+
+# Post-MVP full gate (required before release/deploy)
+# integration/e2e on real Postgres/Redis via testcontainers
+env -u DATABASE_URL_TEST uv run pytest tests/ services/ingestor/tests/ -q -m "integration or e2e"
+```
 
 ---
 
@@ -95,7 +113,7 @@ git remote add observatory https://github.com/ivanprytula/api-observatory.git
 
 ## PHASE 1: Foundation (Commits 1-3)
 
-### Commit 1 — `chore: project setup + ingestor baseline import`
+### Commit 1 — `chore: project setup + ingestor baseline import` [DONE]
 
 **Contents**: `pyproject.toml`, `uv.lock`, `Dockerfile`, `docker-compose.yml`, `docker-compose.dev.yml`, `.gitignore`, `.editorconfig`, `.env.example`, `Justfile` (recipes: `up`, `down`, `test`, `lint` only), `.pre-commit-config.yaml`, `infra/database/Dockerfile`, `infra/database/postgresql.conf`, `infra/database/pg_hba.conf`, `infra/database/init.sql` + whole `services/ingestor/` service tree (code, routers, schemas, repositories, tests) + `libs/` (shared code used by ingestor).
 
@@ -113,7 +131,7 @@ git remote add observatory https://github.com/ivanprytula/api-observatory.git
 **Baseline import guardrails**:
 - Keep existing runtime behavior intact; Commit 1 is a baseline snapshot, not a refactor.
 - Verify `config.py` still uses `pydantic-settings` `BaseSettings` and `database.py` uses async SQLAlchemy 2.0 patterns.
-- Keep **zero alembic migrations** for now: local dev uses current startup schema init behavior.
+- Keep local dev simple (`create_all`), but if integration tests fail due schema drift, add a proper forward migration (no ad-hoc schema hotfix).
 - Defer cleanup/refactors to later commits; do not mix large behavioral changes into baseline import.
 
 **Verify**:
@@ -129,7 +147,7 @@ docker compose down
 
 ---
 
-### Commit 2 — `docs: README, tech-map, learning-paths`
+### Commit 2 — `docs: README, tech-map, learning-paths` [DONE]
 
 **Contents**: `README.md` (rewrite), `docs/tech-map.md`, `docs/learning-paths.md`
 
@@ -158,7 +176,7 @@ docker compose down
 
 ---
 
-### Commit 3 — `chore: .github instructions, hooks, skills`
+### Commit 3 — `chore: .github instructions, hooks, skills` [DONE]
 
 **Contents**: `.github/copilot-instructions.md` (updated), `.github/instructions/`, `.github/skills/`, `.husky/` pre-commit hooks, `.vscode/settings.json` + `launch.json`
 
@@ -196,7 +214,7 @@ curl -s -X POST http://localhost:8000/api/v1/sources \
   -H "Content-Type: application/json" \
   -d '{"name":"httpbin","base_url":"https://httpbin.org","health_check_path":"/get","probe_interval_seconds":60}' | jq .id
 # → 1
-docker compose exec ingestor uv run pytest tests/test_sources.py -v
+DATABASE_URL_TEST=sqlite+aiosqlite:///:memory: uv run pytest services/ingestor/tests/integration/test_source_registry_api.py -q
 docker compose down
 ```
 
@@ -292,6 +310,12 @@ docker compose down
 - Publisher: `redis.publish(channel, json.dumps(event))` from the repository, after persisting DriftEvent.
 - Auth: JWT as `?token=` query param on the WebSocket handshake. Validate before upgrading connection.
 
+**Verify**:
+```bash
+docker compose up -d
+docker compose down
+```
+
 ---
 
 ## PHASE 7: Auth Cross-cut (Commit 9)
@@ -306,6 +330,12 @@ docker compose down
 - Error responses: `401` for both wrong password and unknown user — prevents user enumeration.
 - `get_current_user` dependency: one implementation, shared across all routers via `Depends`.
 
+**Verify**:
+```bash
+docker compose up -d
+docker compose down
+```
+
 ---
 
 ## PHASE 8: Observability (Commit 10)
@@ -319,6 +349,12 @@ docker compose down
 - Health probes: `/health` (liveness, no I/O), `/readiness` (checks DB + Redis). ~20 lines — no health framework.
 - Cache scorecard only after measuring: Redis `SETEX` 30s TTL is sufficient if needed. No caching library.
 
+**Verify**:
+```bash
+docker compose up -d
+docker compose down
+```
+
 ---
 
 ## PHASE 9: Resilience Patterns (Commit 11)
@@ -329,6 +365,12 @@ docker compose down
 - Rate limiting: `slowapi` (Starlette-compatible, Redis backend, per-user + per-IP). Do not implement a token bucket from scratch.
 - Circuit breaker: review `libs/resilience/circuit_breaker.py`. If > 80 lines of state machine code, compare to `pybreaker` — prefer the established library unless the custom code is demonstrably simpler.
 - Return `Retry-After` header on 429 (built into `slowapi`).
+
+**Verify**:
+```bash
+docker compose up -d
+docker compose down
+```
 
 ---
 
@@ -341,6 +383,12 @@ docker compose down
 - SSE: `StreamingResponse(media_type="text/event-stream")` — no separate SSE library.
 - Agent tools must call existing repository functions — no raw SQL inside tool definitions.
 
+**Verify**:
+```bash
+docker compose up -d
+docker compose down
+```
+
 ---
 
 ## PHASE 11: Deployment (Commits 13a-13c)
@@ -348,6 +396,12 @@ docker compose down
 ### Commit 13a — `chore(docker): image size audit, multi-stage verify`
 
 Verify image < 500MB. `docker scan` passes (no critical CVEs).
+
+**Verify (tests)**:
+```bash
+docker compose up -d
+docker compose down
+```
 
 ### Commit 13b — `infra(floci): local AWS sim, Terraform plan, E2E tests`
 
@@ -360,6 +414,12 @@ just sandbox-up && just tf-plan-local && just sandbox-test && just tf-destroy-lo
 ### Commit 13c — `docs(deploy): AWS ECS step-by-step, cost teardown`
 
 Docs only (`docs/deployment/aws-ecs.md`, `docs/deployment/cost-teardown.md`). No code changes.
+
+**Verify**:
+```bash
+DATABASE_URL_TEST=sqlite+aiosqlite://:memory: uv run pytest tests/ services/ingestor/tests/ -q -m "unit"
+env -u DATABASE_URL_TEST uv run pytest tests/ services/ingestor/tests/ -q -m "integration or e2e"
+```
 
 ---
 
@@ -433,6 +493,13 @@ Check this table before writing any new code. If the need is listed here, use th
 
 ## Verification Gates
 
+### During MVP stabilization (default)
+
+```bash
+DATABASE_URL_TEST=sqlite+aiosqlite:///:memory: uv run pytest tests/ services/ingestor/tests/ -q -m "unit"
+DATABASE_URL_TEST=sqlite+aiosqlite:///:memory: uv run pytest services/ingestor/tests/integration/test_source_registry_api.py -q
+```
+
 ### After commit 2 — start applying to jobs
 
 ```bash
@@ -462,6 +529,8 @@ just sandbox-up && just sandbox-test && just tf-destroy-local
 terraform output | grep alb_dns_name
 curl https://<alb-dns>/docs        # 200 OK
 terraform destroy                  # clean, no billable resources remain
+# Post-MVP release gate:
+env -u DATABASE_URL_TEST uv run pytest tests/ services/ingestor/tests/ -q -m "integration or e2e"
 ```
 
 ---
@@ -470,7 +539,7 @@ terraform destroy                  # clean, no billable resources remain
 
 - **Repo**: `api-observatory`, public. Old remote keeps full 8-phase history.
 - **Local dir**: stay in place (orphan branch) — VS Code workspace unchanged.
-- **Alembic**: zero migrations for local dev (`create_all` in lifespan). Add migrations when schema stabilises post-MVP.
+- **Alembic**: post-MVP policy is migration-first for any schema change (one revision per change, forward-only in feature branches, no manual hotfix SQL in tests/runtime).
 - **Docker volumes**: default stack has no volumes. Named volumes in `docker-compose.dev.yml` only.
 - **Service scope**: `services/ingestor/` only for MVP. Other services archived or moved to `examples/`.
 - **APScheduler**: `>=3.10,<4.0` locked. Do not upgrade to 4.x.

@@ -224,8 +224,6 @@ class SourceProfile(Base, TimestampMixin):
     __tablename__ = "source_profiles"
     __table_args__ = (
         Index("ix_source_profiles_name", "name", unique=True),
-        Index("ix_source_profiles_source_type", "source_type"),
-        Index("ix_source_profiles_owner_team", "owner_team"),
         Index(
             "ix_source_profiles_active",
             "is_active",
@@ -235,31 +233,18 @@ class SourceProfile(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    url: Mapped[str] = mapped_column(String(2048), nullable=False)
-    source_type: Mapped[str] = mapped_column(
-        String(64), nullable=False
-    )  # rest | webhook | file | graphql | grpc
-    description: Mapped[str | None] = mapped_column(String(1024), nullable=True)
-    auth_policy: Mapped[dict] = mapped_column(
-        JSON, default=dict, nullable=False
-    )  # {type: bearer|apikey|none, header: str}
-    quota_per_minute: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    cost_per_call_usd: Mapped[float | None] = mapped_column(nullable=True)
-    expected_schema_version: Mapped[str | None] = mapped_column(
-        String(64), nullable=True
+    base_url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    health_check_path: Mapped[str] = mapped_column(
+        String(255), default="/health", nullable=False
     )
-    sla_ms: Mapped[int | None] = mapped_column(
-        Integer, nullable=True
-    )  # target latency SLA in ms
-    tags: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    probe_interval_seconds: Mapped[int] = mapped_column(
+        Integer, default=60, nullable=False
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    owner_team: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # Timestamps from TimestampMixin: created_at, updated_at, deleted_at
 
     def __repr__(self) -> str:
-        return (
-            f"<SourceProfile id={self.id} name={self.name!r} type={self.source_type!r}>"
-        )
+        return f"<SourceProfile id={self.id} name={self.name!r}>"
 
 
 class ContractSnapshot(Base, TimestampMixin):

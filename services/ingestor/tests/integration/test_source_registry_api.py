@@ -16,16 +16,10 @@ from services.ingestor.api_schemas.source_registry import SourceHealthResponse
 # ---------------------------------------------------------------------------
 _SOURCE: dict[str, Any] = {
     "name": "test-weather-api",
-    "url": "https://api.example.com/weather",
-    "source_type": "rest",
-    "description": "Test weather source.",
-    "auth_policy": {"type": "apikey", "header": "X-Api-Key"},
-    "quota_per_minute": 60,
-    "cost_per_call_usd": 0.001,
-    "expected_schema_version": "2.5",
-    "sla_ms": 800,
-    "tags": ["Weather", "Test"],
-    "owner_team": "data-platform",
+    "base_url": "https://1.1.1.1",
+    "health_check_path": "/weather",
+    "probe_interval_seconds": 60,
+    "is_active": True,
 }
 
 
@@ -41,14 +35,28 @@ class TestRegisterSource:
         assert response.status_code == 201
         body = response.json()
         assert body["name"] == "test-weather-api"
-        assert body["source_type"] == "rest"
+        assert body["base_url"] == "https://1.1.1.1/"
         assert isinstance(body["id"], int)
 
-    async def test_tags_lowercased(self, client: AsyncClient) -> None:
-        """Tags are normalised to lowercase on creation."""
-        response = await client.post("/api/v1/sources", json=_SOURCE)
-        assert response.status_code == 201
-        assert response.json()["tags"] == ["weather", "test"]
+    async def test_http_scheme_rejected(self, client: AsyncClient) -> None:
+        """Non-HTTPS base URLs are rejected for SSRF safety."""
+        response = await client.post(
+            "/api/v1/sources",
+            json={
+                **_SOURCE,
+                "name": "insecure-source",
+                "base_url": "http://example.com",
+            },
+        )
+        assert response.status_code == 422
+
+    async def test_private_network_rejected(self, client: AsyncClient) -> None:
+        """Private/local resolved destinations are rejected."""
+        response = await client.post(
+            "/api/v1/sources",
+            json={**_SOURCE, "name": "local-source", "base_url": "https://localhost"},
+        )
+        assert response.status_code == 422
 
     async def test_duplicate_name_returns_409(self, client: AsyncClient) -> None:
         """Registering the same name twice returns 409 Conflict."""
@@ -60,13 +68,13 @@ class TestRegisterSource:
         self, client: AsyncClient
     ) -> None:
         """Omitting a required field returns 422 Unprocessable Entity."""
-        payload = {k: v for k, v in _SOURCE.items() if k != "source_type"}
+        payload = {k: v for k, v in _SOURCE.items() if k != "base_url"}
         response = await client.post("/api/v1/sources", json=payload)
         assert response.status_code == 422
 
-    async def test_invalid_source_type_returns_422(self, client: AsyncClient) -> None:
-        """An unknown source_type value returns 422."""
-        payload = {**_SOURCE, "name": "bad-type-source", "source_type": "ftp"}
+    async def test_invalid_health_path_returns_422(self, client: AsyncClient) -> None:
+        """Health check path must start with slash."""
+        payload = {**_SOURCE, "name": "bad-path-source", "health_check_path": "status"}
         response = await client.post("/api/v1/sources", json=payload)
         assert response.status_code == 422
 
@@ -92,17 +100,23 @@ class TestListSources:
         assert response.status_code == 200
         assert response.json()["total"] == 1
 
-    async def test_filter_by_source_type(self, client: AsyncClient) -> None:
-        """Filtering by source_type returns only matching sources."""
+    async def test_limit_offset_pagination(self, client: AsyncClient) -> None:
+        """List endpoint applies limit/offset pagination."""
         await client.post("/api/v1/sources", json=_SOURCE)
-        webhook = {**_SOURCE, "name": "webhook-source", "source_type": "webhook"}
-        await client.post("/api/v1/sources", json=webhook)
+        await client.post(
+            "/api/v1/sources",
+            json={
+                **_SOURCE,
+                "name": "second-source",
+                "base_url": "https://example.org",
+            },
+        )
 
-        response = await client.get("/api/v1/sources?source_type=webhook")
+        response = await client.get("/api/v1/sources?offset=0&limit=1")
         assert response.status_code == 200
         body = response.json()
-        assert body["total"] == 1
-        assert body["items"][0]["source_type"] == "webhook"
+        assert body["total"] == 2
+        assert len(body["items"]) == 1
 
     async def test_filter_by_is_active(self, client: AsyncClient) -> None:
         """Filtering by is_active=true excludes deactivated sources."""
@@ -131,7 +145,7 @@ class TestSourceSummary:
         body = response.json()
         assert body["total_sources"] == 0
         assert body["active_sources"] == 0
-        assert body["total_estimated_cost_per_minute_usd"] == 0.0
+        assert body["avg_probe_interval_seconds"] is None
 
     async def test_summary_after_registration(self, client: AsyncClient) -> None:
         """Summary reflects registered source counts and type breakdown."""
@@ -141,9 +155,7 @@ class TestSourceSummary:
         body = response.json()
         assert body["total_sources"] == 1
         assert body["active_sources"] == 1
-        assert body["sources_by_type"]["rest"] == 1
-        # cost = 0.001 * 60
-        assert body["total_estimated_cost_per_minute_usd"] == pytest.approx(0.06)
+        assert body["avg_probe_interval_seconds"] == pytest.approx(60.0)
 
 
 # ---------------------------------------------------------------------------
@@ -174,22 +186,35 @@ class TestPatchSource:
     """PATCH /api/v1/sources/{source_id} — partial update."""
 
     async def test_patch_updates_field(self, client: AsyncClient) -> None:
-        """Patching sla_ms updates only that field."""
+        """Patching probe interval updates only that field."""
         create_resp = await client.post("/api/v1/sources", json=_SOURCE)
         source_id = create_resp.json()["id"]
 
         patch_resp = await client.patch(
-            f"/api/v1/sources/{source_id}", json={"sla_ms": 1200}
+            f"/api/v1/sources/{source_id}", json={"probe_interval_seconds": 120}
         )
         assert patch_resp.status_code == 200
-        assert patch_resp.json()["sla_ms"] == 1200
+        assert patch_resp.json()["probe_interval_seconds"] == 120
         # Other fields unchanged
         assert patch_resp.json()["name"] == "test-weather-api"
 
     async def test_patch_nonexistent_returns_404(self, client: AsyncClient) -> None:
         """Patching a nonexistent source returns 404."""
-        response = await client.patch("/api/v1/sources/999999", json={"sla_ms": 500})
+        response = await client.patch(
+            "/api/v1/sources/999999", json={"probe_interval_seconds": 120}
+        )
         assert response.status_code == 404
+
+    async def test_patch_private_url_rejected(self, client: AsyncClient) -> None:
+        """Patch rejects private/local target URLs."""
+        create_resp = await client.post("/api/v1/sources", json=_SOURCE)
+        source_id = create_resp.json()["id"]
+
+        response = await client.patch(
+            f"/api/v1/sources/{source_id}",
+            json={"base_url": "https://localhost"},
+        )
+        assert response.status_code == 422
 
 
 # ---------------------------------------------------------------------------
@@ -205,6 +230,16 @@ class TestDeleteSource:
 
         response = await client.delete(f"/api/v1/sources/{source_id}")
         assert response.status_code == 204
+
+    async def test_delete_is_idempotent(self, client: AsyncClient) -> None:
+        """Deleting an already deleted source returns 204."""
+        create_resp = await client.post("/api/v1/sources", json=_SOURCE)
+        source_id = create_resp.json()["id"]
+
+        first = await client.delete(f"/api/v1/sources/{source_id}")
+        second = await client.delete(f"/api/v1/sources/{source_id}")
+        assert first.status_code == 204
+        assert second.status_code == 204
 
     async def test_deleted_source_not_retrievable(self, client: AsyncClient) -> None:
         """A deleted source returns 404 on subsequent GET."""
@@ -234,11 +269,10 @@ class TestSourceHealth:
 
         mock_result = SourceHealthResponse(
             source_id=source_id,
-            url="https://api.example.com/weather",
+            target_url="https://api.example.com/weather",
             reachable=True,
             status_code=200,
             latency_ms=120.5,
-            sla_ms=800,
             sla_breach=False,
             error=None,
         )
@@ -261,11 +295,10 @@ class TestSourceHealth:
 
         mock_result = SourceHealthResponse(
             source_id=source_id,
-            url="https://api.example.com/weather",
+            target_url="https://api.example.com/weather",
             reachable=False,
             status_code=None,
             latency_ms=10001.0,
-            sla_ms=800,
             sla_breach=True,
             error="Connection refused",
         )

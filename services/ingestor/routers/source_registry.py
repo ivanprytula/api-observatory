@@ -19,9 +19,7 @@ from services.ingestor.api_schemas.source_registry import (
 )
 from services.ingestor.constants import (
     API_V1_PREFIX,
-    DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
-    SOURCE_PROFILE_TYPE_MAX,
 )
 from services.ingestor.database import get_db
 from services.ingestor.repositories.source_registry import (
@@ -32,6 +30,7 @@ from services.ingestor.repositories.source_registry import (
     get_source_summary,
     probe_source_health,
     update_source_profile,
+    validate_source_base_url,
 )
 
 
@@ -90,6 +89,14 @@ async def register_source(
     metadata only (header name, auth type).
     """
     try:
+        await validate_source_base_url(str(payload.base_url))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from None
+
+    try:
         profile = await create_source_profile(db, payload)
     except IntegrityError:
         raise HTTPException(
@@ -98,7 +105,8 @@ async def register_source(
         ) from None
 
     logger.info(
-        "source_registered", extra={"source_id": profile.id, "name": profile.name}
+        "source_registered",
+        extra={"source_id": profile.id, "source_name": profile.name},
     )
     return SourceProfileResponse.model_validate(profile)
 
@@ -115,15 +123,9 @@ async def register_source(
 async def list_sources(
     db: DbDep,
     is_active: bool | None = Query(None, description="Filter by active state."),
-    source_type: str | None = Query(
-        None,
-        max_length=SOURCE_PROFILE_TYPE_MAX,
-        description="Filter by source type (rest, webhook, file, graphql, grpc).",
-    ),
-    owner_team: str | None = Query(None, description="Filter by owner team."),
     offset: int = Query(0, ge=0, description="Pagination offset."),
     limit: int = Query(
-        DEFAULT_PAGE_SIZE,
+        20,
         ge=1,
         le=MAX_PAGE_SIZE,
         description="Maximum number of results to return.",
@@ -136,8 +138,6 @@ async def list_sources(
     profiles, total = await get_source_profiles(
         db,
         is_active=is_active,
-        source_type=source_type,
-        owner_team=owner_team,
         offset=offset,
         limit=limit,
     )
@@ -207,6 +207,15 @@ async def patch_source(
             status_code=status.HTTP_404_NOT_FOUND, detail="Source not found."
         )
 
+    if patch.base_url is not None:
+        try:
+            await validate_source_base_url(str(patch.base_url))
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from None
+
     updated = await update_source_profile(db, profile, patch)
     logger.info("source_updated", extra={"source_id": source_id})
     return SourceProfileResponse.model_validate(updated)
@@ -227,7 +236,7 @@ async def delete_source(source_id: int, db: DbDep) -> None:
     The row is retained for audit purposes; it will no longer appear in list
     or health-probe endpoints.
     """
-    profile = await get_source_profile(db, source_id)
+    profile = await get_source_profile(db, source_id, include_deleted=True)
     if profile is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Source not found."
