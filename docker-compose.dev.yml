@@ -1,0 +1,23 @@
+# Development overrides (loose resources for debugging)
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  db:
+    deploy:
+      resources:
+        reservations:
+          cpus: '0.5'
+          memory: '512M'
+        limits:
+          cpus: '2.0'          # Generous for debugging
+          memory: '2G'         # No memory pressure
+
+  ingestor:
+    deploy:
+      resources:
+        reservations:
+          cpus: '0.25'
+          memory: '256M'
+        limits:
+          cpus: '2.0'          # Generous for debugging
+          memory: '1G'         # Can grow during profiling

@@ -1,0 +1,73 @@
+  repos:
+  - repo: local
+    hooks:
+      - id: ty
+        name: ty type checker
+        entry: uv run ty check
+        language: system
+        types: [python]
+        pass_filenames: true
+        stages: [manual]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        exclude: ^infra/kubernetes/charts/.*/templates/.*\.ya?ml$
+      - id: check-toml
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: debug-statements
+      - id: mixed-line-ending
+        args: [ --fix=lf ]
+      - id: destroyed-symlinks
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.14
+    hooks:
+      - id: ruff-check
+        args: [--fix, --config=pyproject.toml]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: private-docs-safeguard
+        name: private-docs-safeguard
+        entry: ./scripts/ci/02-pre-commit-private-docs.sh
+        language: script
+        types: [file]
+        pass_filenames: false
+      - id: docs-quality-markdown
+        name: docs-quality-markdown
+        entry: uv run python scripts/ci/docs_quality_check.py --profile precommit
+        language: system
+        types: [markdown]
+        pass_filenames: true
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.9.4
+    hooks:
+      - id: bandit
+        args: ["-c", "pyproject.toml", "-r", "src"]
+        additional_dependencies: ["bandit[toml]"]
+  - repo: https://github.com/pypa/pip-audit
+    rev: v2.10.0
+    hooks:
+        - id: pip-audit
+          name: pip-audit (wrapper)
+          entry: uv run python scripts/ci/pip_audit_wrapper.py
+          language: system
+          files: 'pyproject\\.toml|uv\\.lock|requirements-audit\\.txt'
+          pass_filenames: false
+  - repo: local
+    hooks:
+    - id: check-contracts-version
+      name: Check contracts VERSION/CHANGELOG when contracts change
+      entry: uv run python scripts/bump_contracts_version.py --check
+      language: python
+      files: ^libs/contracts/.*\.py$
+
+  ci:
+    # pre-commit.ci does not allow network calls
+    skip: [pip-audit]

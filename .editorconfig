@@ -1,0 +1,47 @@
+# http://editorconfig.org
+
+# top-most EditorConfig file
+root = true
+
+# Unix-style newlines with a newline ending every file
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Docstrings and comments use max_line_length = 88
+[*.py]
+indent_size = 4
+combine_as_imports = true
+max_line_length = 88
+quote_type = double
+
+[*.js]
+quote_type = double
+
+[*.{html,css,scss,json,yml,xml}]
+indent_size = 2
+
+# The JSON files contain newlines inconsistently
+[*.json]
+insert_final_newline = ignore
+
+[*.{yaml,yml}]
+indent_size = 2
+
+[Dockerfile]
+indent_style = tab
+
+# Makefile always use tabs for indentation
+[Makefile]
+indent_style = tab
+
+[*.sh]
+indent_style = tab
+
+[*.md]
+trim_trailing_whitespace = false

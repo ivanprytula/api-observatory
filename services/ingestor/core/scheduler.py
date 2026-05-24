@@ -1,0 +1,217 @@
+"""Lightweight job scheduling abstraction built on APScheduler.
+
+Designed for:
+- Single-instance deployments (dev/test) via APScheduler
+- Easy migration to Celery/arq when horizontal scaling needed
+- Mixed workloads: short-running API ingestion + long-running scheduled jobs
+- Proper lifecycle: startup/shutdown, cancellation handling, health monitoring
+
+Architecture:
+- JobScheduler: wraps APScheduler, manages job lifecycle
+- Job: dataclass defining name, schedule, handler, retry policy
+- HealthCheck: tracks job execution health (last_run, success rate, errors)
+- Jobs registered in lifespan startup/shutdown
+
+For distributed scaling (Phase 2+):
+- Replace APScheduler with Celery/arq (same Job interface, different backend)
+- Move job state to Redis/broker instead of in-memory
+- Add worker pool configuration, result backend, task tracing
+
+Example usage:
+
+    scheduler = JobScheduler()
+
+    @scheduler.job(
+        name="batch_ingest_daily",
+        trigger="cron",
+        hour=0,
+        minute=0,
+        max_retries=3,
+    )
+    async def ingest_daily_batch(db: AsyncSession) -> dict[str, Any]:
+        '''Scheduled job handler — called by scheduler at 00:00 UTC daily.'''
+        records = await fetch_external_source()
+        inserted = await crud.create_records_batch(db, records)
+        return {"inserted": len(inserted), "source": "daily_batch"}
+
+    # In app lifespan:
+    async with scheduler.start(db_session_factory):  # Context manager ensures cleanup
+        yield
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from collections.abc import Callable
+from datetime import datetime
+from typing import Any
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
+
+from libs.platform.job_types import Job, JobHealthMetrics
+from services.ingestor.core.handlers import wrap_job_handler
+
+
+logger = logging.getLogger(__name__)
+
+
+class JobScheduler:
+    """Lightweight job scheduler wrapping APScheduler.
+
+    Responsibilities:
+    - Register jobs with APScheduler
+    - Manage job lifecycle (startup/shutdown)
+    - Track job health and metrics
+    - Handle retries and timeouts
+    - Provide health check endpoints
+
+    Example:
+        scheduler = JobScheduler()
+
+        @scheduler.job(
+            name="ingest_hourly",
+            trigger=IntervalTrigger(hours=1),
+            max_retries=3,
+            tags={"critical", "high_volume"},
+        )
+        async def hourly_ingest(db: AsyncSession) -> dict[str, Any]:
+            ...
+
+        async with scheduler.start(session_factory):
+            yield  # Jobs run in background while app is running
+    """
+
+    def __init__(self) -> None:
+        """Initialize scheduler (not started until .start() is called)."""
+        self._scheduler = AsyncIOScheduler()
+        self._jobs: dict[str, Job] = {}
+        self._session_factory: Callable[[], Any] | None = None
+
+    def job(
+        self,
+        name: str,
+        trigger: CronTrigger | IntervalTrigger,
+        max_retries: int = 3,
+        timeout_seconds: int | None = None,
+        tags: set[str] | None = None,
+    ) -> Callable[[Callable], Callable]:
+        """Decorator to register a scheduled job.
+
+        Args:
+            name: Unique job name.
+            trigger: APScheduler trigger (CronTrigger, IntervalTrigger, etc).
+            max_retries: Max retries on failure.
+            timeout_seconds: Job timeout in seconds (None = no timeout).
+            tags: Metadata tags for monitoring.
+
+        Returns:
+            Decorator that registers the handler and returns it unchanged.
+
+        Example:
+            @scheduler.job(
+                name="daily_ingest",
+                trigger=CronTrigger(hour=0, minute=0),
+                max_retries=3,
+            )
+            async def daily_ingest(db: AsyncSession) -> dict[str, Any]:
+                ...
+        """
+
+        def decorator(handler: Callable) -> Callable:
+            job_obj = Job(
+                name=name,
+                handler=handler,
+                trigger=trigger,
+                max_retries=max_retries,
+                timeout_seconds=timeout_seconds,
+                tags=tags or set(),
+            )
+            self._jobs[name] = job_obj
+            return handler
+
+        return decorator
+
+    async def start(self, session_factory: Callable[[], Any]) -> AsyncIOScheduler:
+        """Start the scheduler and register all jobs.
+
+        Args:
+            session_factory: Callable that returns a new AsyncSession (for job dependency injection)
+
+        Returns:
+            The AsyncIOScheduler instance (can be used with `async with scheduler.start(..): yield`)
+
+        Usage:
+            async with scheduler.start(get_db_session):
+                yield  # Jobs run in background
+        """
+        self._session_factory = session_factory
+
+        for job_name, job_obj in self._jobs.items():
+            # Wrap handler to inject session and track metrics
+            wrapped_handler = wrap_job_handler(job_obj, session_factory)
+
+            self._scheduler.add_job(
+                wrapped_handler,
+                trigger=job_obj.trigger,
+                id=job_name,
+                name=job_name,
+                replace_existing=True,
+            )
+
+            logger.info(
+                "job_registered",
+                extra={
+                    "job_name": job_name,
+                    "trigger": str(job_obj.trigger),
+                    "tags": list(job_obj.tags),
+                },
+            )
+
+        self._scheduler.start()
+        logger.info("scheduler_started", extra={"job_count": len(self._jobs)})
+
+        return self._scheduler
+
+    async def stop(self) -> None:
+        """Stop the scheduler and shut down all jobs."""
+        if self._scheduler.running:
+            self._scheduler.shutdown(wait=False)
+            await asyncio.sleep(0)
+            logger.info("scheduler_stopped")
+
+    def get_job_health(self, job_name: str) -> JobHealthMetrics | None:
+        """Get health metrics for a specific job.
+
+        Args:
+            job_name: Name of the job.
+
+        Returns:
+            JobHealthMetrics instance, or None if job not found.
+        """
+        job = self._jobs.get(job_name)
+        return job.health if job else None
+
+    def get_all_jobs_health(self) -> dict[str, JobHealthMetrics]:
+        """Get health metrics for all jobs.
+
+        Returns:
+            Dict mapping job name to JobHealthMetrics.
+        """
+        return {name: job.health for name, job in self._jobs.items()}
+
+    def get_next_run_times(self) -> dict[str, datetime | None]:
+        """Get next scheduled run time for each job.
+
+        Returns:
+            Dict mapping job name to next run datetime (or None if not scheduled).
+        """
+        result = {}
+        for job_name in self._jobs:
+            apscheduler_job = self._scheduler.get_job(job_name)
+            result[job_name] = (
+                apscheduler_job.next_run_time if apscheduler_job else None
+            )
+        return result

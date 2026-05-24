@@ -1,0 +1,163 @@
+[project]
+name = "api-observatory"
+version = "0.1.0"
+description = "API health observatory — async FastAPI service for monitoring API reliability, drift detection, and scorecard reporting"
+requires-python = ">=3.14"
+
+dependencies = [
+    # Web framework
+    "fastapi>=0.135.2",
+    "uvicorn[standard]>=0.45.0",
+    # Rate limiting
+    "slowapi>=0.1.9",
+    # Database (async)
+    "sqlalchemy[asyncio]>=2.0.40",
+    "asyncpg>=0.30.0",
+    # Database (sync, for Alembic migrations in production)
+    "psycopg[binary]>=3.2",
+    # Validation & config
+    "pydantic[email]>=2.13.3",  # EmailStr support (email-validator)
+    "pydantic-settings>=2.14.0",
+    "python-dotenv>=1.0.0",  # Load environment from .env files
+    # Logging
+    "python-json-logger>=4.1.0",
+    # Authentication
+    "pyjwt>=2.10.0",
+    "argon2-cffi>=23.1.0",  # Argon2id password hashing (OWASP A02)
+    # Migrations
+    "alembic>=1.13",
+    # HTTP client (async)
+    "httpx>=0.28.1",  # requests-like API, HTTP/2 support
+    "aiohttp>=3.11.0",
+    "prometheus-fastapi-instrumentator>=7.1.0",
+    # Caching
+    "redis>=5.2.0",  # async redis client
+    # Event streaming
+    "aiokafka>=0.11",  # async Kafka/Redpanda producer + consumer
+    # Job scheduling (Phase 6)
+    "apscheduler>=3.10,<4.0",
+    # Resilience + Observability (Phase 11-12)
+    "opentelemetry-sdk>=1.41.0",
+    "opentelemetry-instrumentation-fastapi>=0.46b0",
+    "opentelemetry-exporter-otlp>=1.41.0",
+    "sentry-sdk[fastapi]>=2.19.2",
+    # LangGraph HITL agent (Phase 13)
+    "python-multipart>=0.0.9",
+    "openai>=1.55.0",
+    "langgraph>=0.3.0",
+    "langgraph-checkpoint-redis>=0.1.0",
+    # Existing transformations import path requires pandas at startup
+    "pandas>=2.2.3",
+    "polars[rtcompat]>=1.30.0",
+]
+
+[project.optional-dependencies]
+floci = ["boto3>=1.28.0", "testcontainers-floci>=0.1.1"]
+
+[tool.uv]
+environments = ["sys_platform == 'linux'"]
+
+[tool.uv.workspace]
+members = ["services/ingestor"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-asyncio>=0.25.3",
+    "pytest-cov>=6.1.0",
+    # testcontainers: auto-provision postgres:17-bookworm for local integration tests
+    # (Docker must be running; CI uses GHA service container instead)
+    "testcontainers[postgres,redis]>=4.10.0",
+    "pygments>=2.20.0",
+    "httpx>=0.28.1",
+    "aiosqlite>=0.20.0",  # async SQLite for tests (no real PG needed)
+    "fakeredis>=2.35.1",  # in-memory redis for tests
+    # Pre-commit hooks & linting
+    "pre-commit>=4.5.1",
+    "ruff>=0.15.10",
+    # Load testing
+    "locust>=2.32.0",
+    # Type checker
+    "ty>=0.0.32",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "services/ingestor/tests"]
+asyncio_mode = "auto"
+# Limit coverage collection to the package under test to avoid "module X was never imported" warnings
+addopts = "--cov=services/ingestor --cov-report=term-missing --cov-report=html -q -m 'not e2e'"
+filterwarnings = [
+    "ignore::DeprecationWarning:slowapi",
+    "ignore::DeprecationWarning:fastapi.routing",
+]
+markers = [
+    "unit: Fast, isolated unit tests (no I/O, no DB)",
+    "integration: Tests that touch DB/ASGI client",
+    "e2e: End-to-end or long-running tests (skipped by default)",
+    "browser: Browser-based tests using Playwright (may require system dependencies)",
+    "mongo: MongoDB-dependent tests (skipped if MongoDB unavailable)",
+]
+
+
+[tool.coverage.run]
+source = ["services.ingestor"]
+omit = [
+    "services/ingestor/__main__.py",
+    "*/migrations/*",
+    "*/alembic/*",
+]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "if t.TYPE_CHECKING:",
+]
+precision = 2
+show_missing = true
+skip_covered = false
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["SIM117", "B008"]  # Allow nested with statements and Depends() in defaults (FastAPI pattern)
+
+[tool.ruff.lint.isort]
+lines-after-imports = 2
+
+[tool.ruff.lint.pycodestyle]
+max-doc-length = 100
+max-line-length = 100
+
+[[tool.ty.overrides]]
+include = ["services/ingestor", "tests"]
+
+[tool.ty.rules]
+unresolved-attribute = "ignore"
+
+[tool.ty.overrides.rules]
+unresolved-attribute = "ignore"
+invalid-argument-type = "ignore"
+# invalid-assignment = "ignore"
+
+[tool.bandit]
+exclude_dirs = [
+    "tests",
+    ".venv",
+    "venv",
+]
+skips = [
+    "B101",  # assert_used in tests
+]

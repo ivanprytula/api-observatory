@@ -1,0 +1,244 @@
+"""Integration tests for Contract Snapshot and Drift Detection endpoints."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from httpx import AsyncClient
+
+
+_SOURCE: dict[str, Any] = {
+    "name": "contract-test-source",
+    "url": "https://api.example.com/contracts",
+    "source_type": "rest",
+    "tags": ["Contract", "Drift"],
+}
+
+_SCHEMA_V1: dict[str, Any] = {
+    "id": 123,
+    "status": "ok",
+    "payload": {"temperature": 20.5, "region": "eu"},
+}
+
+_SCHEMA_V2_NON_BREAKING: dict[str, Any] = {
+    "id": 123,
+    "status": "ok",
+    "payload": {"temperature": 20.5, "region": "eu", "humidity": 55},
+}
+
+_SCHEMA_V3_BREAKING: dict[str, Any] = {
+    "id": 123,
+    "status": {"code": "ok"},
+    "payload": {"region": "eu"},
+}
+
+
+async def _create_source(
+    client: AsyncClient, name: str = "contract-test-source"
+) -> int:
+    payload = {**_SOURCE, "name": name}
+    response = await client.post("/api/v1/sources", json=payload)
+    assert response.status_code == 201
+    return int(response.json()["id"])
+
+
+class TestIngestContractSnapshot:
+    """POST /api/v1/contracts/snapshots behavior."""
+
+    async def test_first_snapshot_returns_no_drift_event(
+        self, client: AsyncClient
+    ) -> None:
+        source_id = await _create_source(client)
+
+        response = await client.post(
+            "/api/v1/contracts/snapshots",
+            json={
+                "source_id": source_id,
+                "schema_version": "v1",
+                "payload_schema": _SCHEMA_V1,
+            },
+        )
+
+        assert response.status_code == 201
+        body = response.json()
+        assert body["snapshot"]["source_id"] == source_id
+        assert body["snapshot"]["compatibility_score"] == 100.0
+        assert body["drift_event"] is None
+
+    async def test_non_breaking_additive_change_creates_non_breaking_event(
+        self, client: AsyncClient
+    ) -> None:
+        source_id = await _create_source(
+            client, name="contract-test-source-non-breaking"
+        )
+
+        await client.post(
+            "/api/v1/contracts/snapshots",
+            json={
+                "source_id": source_id,
+                "schema_version": "v1",
+                "payload_schema": _SCHEMA_V1,
+            },
+        )
+        response = await client.post(
+            "/api/v1/contracts/snapshots",
+            json={
+                "source_id": source_id,
+                "schema_version": "v2",
+                "payload_schema": _SCHEMA_V2_NON_BREAKING,
+            },
+        )
+
+        assert response.status_code == 201
+        drift_event = response.json()["drift_event"]
+        assert drift_event is not None
+        assert drift_event["event_type"] == "non_breaking"
+        assert "payload.humidity" in drift_event["added_fields"]
+
+    async def test_breaking_change_creates_breaking_event(
+        self, client: AsyncClient
+    ) -> None:
+        source_id = await _create_source(client, name="contract-test-source-breaking")
+
+        await client.post(
+            "/api/v1/contracts/snapshots",
+            json={
+                "source_id": source_id,
+                "schema_version": "v1",
+                "payload_schema": _SCHEMA_V1,
+            },
+        )
+        response = await client.post(
+            "/api/v1/contracts/snapshots",
+            json={
+                "source_id": source_id,
+                "schema_version": "v3",
+                "payload_schema": _SCHEMA_V3_BREAKING,
+            },
+        )
+
+        assert response.status_code == 201
+        drift_event = response.json()["drift_event"]
+        assert drift_event is not None
+        assert drift_event["event_type"] == "breaking"
+        assert "payload.temperature" in drift_event["removed_fields"]
+        assert "status" in drift_event["type_changed_fields"]
+
+    async def test_snapshot_ingest_source_not_found_returns_404(
+        self, client: AsyncClient
+    ) -> None:
+        response = await client.post(
+            "/api/v1/contracts/snapshots",
+            json={"source_id": 999999, "payload_schema": _SCHEMA_V1},
+        )
+        assert response.status_code == 404
+
+
+class TestContractDriftReadEndpoints:
+    """Read-side endpoints for snapshots, events, and compatibility."""
+
+    async def test_list_snapshots(self, client: AsyncClient) -> None:
+        source_id = await _create_source(
+            client, name="contract-test-source-list-snapshots"
+        )
+
+        await client.post(
+            "/api/v1/contracts/snapshots",
+            json={
+                "source_id": source_id,
+                "schema_version": "v1",
+                "payload_schema": _SCHEMA_V1,
+            },
+        )
+        await client.post(
+            "/api/v1/contracts/snapshots",
+            json={
+                "source_id": source_id,
+                "schema_version": "v2",
+                "payload_schema": _SCHEMA_V2_NON_BREAKING,
+            },
+        )
+
+        response = await client.get(f"/api/v1/contracts/sources/{source_id}/snapshots")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["total"] == 2
+        assert len(body["items"]) == 2
+
+    async def test_list_drift_events(self, client: AsyncClient) -> None:
+        source_id = await _create_source(
+            client, name="contract-test-source-list-events"
+        )
+
+        await client.post(
+            "/api/v1/contracts/snapshots",
+            json={
+                "source_id": source_id,
+                "schema_version": "v1",
+                "payload_schema": _SCHEMA_V1,
+            },
+        )
+        await client.post(
+            "/api/v1/contracts/snapshots",
+            json={
+                "source_id": source_id,
+                "schema_version": "v3",
+                "payload_schema": _SCHEMA_V3_BREAKING,
+            },
+        )
+
+        response = await client.get(
+            f"/api/v1/contracts/sources/{source_id}/drift-events"
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["total"] == 1
+        assert body["items"][0]["event_type"] == "breaking"
+
+    async def test_compatibility_report_without_snapshots(
+        self, client: AsyncClient
+    ) -> None:
+        source_id = await _create_source(
+            client, name="contract-test-source-empty-compat"
+        )
+
+        response = await client.get(
+            f"/api/v1/contracts/sources/{source_id}/compatibility"
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["latest_snapshot_id"] is None
+        assert body["compatibility_score"] == 100.0
+        assert body["drift_detected"] is False
+
+    async def test_compatibility_report_with_breaking_change(
+        self, client: AsyncClient
+    ) -> None:
+        source_id = await _create_source(client, name="contract-test-source-compat")
+
+        await client.post(
+            "/api/v1/contracts/snapshots",
+            json={
+                "source_id": source_id,
+                "schema_version": "v1",
+                "payload_schema": _SCHEMA_V1,
+            },
+        )
+        await client.post(
+            "/api/v1/contracts/snapshots",
+            json={
+                "source_id": source_id,
+                "schema_version": "v3",
+                "payload_schema": _SCHEMA_V3_BREAKING,
+            },
+        )
+
+        response = await client.get(
+            f"/api/v1/contracts/sources/{source_id}/compatibility"
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["drift_detected"] is True
+        assert body["event_type"] == "breaking"
+        assert "payload.temperature" in body["removed_fields"]
+        assert "status" in body["type_changed_fields"]

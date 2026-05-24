@@ -1,0 +1,479 @@
+# Plan: api-observatory — Vertical Slice MVP
+
+**Status**: Active ✅
+**Updated**: 2026-05-24
+**Repo**: https://github.com/ivanprytula/api-observatory.git
+**Local dir**: /home/ivanp/PersonalProjects/data-pipeline-async (orphan branch `foundation`, index cleared)
+**Job context**: Middle/middle+ Python dev role — prioritise shippable demo over completeness
+
+## TL;DR
+
+Build the repo with ~13 atomic commits, starting from a full `services/ingestor/` baseline import in Commit 1, then hardening each vertical slice (DB → repo → route → test). Start applying to jobs after commit 2 (docs + runnable demo). Then layer in auth normalization, observability polish, and a full ECS deployment as portfolio depth. Zero alembic migrations until MVP ships; docker volumes removed from default stack.
+
+**Overengineering guard** (read before every commit): prefer the stdlib or a well-known PyPI package over a custom implementation. The simplest solution that satisfies the functional requirement is the correct solution. Custom abstractions only when the same pattern repeats 3+ times.
+
+---
+
+## PHASE 0: Preserve History ✅ DONE
+
+1. ~~Tag pushed to `develop` branch on current remote~~ ✅
+2. ~~New GitHub repo created~~ — https://github.com/ivanprytula/api-observatory.git ✅
+3. ~~Add new remote~~ `git remote add observatory ...` ✅
+4. ~~Create orphan branch~~ `git checkout --orphan foundation` ✅
+5. ~~Unstage everything~~ `git rm -rf --cached .` ✅
+
+---
+
+## PHASE -1: Triage the 800 Files (before first commit)
+
+Current state: 800+ files staged on orphan `foundation` branch. Do not commit them as-is — build up deliberately.
+
+### Delete from the index
+
+```bash
+# Services not in MVP scope
+git rm -r services/portal/
+git rm -r services/inference/ services/dashboard/ services/analytics/
+git rm -r services/webhook/ services/timeseries/ services/search/
+
+# Artefacts — add to .gitignore instead
+git rm -r htmlcov/
+git rm secrets-findings.json
+
+# Old learning archive (kept on old remote)
+git rm -r _archive/learning_docs/
+```
+
+### Move (isolate, not delete)
+
+```bash
+# Create archive destination
+mkdir -p examples/archived-services
+
+# Move (don't delete) out-of-scope services
+mv services/portal examples/archived-services/
+mv services/inference examples/archived-services/
+mv services/dashboard examples/archived-services/
+mv services/analytics examples/archived-services/
+mv services/webhook examples/archived-services/
+mv services/timeseries examples/archived-services/
+mv services/search examples/archived-services/
+
+# Move the other items as planned
+mv services/processor examples/kafka-consumer/
+mv services/ingestor/fetch_aiohttp.py examples/http-clients/aiohttp_example.py
+mv services/ingestor/storage/mongo.py _archive/mongo-storage.py
+
+# Only delete build artifacts (not code)
+rm -rf htmlcov/
+rm -f secrets-findings.json
+rm -rf _archive/learning_docs/
+
+# Verify
+ls -la examples/
+```
+
+### Review every remaining file before staging
+
+1. Does it serve the MVP feature? If no → archive or delete.
+2. Is there a simpler stdlib/PyPI equivalent for what it implements? If yes → replace.
+3. Does it follow the Copilot instructions? If no → refactor first.
+
+---
+
+## Commit Sequence (~13 commits, 3-4 weeks part-time)
+
+```bash
+# Git setup — run once, not a commit
+git remote add observatory https://github.com/ivanprytula/api-observatory.git
+# already done: checkout --orphan foundation && git rm -rf --cached .
+```
+
+---
+
+## PHASE 1: Foundation (Commits 1-3)
+
+### Commit 1 — `chore: project setup + ingestor baseline import`
+
+**Contents**: `pyproject.toml`, `uv.lock`, `Dockerfile`, `docker-compose.yml`, `docker-compose.dev.yml`, `.gitignore`, `.editorconfig`, `.env.example`, `Justfile` (recipes: `up`, `down`, `test`, `lint` only) + whole `services/ingestor/` service tree (code, routers, schemas, repositories, tests)
+
+**Infra simplicity checks**:
+- `pyproject.toml`: remove `celery`, `django-celery-beat`, `motor`, `qdrant-client`; move `aiohttp` to `[dependency-groups.examples]`. Keep only what the ingestor service imports.
+- `docker-compose.yml`: default stack = `db`, `redis`, `redpanda`, `ingestor` only. No named volumes — ephemeral containers are fine for dev. Remove mongodb and qdrant from default.
+- `Dockerfile`: multi-stage only if it reduces final image size by >30%. Don't add layers for complexity's sake. Remove any deps (playwright, browser libs) that aren't in `pyproject.toml`.
+- `.gitignore`: add `htmlcov/`, `secrets-findings.json`, `.env`, `__pycache__`, `.venv`
+
+**Baseline import guardrails**:
+- Keep existing runtime behavior intact; Commit 1 is a baseline snapshot, not a refactor.
+- Verify `config.py` still uses `pydantic-settings` `BaseSettings` and `database.py` uses async SQLAlchemy 2.0 patterns.
+- Keep **zero alembic migrations** for now: local dev uses current startup schema init behavior.
+- Defer cleanup/refactors to later commits; do not mix large behavioral changes into baseline import.
+
+**Verify**:
+```bash
+docker compose build --no-cache ingestor   # exit 0
+docker compose up -d
+docker compose ps                          # 4 services healthy
+curl -s http://localhost:8000/docs         # 200 OK
+docker compose down
+```
+
+---
+
+### Commit 2 — `docs: README, tech-map, learning-paths`
+
+**Contents**: `README.md` (rewrite), `docs/tech-map.md`, `docs/learning-paths.md`
+
+**README**: mission (1 sentence), quick start (3 commands max), What's Running table (service → port → purpose), links to tech-map and learning-paths.
+
+**tech-map.md** — interview topic → exact `file:function` reference:
+
+| Topic | Where in code |
+|-------|---------------|
+| Async Python | `fetch.py:BaseFetcher`, `database.py:get_db` |
+| SQLAlchemy 2.0 async | `models.py`, `repositories/` |
+| APScheduler jobs | `jobs.py`, `jobs_registry.py` |
+| Redis cache + pub/sub | `cache.py`, `rate_limiting.py`, `routers/ws.py` |
+| Circuit breaker | `libs/resilience/circuit_breaker.py` |
+| RLS multi-tenancy | `alembic/versions/*rls*`, `security/` |
+| Observability | `metrics.py`, `main.py` lifespan |
+| LangGraph HITL + SSE | `agent/graph.py`, `routers/agent.py` |
+| WebSocket | `routers/ws.py` |
+| Contract drift | `routers/contract_drift.py`, `routers/scorecards.py` |
+| GitHub Actions CI/CD | `.github/workflows/` |
+| Terraform ECS | `infra/terraform/` |
+
+**learning-paths.md**: three tracks — Backend Interview Prep, Distributed Systems, DevOps/Cloud.
+
+**Verify**: all README links resolve. `docker compose up -d && curl -s http://localhost:8000/docs` — quick-start works end-to-end. `docker compose down`.
+
+---
+
+### Commit 3 — `chore: .github instructions, hooks, skills`
+
+**Contents**: `.github/copilot-instructions.md` (updated), `.github/instructions/`, `.github/skills/`, `.husky/` pre-commit hooks, `.vscode/settings.json` + `launch.json`
+
+The 14 existing workflows stay as-is — do not modify them.
+
+**Verify**: pre-commit hook fails on a deliberate `ruff` lint error.
+
+---
+
+## PHASE 2: Stabilize Existing Vertical Slices (Commits 4-8)
+
+### Commit 4 — `refactor(vs1): stabilize source-registry — SourceProfile CRUD`
+
+**Scope**: existing `SourceProfile` model/repository/router/schemas/tests — harden behavior and trim complexity.
+
+**Functional requirement**: Create, list, get, update, deactivate SourceProfile (name, base_url, health_check_path, probe_interval_seconds, is_active).
+
+**Simplicity checks**:
+- Repository: 5 plain async functions. No base class until 3+ repositories share the same pattern.
+- Schemas: `SourceProfileCreate` + `SourceProfileResponse`. No `SourceProfileUpdate` unless PATCH is in scope.
+- Pagination: `limit: int = 20, offset: int = 0`. Offset is fine for < 10k rows.
+- URL validation: `pydantic.AnyHttpUrl` — no custom regex.
+
+**⚠️ SSRF prevention** (security-critical — `base_url` will be used in server-side HTTP requests):
+- Scheme: `https` only (or explicitly allowed `http`)
+- Resolved IP must not be in private ranges: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `::1`
+- Use `ipaddress` stdlib module to validate the resolved IP.
+
+**Tests**: create, list (pagination), get (404 on missing), deactivate (idempotent).
+
+**Verify**:
+```bash
+docker compose up -d
+curl -s -X POST http://localhost:8000/api/v1/sources \
+  -H "Content-Type: application/json" \
+  -d '{"name":"httpbin","base_url":"https://httpbin.org","health_check_path":"/get","probe_interval_seconds":60}' | jq .id
+# → 1
+docker compose exec ingestor uv run pytest tests/test_sources.py -v
+docker compose down
+```
+
+---
+
+## PHASE 3: Stabilize Probe Loop (Commit 5)
+
+### Commit 5 — `refactor(vs2): stabilize probe-scheduler — APScheduler background HTTP probe loop`
+
+**Scope**: existing `HealthSample`/scheduler/lifespan wiring/tests — keep behavior, reduce accidental complexity.
+
+**Functional requirement**: On startup, schedule one probe job per active SourceProfile. Each job: HTTP GET → record `status_code`, `response_time_ms`, `response_body_hash`. Persist to `health_samples`.
+
+**Simplicity checks**:
+- APScheduler: `AsyncScheduler` from `apscheduler>=3.10,<4.0`. **Do not upgrade to 4.x** — API changed incompatibly.
+- HTTP client: use existing `fetch.py` httpx client. One HTTP client per project.
+- SHA-256: `hashlib.sha256(body).hexdigest()` — stdlib. No extra dependency.
+- Response time: `time.monotonic()` before/after call — stdlib.
+- Circuit breaker: wire existing `libs/resilience/circuit_breaker.py`. If open → skip and log, do not raise.
+- Job isolation: `asyncio.gather(*tasks, return_exceptions=True)`.
+- Timeout: `httpx.AsyncClient(timeout=10.0)` — not configurable yet.
+
+**Overengineering trap**: no job queue, worker pool, or message bus. APScheduler + asyncio is sufficient for hundreds of sources.
+
+**Verify**:
+```bash
+docker compose up -d
+just seed-demo
+# Wait ~70s for first probe cycle
+docker compose exec db psql -U postgres api_observatory -c "SELECT count(*) FROM health_samples;"
+# → count > 0
+docker compose down
+```
+
+---
+
+## PHASE 4: Stabilize Scorecard (Commit 6)
+
+### Commit 6 — `refactor(vs3): stabilize scorecard — rolling 24h uptime and latency`
+
+**Scope**: existing `ProviderScorecard` model/repository/compute/router/tests — validate SQL-first aggregation path.
+
+**Simplicity checks**:
+- Computation: one SQL query with `AVG`, `PERCENTILE_CONT(0.5)`, `PERCENTILE_CONT(0.95)`, `COUNT FILTER`. Aggregation in SQL — do not pull rows into Python.
+- Upsert: `insert().on_conflict_do_update()` — not SELECT then INSERT (race condition).
+- Window: `WHERE created_at > now() - interval '24 hours'`. No windowing library.
+- No Redis caching yet — add only if Prometheus shows p95 query time > 50ms under load.
+
+**Tests**: correct stats from 3 samples, handles zero samples (null stats), upsert idempotent.
+
+**Verify**:
+```bash
+docker compose up -d
+curl -s http://localhost:8000/api/v1/scorecards/1 | jq '{uptime_pct,p50_latency_ms,p95_latency_ms,error_rate}'
+docker compose down
+```
+
+---
+
+## PHASE 5: Stabilize Contract Drift (Commit 7)
+
+### Commit 7 — `refactor(vs4): stabilize contract-drift — snapshot diff, DriftEvent`
+
+**Scope**: existing `ContractSnapshot`/`DriftEvent` models, repositories, detector, router, tests.
+
+**Simplicity checks**:
+- Diff detection: `new_hash != last_hash` — one query for last snapshot. No diff library.
+- Severity: `breaking` (HTTP status class changed), `minor` (same status, body changed). Three enum values max.
+- Store hash only, not full response body — bodies can be megabytes.
+
+**⚠️ APPLY TO JOBS NOW** — if Commit 2 demo is stable, start sending applications immediately; commits 4-7 are quality hardening.
+
+**Verify**:
+```bash
+docker compose up -d
+# Let probes run; target must return two distinct bodies
+curl -s http://localhost:8000/api/v1/drift-events | jq '. | length'
+# → > 0 after body change; no increment on identical response
+docker compose down
+```
+
+---
+
+## PHASE 6: Stabilize Real-time Push (Commit 8)
+
+### Commit 8 — `refactor(vs5): stabilize websocket — Redis pub/sub, live drift notifications`
+
+**Scope**: existing WebSocket/pubsub/publisher/tests — reliability and auth handshake hardening.
+
+**Simplicity checks**:
+- Connection manager: plain `dict[str, WebSocket]`. No custom pub/sub manager class.
+- Redis pub/sub: `redis-py` async `PubSub` — already in project. No separate message broker.
+- Publisher: `redis.publish(channel, json.dumps(event))` from the repository, after persisting DriftEvent.
+- Auth: JWT as `?token=` query param on the WebSocket handshake. Validate before upgrading connection.
+
+---
+
+## PHASE 7: Auth Cross-cut (Commit 9)
+
+### Commit 9 — `feat: JWT auth, RBAC, apply to all routes`
+
+**Simplicity checks**:
+- JWT: use `python-jose` or `PyJWT`. Do not write your own encoder/decoder.
+- Passwords: `passlib[bcrypt]`. Do not use `hashlib.sha256` for password storage.
+- RBAC: two roles only — `admin` (write) and `viewer` (read). No permission matrices yet.
+- Token TTL: 30min access, 7 days refresh.
+- Error responses: `401` for both wrong password and unknown user — prevents user enumeration.
+- `get_current_user` dependency: one implementation, shared across all routers via `Depends`.
+
+---
+
+## PHASE 8: Observability (Commit 10)
+
+### Commit 10 — `feat: structured logging, Prometheus metrics, OTEL traces`
+
+**Simplicity checks**:
+- Structured logging: `structlog` — do not hand-roll a JSON formatter on stdlib `logging`.
+- HTTP metrics: `prometheus-fastapi-instrumentator` — one line, all standard HTTP metrics included.
+- OTEL: `opentelemetry-instrumentation-fastapi` + `opentelemetry-instrumentation-sqlalchemy` auto-instrumentation. No manual span creation per function.
+- Health probes: `/health` (liveness, no I/O), `/readiness` (checks DB + Redis). ~20 lines — no health framework.
+- Cache scorecard only after measuring: Redis `SETEX` 30s TTL is sufficient if needed. No caching library.
+
+---
+
+## PHASE 9: Resilience Patterns (Commit 11)
+
+### Commit 11 — `feat: rate limiting, circuit breaker applied`
+
+**Simplicity checks**:
+- Rate limiting: `slowapi` (Starlette-compatible, Redis backend, per-user + per-IP). Do not implement a token bucket from scratch.
+- Circuit breaker: review `libs/resilience/circuit_breaker.py`. If > 80 lines of state machine code, compare to `pybreaker` — prefer the established library unless the custom code is demonstrably simpler.
+- Return `Retry-After` header on 429 (built into `slowapi`).
+
+---
+
+## PHASE 10: LangGraph Agent (Commit 12)
+
+### Commit 12 — `feat(agent): LangGraph HITL, SSE streaming`
+
+**Simplicity checks**:
+- Review existing `agent/graph.py` before modifying — it is a real implementation.
+- SSE: `StreamingResponse(media_type="text/event-stream")` — no separate SSE library.
+- Agent tools must call existing repository functions — no raw SQL inside tool definitions.
+
+---
+
+## PHASE 11: Deployment (Commits 13a-13c)
+
+### Commit 13a — `chore(docker): image size audit, multi-stage verify`
+
+Verify image < 500MB. `docker scan` passes (no critical CVEs).
+
+### Commit 13b — `infra(floci): local AWS sim, Terraform plan, E2E tests`
+
+Cost-guard: comment out `module "messaging"` in `infra/terraform/environments/dev/main.tf` (MSK = $2.64/day). Without MSK: ~$2.50/day → 2-day test ≈ $5.
+
+```bash
+just sandbox-up && just tf-plan-local && just sandbox-test && just tf-destroy-local
+```
+
+### Commit 13c — `docs(deploy): AWS ECS step-by-step, cost teardown`
+
+Docs only (`docs/deployment/aws-ecs.md`, `docs/deployment/cost-teardown.md`). No code changes.
+
+---
+
+## Justfile DX Recipes (added in Commit 3)
+
+- `just probe-once` — run one full probe cycle manually
+- `just scorecard SOURCE_ID` — print current scorecard for a source
+- `just seed-demo` — seed 3 demo SourceProfiles (httpbin.org, jsonplaceholder.typicode.com, postman-echo.com)
+- `just tech-map` — `bat docs/tech-map.md || cat docs/tech-map.md`
+
+---
+
+## Pre-Commit Checklist (apply before every `git commit`)
+
+**Correctness**
+- [ ] Feature works end-to-end (manually tested or covered by a test)
+- [ ] `docker compose exec ingestor uv run pytest -x` passes
+- [ ] `docker compose exec ingestor uv run python -c "from services.ingestor.main import app"` — zero import errors
+
+**Simplicity (anti-overengineering)**
+- [ ] Is there a stdlib or well-known PyPI solution I should use instead?
+- [ ] Does each class/function have only one reason to exist?
+- [ ] Is any abstraction used by fewer than 3 callers? If yes, inline it.
+- [ ] Did I add a dependency for something I could write in < 20 stdlib lines?
+
+**Code quality**
+- [ ] `docker compose exec ingestor uv run ruff check services/` — zero errors
+- [ ] `docker compose exec ingestor uv run black --check services/` — no diffs
+- [ ] Type hints 100% on all new public functions
+- [ ] No `print()` — use `logger`
+- [ ] No bare `except:` — catch specific exceptions
+
+**Security (OWASP)**
+- [ ] No hardcoded secrets, passwords, tokens
+- [ ] User-controlled URLs validated against private IP ranges (SSRF)
+- [ ] Parameterised SQL only — no f-string queries
+- [ ] Error responses do not leak internal state
+
+**Async**
+- [ ] No blocking I/O on the event loop (`time.sleep`, `requests.get`, sync `open()`)
+- [ ] `asyncio.gather` used for parallel independent tasks
+
+---
+
+## Proven Solutions Reference
+
+Check this table before writing any new code. If the need is listed here, use the solution in the "Use" column — do not build a custom alternative.
+
+| Need | Use | Do NOT build |
+|------|-----|--------------|
+| Settings/config | `pydantic-settings BaseSettings` | Custom env-var parser |
+| HTTP client | `httpx.AsyncClient` | Custom session wrapper |
+| URL validation | `pydantic.AnyHttpUrl` | Custom regex |
+| Password hashing | `passlib[bcrypt]` | `hashlib.sha256` on passwords |
+| JWT encode/decode | `python-jose` or `PyJWT` | Custom base64 encoder |
+| Structured logging | `structlog` | JSON formatter on stdlib `logging` |
+| HTTP metrics | `prometheus-fastapi-instrumentator` | Manual `Counter`/`Histogram` per route |
+| OTEL tracing | `opentelemetry-instrumentation-fastapi` auto | Manual spans per function |
+| Rate limiting | `slowapi` | Custom token bucket |
+| SHA-256 body hash | `hashlib.sha256` (stdlib) | Any PyPI hash library |
+| Response time | `time.monotonic()` (stdlib) | Timing decorator library |
+| Pagination | `limit`/`offset` query params | Cursor pagination (add only at > 50k rows) |
+| Job scheduling | `apscheduler>=3.10,<4.0 AsyncScheduler` | Custom asyncio task manager |
+| Redis pub/sub | `redis-py` async `PubSub` | Custom broker or message bus |
+| SSE | `StreamingResponse(media_type="text/event-stream")` | Separate SSE library |
+| Circuit breaker | `pybreaker` or existing `libs/resilience/` | Custom state machine > 80 lines |
+| DB upsert | `insert().on_conflict_do_update()` | SELECT then INSERT (race condition) |
+| Percentile stats | `PERCENTILE_CONT` in SQL | Python `statistics` on fetched rows |
+
+---
+
+## Verification Gates
+
+### After commit 2 — start applying to jobs
+
+```bash
+docker compose up -d && just seed-demo
+curl -s http://localhost:8000/api/v1/scorecards | jq .
+# Returns uptime_pct, p50_latency_ms, p95_latency_ms
+docker compose exec ingestor uv run pytest tests/ -m "not e2e" -q
+# All pass
+docker compose down
+```
+
+### After commit 11 — full MVP+
+
+```bash
+docker compose up -d
+docker compose exec ingestor uv run pytest tests/ -q
+docker compose exec ingestor uv run ruff check services/ && docker compose exec ingestor uv run black --check services/
+docker build -t api-obs:test .
+# WebSocket: connect client, trigger drift, assert event received
+docker compose down
+```
+
+### After commit 13 — deployment
+
+```bash
+just sandbox-up && just sandbox-test && just tf-destroy-local
+terraform output | grep alb_dns_name
+curl https://<alb-dns>/docs        # 200 OK
+terraform destroy                  # clean, no billable resources remain
+```
+
+---
+
+## Decisions
+
+- **Repo**: `api-observatory`, public. Old remote keeps full 8-phase history.
+- **Local dir**: stay in place (orphan branch) — VS Code workspace unchanged.
+- **Alembic**: zero migrations for local dev (`create_all` in lifespan). Add migrations when schema stabilises post-MVP.
+- **Docker volumes**: default stack has no volumes. Named volumes in `docker-compose.dev.yml` only.
+- **Service scope**: `services/ingestor/` only for MVP. Other services archived or moved to `examples/`.
+- **APScheduler**: `>=3.10,<4.0` locked. Do not upgrade to 4.x.
+- **MSK/Kafka**: commented out in dev Terraform. ~$2.50/day without it → 2-day test ≈ $5.
+- **Auth timing**: normalize/lock auth behavior in commit 9 (if baseline diverges). Routes can remain open temporarily during earlier stabilization commits.
+- **aiohttp**: moved to `examples/http-clients/` — deliberate comparison file, not deleted.
+- **LangGraph agent**: keep as-is, document in tech-map — real HITL + SSE implementation.
+
+## Excluded from Scope
+
+- Other services (inference, dashboard, analytics, webhook, timeseries, search)
+- Kubernetes manifests (ECS is the deploy target)
+- CI/CD workflow changes (14 workflows already solid)
+- Semantic diff for contract drift (hash comparison is sufficient)
+- Cursor pagination (offset is fine for MVP scale)

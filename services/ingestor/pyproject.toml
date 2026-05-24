@@ -1,0 +1,9 @@
+[project]
+name = "ingestor"
+version = "0.1.0"
+description = "Write-side CQRS service — ingest pipeline records into PostgreSQL"
+requires-python = ">=3.14"
+
+# Dependencies live at repo root pyproject.toml (single uv.lock monorepo).
+# This file is a namespace marker and future service-extraction anchor.
+dependencies = []
