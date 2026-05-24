@@ -21,6 +21,8 @@ Build the repo with ~13 atomic commits, starting from a full `services/ingestor/
 3. ~~Add new remote~~ `git remote add observatory ...` ✅
 4. ~~Create orphan branch~~ `git checkout --orphan foundation` ✅
 5. ~~Unstage everything~~ `git rm -rf --cached .` ✅
+6. First baseline commit created on `foundation`:
+  - `fef4440` — `chore: project setup + ingestor baseline import` ✅
 
 ---
 
@@ -95,7 +97,12 @@ git remote add observatory https://github.com/ivanprytula/api-observatory.git
 
 ### Commit 1 — `chore: project setup + ingestor baseline import`
 
-**Contents**: `pyproject.toml`, `uv.lock`, `Dockerfile`, `docker-compose.yml`, `docker-compose.dev.yml`, `.gitignore`, `.editorconfig`, `.env.example`, `Justfile` (recipes: `up`, `down`, `test`, `lint` only) + whole `services/ingestor/` service tree (code, routers, schemas, repositories, tests)
+**Contents**: `pyproject.toml`, `uv.lock`, `Dockerfile`, `docker-compose.yml`, `docker-compose.dev.yml`, `.gitignore`, `.editorconfig`, `.env.example`, `Justfile` (recipes: `up`, `down`, `test`, `lint` only), `.pre-commit-config.yaml`, `infra/database/Dockerfile`, `infra/database/postgresql.conf`, `infra/database/pg_hba.conf`, `infra/database/init.sql` + whole `services/ingestor/` service tree (code, routers, schemas, repositories, tests) + `libs/` (shared code used by ingestor).
+
+**Retrospective note (what was required to make foundation verify pass)**:
+- Add local/default runtime values for app startup checks (for example `SERVICE_VERSION` via compose env).
+- Keep optional integrations fail-open when modules are intentionally absent in baseline (Mongo/scraper/agent optional paths).
+- Fix duplicate ORM index declarations that break `Base.metadata.create_all` startup bootstrap.
 
 **Infra simplicity checks**:
 - `pyproject.toml`: remove `celery`, `django-celery-beat`, `motor`, `qdrant-client`; move `aiohttp` to `[dependency-groups.examples]`. Keep only what the ingestor service imports.
@@ -113,8 +120,10 @@ git remote add observatory https://github.com/ivanprytula/api-observatory.git
 ```bash
 docker compose build --no-cache ingestor   # exit 0
 docker compose up -d
-docker compose ps                          # 4 services healthy
-curl -s http://localhost:8000/docs         # 200 OK
+docker compose ps                          # db/redis/redpanda healthy, ingestor warming up
+curl -s http://localhost:8000/health       # 200
+curl -s http://localhost:8000/readyz       # 200
+curl -s http://localhost:8000/docs         # 200
 docker compose down
 ```
 
