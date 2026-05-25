@@ -49,6 +49,9 @@ dependencies = [
     # Existing transformations import path requires pandas at startup
     "pandas>=2.2.3",
     "polars[rtcompat]>=1.30.0",
+    # Dashboard
+    "streamlit>=1.45.0",
+    "websockets>=14.0",
 ]
 
 [project.optional-dependencies]

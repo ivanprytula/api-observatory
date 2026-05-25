@@ -299,7 +299,7 @@ docker compose down
 
 ---
 
-## PHASE 6: Stabilize Real-time Push (Commit 8)
+## PHASE 6: Stabilize Real-time Push (Commit 8) ✅ DONE — 6f77c5c
 
 ### Commit 8 — `refactor(vs5): stabilize websocket — Redis pub/sub, live drift notifications`
 
@@ -316,6 +316,51 @@ docker compose down
 docker compose up -d
 docker compose down
 ```
+
+---
+
+## PHASE 6b: Streamlit Dashboard (Commit 8b)
+
+### Commit 8b — `feat(ui): Streamlit dashboard — drift events, source health, live WS tail`
+
+**Purpose**: Give recruiters and non-technical reviewers a visual entry point. The entire portfolio is
+API-first; this adds a single-page dashboard without introducing a separate frontend service.
+
+**Scope**: one `streamlit_app.py` file at the repo root. No new service, no new DB access —
+connects to the ingestor API over HTTP and WebSocket only.
+
+**Simplicity checks**:
+- Single file, ≤ 300 lines. No custom components, no extra CSS framework.
+- All I/O goes through the ingestor REST API — no direct DB or Redis access from the dashboard.
+- `INGESTOR_URL` env var (default `http://localhost:8000`). Bearer token via `st.secrets` or env var.
+- Three panels only: **Source Health** (scorecards table), **Drift Events** (recent events list),
+  **Live Stream** (WebSocket tail, last 20 messages).
+- Auto-refresh: `st.rerun()` on a timer for the health + drift panels. Manual "connect" button for WS.
+- Dependencies: `streamlit`, `httpx` (already in project), `websockets`.
+
+**Files**:
+- `streamlit_app.py` — main app
+- `docs/dev/streamlit-dashboard.md` — how to run, env vars, screenshot description
+
+**Verify**:
+```bash
+# Start the ingestor stack first
+docker compose up -d
+
+# Run dashboard — no secrets.toml required; token is optional
+uv run streamlit run streamlit_app.py
+# → opens http://localhost:8501, shows three panels
+
+# With a bearer token (if API_V1_BEARER_TOKEN is set on the server)
+BEARER_TOKEN=mysecret uv run streamlit run streamlit_app.py
+
+# Alternative: create .streamlit/secrets.toml (gitignored)
+# mkdir -p .streamlit && echo 'BEARER_TOKEN = "mysecret"' > .streamlit/secrets.toml
+# uv run streamlit run streamlit_app.py
+```
+
+**Note**: `st.secrets.get()` raises `StreamlitSecretNotFoundError` when no `secrets.toml`
+exists — the app wraps the call in `try/except` and falls back to `os.environ`.
 
 ---
 

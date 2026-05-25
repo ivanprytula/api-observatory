@@ -126,6 +126,9 @@ celerybeat.pid
 # NEVER commit this
 .env
 
+# Streamlit local secrets — never commit
+.streamlit/secrets.toml
+
 # For local overrides (e.g. secrets, local database URLs, etc.) that should not be shared
 .env.local
 
