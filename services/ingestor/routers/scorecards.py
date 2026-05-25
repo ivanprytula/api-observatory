@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +13,7 @@ from services.ingestor.api_schemas.scorecards import (
     ProviderScorecard,
     ScorecardListResponse,
 )
+from services.ingestor.auth import jwt_role_guard, verify_jwt_token
 from services.ingestor.constants import (
     API_V1_PREFIX,
     MAX_PAGE_SIZE,
@@ -34,6 +35,12 @@ from services.ingestor.repositories.scorecards import (
 router = APIRouter(prefix=f"{API_V1_PREFIX}/scorecards", tags=["scorecards"])
 
 type DbDep = Annotated[AsyncSession, Depends(get_db)]
+type JwtDep = Annotated[dict[str, Any], Depends(verify_jwt_token)]
+type AdminJwtDep = Annotated[dict[str, Any], Depends(jwt_role_guard("admin"))]
+# operator: data-ingest agents; admin: full access — both can write probe telemetry
+type OperatorJwtDep = Annotated[
+    dict[str, Any], Depends(jwt_role_guard("operator", "admin"))
+]
 
 _R404 = {"404": {"description": "Source not found."}}
 _R422 = {
@@ -51,6 +58,7 @@ _R422 = {
 async def create_health_sample(
     db: DbDep,
     payload: HealthSampleCreate,
+    _: OperatorJwtDep,
 ) -> HealthSampleResponse:
     """Ingest one health probe result for a provider.
 
@@ -69,6 +77,7 @@ async def create_health_sample(
 )
 async def get_scorecards(
     db: DbDep,
+    _: JwtDep,
     days: Annotated[
         int,
         Query(ge=1, le=SCORECARD_MAX_DAYS, description="Look-back window in days."),
@@ -119,6 +128,7 @@ async def get_scorecards(
 async def get_provider_scorecard(
     db: DbDep,
     source_id: int,
+    _: JwtDep,
     days: Annotated[
         int,
         Query(ge=1, le=SCORECARD_MAX_DAYS, description="Look-back window in days."),

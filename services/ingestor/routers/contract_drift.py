@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,7 @@ from services.ingestor.api_schemas.contract_drift import (
     DriftEventListResponse,
     DriftEventResponse,
 )
+from services.ingestor.auth import jwt_role_guard, verify_jwt_token
 from services.ingestor.constants import API_V1_PREFIX, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from services.ingestor.database import get_db
 from services.ingestor.repositories.contract_drift import (
@@ -33,6 +34,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix=f"{API_V1_PREFIX}/contracts", tags=["contract-drift"])
 
 type DbDep = Annotated[AsyncSession, Depends(get_db)]
+type JwtDep = Annotated[dict[str, Any], Depends(verify_jwt_token)]
+type AdminJwtDep = Annotated[dict[str, Any], Depends(jwt_role_guard("admin"))]
+# operator: data-ingest agents; admin: full access — both can ingest contract snapshots
+type OperatorJwtDep = Annotated[
+    dict[str, Any], Depends(jwt_role_guard("operator", "admin"))
+]
 
 _R404_SOURCE = {
     404: {
@@ -52,6 +59,7 @@ _R404_SOURCE = {
 async def ingest_snapshot(
     payload: ContractSnapshotCreate,
     db: DbDep,
+    _: OperatorJwtDep,
 ) -> ContractSnapshotIngestResponse:
     """Store a schema snapshot and detect drift against the previous snapshot."""
     snapshot, drift_event = await create_contract_snapshot(db, payload)
@@ -89,6 +97,7 @@ async def ingest_snapshot(
 async def list_snapshots(
     source_id: int,
     db: DbDep,
+    _: JwtDep,
     offset: int = Query(0, ge=0, description="Pagination offset."),
     limit: int = Query(
         DEFAULT_PAGE_SIZE,
@@ -130,6 +139,7 @@ async def list_snapshots(
 async def list_drift_events(
     source_id: int,
     db: DbDep,
+    _: JwtDep,
     offset: int = Query(0, ge=0, description="Pagination offset."),
     limit: int = Query(
         DEFAULT_PAGE_SIZE,
@@ -167,7 +177,7 @@ async def list_drift_events(
     responses={**_R404_SOURCE},
 )
 async def compatibility_report(
-    source_id: int, db: DbDep
+    source_id: int, db: DbDep, _: JwtDep
 ) -> CompatibilityReportResponse:
     """Return compatibility score and latest drift breakdown for a source."""
     source = await get_source_profile(db, source_id)

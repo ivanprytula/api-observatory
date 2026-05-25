@@ -163,4 +163,6 @@ exclude_dirs = [
 ]
 skips = [
     "B101",  # assert_used in tests
+    "B105",  # false positive: Redis key prefixes and session-state token keys flagged as hardcoded passwords
+    "B107",  # false positive: token: str = "" optional-param default flagged as hardcoded password
 ]

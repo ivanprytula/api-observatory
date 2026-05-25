@@ -36,9 +36,17 @@ import contextlib
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+)
 
 from services.ingestor import pubsub
+from services.ingestor.auth import verify_jwt_token_str
 from services.ingestor.config import settings
 
 
@@ -129,13 +137,15 @@ async def records_stream(
         - ``{"type": "ping"}`` — keepalive sent every 30 s by the server
         - ``{"type": "info",  "message": str}`` — informational / error messages
     """
-    # --- Auth (optional, fail-open if no token and settings allow it) ------
-    # Auth: if bearer token is configured, require it via ?token= query param
-    if settings.api_v1_bearer_token:
+    # --- Auth (optional, fail-open if no jwt_secret configured) -----------
+    # JWT auth via ?token= query param (browsers can't send Authorization headers)
+    if settings.jwt_secret:
         if not token:
             await websocket.close(code=4001, reason="missing token")
             return
-        if token != settings.api_v1_bearer_token:
+        try:
+            await verify_jwt_token_str(token)
+        except HTTPException:
             logger.warning("ws_invalid_token")
             await websocket.close(code=4003, reason="invalid token")
             return

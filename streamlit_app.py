@@ -7,7 +7,6 @@ Three panels:
 
 Configuration (environment variables or .streamlit/secrets.toml):
   INGESTOR_URL   Base URL of the ingestor service (default: http://localhost:8000)
-  BEARER_TOKEN   Optional bearer token for the WebSocket endpoint
 """
 
 from __future__ import annotations
@@ -30,18 +29,8 @@ import streamlit as st
 
 INGESTOR_URL: str = os.environ.get("INGESTOR_URL", "http://localhost:8000").rstrip("/")
 
-try:
-    _token_from_secrets: str = st.secrets.get("BEARER_TOKEN", "") or ""  # type: ignore[union-attr]
-except Exception:
-    _token_from_secrets = ""  # nosec B105 — empty default, not a hardcoded password
-BEARER_TOKEN: str = _token_from_secrets or os.environ.get("BEARER_TOKEN", "")
-WS_URL: str = (
-    INGESTOR_URL.replace("http://", "ws://").replace("https://", "wss://")
-    + "/ws/records/stream"
-)
-if BEARER_TOKEN:
-    WS_URL = f"{WS_URL}?token={BEARER_TOKEN}"
-
+API_AUTH_TOKEN = f"{INGESTOR_URL}/api/v1/auth/token"
+API_AUTH_REFRESH = f"{INGESTOR_URL}/api/v1/auth/refresh"
 API_SCORECARDS = f"{INGESTOR_URL}/api/v1/scorecards"
 API_SOURCES = f"{INGESTOR_URL}/api/v1/sources"
 API_DRIFT = f"{INGESTOR_URL}/api/v1/contracts/sources/{{source_id}}/drift-events"
@@ -69,10 +58,16 @@ st.caption(f"Ingestor: `{INGESTOR_URL}`")
 
 
 @st.cache_data(ttl=REFRESH_INTERVAL, show_spinner=False)
-def fetch_scorecards() -> list[dict]:
+def fetch_scorecards(token: str = "") -> list[dict]:
     try:
         with httpx.Client(timeout=5.0) as client:
-            r = client.get(API_SCORECARDS, params={"limit": 50})
+            r = client.get(
+                API_SCORECARDS,
+                params={"limit": 50},
+                headers={"Authorization": f"Bearer {token}"} if token else {},
+            )
+            if r.status_code == 401:
+                return [{"_401": True}]
             r.raise_for_status()
             return r.json().get("items", [])
     except Exception as exc:  # noqa: BLE001
@@ -80,10 +75,16 @@ def fetch_scorecards() -> list[dict]:
 
 
 @st.cache_data(ttl=REFRESH_INTERVAL, show_spinner=False)
-def fetch_sources() -> list[dict]:
+def fetch_sources(token: str = "") -> list[dict]:
     try:
         with httpx.Client(timeout=5.0) as client:
-            r = client.get(API_SOURCES, params={"limit": 50})
+            r = client.get(
+                API_SOURCES,
+                params={"limit": 50},
+                headers={"Authorization": f"Bearer {token}"} if token else {},
+            )
+            if r.status_code == 401:
+                return []
             r.raise_for_status()
             return r.json().get("items", [])
     except Exception:  # noqa: BLE001
@@ -91,10 +92,16 @@ def fetch_sources() -> list[dict]:
 
 
 @st.cache_data(ttl=REFRESH_INTERVAL, show_spinner=False)
-def fetch_drift_events(source_id: int) -> list[dict]:
+def fetch_drift_events(source_id: int, token: str = "") -> list[dict]:
     try:
         with httpx.Client(timeout=5.0) as client:
-            r = client.get(API_DRIFT.format(source_id=source_id), params={"limit": 20})
+            r = client.get(
+                API_DRIFT.format(source_id=source_id),
+                params={"limit": 20},
+                headers={"Authorization": f"Bearer {token}"} if token else {},
+            )
+            if r.status_code == 401:
+                return []
             r.raise_for_status()
             return r.json().get("items", [])
     except Exception:  # noqa: BLE001
@@ -116,6 +123,90 @@ if "_ws_stop" not in st.session_state:
     st.session_state["_ws_stop"] = threading.Event()
 if "_ws_buf" not in st.session_state:
     st.session_state["_ws_buf"] = queue.Queue()
+# Auth state
+if "access_token" not in st.session_state:
+    st.session_state["access_token"] = ""
+if "refresh_token" not in st.session_state:
+    st.session_state["refresh_token"] = ""
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+if "auth_username" not in st.session_state:
+    st.session_state["auth_username"] = ""
+
+# ---------------------------------------------------------------------------
+# Login sidebar
+# ---------------------------------------------------------------------------
+
+
+def _do_login(username: str, password: str) -> str | None:
+    """POST /api/v1/auth/token (OAuth2 form). Returns error message or None."""
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            r = client.post(
+                API_AUTH_TOKEN,
+                data={"username": username, "password": password},
+            )
+            if r.status_code == 200:
+                body = r.json()
+                st.session_state["access_token"] = body["access_token"]
+                st.session_state["refresh_token"] = body.get("refresh_token", "")
+                st.session_state["logged_in"] = True
+                st.session_state["auth_username"] = username
+                return None
+            return f"Login failed ({r.status_code}): {r.text[:120]}"
+    except Exception as exc:  # noqa: BLE001
+        return f"Connection error: {exc}"
+
+
+def _do_refresh() -> bool:
+    """POST /api/v1/auth/refresh. Rotates both tokens. Returns True on success."""
+    rt = st.session_state.get("refresh_token", "")
+    if not rt:
+        return False
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            r = client.post(API_AUTH_REFRESH, json={"refresh_token": rt})
+            if r.status_code == 200:
+                body = r.json()
+                st.session_state["access_token"] = body["access_token"]
+                st.session_state["refresh_token"] = body.get("refresh_token", "")
+                return True
+    except Exception:  # noqa: BLE001  # nosec B110 — refresh failure: force logout path, pass is safe
+        pass
+    # Refresh failed — force logout
+    st.session_state["access_token"] = ""
+    st.session_state["refresh_token"] = ""
+    st.session_state["logged_in"] = False
+    return False
+
+
+def _auth_headers() -> dict[str, str]:
+    token = st.session_state.get("access_token", "")
+    return {"Authorization": f"Bearer {token}"} if token else {}
+
+
+with st.sidebar:
+    st.header("Authentication")
+    if not st.session_state["logged_in"]:
+        with st.form("login_form"):
+            _uname = st.text_input("Username")
+            _pwd = st.text_input("Password", type="password")
+            if st.form_submit_button("Login"):
+                _err = _do_login(_uname, _pwd)
+                if _err:
+                    st.error(_err)
+                else:
+                    st.cache_data.clear()
+                    st.rerun()
+    else:
+        st.success(f"Logged in as **{st.session_state['auth_username']}**")
+        if st.button("Logout"):
+            st.session_state["access_token"] = ""
+            st.session_state["refresh_token"] = ""
+            st.session_state["logged_in"] = False
+            st.session_state["auth_username"] = ""
+            st.cache_data.clear()
+            st.rerun()
 
 # ---------------------------------------------------------------------------
 # Panel 1: Source Health
@@ -123,9 +214,21 @@ if "_ws_buf" not in st.session_state:
 
 st.header("Source Health")
 
-scorecards = fetch_scorecards()
+_token = st.session_state.get("access_token", "")
+scorecards = fetch_scorecards(token=_token)
 
-if scorecards and "_error" in scorecards[0]:
+# 401 — silent token refresh then retry
+if scorecards and scorecards[0].get("_401"):
+    if _do_refresh():
+        st.cache_data.clear()
+        _token = st.session_state.get("access_token", "")
+        scorecards = fetch_scorecards(token=_token)
+    else:
+        scorecards = []
+
+if not st.session_state["logged_in"]:
+    st.warning("Log in from the sidebar to view data.")
+elif scorecards and "_error" in scorecards[0]:
     st.error(f"Could not reach ingestor: {scorecards[0]['_error']}")
 elif not scorecards:
     st.info("No scorecards yet — seed some sources and wait for the first probe cycle.")
@@ -156,13 +259,13 @@ else:
 
 st.header("Drift Events")
 
-sources = fetch_sources()
+sources = fetch_sources(token=_token)
 if not sources:
     st.info("No sources registered yet.")
 else:
     all_drift: list[dict] = []
     for src in sources:
-        events = fetch_drift_events(src["id"])
+        events = fetch_drift_events(src["id"], token=_token)
         for ev in events:
             all_drift.append(
                 {
@@ -251,12 +354,19 @@ if st.session_state.ws_connected:
     # st.session_state because background threads have no ScriptRunContext.
     _stop: threading.Event = st.session_state["_ws_stop"]
     _buf: queue.Queue = st.session_state["_ws_buf"]
+    _ws_token: str = st.session_state.get("access_token", "")
+    _ws_url: str = (
+        INGESTOR_URL.replace("http://", "ws://").replace("https://", "wss://")
+        + "/ws/records/stream"
+    )
+    if _ws_token:
+        _ws_url = f"{_ws_url}?token={_ws_token}"
 
     def _ws_thread() -> None:
         async def _listen() -> None:
             try:
                 async with _ws.connect(
-                    WS_URL, open_timeout=3, ping_timeout=None
+                    _ws_url, open_timeout=3, ping_timeout=None
                 ) as sock:
                     async for raw in sock:
                         if _stop.is_set():

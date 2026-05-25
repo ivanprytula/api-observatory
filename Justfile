@@ -39,6 +39,13 @@ seed-demo:
 migrate:
     uv run alembic upgrade head
 
+# Create the default admin user (idempotent — 409 is OK)
+create-admin:
+    curl -sf -o /dev/null -w "%{http_code}" -X POST http://localhost:8000/api/v1/auth/register \
+      -H "Content-Type: application/json" \
+      -d '{"username":"admin","email":"admin@example.com","password":"admin123"}' | \
+      grep -qE "^(201|409)" && echo "admin user ready" || echo "create-admin failed"
+
 # Stop all services
 down:
     docker compose down

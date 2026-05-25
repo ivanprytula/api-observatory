@@ -9,6 +9,7 @@ Three auth patterns for learning:
 from __future__ import annotations
 
 import logging
+import uuid
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
@@ -42,6 +43,7 @@ _session_client: Redis | None = None
 DEFAULT_ROLE = "viewer"
 
 _SESSION_KEY_PREFIX = "session:"
+_REFRESH_TOKEN_PREFIX = "refresh:"
 
 
 def _jwt_verification_secrets() -> list[str]:
@@ -359,6 +361,176 @@ def create_jwt_token(
 
     logger.info("jwt_token_created", extra={"sub": sub, "exp": expires_at.isoformat()})
     return token
+
+
+async def create_refresh_token(
+    sub: str,
+    custom_claims: dict[str, Any] | None = None,
+) -> str:
+    """Create a refresh token JWT and store its JTI in Redis for revocation.
+
+    Returns:
+        Signed refresh token string.
+    """
+    now = datetime.now(UTC)
+    jti = str(uuid.uuid4())
+    expires_at = now + timedelta(days=settings.jwt_refresh_ttl_days)
+
+    payload: dict[str, Any] = {
+        "sub": sub,
+        "iat": now,
+        "exp": expires_at,
+        "iss": settings.app_name,
+        "jti": jti,
+        "token_type": "refresh",
+        "tenant_id": (custom_claims or {}).get("tenant_id"),
+        **(custom_claims or {}),
+    }
+
+    token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+    ttl_seconds = settings.jwt_refresh_ttl_days * 86400
+    if _session_client is not None:
+        try:
+            await _session_client.setex(
+                f"{_REFRESH_TOKEN_PREFIX}{jti}", ttl_seconds, sub
+            )  # ty: ignore[invalid-await]
+        except Exception:
+            logger.warning("refresh_token_store_failed", extra={"jti": jti})
+
+    logger.info("refresh_token_created", extra={"sub": sub, "jti": jti})
+    return token
+
+
+async def verify_refresh_token(token: str) -> dict[str, Any]:
+    """Verify a refresh token JWT and confirm its JTI exists in Redis.
+
+    Raises HTTPException 401 if the token is invalid, expired, or revoked.
+    """
+    saw_invalid_signature = False
+    for secret in _jwt_verification_secrets():
+        try:
+            payload = jwt.decode(token, secret, algorithms=[settings.jwt_algorithm])
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token expired",
+            ) from None
+        except jwt.InvalidSignatureError:
+            saw_invalid_signature = True
+            continue
+        except jwt.DecodeError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token format",
+            ) from None
+
+        if payload.get("token_type") != "refresh":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not a refresh token",
+            )
+
+        jti = payload.get("jti")
+        if _session_client is not None and jti:
+            exists = await _session_client.exists(f"{_REFRESH_TOKEN_PREFIX}{jti}")  # ty: ignore[invalid-await]
+            if not exists:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Refresh token revoked or expired",
+                )
+
+        return payload
+
+    if saw_invalid_signature:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token signature",
+        )
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid refresh token",
+    )
+
+
+async def revoke_refresh_token(jti: str) -> None:
+    """Delete a refresh token JTI from Redis (logout / rotation).
+
+    Fail-open: logs a warning if Redis is unavailable.
+    """
+    if _session_client is None:
+        logger.warning("refresh_revoke_skipped_no_redis", extra={"jti": jti})
+        return
+    try:
+        await _session_client.delete(f"{_REFRESH_TOKEN_PREFIX}{jti}")  # ty: ignore[invalid-await]
+        logger.info("refresh_token_revoked", extra={"jti": jti})
+    except Exception:
+        logger.warning("refresh_token_revoke_failed", extra={"jti": jti})
+
+
+async def verify_jwt_token_str(token: str) -> dict[str, Any]:
+    """Verify a JWT from a raw token string (for WebSocket use).
+
+    Same decode logic as ``verify_jwt_token`` but accepts the raw string
+    instead of an Authorization header — WebSocket handshakes pass the token
+    via ``?token=`` query param since browsers cannot set WS headers.
+
+    Raises HTTPException 401 on any validation failure.
+    """
+    saw_invalid_signature = False
+    for secret in _jwt_verification_secrets():
+        try:
+            payload = jwt.decode(token, secret, algorithms=[settings.jwt_algorithm])
+
+            tenant_id = payload.get("tenant_id")
+            if tenant_id:
+                from services.ingestor.core.tenant import tenant_context
+
+                tenant_context.set(int(tenant_id))
+
+            await emit_security_audit_event(
+                event_type="auth.jwt",
+                action="verify_token",
+                decision="allow",
+                actor_type="user",
+                actor_id=str(payload.get("sub")) if payload.get("sub") else None,
+                tenant_id=int(tenant_id) if tenant_id is not None else None,
+                metadata_json={"source": "websocket"},
+            )
+            return payload
+        except jwt.ExpiredSignatureError:
+            await emit_security_audit_event(
+                event_type="auth.jwt",
+                action="verify_token",
+                decision="deny",
+                actor_type="user",
+                reason="token_expired",
+                metadata_json={"source": "websocket"},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token expired",
+            ) from None
+        except jwt.InvalidSignatureError:
+            saw_invalid_signature = True
+            continue
+        except jwt.DecodeError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token format",
+            ) from None
+
+    if saw_invalid_signature:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token signature",
+        )
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid token",
+    )
 
 
 async def verify_jwt_token(

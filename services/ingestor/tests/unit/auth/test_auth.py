@@ -20,13 +20,17 @@ from fastapi.security import HTTPBasicCredentials
 from services.ingestor.auth import (
     _extract_roles,
     create_jwt_token,
+    create_refresh_token,
     create_session,
     jwt_role_guard,
     require_roles,
+    revoke_refresh_token,
     session_role_guard,
     verify_bearer_token,
     verify_docs_credentials,
     verify_jwt_token,
+    verify_jwt_token_str,
+    verify_refresh_token,
     verify_session,
 )
 
@@ -283,4 +287,82 @@ class TestJWT:
         """Completely invalid token string raises 401."""
         with pytest.raises(HTTPException) as exc:
             await verify_jwt_token("Bearer not.a.jwt")
+        assert exc.value.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Refresh tokens
+# ---------------------------------------------------------------------------
+class TestRefreshToken:
+    """Single-use refresh token lifecycle."""
+
+    async def test_create_and_verify_refresh_token(self) -> None:
+        """create_refresh_token issues a token that verify_refresh_token accepts."""
+        with patch(
+            "services.ingestor.auth._session_client", new_callable=AsyncMock
+        ) as mock_redis:
+            mock_redis.setex = AsyncMock(return_value=True)
+            token = await create_refresh_token("user-99")
+
+        assert token
+
+        # Verify it (stub Redis to confirm JTI present)
+        with patch(
+            "services.ingestor.auth._session_client", new_callable=AsyncMock
+        ) as mock_redis:
+            mock_redis.exists = AsyncMock(return_value=1)
+            claims = await verify_refresh_token(token)
+
+        assert claims["sub"] == "user-99"
+        assert claims["token_type"] == "refresh"
+
+    async def test_verify_refresh_token_raises_401_when_revoked(self) -> None:
+        """verify_refresh_token raises 401 when JTI has been revoked in Redis."""
+        with patch(
+            "services.ingestor.auth._session_client", new_callable=AsyncMock
+        ) as mock_redis:
+            mock_redis.setex = AsyncMock(return_value=True)
+            token = await create_refresh_token("user-99")
+
+        with patch(
+            "services.ingestor.auth._session_client", new_callable=AsyncMock
+        ) as mock_redis:
+            mock_redis.exists = AsyncMock(return_value=0)  # revoked
+            with pytest.raises(HTTPException) as exc:
+                await verify_refresh_token(token)
+
+        assert exc.value.status_code == 401
+
+    async def test_verify_refresh_token_rejects_access_token(self) -> None:
+        """verify_refresh_token rejects a regular access token (wrong token_type)."""
+        access_token = create_jwt_token("user-1")
+        with pytest.raises(HTTPException) as exc:
+            await verify_refresh_token(access_token)
+        assert exc.value.status_code == 401
+
+    async def test_revoke_refresh_token_deletes_redis_key(self) -> None:
+        """revoke_refresh_token removes the JTI from Redis."""
+        with patch(
+            "services.ingestor.auth._session_client", new_callable=AsyncMock
+        ) as mock_redis:
+            mock_redis.delete = AsyncMock()
+            await revoke_refresh_token("some-jti-uuid")
+            mock_redis.delete.assert_called_once_with("refresh:some-jti-uuid")
+
+    async def test_create_refresh_token_fails_open_when_redis_unavailable(self) -> None:
+        """create_refresh_token still returns a token even if Redis is down."""
+        with patch("services.ingestor.auth._session_client", None):
+            token = await create_refresh_token("user-no-redis")
+        assert token  # token issued despite no Redis
+
+    async def test_verify_jwt_token_str_accepts_valid_token(self) -> None:
+        """verify_jwt_token_str accepts a raw bearer string (no 'Bearer ' prefix)."""
+        token = create_jwt_token("user-ws")
+        claims = await verify_jwt_token_str(token)
+        assert claims["sub"] == "user-ws"
+
+    async def test_verify_jwt_token_str_rejects_invalid_token(self) -> None:
+        """verify_jwt_token_str raises 401 for a garbage token."""
+        with pytest.raises(HTTPException) as exc:
+            await verify_jwt_token_str("not.a.valid.jwt")
         assert exc.value.status_code == 401

@@ -13,15 +13,20 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.ingestor.api_schemas.records import (
+    LogoutRequest,
+    RefreshRequest,
     TokenResponse,
     UserCreate,
     UserResponse,
 )
 from services.ingestor.auth import (
     create_jwt_token,
+    create_refresh_token,
     create_session,
     delete_session,
+    revoke_refresh_token,
     verify_jwt_token,
+    verify_refresh_token,
 )
 from services.ingestor.constants import API_V1_PREFIX, AUTH_LOGIN_RATE_LIMIT
 from services.ingestor.database import get_db
@@ -114,13 +119,19 @@ async def login(
         custom_claims={"role": user.role, "tenant_id": user.tenant_id},
     )
 
+    # Issue refresh token (Redis-backed, revocable)
+    refresh_token = await create_refresh_token(
+        sub=user.username,
+        custom_claims={"role": user.role, "tenant_id": user.tenant_id},
+    )
+
     # Also create a Redis session with tenant_id
     await create_session(
         user.username, {"role": user.role, "tenant_id": user.tenant_id}
     )
 
     logger.info("user_login", extra={"username": user.username})
-    return TokenResponse(access_token=token)
+    return TokenResponse(access_token=token, refresh_token=refresh_token)
 
 
 @router.get("/me", response_model=UserResponse)
@@ -151,12 +162,77 @@ async def me(claims: JwtDep, db: DbDep) -> UserResponse:
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(session_id: str | None = Cookie(default=None)) -> None:
-    """Invalidate the current session cookie.
+async def logout(
+    body: LogoutRequest | None = None,
+    session_id: str | None = Cookie(default=None),
+) -> None:
+    """Invalidate the current session and optionally revoke the refresh token.
 
     Args:
+        body: Optional body with refresh_token to revoke.
         session_id: Session ID from the HTTP-only cookie (if present).
     """
     if session_id:
         await delete_session(session_id)
+    if body and body.refresh_token:
+        import jwt as _jwt
+
+        try:
+            # Decode without verification to extract jti — we issued this token
+            unverified = _jwt.decode(
+                body.refresh_token,
+                options={"verify_signature": False, "verify_exp": False},
+                algorithms=["HS256"],
+            )
+            jti = unverified.get("jti")
+            if jti:
+                await revoke_refresh_token(jti)
+        except Exception:  # nosec B110 — malformed token on logout: safe to discard
+            pass
     logger.info("user_logout", extra={"session_id": session_id})
+
+
+@router.post("/refresh", response_model=TokenResponse)
+@limiter.limit(AUTH_LOGIN_RATE_LIMIT)
+async def refresh(
+    request: Request,
+    body: RefreshRequest,
+    db: DbDep,
+) -> TokenResponse:
+    """Issue a new access + refresh token pair from a valid refresh token.
+
+    Implements single-use rotation: the old refresh token JTI is revoked
+    immediately and a new one is issued, preventing replay attacks.
+
+    Args:
+        request: Raw FastAPI request (required by slowapi).
+        body: JSON body with refresh_token field.
+        db: Injected async database session.
+
+    Returns:
+        200 TokenResponse with new access_token + refresh_token.
+        401 if refresh token is invalid, expired, or already revoked.
+    """
+    claims = await verify_refresh_token(body.refresh_token)
+
+    username: str = claims.get("sub", "")
+    user = await get_user_by_username(db, username)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or inactive.",
+        )
+
+    # Rotate: revoke old refresh token JTI
+    old_jti = claims.get("jti")
+    if old_jti:
+        await revoke_refresh_token(old_jti)
+
+    custom_claims = {"role": user.role, "tenant_id": user.tenant_id}
+    new_access_token = create_jwt_token(sub=username, custom_claims=custom_claims)
+    new_refresh_token = await create_refresh_token(
+        sub=username, custom_claims=custom_claims
+    )
+
+    logger.info("token_refreshed", extra={"username": username})
+    return TokenResponse(access_token=new_access_token, refresh_token=new_refresh_token)

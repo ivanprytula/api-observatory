@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
@@ -17,6 +17,7 @@ from services.ingestor.api_schemas.source_registry import (
     SourceProfileUpdate,
     SourceSummaryResponse,
 )
+from services.ingestor.auth import jwt_role_guard, verify_jwt_token
 from services.ingestor.constants import (
     API_V1_PREFIX,
     MAX_PAGE_SIZE,
@@ -39,6 +40,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix=f"{API_V1_PREFIX}/sources", tags=["source-registry"])
 
 type DbDep = Annotated[AsyncSession, Depends(get_db)]
+type JwtDep = Annotated[dict[str, Any], Depends(verify_jwt_token)]
+type AdminJwtDep = Annotated[dict[str, Any], Depends(jwt_role_guard("admin"))]
 
 # ---------------------------------------------------------------------------
 # Shared error-response docs
@@ -80,7 +83,7 @@ _R422 = {
     responses={**_R409, **_R422},
 )
 async def register_source(
-    payload: SourceProfileCreate, db: DbDep
+    payload: SourceProfileCreate, db: DbDep, _: AdminJwtDep
 ) -> SourceProfileResponse:
     """Register a new external data source in the registry.
 
@@ -122,6 +125,7 @@ async def register_source(
 )
 async def list_sources(
     db: DbDep,
+    _: JwtDep,
     is_active: bool | None = Query(None, description="Filter by active state."),
     offset: int = Query(0, ge=0, description="Pagination offset."),
     limit: int = Query(
@@ -158,7 +162,7 @@ async def list_sources(
     response_model=SourceSummaryResponse,
     summary="Aggregate source registry statistics",
 )
-async def source_summary(db: DbDep) -> SourceSummaryResponse:
+async def source_summary(db: DbDep, _: JwtDep) -> SourceSummaryResponse:
     """Return aggregate counts, type breakdown, and cost estimates.
 
     Useful for dashboards and capacity-planning views.
@@ -175,7 +179,7 @@ async def source_summary(db: DbDep) -> SourceSummaryResponse:
     summary="Get a source profile by ID",
     responses={**_R404},
 )
-async def get_source(source_id: int, db: DbDep) -> SourceProfileResponse:
+async def get_source(source_id: int, db: DbDep, _: JwtDep) -> SourceProfileResponse:
     """Fetch a single source profile."""
     profile = await get_source_profile(db, source_id)
     if profile is None:
@@ -195,7 +199,7 @@ async def get_source(source_id: int, db: DbDep) -> SourceProfileResponse:
     responses={**_R404, **_R422},
 )
 async def patch_source(
-    source_id: int, patch: SourceProfileUpdate, db: DbDep
+    source_id: int, patch: SourceProfileUpdate, db: DbDep, _: AdminJwtDep
 ) -> SourceProfileResponse:
     """Partially update a source profile.
 
@@ -230,7 +234,7 @@ async def patch_source(
     summary="Deactivate (soft-delete) a source profile",
     responses={**_R404},
 )
-async def delete_source(source_id: int, db: DbDep) -> None:
+async def delete_source(source_id: int, db: DbDep, _: AdminJwtDep) -> None:
     """Mark a source profile as deleted.
 
     The row is retained for audit purposes; it will no longer appear in list
@@ -255,7 +259,7 @@ async def delete_source(source_id: int, db: DbDep) -> None:
     summary="Probe source reachability and latency",
     responses={**_R404},
 )
-async def source_health(source_id: int, db: DbDep) -> SourceHealthResponse:
+async def source_health(source_id: int, db: DbDep, _: JwtDep) -> SourceHealthResponse:
     """Perform a live HEAD (or GET) request against the source URL.
 
     Returns reachability, HTTP status code, and measured round-trip latency.

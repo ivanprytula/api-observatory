@@ -128,8 +128,13 @@ class Settings(BaseSettings):
     )
 
     jwt_expiry_minutes: int = Field(
-        default=60,
-        description="JWT token expiration in minutes",
+        default=30,
+        description="JWT access token expiration in minutes",
+    )
+
+    jwt_refresh_ttl_days: int = Field(
+        default=7,
+        description="Refresh token time-to-live in days",
     )
 
     # ============ Internal Service Auth (M2M) ============

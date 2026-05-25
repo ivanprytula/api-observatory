@@ -441,6 +441,8 @@ __all__ = [
     "UserCreate",
     "UserResponse",
     "TokenResponse",
+    "RefreshRequest",
+    "LogoutRequest",
 ]
 
 
@@ -476,4 +478,17 @@ class TokenResponse(BaseModel):
     """OAuth2 token response."""
 
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
+
+
+class RefreshRequest(BaseModel):
+    """Refresh token request body."""
+
+    refresh_token: str
+
+
+class LogoutRequest(BaseModel):
+    """Optional logout request body — pass refresh_token to revoke it."""
+
+    refresh_token: str | None = None

@@ -22,9 +22,7 @@ pytestmark = pytest.mark.integration
 
 
 _SOURCE: dict[str, Any] = {
-    "url": "https://api.provider-scorecard-test.example.com",
-    "source_type": "rest",
-    "tags": ["scorecard-test"],
+    "base_url": "https://1.1.1.1",
 }
 
 
