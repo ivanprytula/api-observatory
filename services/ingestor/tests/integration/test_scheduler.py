@@ -19,7 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.ingestor.core.handlers import wrap_job_handler
 from services.ingestor.core.scheduler import Job, JobHealthMetrics, JobScheduler
-from services.ingestor.jobs_registry import register_jobs
+from services.ingestor.jobs_registry import register_jobs, register_source_probe_jobs
+from services.ingestor.models import SourceProfile
 
 
 # ============================================================================
@@ -319,6 +320,60 @@ class TestJobsRegistry:
         assert archive_job.max_retries == 2
         assert archive_job.timeout_seconds == 600
         assert "archive" in archive_job.tags
+
+    @pytest.mark.asyncio
+    async def test_register_source_probe_jobs_only_active(
+        self, db: AsyncSession
+    ) -> None:
+        """Register one probe job per active source profile."""
+        active = SourceProfile(
+            name="active-source",
+            base_url="https://example.com",
+            health_check_path="/health",
+            probe_interval_seconds=45,
+            is_active=True,
+        )
+        inactive = SourceProfile(
+            name="inactive-source",
+            base_url="https://example.org",
+            health_check_path="/health",
+            probe_interval_seconds=30,
+            is_active=False,
+        )
+        db.add_all([active, inactive])
+        await db.commit()
+        await db.refresh(active)
+        await db.refresh(inactive)
+
+        scheduler = JobScheduler()
+        registered = await register_source_probe_jobs(scheduler, db)
+
+        assert registered == 1
+        assert f"probe_source_{active.id}" in scheduler._jobs
+        assert f"probe_source_{inactive.id}" not in scheduler._jobs
+
+    @pytest.mark.asyncio
+    async def test_register_source_probe_jobs_interval_matches_profile(
+        self, db: AsyncSession
+    ) -> None:
+        """Probe job interval is derived from SourceProfile.probe_interval_seconds."""
+        source = SourceProfile(
+            name="interval-source",
+            base_url="https://example.net",
+            health_check_path="/status",
+            probe_interval_seconds=75,
+            is_active=True,
+        )
+        db.add(source)
+        await db.commit()
+        await db.refresh(source)
+
+        scheduler = JobScheduler()
+        await register_source_probe_jobs(scheduler, db)
+
+        job = scheduler._jobs[f"probe_source_{source.id}"]
+        assert isinstance(job.trigger, IntervalTrigger)
+        assert int(job.trigger.interval.total_seconds()) == 75
 
 
 # ============================================================================

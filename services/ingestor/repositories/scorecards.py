@@ -36,6 +36,7 @@ async def record_health_sample(
         latency_ms=payload.latency_ms,
         is_success=payload.is_success,
         http_status=payload.http_status,
+        response_body_hash=payload.response_body_hash,
         error_message=payload.error_message,
         region=payload.region,
         tenant_id=payload.tenant_id,

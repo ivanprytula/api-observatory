@@ -15,10 +15,13 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from apscheduler.triggers.interval import IntervalTrigger
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.ingestor import jobs as job_handlers
 from services.ingestor.core.scheduler import JobScheduler
+from services.ingestor.models import SourceProfile
 
 
 logger = logging.getLogger(__name__)
@@ -77,3 +80,46 @@ def register_jobs(scheduler: JobScheduler) -> None:
             "jobs": list(scheduler._jobs.keys()),
         },
     )
+
+
+async def register_source_probe_jobs(scheduler: JobScheduler, db: AsyncSession) -> int:
+    """Register one probe job per active source profile.
+
+    Returns the number of newly registered probe jobs.
+    """
+    stmt = select(SourceProfile).where(
+        SourceProfile.deleted_at.is_(None),
+        SourceProfile.is_active.is_(True),
+    )
+    sources = list((await db.execute(stmt)).scalars().all())
+
+    registered = 0
+    for source in sources:
+        source_id = source.id
+        interval_seconds = max(1, int(source.probe_interval_seconds))
+        job_name = f"probe_source_{source_id}"
+        if job_name in scheduler._jobs:
+            continue
+
+        @scheduler.job(
+            name=job_name,
+            trigger=IntervalTrigger(seconds=interval_seconds),
+            max_retries=0,
+            timeout_seconds=15,
+            tags={"probe", "source-health"},
+        )
+        async def source_probe_job(
+            session: AsyncSession, _source_id: int = source_id
+        ) -> dict[str, Any]:
+            return await job_handlers.run_source_probe(session, _source_id)
+
+        registered += 1
+
+    logger.info(
+        "source_probe_jobs_registered",
+        extra={
+            "registered_probe_jobs": registered,
+            "total_scheduler_jobs": len(scheduler._jobs),
+        },
+    )
+    return registered

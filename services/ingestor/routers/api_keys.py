@@ -61,7 +61,11 @@ async def create_key(payload: ApiKeyCreate, db: DbDep) -> ApiKeyCreatedResponse:
 
     logger.info(
         "api_key_created",
-        extra={"api_key_id": row.id, "tenant_id": row.tenant_id, "name": row.name},
+        extra={
+            "api_key_id": row.id,
+            "tenant_id": row.tenant_id,
+            "api_key_name": row.name,
+        },
     )
     return ApiKeyCreatedResponse(
         id=row.id,

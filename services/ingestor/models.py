@@ -477,6 +477,7 @@ class ProviderHealthSample(Base, TimestampMixin):
     latency_ms: Mapped[float] = mapped_column(Float, nullable=False)
     is_success: Mapped[bool] = mapped_column(Boolean, nullable=False)
     http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    response_body_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     error_message: Mapped[str | None] = mapped_column(String(512), nullable=True)
     region: Mapped[str | None] = mapped_column(String(64), nullable=True)
     tenant_id: Mapped[int | None] = mapped_column(Integer, nullable=True)

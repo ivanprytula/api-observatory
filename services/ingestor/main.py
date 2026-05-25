@@ -34,11 +34,11 @@ from services.ingestor.core.logging import set_cid, setup_logging
 from services.ingestor.core.scheduler import JobScheduler
 from services.ingestor.core.sentry import setup_sentry
 from services.ingestor.core.tenant import TenantMiddleware
-from services.ingestor.database import Base, engine, get_db
+from services.ingestor.database import AsyncSessionLocal, Base, engine, get_db
 from services.ingestor.fetch import close_http_client
 
 # from services.ingestor.fetch_aiohttp import close_http_session
-from services.ingestor.jobs_registry import register_jobs
+from services.ingestor.jobs_registry import register_jobs, register_source_probe_jobs
 from services.ingestor.metrics import (  # noqa: F401 — imported to register metrics at startup
     background_jobs_active,
     background_jobs_in_queue,
@@ -261,6 +261,20 @@ async def lifespan(app: FastAPI):
     # Initialize job scheduler and register all jobs
     _scheduler = JobScheduler()
     register_jobs(_scheduler)
+    try:
+        async with AsyncSessionLocal() as session:
+            registered_probe_jobs = await register_source_probe_jobs(
+                _scheduler, session
+            )
+        logger.info(
+            "source_probe_job_registration_complete",
+            extra={"registered_probe_jobs": registered_probe_jobs},
+        )
+    except Exception as e:
+        logger.warning(
+            "source_probe_job_registration_failed",
+            extra={"error": str(e)},
+        )
 
     # Initialize in-process background worker pool (Pillar 5 prototype)
     if settings.background_workers_enabled:
@@ -294,7 +308,7 @@ async def lifespan(app: FastAPI):
 
     # Start scheduler (only if there are enabled jobs)
     try:
-        await _scheduler.start(get_db)
+        await _scheduler.start(AsyncSessionLocal)
         # Inject scheduler into health router for health check endpoints
         from services.ingestor.routers import health_ingestion_jobs as health_router
 

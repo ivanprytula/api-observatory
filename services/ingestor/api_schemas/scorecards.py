@@ -25,6 +25,12 @@ class HealthSampleCreate(BaseModel):
     http_status: int | None = Field(
         None, ge=100, le=599, description="HTTP status code returned by the provider."
     )
+    response_body_hash: str | None = Field(
+        None,
+        min_length=64,
+        max_length=64,
+        description="SHA-256 hash of the probe response body.",
+    )
     error_message: str | None = Field(
         None,
         max_length=HEALTH_SAMPLE_ERROR_MSG_MAX,
@@ -51,6 +57,7 @@ class HealthSampleResponse(BaseModel):
     latency_ms: float
     is_success: bool
     http_status: int | None
+    response_body_hash: str | None
     error_message: str | None
     region: str | None
     tenant_id: int | None

@@ -188,7 +188,7 @@ The 14 existing workflows stay as-is — do not modify them.
 
 ## PHASE 2: Stabilize Existing Vertical Slices (Commits 4-8)
 
-### Commit 4 — `refactor(vs1): stabilize source-registry — SourceProfile CRUD`
+### Commit 4 — `refactor(vs1): stabilize source-registry — SourceProfile CRUD` [DONE]
 
 **Scope**: existing `SourceProfile` model/repository/router/schemas/tests — harden behavior and trim complexity.
 
@@ -222,11 +222,11 @@ docker compose down
 
 ## PHASE 3: Stabilize Probe Loop (Commit 5)
 
-### Commit 5 — `refactor(vs2): stabilize probe-scheduler — APScheduler background HTTP probe loop`
+### Commit 5 — `refactor(vs2): stabilize probe-scheduler — APScheduler background HTTP probe loop` [DONE]
 
 **Scope**: existing `HealthSample`/scheduler/lifespan wiring/tests — keep behavior, reduce accidental complexity.
 
-**Functional requirement**: On startup, schedule one probe job per active SourceProfile. Each job: HTTP GET → record `status_code`, `response_time_ms`, `response_body_hash`. Persist to `health_samples`.
+**Functional requirement**: On startup, schedule one probe job per active SourceProfile. Each job: HTTP GET → record `status_code`, `response_time_ms`, `response_body_hash`. Persist to `provider_health_samples`.
 
 **Simplicity checks**:
 - APScheduler: `AsyncScheduler` from `apscheduler>=3.10,<4.0`. **Do not upgrade to 4.x** — API changed incompatibly.
@@ -243,8 +243,9 @@ docker compose down
 ```bash
 docker compose up -d
 just seed-demo
-# Wait ~70s for first probe cycle
-docker compose exec db psql -U postgres api_observatory -c "SELECT count(*) FROM health_samples;"
+docker compose restart ingestor
+# Wait ~70s for first probe cycle (probe jobs are registered on startup)
+docker compose exec db psql -U postgres api_observatory -c "SELECT count(*) FROM provider_health_samples;"
 # → count > 0
 docker compose down
 ```

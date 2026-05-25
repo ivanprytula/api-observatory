@@ -128,5 +128,11 @@ def wrap_job_handler(
                 },
             )
             raise
+        finally:
+            close_method = getattr(session, "close", None)
+            if callable(close_method):
+                maybe_awaitable = close_method()
+                if asyncio.iscoroutine(maybe_awaitable):
+                    await maybe_awaitable
 
     return wrapped

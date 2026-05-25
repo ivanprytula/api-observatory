@@ -150,6 +150,13 @@ class JobScheduler:
         self._session_factory = session_factory
 
         for job_name, job_obj in self._jobs.items():
+            if job_obj.trigger is None:
+                logger.info(
+                    "job_registration_skipped",
+                    extra={"job_name": job_name, "reason": "trigger_disabled"},
+                )
+                continue
+
             # Wrap handler to inject session and track metrics
             wrapped_handler = wrap_job_handler(job_obj, session_factory)
 

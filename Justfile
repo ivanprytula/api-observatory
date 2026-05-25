@@ -22,6 +22,19 @@ up-portal:
 logs svc:
     docker compose logs -f {{svc}}
 
+# Seed demo source profiles for probe/scorecard workflows
+seed-demo:
+        curl -s -X POST http://localhost:8000/api/v1/sources \
+            -H "Content-Type: application/json" \
+            -d '{"name":"httpbin","base_url":"https://httpbin.org","health_check_path":"/get","probe_interval_seconds":10,"is_active":true}' > /dev/null
+        curl -s -X POST http://localhost:8000/api/v1/sources \
+            -H "Content-Type: application/json" \
+            -d '{"name":"jsonplaceholder","base_url":"https://jsonplaceholder.typicode.com","health_check_path":"/posts/1","probe_interval_seconds":10,"is_active":true}' > /dev/null
+        curl -s -X POST http://localhost:8000/api/v1/sources \
+            -H "Content-Type: application/json" \
+            -d '{"name":"postman-echo","base_url":"https://postman-echo.com","health_check_path":"/get","probe_interval_seconds":10,"is_active":true}' > /dev/null
+        @echo "seed-demo complete"
+
 # Run database migrations
 migrate:
     uv run alembic upgrade head

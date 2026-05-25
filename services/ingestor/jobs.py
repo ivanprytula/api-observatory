@@ -15,20 +15,28 @@ Job patterns:
 
 from __future__ import annotations
 
+import hashlib
 import heapq
 import logging
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from libs.platform.circuit_breaker import CircuitBreaker, CircuitOpenError
 from libs.platform.retry import IdempotencyKeyTracker, exponential_backoff
 from services.ingestor.api_schemas.records import RecordRequest
-from services.ingestor.models import Record
+from services.ingestor.api_schemas.scorecards import HealthSampleCreate
+from services.ingestor.constants import SOURCE_HEALTH_TIMEOUT_SECONDS
+from services.ingestor.fetch import get_http_client
+from services.ingestor.models import Record, SourceProfile
 from services.ingestor.repositories import records as crud
+from services.ingestor.repositories.scorecards import record_health_sample
 
 
 logger = logging.getLogger(__name__)
@@ -36,6 +44,94 @@ logger = logging.getLogger(__name__)
 
 # Global deduplication tracker (in-memory for single-instance; Redis for distributed)
 _dedup_tracker = IdempotencyKeyTracker(ttl_seconds=3600)
+_source_probe_breakers: dict[int, CircuitBreaker] = {}
+
+
+def _get_source_probe_breaker(source_id: int) -> CircuitBreaker:
+    breaker = _source_probe_breakers.get(source_id)
+    if breaker is None:
+        # Small threshold + short recovery keeps probes responsive under transient failures.
+        breaker = CircuitBreaker(failure_threshold=3, recovery_timeout=60.0)
+        _source_probe_breakers[source_id] = breaker
+    return breaker
+
+
+async def run_source_probe(db: AsyncSession, source_id: int) -> dict[str, Any]:
+    """Probe one active source and persist a provider health sample."""
+    stmt = select(SourceProfile).where(
+        SourceProfile.id == source_id,
+        SourceProfile.deleted_at.is_(None),
+        SourceProfile.is_active.is_(True),
+    )
+    profile = (await db.execute(stmt)).scalar_one_or_none()
+    if profile is None:
+        return {"source_id": source_id, "skipped": True, "reason": "source_inactive"}
+
+    target_url = (
+        f"{profile.base_url.rstrip('/')}/{profile.health_check_path.lstrip('/')}"
+    )
+    breaker = _get_source_probe_breaker(source_id)
+
+    if breaker.is_open:
+        logger.warning(
+            "source_probe_skipped_circuit_open",
+            extra={"source_id": source_id, "target_url": target_url},
+        )
+        return {"source_id": source_id, "skipped": True, "reason": "circuit_open"}
+
+    start = time.monotonic()
+    sampled_at = datetime.now(UTC)
+
+    async def _do_probe_get() -> httpx.Response:
+        client = await get_http_client()
+        return await client.get(target_url, timeout=SOURCE_HEALTH_TIMEOUT_SECONDS)
+
+    status_code: int | None = None
+    body_hash: str | None = None
+    error_message: str | None = None
+    is_success = False
+
+    try:
+        response = await breaker.call(_do_probe_get)
+        status_code = response.status_code
+        body_hash = hashlib.sha256(response.content).hexdigest()
+        is_success = 200 <= response.status_code < 400
+        if not is_success:
+            error_message = f"upstream_status_{response.status_code}"
+    except CircuitOpenError:
+        logger.warning(
+            "source_probe_skipped_circuit_open",
+            extra={"source_id": source_id, "target_url": target_url},
+        )
+        return {"source_id": source_id, "skipped": True, "reason": "circuit_open"}
+    except Exception as exc:
+        error_message = str(exc)
+
+    elapsed_ms = round((time.monotonic() - start) * 1000, 2)
+
+    await record_health_sample(
+        db,
+        HealthSampleCreate(
+            source_id=source_id,
+            sampled_at=sampled_at,
+            latency_ms=elapsed_ms,
+            is_success=is_success,
+            http_status=status_code,
+            response_body_hash=body_hash,
+            error_message=error_message,
+            region=None,
+            tenant_id=None,
+        ),
+    )
+
+    return {
+        "source_id": source_id,
+        "target_url": target_url,
+        "status_code": status_code,
+        "latency_ms": elapsed_ms,
+        "response_body_hash": body_hash,
+        "is_success": is_success,
+    }
 
 
 # ============================================================================

@@ -23,4 +23,5 @@ curl -s http://localhost:8000/docs
 
 - [docs/tech-map.md](docs/tech-map.md)
 - [docs/learning-paths.md](docs/learning-paths.md)
+- [docs/dev/mvp-mvp-plus-usage.md](docs/dev/mvp-mvp-plus-usage.md)
 - [docs/README.md](docs/README.md)
