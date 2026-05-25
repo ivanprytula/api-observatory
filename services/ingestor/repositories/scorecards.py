@@ -1,11 +1,26 @@
-"""Repository helpers for provider health samples and scorecard computation."""
+"""Repository helpers for provider health samples and scorecard computation.
+
+Aggregation strategy
+--------------------
+All rolling-window statistics (uptime %, p50/p95 latency, error count) are
+computed inside a single PostgreSQL aggregate query using:
+
+    COUNT(*) FILTER (WHERE NOT is_success)
+    AVG(latency_ms)
+    PERCENTILE_CONT(0.5)  WITHIN GROUP (ORDER BY latency_ms)
+    PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms)
+
+This keeps row fetching to a minimum and delegates percentile math to the
+database engine, which uses the Greenwald-Khanna algorithm rather than
+pulling every raw sample into Python.
+"""
 
 from __future__ import annotations
 
-import statistics
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import Row, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.ingestor.api_schemas.scorecards import (
@@ -48,41 +63,32 @@ async def record_health_sample(
     return HealthSampleResponse.model_validate(sample)
 
 
-def _compute_percentile(sorted_values: list[float], pct: float) -> float:
-    """Return the p-th percentile from a pre-sorted list using nearest-rank."""
-    if not sorted_values:
-        return 0.0
-    n = len(sorted_values)
-    rank = max(1, round(pct / 100.0 * n))
-    return sorted_values[min(rank, n) - 1]
-
-
-def _build_scorecard(
+def _scorecard_from_agg(
     source: SourceProfile,
-    samples: list[ProviderHealthSample],
     *,
     window_days: int,
     slo_target_pct: float,
+    sample_count: int,
+    error_count: int,
+    avg_latency_ms: float,
+    p50_latency_ms: float,
+    p95_latency_ms: float,
 ) -> ProviderScorecard:
-    """Compute a single scorecard from raw samples for one source."""
-    sample_count = len(samples)
-    error_count = sum(1 for s in samples if not s.is_success)
+    """Assemble a ProviderScorecard from pre-aggregated SQL results.
 
+    All numeric inputs come directly from the database aggregate query.
+    Business metric derivation (uptime %, burn rate) happens here because
+    those are lightweight formulas over already-aggregated scalars.
+    """
     if sample_count == 0:
         uptime_pct = 100.0
-        avg_lat = 0.0
-        p50_lat = 0.0
-        p95_lat = 0.0
+        error_rate = 0.0
     else:
         uptime_pct = (sample_count - error_count) / sample_count * 100.0
-        latencies = sorted(s.latency_ms for s in samples)
-        avg_lat = statistics.mean(latencies)
-        p50_lat = _compute_percentile(latencies, 50)
-        p95_lat = _compute_percentile(latencies, 95)
+        error_rate = 1.0 - uptime_pct / 100.0
 
-    error_rate = 1.0 - uptime_pct / 100.0
     error_budget = 1.0 - slo_target_pct / 100.0
-    # Avoid division by zero when SLO is 100% (budget = 0)
+    # Avoid division by zero when SLO target is 100% (zero error budget).
     if error_budget <= 0.0:
         burn_rate = 0.0 if error_rate == 0.0 else float("inf")
     else:
@@ -95,9 +101,9 @@ def _build_scorecard(
         sample_count=sample_count,
         error_count=error_count,
         uptime_pct=round(uptime_pct, 4),
-        avg_latency_ms=round(avg_lat, 2),
-        p50_latency_ms=round(p50_lat, 2),
-        p95_latency_ms=round(p95_lat, 2),
+        avg_latency_ms=round(avg_latency_ms, 2),
+        p50_latency_ms=round(p50_latency_ms, 2),
+        p95_latency_ms=round(p95_latency_ms, 2),
         slo_target_pct=slo_target_pct,
         error_budget_burn_rate=round(burn_rate, 4),
         generated_at=_now_utc_naive(),
@@ -123,19 +129,72 @@ async def get_scorecard(
         return None
 
     cutoff = _cutoff_utc_naive(days)
-    samples_result = await db.execute(
-        select(ProviderHealthSample)
+    row = _extract_agg(await db.execute(_agg_query([source_id], cutoff)), source_id)
+    return _scorecard_from_agg(
+        source,
+        window_days=days,
+        slo_target_pct=slo_target_pct,
+        **_row_to_kwargs(row),
+    )
+
+
+def _agg_query(source_ids: list[int], cutoff: datetime):  # type: ignore[return]
+    """Single GROUP BY query: one row per source with COUNT/AVG/PERCENTILE_CONT.
+
+    Returns COUNT(*) FILTER for error count and PERCENTILE_CONT(0.5/0.95)
+    for median and p95 latency — all computed inside PostgreSQL.
+    """
+    return (
+        select(
+            ProviderHealthSample.source_id,
+            func.count().label("sample_count"),
+            func.count()
+            .filter(ProviderHealthSample.is_success.is_(False))
+            .label("error_count"),
+            func.avg(ProviderHealthSample.latency_ms).label("avg_latency_ms"),
+            func.percentile_cont(0.5)
+            .within_group(ProviderHealthSample.latency_ms.asc())
+            .label("p50_latency_ms"),
+            func.percentile_cont(0.95)
+            .within_group(ProviderHealthSample.latency_ms.asc())
+            .label("p95_latency_ms"),
+        )
         .where(
-            ProviderHealthSample.source_id == source_id,
+            ProviderHealthSample.source_id.in_(source_ids),
             ProviderHealthSample.sampled_at >= cutoff,
         )
-        .order_by(ProviderHealthSample.sampled_at.asc())
+        .group_by(ProviderHealthSample.source_id)
     )
-    samples = list(samples_result.scalars().all())
 
-    return _build_scorecard(
-        source, samples, window_days=days, slo_target_pct=slo_target_pct
-    )
+
+def _extract_agg(result: Any, source_id: int) -> Row[Any] | None:
+    """Index aggregate result rows by source_id; return row or None."""
+    return {row.source_id: row for row in result.all()}.get(source_id)
+
+
+def _row_to_kwargs(row: Row[Any] | None) -> dict[str, Any]:
+    """Convert a nullable aggregate row to _scorecard_from_agg keyword args."""
+    if row is None:
+        return {
+            "sample_count": 0,
+            "error_count": 0,
+            "avg_latency_ms": 0.0,
+            "p50_latency_ms": 0.0,
+            "p95_latency_ms": 0.0,
+        }
+    return {
+        "sample_count": row.sample_count or 0,
+        "error_count": row.error_count or 0,
+        "avg_latency_ms": float(row.avg_latency_ms)
+        if row.avg_latency_ms is not None
+        else 0.0,
+        "p50_latency_ms": float(row.p50_latency_ms)
+        if row.p50_latency_ms is not None
+        else 0.0,
+        "p95_latency_ms": float(row.p95_latency_ms)
+        if row.p95_latency_ms is not None
+        else 0.0,
+    }
 
 
 async def list_scorecards(
@@ -146,7 +205,12 @@ async def list_scorecards(
     slo_target_pct: float,
     limit: int,
 ) -> list[ProviderScorecard]:
-    """Compute scorecards for all active sources (optionally filtered by source)."""
+    """Compute scorecards for all active sources via one aggregate SQL query.
+
+    Two queries total regardless of source count:
+      1. Fetch active SourceProfile rows (with LIMIT).
+      2. One GROUP BY aggregate over all matching health samples.
+    """
     source_stmt = (
         select(SourceProfile)
         .where(SourceProfile.deleted_at.is_(None))
@@ -162,29 +226,20 @@ async def list_scorecards(
 
     cutoff = _cutoff_utc_naive(days)
     source_ids = [s.id for s in sources]
-
-    samples_result = await db.execute(
-        select(ProviderHealthSample)
-        .where(
-            ProviderHealthSample.source_id.in_(source_ids),
-            ProviderHealthSample.sampled_at >= cutoff,
-        )
-        .order_by(ProviderHealthSample.sampled_at.asc())
-    )
-    all_samples = list(samples_result.scalars().all())
-
-    samples_by_source: dict[int, list[ProviderHealthSample]] = {
-        s.id: [] for s in sources
+    agg_rows = {
+        row.source_id: row
+        for row in (await db.execute(_agg_query(source_ids, cutoff))).all()
     }
-    for sample in all_samples:
-        samples_by_source[sample.source_id].append(sample)
 
-    return [
-        _build_scorecard(
-            source,
-            samples_by_source[source.id],
-            window_days=days,
-            slo_target_pct=slo_target_pct,
+    scorecards = []
+    for source in sources:
+        row = agg_rows.get(source.id)
+        scorecards.append(
+            _scorecard_from_agg(
+                source,
+                window_days=days,
+                slo_target_pct=slo_target_pct,
+                **_row_to_kwargs(row),
+            )
         )
-        for source in sources
-    ]
+    return scorecards

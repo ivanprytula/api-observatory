@@ -254,7 +254,7 @@ docker compose down
 
 ## PHASE 4: Stabilize Scorecard (Commit 6)
 
-### Commit 6 — `refactor(vs3): stabilize scorecard — rolling 24h uptime and latency`
+### Commit 6 — `refactor(vs3): stabilize scorecard — rolling 24h uptime and latency` ✅ DONE
 
 **Scope**: existing `ProviderScorecard` model/repository/compute/router/tests — validate SQL-first aggregation path.
 

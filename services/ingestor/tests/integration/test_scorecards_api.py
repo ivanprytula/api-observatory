@@ -1,11 +1,24 @@
-"""Integration tests for Provider Scorecard endpoints."""
+"""Integration tests for Provider Scorecard endpoints.
+
+These tests require a real PostgreSQL instance because scorecard
+computation uses PERCENTILE_CONT, an ordered-set aggregate that is
+not available in SQLite.
+
+Run with:
+    env -u DATABASE_URL_TEST uv run pytest \
+        services/ingestor/tests/integration/test_scorecards_api.py -v
+"""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import pytest
 from httpx import AsyncClient
+
+
+pytestmark = pytest.mark.integration
 
 
 _SOURCE: dict[str, Any] = {
