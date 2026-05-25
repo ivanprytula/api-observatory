@@ -119,3 +119,9 @@ restore-s3-postgres s3uri:
 # Restore MongoDB from an S3 URI
 restore-s3-mongodb s3uri:
     bash infra/scripts/restore.sh mongodb --from-s3 {{s3uri}}
+
+# ─── API Testing (Bruno) ───────────────────────────────────────────────────────
+
+# Run all Bruno API collections against the local stack
+api-test:
+    bru run bruno/ --env local

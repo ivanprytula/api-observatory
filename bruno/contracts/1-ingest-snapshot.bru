@@ -1,0 +1,33 @@
+meta {
+  name: Ingest Snapshot
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/contracts/snapshots
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "source_id": {{source_id}},
+    "payload_schema": {
+      "id": "integer",
+      "name": "string",
+      "email": "string",
+      "created_at": "datetime"
+    },
+    "schema_version": "1.0.0",
+    "snapshot_note": "bruno manual snapshot"
+  }
+}

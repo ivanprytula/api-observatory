@@ -1,0 +1,29 @@
+meta {
+  name: Create Source
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/sources
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "httpbin-demo",
+    "base_url": "https://httpbin.org",
+    "health_check_path": "/get",
+    "probe_interval_seconds": 60,
+    "is_active": true
+  }
+}

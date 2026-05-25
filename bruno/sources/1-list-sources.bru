@@ -1,0 +1,20 @@
+meta {
+  name: List Sources
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/sources
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+query {
+  offset: 0
+  limit: 20
+}

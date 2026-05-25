@@ -1,0 +1,20 @@
+meta {
+  name: List Drift Events for Source
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/contracts/sources/{{source_id}}/drift-events
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+query {
+  offset: 0
+  limit: 20
+}

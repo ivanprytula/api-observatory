@@ -1,0 +1,55 @@
+meta {
+  name: WebSocket Connect (wscat example)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/health
+  body: none
+  auth: none
+}
+
+docs {
+  # WebSocket Live Stream
+
+  Bruno CLI does not support WebSocket connections. Use wscat for interactive
+  testing or the Streamlit dashboard for a visual stream.
+
+  ## Connect with wscat
+
+  ```bash
+  # Install wscat once
+  npm install -g wscat
+
+  # Connect without auth (open endpoint during MVP)
+  wscat -c "ws://localhost:8000/ws/records/stream"
+
+  # Connect with bearer token (when auth is enabled)
+  wscat -c "ws://localhost:8000/ws/records/stream?token=<your-token>"
+  ```
+
+  ## Expected events
+
+  Each drift event is pushed as a JSON object:
+
+  ```json
+  {
+    "event": "drift",
+    "source_id": 1,
+    "severity": "minor",
+    "detected_at": "2026-05-25T10:00:00Z"
+  }
+  ```
+
+  ## Streamlit dashboard
+
+  Run the dashboard for a browser-based live tail:
+
+  ```bash
+  uv run streamlit run streamlit_app.py
+  ```
+
+  This GET /health request is included as a smoke check so `bru run` does not
+  skip this collection folder.
+}

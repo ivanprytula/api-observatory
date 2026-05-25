@@ -24,4 +24,15 @@ curl -s http://localhost:8000/docs
 - [docs/tech-map.md](docs/tech-map.md)
 - [docs/learning-paths.md](docs/learning-paths.md)
 - [docs/dev/mvp-mvp-plus-usage.md](docs/dev/mvp-mvp-plus-usage.md)
+- [docs/dev/bruno-collections.md](docs/dev/bruno-collections.md)
 - [docs/README.md](docs/README.md)
+
+## Test the API
+
+```bash
+docker compose up -d
+just api-test
+# runs: bru run bruno/ --env local
+```
+
+See [docs/dev/bruno-collections.md](docs/dev/bruno-collections.md) for installation and usage.

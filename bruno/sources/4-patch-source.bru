@@ -1,0 +1,25 @@
+meta {
+  name: Patch Source (deactivate)
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/sources/{{source_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "is_active": false
+  }
+}
