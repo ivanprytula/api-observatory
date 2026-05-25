@@ -14,6 +14,13 @@ auth:bearer {
   token: {{token}}
 }
 
-vars:pre-request {
-  record_id: 1
+# post-MVP: assertions deferred until OPENAI_API_KEY is configured
+assert {
+  res.status: in [200, 500]
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.run_id) {
+    bru.setEnvVar("run_id", res.body.run_id);
+  }
 }

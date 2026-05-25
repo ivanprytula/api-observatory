@@ -457,6 +457,11 @@ class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=64)
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
+    role: str = Field(
+        "viewer",
+        pattern="^(viewer|writer|operator|tenant_admin|admin)$",
+        description="Role assigned at creation. Defaults to viewer.",
+    )
     tenant_id: int | None = Field(None, description="Assigned tenant ID")
 
 

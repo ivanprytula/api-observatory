@@ -68,6 +68,7 @@ async def register(body: UserCreate, db: DbDep) -> UserResponse:
             username=body.username,
             email=body.email,
             password_hash=password_hash,
+            role=body.role,
             tenant_id=body.tenant_id,
         )
     except IntegrityError:

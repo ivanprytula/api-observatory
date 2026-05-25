@@ -39,12 +39,12 @@ seed-demo:
 migrate:
     uv run alembic upgrade head
 
-# Create the default admin user (idempotent — 409 is OK)
+# Create the default admin user. After db-reset this is always 201; outside tests 409 is also fine.
 create-admin:
     curl -sf -o /dev/null -w "%{http_code}" -X POST http://localhost:8000/api/v1/auth/register \
       -H "Content-Type: application/json" \
-      -d '{"username":"admin","email":"admin@example.com","password":"admin123"}' | \
-      grep -qE "^(201|409)" && echo "admin user ready" || echo "create-admin failed"
+      -d '{"username":"admin","email":"admin@example.com","password":"admin123","role":"admin"}' | \
+      grep -qE "^(201|409)" && echo "admin user ready" || (echo "create-admin failed" >&2; exit 1)
 
 # Stop all services
 down:
@@ -129,6 +129,39 @@ restore-s3-mongodb s3uri:
 
 # ─── API Testing (Bruno) ───────────────────────────────────────────────────────
 
-# Run all Bruno API collections against the local stack
+# Verify the stack is healthy. Fails fast if not up.
+api-check:
+    @curl -sf http://localhost:8000/readyz > /dev/null && echo "stack ready" || (echo "stack not ready — run: just up" >&2; exit 1)
+
+# Wipe DB to a clean empty state: stop → remove container+volume → restart → wait.
+db-reset:
+    docker compose rm -sfv ingestor db
+    docker compose up -d db
+    @bash -c 'until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done'
+    docker compose up -d ingestor
+    @bash -c 'until curl -sf http://localhost:8000/readyz > /dev/null 2>&1; do sleep 1; done && echo "stack ready"'
+
+# Seed one demo source via API (requires admin to exist first).
+# Contracts tests depend on source_id=1 existing before they run.
+seed-source:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TOKEN=$(curl -sf -X POST http://localhost:8000/api/v1/auth/token \
+      -H 'Content-Type: application/x-www-form-urlencoded' \
+      -d 'username=admin&password=admin123' | \
+      python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+    curl -sf -X POST http://localhost:8000/api/v1/sources \
+      -H "Authorization: Bearer $TOKEN" \
+      -H 'Content-Type: application/json' \
+      -d '{"name":"seed-internal","base_url":"https://httpbin.org","health_check_path":"/get","probe_interval_seconds":60,"is_active":true}' > /dev/null
+    echo "seed-source complete"
+
+# E2E smoke test: clean DB → seed admin + source → run Bruno collections → clean DB.
 api-test:
+    #!/usr/bin/env bash
+    set -eo pipefail
+    trap 'just db-reset' EXIT
+    just db-reset
+    just create-admin
+    just seed-source
     cd bruno && bru run . -r --env local

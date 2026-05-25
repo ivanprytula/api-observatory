@@ -1,0 +1,33 @@
+meta {
+  name: Setup — Create Test Record
+  type: http
+  seq: 0
+}
+
+post {
+  url: {{baseUrl}}/api/v1/records
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "source": "test.agent.seed",
+    "data": {"test": true, "value": 42}
+  }
+}
+
+assert {
+  res.status: in [200, 201]
+  res.body.id: isDefined
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setEnvVar("record_id", res.body.id.toString());
+  }
+}

@@ -106,6 +106,8 @@ services:
       REDIS_URL: redis://redis:6379
       LOG_FORMAT: json
       SERVICE_VERSION: ${SERVICE_VERSION:-0.1.0}
+    volumes:
+      - ./services/ingestor:/app/services/ingestor
     ports:
       - '8000:8000'
     depends_on:
