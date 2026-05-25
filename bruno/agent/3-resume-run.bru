@@ -1,0 +1,29 @@
+meta {
+  name: Resume HITL Run (approve or reject)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/agent/runs/{{run_id}}/resume
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "approve": true
+  }
+}
+
+vars:pre-request {
+  run_id: replace-with-run-id-from-review-response
+}

@@ -1,0 +1,19 @@
+meta {
+  name: Enrich Record (HITL review — pauses before publish)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/agent/enrich/{{record_id}}/review
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+vars:pre-request {
+  record_id: 1
+}

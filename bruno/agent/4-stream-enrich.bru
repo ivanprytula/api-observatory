@@ -1,0 +1,38 @@
+meta {
+  name: Stream Enrich Record (SSE)
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/agent/enrich/{{record_id}}/stream
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+headers {
+  Accept: text/event-stream
+}
+
+vars:pre-request {
+  record_id: 1
+}
+
+docs {
+  Streams Server-Sent Events for each LangGraph node completion.
+
+  Each event follows the SSE format:
+    event: node_complete
+    data: {"node": "<name>", "classification": {...}, "analysis": "..."}
+
+  Final event:
+    event: done
+    data: {"run_id": "...", "record_id": 1, "classification": {...}, "analysis": "...", "published": true, "hitl_paused": false}
+
+  Bruno does not render streaming responses in real time — use curl or a browser EventSource for live output:
+    curl -N -H "Authorization: Bearer <token>" http://localhost:8000/api/v1/agent/enrich/1/stream
+}

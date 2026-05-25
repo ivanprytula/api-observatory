@@ -321,7 +321,7 @@ docker compose down
 
 ---
 
-## PHASE 6b: Streamlit Dashboard (Commit 8b)
+## PHASE 6b: Streamlit Dashboard (Commit 8b) [DONE]
 
 ### Commit 8b — `feat(ui): Streamlit dashboard — drift events, source health, live WS tail`
 
@@ -366,7 +366,7 @@ exists — the app wraps the call in `try/except` and falls back to `os.environ`
 
 ---
 
-## PHASE 6c: API Collections for Testing & Documentation (Commit 8c)
+## PHASE 6c: API Collections for Testing & Documentation (Commit 8c) [DONE]
 
 ### Commit 8c — `docs(api): Bruno collections — living API documentation`
 
@@ -445,7 +445,7 @@ docker compose down
 
 ---
 
-## PHASE 7: Auth Cross-cut (Commit 9)
+## PHASE 7: Auth Cross-cut (Commit 9) [DONE]
 
 ### Commit 9 — `feat: JWT auth, RBAC, apply to all routes`
 
@@ -465,7 +465,7 @@ docker compose down
 
 ---
 
-## PHASE 8: Observability (Commit 10)
+## PHASE 8: Observability (Commit 10) [DONE]
 
 ### Commit 10 — `feat: structured logging, Prometheus metrics, OTEL traces`
 
@@ -484,7 +484,7 @@ docker compose down
 
 ---
 
-## PHASE 9: Resilience Patterns (Commit 11)
+## PHASE 9: Resilience Patterns (Commit 11) [DONE]
 
 ### Commit 11 — `feat: rate limiting, circuit breaker applied`
 
@@ -501,7 +501,7 @@ docker compose down
 
 ---
 
-## PHASE 10: LangGraph Agent (Commit 12)
+## PHASE 10: LangGraph Agent (Commit 12) [DONE]
 
 ### Commit 12 — `feat(agent): LangGraph HITL, SSE streaming`
 

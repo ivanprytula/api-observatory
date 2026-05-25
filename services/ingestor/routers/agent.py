@@ -9,8 +9,8 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.ingestor.agent.graph import (
-    record_enrichment_agent,
-    record_enrichment_agent_hitl,
+    get_agent,
+    get_agent_hitl,
 )
 from services.ingestor.api_schemas.records import AgentRunResponse
 from services.ingestor.database import get_db
@@ -44,7 +44,8 @@ async def enrich_record(record_id: int, db: AsyncSession = Depends(get_db)):
     }
 
     config = {"configurable": {"thread_id": run_id}}
-    final_state = await record_enrichment_agent.ainvoke(initial_state, config=config)
+    agent = get_agent()
+    final_state = await agent.ainvoke(initial_state, config=config)
 
     return AgentRunResponse(
         run_id=run_id,
@@ -74,9 +75,8 @@ async def enrich_record_review(record_id: int, db: AsyncSession = Depends(get_db
     }
 
     config = {"configurable": {"thread_id": run_id}}
-    final_state = await record_enrichment_agent_hitl.ainvoke(
-        initial_state, config=config
-    )
+    agent_hitl = get_agent_hitl()
+    final_state = await agent_hitl.ainvoke(initial_state, config=config)
 
     return AgentRunResponse(
         run_id=run_id,
@@ -91,21 +91,20 @@ async def enrich_record_review(record_id: int, db: AsyncSession = Depends(get_db
 @router.post("/runs/{run_id}/resume", response_model=AgentRunResponse)
 async def resume_run(run_id: str, body: ResumeRequest):
     config = {"configurable": {"thread_id": run_id}}
+    agent_hitl = get_agent_hitl()
 
     # get state
-    state_snapshot = await record_enrichment_agent_hitl.aget_state(config)
+    state_snapshot = await agent_hitl.aget_state(config)
     if not state_snapshot:
         raise HTTPException(status_code=404, detail="Run not found or not resumable")
 
     if body.approve:
-        final_state = await record_enrichment_agent_hitl.ainvoke(None, config=config)
+        final_state = await agent_hitl.ainvoke(None, config=config)
         published = True
     else:
         # update state
-        await record_enrichment_agent_hitl.aupdate_state(
-            config, {"error": "rejected_by_human"}
-        )
-        final_state = await record_enrichment_agent_hitl.aget_state(config)
+        await agent_hitl.aupdate_state(config, {"error": "rejected_by_human"})
+        final_state = await agent_hitl.aget_state(config)
         final_state = final_state.values
         published = False
 
@@ -137,10 +136,11 @@ async def stream_enrich_record(record_id: int, db: AsyncSession = Depends(get_db
     }
 
     config = {"configurable": {"thread_id": run_id}}
+    agent = get_agent()
 
     async def event_gen() -> AsyncGenerator[str]:
         try:
-            async for event in record_enrichment_agent.astream_events(
+            async for event in agent.astream_events(
                 initial_state, config=config, version="v1"
             ):
                 if event["event"] == "on_chain_end":
@@ -156,7 +156,7 @@ async def stream_enrich_record(record_id: int, db: AsyncSession = Depends(get_db
 
             # Stream node outputs via astream(stream_mode="updates")
             # Each node completion emits an update event with node name and state
-            async for event in record_enrichment_agent.astream(
+            async for event in agent.astream(
                 initial_state, config=config, stream_mode="updates"
             ):
                 for node_name, node_state in event.items():
@@ -170,7 +170,7 @@ async def stream_enrich_record(record_id: int, db: AsyncSession = Depends(get_db
                     yield f"event: node_complete\ndata: {json.dumps(data)}\n\n"
 
             # We don't get the FULL state via updates, we only get the deltas. Let's merge it:
-            final_state_snapshot = await record_enrichment_agent.aget_state(config)
+            final_state_snapshot = await agent.aget_state(config)
             final_state_vals = final_state_snapshot.values
 
             done_data = {

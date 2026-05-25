@@ -38,6 +38,11 @@ API_DRIFT = f"{INGESTOR_URL}/api/v1/contracts/sources/{{source_id}}/drift-events
 API_HEALTH = f"{INGESTOR_URL}/health"
 API_READYZ = f"{INGESTOR_URL}/readyz"
 API_METRICS = f"{INGESTOR_URL}/metrics"
+API_AGENT_ENRICH = f"{INGESTOR_URL}/api/v1/agent/enrich/{{record_id}}"
+API_AGENT_REVIEW = f"{INGESTOR_URL}/api/v1/agent/enrich/{{record_id}}/review"
+API_AGENT_RESUME = f"{INGESTOR_URL}/api/v1/agent/runs/{{run_id}}/resume"
+API_AGENT_STREAM = f"{INGESTOR_URL}/api/v1/agent/enrich/{{record_id}}/stream"
+
 
 REFRESH_INTERVAL = 30  # seconds between auto-refreshes for health / drift panels
 MAX_STREAM_MESSAGES = 50
@@ -153,6 +158,15 @@ if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 if "auth_username" not in st.session_state:
     st.session_state["auth_username"] = ""
+# Agent panel state
+if "agent_run_id" not in st.session_state:
+    st.session_state["agent_run_id"] = ""
+if "agent_result" not in st.session_state:
+    st.session_state["agent_result"] = None
+if "agent_hitl_paused" not in st.session_state:
+    st.session_state["agent_hitl_paused"] = False
+if "agent_stream_events" not in st.session_state:
+    st.session_state["agent_stream_events"]: list[dict] = []
 
 # ---------------------------------------------------------------------------
 # Login sidebar
@@ -442,7 +456,191 @@ if st.session_state.ws_connected:
 _render_messages()
 
 # ---------------------------------------------------------------------------
-# Panel 4: Service Health
+# Panel 4: Agent Enrichment
+# ---------------------------------------------------------------------------
+
+st.header("🤖 Agent Enrichment")
+st.caption(
+    "Invoke the LangGraph enrichment agent against any record. "
+    "Choose full-auto, Human-in-the-Loop (HITL), or SSE streaming."
+)
+
+_agent_token = st.session_state.get("access_token", "")
+_agent_headers = {"Authorization": f"Bearer {_agent_token}"} if _agent_token else {}
+
+agent_tab_full, agent_tab_hitl, agent_tab_stream = st.tabs(
+    ["⚡ Full Run", "👁 HITL Review", "📡 Stream (SSE)"]
+)
+
+# --- Tab 1: Full auto run ---
+with agent_tab_full:
+    col_rid, col_go = st.columns([2, 1])
+    _full_rid = col_rid.number_input(
+        "Record ID", min_value=1, value=1, step=1, key="agent_full_rid"
+    )
+    if col_go.button("▶ Enrich", key="agent_full_run"):
+        with st.spinner("Running enrichment agent…"):
+            try:
+                with httpx.Client(timeout=60.0) as _c:
+                    _r = _c.post(
+                        API_AGENT_ENRICH.format(record_id=int(_full_rid)),
+                        headers=_agent_headers,
+                    )
+                    _r.raise_for_status()
+                    st.session_state["agent_result"] = _r.json()
+                    st.session_state["agent_hitl_paused"] = False
+            except Exception as _exc:  # noqa: BLE001
+                st.error(f"Agent call failed: {_exc}")
+    if st.session_state["agent_result"] and not st.session_state["agent_hitl_paused"]:
+        _res = st.session_state["agent_result"]
+        st.success(f"Run `{_res.get('run_id', '?')}` complete")
+        _clf = _res.get("classification")
+        if _clf:
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Category", _clf.get("category", "—"))
+            c2.metric("Priority", _clf.get("priority", "—"))
+            c3.metric("Sentiment", _clf.get("sentiment", "—"))
+            c4.metric("Published", "✅" if _res.get("published") else "⏸")
+            st.markdown(f"**Summary:** {_clf.get('summary', '—')}")
+        if _res.get("analysis"):
+            with st.expander("Analysis", expanded=True):
+                st.write(_res["analysis"])
+
+# --- Tab 2: HITL review + resume ---
+with agent_tab_hitl:
+    col_hrid, col_hgo = st.columns([2, 1])
+    _hitl_rid = col_hrid.number_input(
+        "Record ID", min_value=1, value=1, step=1, key="agent_hitl_rid"
+    )
+    if col_hgo.button("👁 Start Review", key="agent_hitl_start"):
+        with st.spinner("Starting HITL enrichment…"):
+            try:
+                with httpx.Client(timeout=60.0) as _c:
+                    _r = _c.post(
+                        API_AGENT_REVIEW.format(record_id=int(_hitl_rid)),
+                        headers=_agent_headers,
+                    )
+                    _r.raise_for_status()
+                    _body = _r.json()
+                    st.session_state["agent_run_id"] = _body.get("run_id", "")
+                    st.session_state["agent_result"] = _body
+                    st.session_state["agent_hitl_paused"] = _body.get(
+                        "hitl_paused", False
+                    )
+            except Exception as _exc:  # noqa: BLE001
+                st.error(f"HITL call failed: {_exc}")
+
+    if st.session_state["agent_hitl_paused"]:
+        _res = st.session_state["agent_result"]
+        st.warning(
+            f"⏸ Paused before publish — Run ID: `{st.session_state['agent_run_id']}`"
+        )
+        _clf = _res.get("classification") if _res else None
+        if _clf:
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Category", _clf.get("category", "—"))
+            c2.metric("Priority", _clf.get("priority", "—"))
+            c3.metric("Sentiment", _clf.get("sentiment", "—"))
+            st.markdown(f"**Summary:** {_clf.get('summary', '—')}")
+        if _res and _res.get("analysis"):
+            with st.expander("Analysis to publish", expanded=True):
+                st.write(_res["analysis"])
+
+        col_approve, col_reject = st.columns(2)
+        if col_approve.button("✅ Approve & Publish", key="agent_hitl_approve"):
+            with st.spinner("Resuming with approval…"):
+                try:
+                    with httpx.Client(timeout=60.0) as _c:
+                        _r = _c.post(
+                            API_AGENT_RESUME.format(
+                                run_id=st.session_state["agent_run_id"]
+                            ),
+                            json={"approve": True},
+                            headers=_agent_headers,
+                        )
+                        _r.raise_for_status()
+                        st.session_state["agent_result"] = _r.json()
+                        st.session_state["agent_hitl_paused"] = False
+                        st.success("Published! ✅")
+                        st.rerun()
+                except Exception as _exc:  # noqa: BLE001
+                    st.error(f"Resume failed: {_exc}")
+        if col_reject.button("❌ Reject", key="agent_hitl_reject"):
+            with st.spinner("Rejecting…"):
+                try:
+                    with httpx.Client(timeout=60.0) as _c:
+                        _r = _c.post(
+                            API_AGENT_RESUME.format(
+                                run_id=st.session_state["agent_run_id"]
+                            ),
+                            json={"approve": False},
+                            headers=_agent_headers,
+                        )
+                        _r.raise_for_status()
+                        st.session_state["agent_result"] = None
+                        st.session_state["agent_hitl_paused"] = False
+                        st.info("Run rejected — publish skipped.")
+                        st.rerun()
+                except Exception as _exc:  # noqa: BLE001
+                    st.error(f"Reject failed: {_exc}")
+
+# --- Tab 3: SSE stream ---
+with agent_tab_stream:
+    col_srid, col_sgo = st.columns([2, 1])
+    _stream_rid = col_srid.number_input(
+        "Record ID", min_value=1, value=1, step=1, key="agent_stream_rid"
+    )
+    if col_sgo.button("📡 Stream", key="agent_stream_run"):
+        st.session_state["agent_stream_events"] = []
+        _stream_url = API_AGENT_STREAM.format(record_id=int(_stream_rid))
+        _event_placeholder = st.empty()
+        try:
+            with httpx.Client(timeout=120.0) as _c:
+                with _c.stream(
+                    "GET",
+                    _stream_url,
+                    headers={**_agent_headers, "Accept": "text/event-stream"},
+                ) as _resp:
+                    _resp.raise_for_status()
+                    _current_event = ""
+                    for _line in _resp.iter_lines():
+                        if _line.startswith("event:"):
+                            _current_event = _line[len("event:") :].strip()
+                        elif _line.startswith("data:"):
+                            _raw = _line[len("data:") :].strip()
+                            try:
+                                _data = json.loads(_raw)
+                            except json.JSONDecodeError:
+                                _data = {"raw": _raw}
+                            st.session_state["agent_stream_events"].append(
+                                {"event": _current_event, **_data}
+                            )
+                            _event_placeholder.empty()
+        except Exception as _exc:  # noqa: BLE001
+            st.error(f"Stream error: {_exc}")
+
+    if st.session_state["agent_stream_events"]:
+        for _ev in st.session_state["agent_stream_events"]:
+            _etype = _ev.get("event", "")
+            _icon = {"node_complete": "🔵", "done": "✅", "error": "🔴"}.get(
+                _etype, "📨"
+            )
+            if _etype == "node_complete":
+                _node = _ev.get("node", "?")
+                st.markdown(f"{_icon} **node_complete** → `{_node}`")
+                if _ev.get("classification"):
+                    st.json(_ev["classification"], expanded=False)
+            elif _etype == "done":
+                st.success(f"✅ Done — run `{_ev.get('run_id', '?')}`")
+                if _ev.get("analysis"):
+                    st.write(_ev["analysis"])
+            elif _etype == "error":
+                st.error(_ev.get("error", "Unknown error"))
+    else:
+        st.info("Press **Stream** to run and receive SSE events node-by-node.")
+
+# ---------------------------------------------------------------------------
+# Panel 5: Service Health
 # ---------------------------------------------------------------------------
 
 st.header("Service Health")

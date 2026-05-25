@@ -1,3 +1,6 @@
+import logging
+
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from langgraph.graph import END, START, StateGraph
 
@@ -11,6 +14,9 @@ from .nodes import (
     publish_node,
 )
 from .state import AgentState
+
+
+logger = logging.getLogger(__name__)
 
 
 def _should_deep_analyze(state: AgentState) -> str:
@@ -44,11 +50,57 @@ def get_checkpointer() -> AsyncRedisSaver:
 
 _graph = build_graph()
 
-# Compile without checkpointer so the module can be imported without a live Redis
-# connection (important for tests and cold imports). Production endpoints should
-# call compile_with_checkpointer() once at startup and use the returned agents.
-record_enrichment_agent = _graph.compile()
-record_enrichment_agent_hitl = _graph.compile(interrupt_before=["publish"])
+# Default checkpointer for unit tests and local runs without Redis is MemorySaver.
+# This ensures that checkpoints work out-of-the-box in all test suites and modules.
+memory_saver = MemorySaver()
+record_enrichment_agent = _graph.compile(checkpointer=memory_saver)
+record_enrichment_agent_hitl = _graph.compile(
+    checkpointer=memory_saver, interrupt_before=["publish"]
+)
+
+
+_redis_agent = None
+_redis_agent_hitl = None
+
+
+def get_agent():
+    """Get the compiled enrichment agent, using the Redis checkpointer if enabled."""
+    global _redis_agent
+    if _redis_agent is None:
+        if settings.redis_enabled:
+            try:
+                saver = get_checkpointer()
+                _redis_agent = _graph.compile(checkpointer=saver)
+            except Exception as e:
+                logger.warning(
+                    "redis_checkpointer_failed",
+                    extra={"error": str(e), "fallback": "memory"},
+                )
+                _redis_agent = record_enrichment_agent
+        else:
+            _redis_agent = record_enrichment_agent
+    return _redis_agent
+
+
+def get_agent_hitl():
+    """Get the compiled HITL enrichment agent, using the Redis checkpointer if enabled."""
+    global _redis_agent_hitl
+    if _redis_agent_hitl is None:
+        if settings.redis_enabled:
+            try:
+                saver = get_checkpointer()
+                _redis_agent_hitl = _graph.compile(
+                    checkpointer=saver, interrupt_before=["publish"]
+                )
+            except Exception as e:
+                logger.warning(
+                    "redis_checkpointer_failed",
+                    extra={"error": str(e), "fallback": "memory"},
+                )
+                _redis_agent_hitl = record_enrichment_agent_hitl
+        else:
+            _redis_agent_hitl = record_enrichment_agent_hitl
+    return _redis_agent_hitl
 
 
 def compile_with_checkpointer():
