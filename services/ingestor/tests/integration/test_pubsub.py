@@ -22,6 +22,9 @@ from services.ingestor.pubsub import (
 )
 
 
+pytestmark = pytest.mark.integration
+
+
 @pytest.fixture(autouse=True)
 async def _wire_pubsub(real_redis):
     """Inject the real Redis client as the pub/sub connection for each test."""

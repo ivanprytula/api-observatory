@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from services.ingestor import pubsub
 from services.ingestor.api_schemas.contract_drift import (
     CompatibilityReportResponse,
     ContractSnapshotCreate,
@@ -231,6 +232,13 @@ async def create_contract_snapshot(
     await db.refresh(snapshot)
     if drift_event is not None:
         await db.refresh(drift_event)
+        await pubsub.publish_drift_event(
+            source_id=payload.source_id,
+            drift_event_id=drift_event.id,
+            event_type=drift_event.event_type,
+            severity=drift_event.severity,
+            compatibility_score=drift_event.compatibility_score,
+        )
 
     return snapshot, drift_event
 

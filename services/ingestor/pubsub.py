@@ -160,6 +160,38 @@ async def publish_job_progress(
     )
 
 
+async def publish_drift_event(
+    source_id: int,
+    drift_event_id: int,
+    event_type: str,
+    severity: str,
+    compatibility_score: float,
+) -> None:
+    """Publish a ``drift.detected`` notification after a DriftEvent is persisted.
+
+    Clients listening on the WebSocket stream receive this immediately after
+    the DB write, without polling.
+
+    Args:
+        source_id:          ID of the SourceProfile that drifted.
+        drift_event_id:     Primary key of the newly created DriftEvent.
+        event_type:         ``"breaking"`` or ``"non_breaking"``.
+        severity:           Severity label (``"low"``/``"medium"``/``"high"``/
+                            ``"critical"``).
+        compatibility_score: Score in ``[0.0, 100.0]``.
+    """
+    await publish_event(
+        "drift.detected",
+        {
+            "source_id": source_id,
+            "drift_event_id": drift_event_id,
+            "event_type": event_type,
+            "severity": severity,
+            "compatibility_score": round(compatibility_score, 4),
+        },
+    )
+
+
 # ---------------------------------------------------------------------------
 # Subscriber (used by FastAPI WS endpoint)
 # ---------------------------------------------------------------------------
