@@ -10,6 +10,8 @@
 
 Build the repo with ~13 atomic commits, starting from a full `services/ingestor/` baseline import in Commit 1, then hardening each vertical slice (DB → repo → route → test). Start applying to jobs after commit 2 (docs + runnable demo). Then layer in auth normalization, observability polish, and a full ECS deployment as portfolio depth. During MVP, keep schema churn minimal; after MVP ship, switch to migration-first DB changes with clean incremental history. Docker volumes removed from default stack.
 
+**Commit sequence**: 1 (setup) → 2 (docs) → 3 (infra) → 4-8 (stabilize slices) → 8b (Streamlit UI) → 8c (Bruno collections) → 9 (auth) → 10 (observability) → 11 (resilience) → 12 (agent) → 13a-c (deploy).
+
 **Overengineering guard** (read before every commit): prefer the stdlib or a well-known PyPI package over a custom implementation. The simplest solution that satisfies the functional requirement is the correct solution. Custom abstractions only when the same pattern repeats 3+ times.
 
 **Test Gate policy (required from first test-bearing commit onward):**
@@ -364,6 +366,85 @@ exists — the app wraps the call in `try/except` and falls back to `os.environ`
 
 ---
 
+## PHASE 6c: API Collections for Testing & Documentation (Commit 8c)
+
+### Commit 8c — `docs(api): Bruno collections — living API documentation`
+
+**Purpose**: Replace curl snippets in README/docs with a CLI-testable, version-controlled API collection.
+Bruno's `.bru` files are plain text (no binary JSON blobs), run locally without accounts/cloud, and serve as
+living documentation — clone repo, run `just api-test`, all endpoints verified.
+
+**Scope**: five collections covering all MVP endpoints.
+
+**Simplicity checks**:
+- One `bruno/` directory at repo root. Collections organized by slice: `bruno/sources/`, `bruno/records/`, etc.
+- Plain text `.bru` files — Git-friendly, no vendor lock-in.
+- Single environment file: `bruno/environments/local.bru` — `baseUrl = "http://localhost:8000"`, optional `token`.
+- No CI blocker — `bru run` can stay local-only initially or run in CI if needed.
+- No npm dependencies in main `pyproject.toml` — Bruno CLI installed separately or run via `npx`.
+- Collections mirror the repo's API surface: GET/POST/DELETE on each resource slice.
+
+**Files**:
+- `bruno/sources/collection.bru` — SourceProfile endpoints (list, create, get, deactivate)
+- `bruno/records/collection.bru` — ContractSnapshot + drift-events (list, POST snapshot)
+- `bruno/contracts/collection.bru` — DriftEvent endpoints (list per source, list all)
+- `bruno/scorecards/collection.bru` — ProviderScorecard endpoints (list, get)
+- `bruno/websocket/collection.bru` — WebSocket connection test (wscat-like example)
+- `bruno/environments/local.bru` — env vars: `baseUrl`, `token` (optional), `source_id` (placeholder)
+- `Justfile` — add `api-test` recipe: `bru run bruno/ --env local`
+- `docs/dev/bruno-collections.md` — how to install Bruno, run collections, add new requests
+- `README.md` — link to `docs/dev/bruno-collections.md`, replace curl snippets with `just api-test`
+
+**Key requests per collection** (each should be a real, working request against the running stack):
+
+| Collection | Requests |
+|------------|----------|
+| sources | GET all, POST create, GET by ID, PATCH deactivate |
+| records | POST new snapshot, GET drift-events for source, GET all drift-events |
+| scorecards | GET all scorecards, GET scorecard for source |
+| websocket | WS connect example (commented note: use wscat for interactive) |
+
+**Verify**:
+```bash
+# Install Bruno if not already present
+npm install -g @usebruno/cli    # or: npx @usebruno/cli
+
+# Start ingestor stack
+docker compose up -d
+
+# Run all collections against the running stack
+just api-test
+# → all requests return 200/2xx
+# → output is human-readable (request name, status, response summary)
+
+# Alternative: run a single collection
+bru run bruno/sources --env local
+
+# Alternative: run with verbose output
+bru run bruno/ --env local --verbose
+
+docker compose down
+```
+
+**Bruno CLI notes**:
+- `bru run [collection path] --env [env name]` — runs all requests in sequence.
+- `--env local` matches the `bruno/environments/local.bru` file.
+- Exit code 0 if all requests pass (2xx response codes), non-zero if any fail.
+- No account/login required — all auth is via `BEARER_TOKEN` env var.
+
+**Integration with CI** (post-MVP):
+```yaml
+# Example GitHub Actions step (do not add to .github/workflows yet)
+- name: Test API with Bruno
+  run: |
+    npm install -g @usebruno/cli
+    docker compose up -d
+    bru run bruno/ --env local
+    docker compose down
+```
+
+---
+
 ## PHASE 7: Auth Cross-cut (Commit 9)
 
 ### Commit 9 — `feat: JWT auth, RBAC, apply to all routes`
@@ -469,12 +550,13 @@ env -u DATABASE_URL_TEST uv run pytest tests/ services/ingestor/tests/ -q -m "in
 
 ---
 
-## Justfile DX Recipes (added in Commit 3)
+## Justfile DX Recipes (added in Commit 3, extended in Commit 8c)
 
 - `just probe-once` — run one full probe cycle manually
 - `just scorecard SOURCE_ID` — print current scorecard for a source
 - `just seed-demo` — seed 3 demo SourceProfiles (httpbin.org, jsonplaceholder.typicode.com, postman-echo.com)
 - `just tech-map` — `bat docs/tech-map.md || cat docs/tech-map.md`
+- `just api-test` — `bru run bruno/ --env local` (added Commit 8c)
 
 ---
 
@@ -554,6 +636,16 @@ curl -s http://localhost:8000/api/v1/scorecards | jq .
 # Returns uptime_pct, p50_latency_ms, p95_latency_ms
 docker compose exec ingestor uv run pytest tests/ -m "not e2e" -q
 # All pass
+docker compose down
+```
+
+### After commit 8c — API collections live
+
+```bash
+docker compose up -d && just seed-demo
+just api-test
+# → all requests pass (2xx responses)
+docker compose exec ingestor uv run pytest tests/ -q
 docker compose down
 ```
 
