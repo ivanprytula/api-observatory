@@ -7,13 +7,6 @@ from typing import Any
 from httpx import AsyncClient
 
 
-_SOURCE: dict[str, Any] = {
-    "name": "contract-test-source",
-    "url": "https://api.example.com/contracts",
-    "source_type": "rest",
-    "tags": ["Contract", "Drift"],
-}
-
 _SCHEMA_V1: dict[str, Any] = {
     "id": 123,
     "status": "ok",
@@ -36,9 +29,16 @@ _SCHEMA_V3_BREAKING: dict[str, Any] = {
 async def _create_source(
     client: AsyncClient, name: str = "contract-test-source"
 ) -> int:
-    payload = {**_SOURCE, "name": name}
-    response = await client.post("/api/v1/sources", json=payload)
-    assert response.status_code == 201
+    response = await client.post(
+        "/api/v1/sources",
+        json={
+            "name": name,
+            "base_url": "https://1.1.1.1",
+            "health_check_path": "/contracts",
+            "probe_interval_seconds": 60,
+        },
+    )
+    assert response.status_code == 201, response.text
     return int(response.json()["id"])
 
 
@@ -132,6 +132,35 @@ class TestIngestContractSnapshot:
             json={"source_id": 999999, "payload_schema": _SCHEMA_V1},
         )
         assert response.status_code == 404
+
+    async def test_identical_schema_produces_no_drift_event(
+        self, client: AsyncClient
+    ) -> None:
+        """Fingerprint short-circuit: second snapshot with identical payload produces
+        no drift event and compatibility_score == 100."""
+        source_id = await _create_source(client, name="contract-test-source-identical")
+
+        await client.post(
+            "/api/v1/contracts/snapshots",
+            json={
+                "source_id": source_id,
+                "schema_version": "v1",
+                "payload_schema": _SCHEMA_V1,
+            },
+        )
+        response = await client.post(
+            "/api/v1/contracts/snapshots",
+            json={
+                "source_id": source_id,
+                "schema_version": "v1",
+                "payload_schema": _SCHEMA_V1,
+            },
+        )
+
+        assert response.status_code == 201
+        body = response.json()
+        assert body["drift_event"] is None
+        assert body["snapshot"]["compatibility_score"] == 100.0
 
 
 class TestContractDriftReadEndpoints:

@@ -163,6 +163,23 @@ async def create_contract_snapshot(
         .limit(1)
     )
 
+    new_fingerprint = _fingerprint(payload.payload_schema)
+
+    # Short-circuit: identical schema — persist the record but skip diff.
+    if latest is not None and latest.schema_fingerprint == new_fingerprint:
+        snapshot = ContractSnapshot(
+            source_id=payload.source_id,
+            schema_version=payload.schema_version,
+            payload_schema=payload.payload_schema,
+            schema_fingerprint=new_fingerprint,
+            compatibility_score=CONTRACT_COMPATIBILITY_MAX_SCORE,
+            snapshot_note=payload.snapshot_note,
+        )
+        db.add(snapshot)
+        await db.commit()
+        await db.refresh(snapshot)
+        return snapshot, None
+
     added_fields: list[str] = []
     removed_fields: list[str] = []
     type_changed_fields: dict[str, dict[str, str]] = {}
@@ -180,7 +197,7 @@ async def create_contract_snapshot(
         source_id=payload.source_id,
         schema_version=payload.schema_version,
         payload_schema=payload.payload_schema,
-        schema_fingerprint=_fingerprint(payload.payload_schema),
+        schema_fingerprint=new_fingerprint,
         compatibility_score=score,
         snapshot_note=payload.snapshot_note,
     )
