@@ -391,7 +391,7 @@ living documentation — clone repo, run `just api-test`, all endpoints verified
 - `bruno/scorecards/collection.bru` — ProviderScorecard endpoints (list, get)
 - `bruno/websocket/collection.bru` — WebSocket connection test (wscat-like example)
 - `bruno/environments/local.bru` — env vars: `baseUrl`, `token` (optional), `source_id` (placeholder)
-- `Justfile` — add `api-test` recipe: `bru run bruno/ --env local`
+- `Justfile` — add `api-test` recipe: `cd bruno && bru run . -r --env local`
 - `docs/dev/bruno-collections.md` — how to install Bruno, run collections, add new requests
 - `README.md` — link to `docs/dev/bruno-collections.md`, replace curl snippets with `just api-test`
 
@@ -418,16 +418,16 @@ just api-test
 # → output is human-readable (request name, status, response summary)
 
 # Alternative: run a single collection
-bru run bruno/sources --env local
+cd bruno && bru run sources --env local
 
 # Alternative: run with verbose output
-bru run bruno/ --env local --verbose
+cd bruno && bru run . -r --env local --verbose
 
 docker compose down
 ```
 
 **Bruno CLI notes**:
-- `bru run [collection path] --env [env name]` — runs all requests in sequence.
+- `cd bruno && bru run . -r --env [env name]` — runs all requests in sequence (must be run from the collection root).
 - `--env local` matches the `bruno/environments/local.bru` file.
 - Exit code 0 if all requests pass (2xx response codes), non-zero if any fail.
 - No account/login required — all auth is via `BEARER_TOKEN` env var.
@@ -439,7 +439,7 @@ docker compose down
   run: |
     npm install -g @usebruno/cli
     docker compose up -d
-    bru run bruno/ --env local
+    cd bruno && bru run . -r --env local
     docker compose down
 ```
 
@@ -556,7 +556,7 @@ env -u DATABASE_URL_TEST uv run pytest tests/ services/ingestor/tests/ -q -m "in
 - `just scorecard SOURCE_ID` — print current scorecard for a source
 - `just seed-demo` — seed 3 demo SourceProfiles (httpbin.org, jsonplaceholder.typicode.com, postman-echo.com)
 - `just tech-map` — `bat docs/tech-map.md || cat docs/tech-map.md`
-- `just api-test` — `bru run bruno/ --env local` (added Commit 8c)
+- `just api-test` — `cd bruno && bru run . -r --env local` (added Commit 8c)
 
 ---
 

@@ -22,7 +22,7 @@ npx @usebruno/cli run bruno/ --env local
 docker compose up -d
 
 just api-test
-# equivalent: bru run bruno/ --env local
+# equivalent: cd bruno && bru run . -r --env local
 ```
 
 All requests should return 2xx. Exit code is 0 on success, non-zero if any request fails.
@@ -30,8 +30,8 @@ All requests should return 2xx. Exit code is 0 on success, non-zero if any reque
 ## Run a single collection
 
 ```bash
-bru run bruno/sources --env local
-bru run bruno/scorecards --env local
+cd bruno && bru run sources --env local
+cd bruno && bru run scorecards --env local
 ```
 
 ## Environment variables
@@ -47,7 +47,7 @@ The `local` environment is defined in [bruno/environments/local.bru](../../bruno
 To override `source_id` for a run, edit `bruno/environments/local.bru` or pass env overrides:
 
 ```bash
-bru run bruno/sources --env local --env-var source_id=3
+cd bruno && bru run sources --env local --env-var source_id=3
 ```
 
 ## Collections
@@ -108,6 +108,6 @@ uv run streamlit run streamlit_app.py
   run: |
     npm install -g @usebruno/cli
     docker compose up -d
-    bru run bruno/ --env local
+    cd bruno && bru run . -r --env local
     docker compose down
 ```

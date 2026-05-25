@@ -124,4 +124,4 @@ restore-s3-mongodb s3uri:
 
 # Run all Bruno API collections against the local stack
 api-test:
-    bru run bruno/ --env local
+    cd bruno && bru run . -r --env local
