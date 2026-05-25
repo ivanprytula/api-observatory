@@ -544,10 +544,15 @@ Instrumentator().instrument(app).expose(app, include_in_schema=False, tags=["ops
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     """Handle rate limit exceeded (429 Too Many Requests)."""
     logger.warning("rate_limit_exceeded", extra={"path": request.url.path})
-    return JSONResponse(
+    response = JSONResponse(
         status_code=429,
-        content={"detail": "Rate limit exceeded"},
+        content={"detail": f"Rate limit exceeded: {exc.detail}"},
     )
+    if hasattr(request.state, "view_rate_limit"):
+        response = request.app.state.limiter._inject_headers(
+            response, request.state.view_rate_limit
+        )
+    return response
 
 
 # ---------------------------------------------------------------------------

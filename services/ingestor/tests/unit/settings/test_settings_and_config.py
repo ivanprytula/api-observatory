@@ -86,9 +86,9 @@ class TestSettingsDefaults:
         assert settings.token_expiry_hours == 24
 
     def test_default_jwt_expiry(self) -> None:
-        """JWT expiry defaults to 60 minutes."""
+        """JWT expiry defaults to 30 minutes."""
         settings = Settings()
-        assert settings.jwt_expiry_minutes == 60
+        assert settings.jwt_expiry_minutes == 30
 
 
 # ---------------------------------------------------------------------------
