@@ -50,6 +50,7 @@ def setup_tracing(
             OTLPSpanExporter,
         )
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+        from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
         from opentelemetry.sdk.resources import Resource
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -61,6 +62,7 @@ def setup_tracing(
         trace.set_tracer_provider(provider)
 
         FastAPIInstrumentor.instrument_app(app)
+        SQLAlchemyInstrumentor().instrument(enable_commenter=True)
 
         _initialized = True
         logger.info(

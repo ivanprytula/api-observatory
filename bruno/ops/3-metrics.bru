@@ -1,0 +1,30 @@
+meta {
+  name: Prometheus Metrics
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/metrics
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /metrics — Prometheus exposition format
+
+  Returns all registered metrics in Prometheus text format (`text/plain; version=0.0.4`).
+
+  Key metric families:
+  - `http_requests_total` — request count by method/path/status (prometheus-fastapi-instrumentator)
+  - `http_request_duration_seconds` — latency histogram
+  - `pipeline_records_created_total{endpoint}` — record inserts by endpoint
+  - `pipeline_batch_insert_size` — batch sizes histogram
+  - `pipeline_llm_prompt_tokens_total{model,endpoint}` — LLM token usage
+  - `pipeline_records_upsert_conflicts_total{mode}` — upsert conflict rate
+  - `pipeline_circuit_breaker_state{circuit}` — 0=CLOSED, 1=OPEN, 2=HALF_OPEN
+  - `pipeline_job_executions_total{job,status}` — scheduler job outcomes
+  - `pipeline_job_duration_seconds{job}` — scheduler job latency
+
+  Scraped by Prometheus every 15 s (see `infra/` docker-compose config).
+}

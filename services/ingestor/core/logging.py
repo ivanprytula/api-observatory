@@ -1,17 +1,21 @@
-"""Environment-aware logging setup — runs once at app startup.
+"""Environment-aware structured logging setup — runs once at app startup.
+
+Uses structlog with a stdlib bridge (ProcessorFormatter) so all existing
+``logging.getLogger(__name__)`` call sites remain unchanged.
 
 Development:
-- Human-readable format with IDE-clickable source info (pathname:lineno:funcName)
-- Console output + rotating file handler (logs/app.log)
+- structlog ConsoleRenderer (human-readable, coloured)
+- Console + rotating file handler (logs/app.log)
 
 Production:
-- Minimal JSON (message + context fields only)
-- No source location metadata (reduces noise in aggregation systems)
+- structlog JSONRenderer (machine-readable, one JSON object per line)
+- stdout only (ready for log aggregation systems)
 
 Provides:
 - Global log level control via LOG_LEVEL env var
-- Per-call log level control (logger.debug(), logger.info(), etc.)
-- Correlation ID auto-injection via ContextVar
+- Correlation ID auto-injection from request context
+- OTel trace_id injection for log–trace correlation
+- ``extra={}`` fields forwarded into structured event dict
 - Dependency lib logging control (sqlalchemy, httpx, asyncio, etc.)
 """
 
@@ -22,7 +26,8 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
 
-from pythonjsonlogger.json import JsonFormatter
+import structlog
+from structlog.stdlib import ProcessorFormatter
 
 from services.ingestor.config import settings
 
@@ -55,168 +60,128 @@ def set_cid(cid: str) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Formatters: Development (human-readable) vs Production (minimal JSON)
+# Stdlib LogRecord attributes excluded from "extra" field forwarding
 # ─────────────────────────────────────────────────────────────────────────────
-class DevelopmentFormatter(logging.Formatter):
-    """Human-readable format with IDE-clickable source info.
+_STDLIB_ATTRS: frozenset[str] = frozenset(
+    {
+        "args",
+        "created",
+        "exc_info",
+        "exc_text",
+        "filename",
+        "funcName",
+        "levelname",
+        "levelno",
+        "lineno",
+        "message",
+        "module",
+        "msecs",
+        "msg",
+        "name",
+        "pathname",
+        "process",
+        "processName",
+        "relativeCreated",
+        "stack_info",
+        "taskName",
+        "thread",
+        "threadName",
+    }
+)
 
-    Format: YYYY-MM-DD HH:MM:SS | LEVEL | pathname:lineno:funcName | [cid] msg extra_dict
 
-    Example:
-    2026-04-15 10:30:45 | INFO | app/routers/records.py:45:create_record | [abc-123]
-    record created {'user': 'alice', 'record_id': 42}
+# ─────────────────────────────────────────────────────────────────────────────
+# structlog processors
+# ─────────────────────────────────────────────────────────────────────────────
 
-    The pathname:lineno:funcName part is clickable in most IDEs (VS Code, PyCharm, etc.)
-    allowing Ctrl+Click to jump directly to the source line.
+
+def _extract_extra(
+    _logger: Any, _method: str, event_dict: structlog.types.EventDict
+) -> structlog.types.EventDict:
+    """Forward ``extra={}`` fields from stdlib LogRecord into event_dict.
+
+    When stdlib code calls ``logger.info("msg", extra={"key": "val"})``,
+    the extra keys are attributes on the LogRecord.  This processor copies
+    them into the structlog event_dict so renderers can include them.
     """
-
-    def format(self, record: logging.LogRecord) -> str:
-        """Format log record as human-readable with IDE-clickable link,
-        using project-root-relative path.
-        """
-        from pathlib import Path
-
-        # Timestamp
-        timestamp = self.formatTime(record, datefmt="%Y-%m-%d %H:%M:%S")
-
-        # Level (right-padded for alignment)
-        level_name = record.levelname.ljust(8)
-
-        # Compute project root (directory containing this file)
-        project_root = Path(__file__).parent.parent.parent.resolve()
-        try:
-            abs_path = Path(record.pathname).resolve()
-            rel_path = abs_path.relative_to(project_root)
-        except Exception:
-            rel_path = Path(record.pathname).name  # fallback: just filename
-
-        # Source location as IDE-clickable format (relative to project root)
-        source_link = f"{rel_path}:{record.lineno}:{record.funcName}"
-
-        # Correlation ID and trace ID if available
-        cid = get_cid()
-        cid_str = f"[{cid}]" if cid else ""
-        trace_id = _get_trace_id()
-        trace_str = f"[trace:{trace_id[:8]}]" if trace_id else ""
-
-        # Message
-        message = record.getMessage()
-
-        # Extra fields (formatted as dict if present)
-        extra_dict = {
-            k: v
-            for k, v in record.__dict__.items()
-            if k
-            not in {
-                "name",
-                "msg",
-                "args",
-                "created",
-                "filename",
-                "funcName",
-                "levelname",
-                "levelno",
-                "lineno",
-                "module",
-                "msecs",
-                "pathname",
-                "process",
-                "processName",
-                "relativeCreated",
-                "thread",
-                "threadName",
-                "exc_info",
-                "exc_text",
-                "stack_info",
-                "taskName",
-            }
-        }
-        extra_str = f" {extra_dict}" if extra_dict else ""
-
-        prefix = " ".join(filter(None, [cid_str, trace_str]))
-        prefix_str = f"{prefix} " if prefix else ""
-        return f"{timestamp} | {level_name} | {source_link} | {prefix_str}{message}{extra_str}"
+    record: logging.LogRecord | None = event_dict.get("_record")  # type: ignore[assignment]
+    if record is None:
+        return event_dict
+    for key, value in record.__dict__.items():
+        if key not in _STDLIB_ATTRS and not key.startswith("_"):
+            event_dict.setdefault(key, value)
+    return event_dict
 
 
-class ProductionJsonFormatter(JsonFormatter):
-    """Minimal JSON formatter for centralized log aggregation.
-
-    Includes only essential fields:
-    - message: The log message
-    - cid: Correlation ID (for request tracing)
-    - Extra fields from the log call
-
-    Does NOT include source location metadata (lineno, funcName, pathname)
-    to reduce noise in aggregated logs viewed via Sentry/ELK/VictoriaMetrics.
-    """
-
-    def add_fields(
-        self,
-        log_data: dict[str, Any],
-        record: logging.LogRecord,
-        message_dict: dict[str, Any],
-    ) -> None:
-        """Add minimal fields: message + auto-injected cid only."""
-        super().add_fields(log_data, record, message_dict)
-
-        # Inject service name for log aggregator filters
-        log_data.setdefault("service", "ingestor")
-
-        # Auto-inject correlation ID and trace ID if available
-        cid = get_cid()
-        if cid:
-            log_data["cid"] = cid
-        trace_id = _get_trace_id()
-        if trace_id:
-            log_data["trace_id"] = trace_id
+def _inject_context(
+    _logger: Any, _method: str, event_dict: structlog.types.EventDict
+) -> structlog.types.EventDict:
+    """Inject request correlation ID and OTel trace ID into event_dict."""
+    cid = get_cid()
+    if cid:
+        event_dict["cid"] = cid
+    trace_id = _get_trace_id()
+    if trace_id:
+        event_dict["trace_id"] = trace_id
+    return event_dict
 
 
 def setup_logging() -> logging.Logger:
-    """Initialize environment-aware logging for the application.
+    """Configure structlog and wire it to stdlib logging.
 
-    Call once at app startup (in lifespan hook).
+    Uses ``structlog.stdlib.ProcessorFormatter`` as the stdlib handler's
+    formatter so every ``logging.getLogger(__name__)`` call site works
+    unchanged while output passes through the structlog processor chain.
 
-    Development:
-    - Human-readable format to console
-    - RotatingFileHandler for logs/app.log (10MB per file, 5 backups)
-    - Includes source location for IDE navigation
+    Dev:   structlog ConsoleRenderer — coloured, human-readable.
+    Prod:  structlog JSONRenderer — one JSON object per line to stdout.
 
-    Production:
-    - Minimal JSON to stdout (ready for log aggregation)
-    - No source location metadata (reduces noise)
-
-    Configures:
-    - Root logger level from LOG_LEVEL (default: INFO)
-    - Dependency lib levels from environment (LOG_SQLALCHEMY_LEVEL, etc.)
+    Also applies a RotatingFileHandler (dev only) and silences noisy
+    dependency loggers via per-env settings.
 
     Returns:
-        The root logger, configured and ready to use.
+        The root ``logging.Logger`` (already configured).
     """
-    root_logger = logging.getLogger()
-
-    # Remove any existing handlers to avoid duplication on reload
-    for handler in root_logger.handlers[:]:
-        root_logger.removeHandler(handler)
-
-    # Set root logger level from settings (default: INFO)
     configured = str(settings.log_level or "INFO").upper()
     root_level = getattr(logging, configured, logging.INFO)
+
+    use_json = settings.log_format == "json" or settings.environment == "production"
+
+    # Shared processors run for both stdlib-bridged and native structlog calls.
+    shared_processors: list[structlog.types.Processor] = [
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
+        structlog.processors.TimeStamper(fmt="iso"),
+        _inject_context,
+        _extract_extra,
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.ExceptionRenderer(),
+    ]
+
+    renderer: structlog.types.Processor = (
+        structlog.processors.JSONRenderer()
+        if use_json
+        else structlog.dev.ConsoleRenderer()
+    )
+
+    # ProcessorFormatter bridges stdlib LogRecords through structlog processors.
+    formatter = ProcessorFormatter(
+        processors=[ProcessorFormatter.remove_processors_meta, renderer],
+        foreign_pre_chain=shared_processors,
+    )
+
+    # ── stdlib root logger ──────────────────────────────────────────────────
+    root_logger = logging.getLogger()
+    for h in root_logger.handlers[:]:
+        root_logger.removeHandler(h)
     root_logger.setLevel(root_level)
 
-    # Environment-aware formatter and handler setup
-    if settings.log_format == "json" or settings.environment == "production":
-        # Production or explicit JSON: minimal JSON to stdout
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setFormatter(ProductionJsonFormatter())
-        root_logger.addHandler(handler)
-    else:
-        # Development: human-readable + file rotation
-        # Console handler
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(DevelopmentFormatter())
-        root_logger.addHandler(console_handler)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
 
-        # File handler with rotation (10MB per file, keep 5 backups)
+    if not use_json:
+        # Dev: also write to rotating file
         log_dir = Path("logs")
         log_dir.mkdir(exist_ok=True)
         file_handler = RotatingFileHandler(
@@ -224,11 +189,22 @@ def setup_logging() -> logging.Logger:
             maxBytes=10 * 1024 * 1024,  # 10 MB
             backupCount=5,
         )
-        file_handler.setFormatter(DevelopmentFormatter())
+        file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
 
-    # Configure dependency library loggers to reduce noise
-    # These are set to WARNING by default; override via env vars
+    # ── structlog global configuration ──────────────────────────────────────
+    structlog.configure(
+        processors=[
+            *shared_processors,
+            structlog.stdlib.render_to_log_kwargs,
+        ],
+        wrapper_class=structlog.stdlib.BoundLogger,
+        context_class=dict,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
+
+    # ── silence noisy dependency libraries ──────────────────────────────────
     if settings.log_sqlalchemy_level:
         dep_level = getattr(
             logging,
@@ -250,5 +226,4 @@ def setup_logging() -> logging.Logger:
         )
         logging.getLogger("asyncio").setLevel(dep_level)
 
-    # Return root logger for use in app
     return root_logger

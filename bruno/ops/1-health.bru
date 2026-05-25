@@ -1,0 +1,24 @@
+meta {
+  name: Liveness Probe
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/health
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /health — Liveness probe
+
+  No I/O check — just confirms the process is alive.
+
+  Expected response: `200 OK`
+  ```json
+  { "status": "healthy", "version": { ... } }
+  ```
+
+  Used by Kubernetes `livenessProbe` to decide whether to restart the pod.
+}

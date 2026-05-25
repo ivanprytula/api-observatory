@@ -1,9 +1,10 @@
 """API Observatory — Streamlit dashboard.
 
-Three panels:
-  1. Source Health  — scorecards table (auto-refreshed every 30 s)
-  2. Drift Events   — recent drift events across all sources (auto-refreshed)
-  3. Live Stream    — WebSocket event tail (connect/disconnect manually)
+Four panels:
+  1. Source Health    — scorecards table (auto-refreshed every 30 s)
+  2. Drift Events     — recent drift events across all sources (auto-refreshed)
+  3. Live Stream      — WebSocket event tail (connect/disconnect manually)
+  4. Service Health   — /health and /readyz probe status + links to /metrics
 
 Configuration (environment variables or .streamlit/secrets.toml):
   INGESTOR_URL   Base URL of the ingestor service (default: http://localhost:8000)
@@ -34,6 +35,9 @@ API_AUTH_REFRESH = f"{INGESTOR_URL}/api/v1/auth/refresh"
 API_SCORECARDS = f"{INGESTOR_URL}/api/v1/scorecards"
 API_SOURCES = f"{INGESTOR_URL}/api/v1/sources"
 API_DRIFT = f"{INGESTOR_URL}/api/v1/contracts/sources/{{source_id}}/drift-events"
+API_HEALTH = f"{INGESTOR_URL}/health"
+API_READYZ = f"{INGESTOR_URL}/readyz"
+API_METRICS = f"{INGESTOR_URL}/metrics"
 
 REFRESH_INTERVAL = 30  # seconds between auto-refreshes for health / drift panels
 MAX_STREAM_MESSAGES = 50
@@ -106,6 +110,23 @@ def fetch_drift_events(source_id: int, token: str = "") -> list[dict]:
             return r.json().get("items", [])
     except Exception:  # noqa: BLE001
         return []
+
+
+@st.cache_data(ttl=10, show_spinner=False)
+def fetch_health_status() -> dict[str, dict]:
+    """Probe /health and /readyz; return a dict of {endpoint: {status, code}}."""
+    results: dict[str, dict] = {}
+    for label, url in (
+        ("liveness (/health)", API_HEALTH),
+        ("readiness (/readyz)", API_READYZ),
+    ):
+        try:
+            with httpx.Client(timeout=3.0) as client:
+                r = client.get(url)
+            results[label] = {"status_code": r.status_code, "body": r.json()}
+        except Exception as exc:  # noqa: BLE001
+            results[label] = {"status_code": None, "body": None, "error": str(exc)}
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -419,6 +440,45 @@ if st.session_state.ws_connected:
     st.rerun()
 
 _render_messages()
+
+# ---------------------------------------------------------------------------
+# Panel 4: Service Health
+# ---------------------------------------------------------------------------
+
+st.header("Service Health")
+st.caption(
+    "Live probe status for liveness (/health) and readiness (/readyz) endpoints."
+)
+
+col_probe, col_refresh_probe = st.columns([4, 1])
+if col_refresh_probe.button("🔄 Re-check", key="health_recheck"):
+    st.cache_data.clear()
+
+health_data = fetch_health_status()
+probe_cols = st.columns(len(health_data))
+for col, (label, info) in zip(probe_cols, health_data.items(), strict=False):
+    code = info.get("status_code")
+    body = info.get("body") or {}
+    err = info.get("error")
+    if err:
+        col.metric(label, "Error", delta=err, delta_color="inverse")
+    elif code == 200:
+        probe_status = body.get("status", "ok")
+        col.metric(label, f"✅ {probe_status} ({code})")
+    else:
+        col.metric(
+            label, f"🔴 degraded ({code})", delta="check logs", delta_color="inverse"
+        )
+
+    if body:
+        checks = {k: v for k, v in body.items() if k not in ("status", "version")}
+        if checks:
+            col.json(checks, expanded=False)
+
+st.caption(
+    f"Prometheus metrics are scraped from [`{API_METRICS}`]({API_METRICS}) — "
+    "open in a browser to view the raw exposition format."
+)
 
 # ---------------------------------------------------------------------------
 # Footer

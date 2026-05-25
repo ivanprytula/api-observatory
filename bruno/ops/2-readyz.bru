@@ -1,0 +1,29 @@
+meta {
+  name: Readiness Probe
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/readyz
+  body: none
+  auth: none
+}
+
+docs {
+  ## GET /readyz — Readiness probe
+
+  Checks DB (SELECT 1) and Redis (PING).
+
+  **Success** `200 OK`:
+  ```json
+  { "status": "ready", "db": "ok", "redis": "ok", "version": { ... } }
+  ```
+
+  **Degraded** `503 Service Unavailable`:
+  ```json
+  { "status": "degraded", "db": "unreachable", "redis": "ok", "version": { ... } }
+  ```
+
+  Used by Kubernetes `readinessProbe` to pull the pod from load balancer rotation.
+}

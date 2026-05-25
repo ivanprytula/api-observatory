@@ -658,30 +658,45 @@ async def health(request: Request) -> dict[str, object]:
 
 @app.get("/readyz", tags=["ops"])
 async def readyz(db: DbDep) -> dict[str, object]:
-    """Readiness probe — DB reachable, pod can serve traffic.
+    """Readiness probe — DB and Redis reachable, pod can serve traffic.
 
     Used by Kubernetes to decide whether to route traffic to this pod.
-    If DB is unreachable, returns 503 to pull this pod from load balancer.
+    Returns 503 if DB or Redis is unreachable.
     """
+    from services.ingestor.auth import _session_client as _redis
+
+    checks: dict[str, str] = {}
+    failed: list[str] = []
+
     try:
         await db.execute(text("SELECT 1"))
-        svc_version = os.getenv("SERVICE_VERSION") or settings.app_version
-        payload = get_version_payload()
-        payload["service"] = svc_version
-        return {"status": "ready", "db": "ok", "version": payload}
+        checks["db"] = "ok"
     except Exception as e:
-        logger.warning("readyz_failed", extra={"reason": str(e)})
+        checks["db"] = "unreachable"
+        failed.append(f"db: {e}")
+
+    try:
+        if _redis is not None:
+            await _redis.ping()  # type: ignore[attr-defined]
+            checks["redis"] = "ok"
+        else:
+            checks["redis"] = "not_configured"
+    except Exception as e:
+        checks["redis"] = "unreachable"
+        failed.append(f"redis: {e}")
+
+    svc_version = os.getenv("SERVICE_VERSION") or settings.app_version
+    payload = get_version_payload()
+    payload["service"] = svc_version
+
+    if failed:
+        logger.warning("readyz_failed", extra={"checks": checks, "failed": failed})
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={
-                "status": "degraded",
-                "db": "unreachable",
-                "version": {
-                    **get_version_payload(),
-                    "service": (os.getenv("SERVICE_VERSION") or settings.app_version),
-                },
-            },
-        ) from e
+            detail={"status": "degraded", **checks, "version": payload},
+        )
+
+    return {"status": "ready", **checks, "version": payload}
 
 
 # ---------------------------------------------------------------------------
