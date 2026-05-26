@@ -1,0 +1,26 @@
+# terraform.tfvars — dev environment
+# DO NOT commit sensitive values. Use TF_VAR_* env vars or AWS SSM for secrets.
+# Copy this file to terraform.tfvars and fill in your values.
+#
+# Usage with AWS CLI profile:
+#   export TF_VAR_aws_profile=data-zoo-dev
+#   export TF_VAR_redis_auth_token=$(aws ssm get-parameter \
+#     --name "/data-zoo/dev/redis-auth-token" \
+#     --with-decryption --query Parameter.Value --output text \
+#     --profile data-zoo-dev)
+#   terraform apply
+
+aws_region         = "eu-central-1"  # Frankfurt (change to your region)
+aws_profile        = "data-zoo-dev"
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["eu-central-1a", "eu-central-1b"]  # Frankfurt AZs (update per region)
+github_repository  = "ivanprytula/data-pipeline-async"
+image_tag          = "develop"
+enable_messaging   = false  # Keep false in sandbox/local plan to avoid MSK cost
+
+# Sensitive values — DO NOT set here. Use TF_VAR_* env var instead:
+# export TF_VAR_redis_auth_token=$(openssl rand -hex 32)
+# redis_auth_token    → set via TF_VAR_redis_auth_token (never in this file)
+
+# ACM certificate ARN for your domain (create in AWS console, then set here)
+# acm_certificate_arn = "arn:aws:acm:eu-central-1:123456789012:certificate/..."

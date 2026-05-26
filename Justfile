@@ -102,19 +102,43 @@ test-aws-connectivity:
 
 # Terraform initialization (Floci)
 tf-init:
-    cd infra/terraform && terraform init -upgrade
+    cd infra/terraform/environments/dev && terraform init -upgrade -backend=false
 
 # Terraform plan for Floci environment
 tf-plan-local:
-    cd infra/terraform && TF_VAR_environment=floci tflocal plan -out=tfplan
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! command -v tflocal >/dev/null 2>&1; then
+        echo "tflocal is required. Install with: uv tool install terraform-local" >&2
+        exit 1
+    fi
+    export TF_VAR_aws_region="${TF_VAR_aws_region:-us-east-1}"
+    export TF_VAR_aws_profile="${TF_VAR_aws_profile:-default}"
+    export TF_VAR_availability_zones='${TF_VAR_availability_zones:-["us-east-1a","us-east-1b"]}'
+    export TF_VAR_redis_auth_token="${TF_VAR_redis_auth_token:-local-dev-redis-token}"
+    export TF_VAR_enable_messaging="${TF_VAR_enable_messaging:-false}"
+    cd infra/terraform/environments/dev
+    tflocal init -upgrade -backend=false > /dev/null
+    tflocal plan -out=tfplan
 
 # Terraform apply for Floci environment
 tf-apply-local:
-    cd infra/terraform && TF_VAR_environment=floci tflocal apply tfplan
+    cd infra/terraform/environments/dev && tflocal apply tfplan
 
 # Terraform destroy for Floci environment
 tf-destroy-local:
-    cd infra/terraform && TF_VAR_environment=floci tflocal destroy -auto-approve
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! command -v tflocal >/dev/null 2>&1; then
+        echo "tflocal is required. Install with: uv tool install terraform-local" >&2
+        exit 1
+    fi
+    export TF_VAR_aws_region="${TF_VAR_aws_region:-us-east-1}"
+    export TF_VAR_aws_profile="${TF_VAR_aws_profile:-default}"
+    export TF_VAR_availability_zones='${TF_VAR_availability_zones:-["us-east-1a","us-east-1b"]}'
+    export TF_VAR_redis_auth_token="${TF_VAR_redis_auth_token:-local-dev-redis-token}"
+    export TF_VAR_enable_messaging="${TF_VAR_enable_messaging:-false}"
+    cd infra/terraform/environments/dev && tflocal destroy -auto-approve
 
 # Full sandbox startup
 sandbox-up: up-aws
