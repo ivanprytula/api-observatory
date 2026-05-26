@@ -54,6 +54,35 @@ down:
 doctor:
     bash scripts/setup/00-doctor.sh
 
+# Build deployment image for release audit
+docker-build-image tag="api-observatory:local":
+    docker build -t {{tag}} .
+
+# MVP deployment image size audit (informational; functionality first)
+docker-audit-size image="api-observatory:local":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    SIZE_BYTES=$(docker image inspect {{image}} | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["Size"])')
+    SIZE_MB=$((SIZE_BYTES / 1024 / 1024))
+    LIMIT_MB=${DOCKER_IMAGE_SIZE_LIMIT_MB:-1500}
+    echo "Image {{image}} size: ${SIZE_MB}MB"
+    if (( SIZE_MB > LIMIT_MB )); then
+        echo "WARNING: image exceeds ${LIMIT_MB}MB budget (allowed for MVP while functionality is prioritized)" >&2
+        exit 0
+    fi
+    echo "Image size check passed"
+
+# Fail if CRITICAL CVEs are found (requires Trivy)
+docker-scan-image image="api-observatory:local":
+    docker compose --profile security run --rm trivy image --severity CRITICAL --ignore-unfixed --exit-code 1 {{image}}
+    echo "No CRITICAL CVEs detected"
+
+# Phase 13a deployment image verification gate
+deploy-audit tag="api-observatory:local":
+    just docker-build-image {{tag}}
+    just docker-audit-size {{tag}}
+    just docker-scan-image {{tag}}
+
 # Floci AWS sandbox
 up-aws:
     docker compose --profile aws up -d floci

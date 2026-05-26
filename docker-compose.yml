@@ -142,3 +142,14 @@ services:
         limits:
           cpus: '0.5'
           memory: '512M'
+
+  trivy:
+    image: aquasec/trivy:0.56.2
+    container_name: api-obs-trivy
+    profiles: [security]
+    entrypoint: ["trivy"]
+    command: ["--help"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./.local-dev/tmp/trivy-cache:/root/.cache/trivy
+    security_opt: [no-new-privileges:true]

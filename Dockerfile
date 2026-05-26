@@ -34,18 +34,15 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Python environment from builder
-COPY --from=builder /app/.venv /app/.venv
-ENV PATH="/app/.venv/bin:$PATH" \
-    PYTHONPATH="/app" \
-    PYTHONUNBUFFERED=1
-
 # Create non-root user for security
 RUN groupadd --gid 1001 appgroup && \
     useradd --uid 1001 --gid appgroup --shell /bin/false --no-create-home appuser
 
-# Set ownership of app directory to non-root user
-RUN chown -R appuser:appgroup /app
+# Copy Python environment from builder (avoid extra layer from recursive chown)
+COPY --from=builder --chown=appuser:appgroup /app/.venv /app/.venv
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONPATH="/app" \
+    PYTHONUNBUFFERED=1
 
 # Copy source code and migration files
 COPY --chown=appuser:appgroup libs/ ./libs/
