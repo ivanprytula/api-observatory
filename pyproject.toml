@@ -86,6 +86,9 @@ dev = [
     "locust>=2.32.0",
     # Type checker
     "ty>=0.0.32",
+    # Infrastructure as Code (Floci / Terraform local workflows)
+    # Note: Also requires the Terraform CLI binary (system package, not Python)
+    "terraform-local>=0.26.0",  # tflocal wrapper for local AWS simulation (Floci)
 ]
 
 [tool.pytest.ini_options]
