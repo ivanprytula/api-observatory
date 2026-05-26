@@ -60,6 +60,8 @@ just api-test
 ## Read Next
 
 - [docs/04-architecture-overview.md](docs/04-architecture-overview.md) — Visual flow diagram, service justifications
+- [docs/deployment/aws-ecs.md](docs/deployment/aws-ecs.md) — ECS deployment sequence for Phase 11
+- [docs/deployment/cost-teardown.md](docs/deployment/cost-teardown.md) — Cost guardrails and teardown checklist
 - [docs/tech-map.md](docs/tech-map.md) — Interview topic → exact file:function map
 - [docs/learning-paths.md](docs/learning-paths.md) — Four learning tracks (backend, distributed, devops, agent)
 - [docs/dev/bruno-collections.md](docs/dev/bruno-collections.md) — API testing with Bruno CLI

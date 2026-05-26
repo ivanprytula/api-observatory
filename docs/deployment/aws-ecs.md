@@ -1,0 +1,109 @@
+# AWS ECS Deployment Guide
+
+Track: C — Architecture and Platform Strategy
+
+This guide defines the operational sequence for Phase 11 deployment work (commits 13a-13c): image audit, local sandbox validation, and AWS ECS rollout steps.
+
+## Scope
+
+This project deploys to AWS ECS/Fargate.
+
+Use these docs as source of truth:
+
+- [Cloud deployment model](../cloud-deployment.md)
+- [Floci local workflow](../floci-aws-deployment-workflow.md)
+- [Cost teardown checklist](cost-teardown.md)
+
+## Prerequisites
+
+- Docker and Docker Compose
+- Terraform + `tflocal` (install with `uv tool install terraform-local`)
+- `awslocal` (install with `uv tool install awscli-local`)
+- No local Trivy install required (scan runs via Docker Compose service)
+
+Run host checks first:
+
+```bash
+just doctor
+```
+
+## Phase 13a: Image Audit and Scan
+
+Build and verify the deployment image gate:
+
+```bash
+just deploy-audit
+```
+
+This gate performs:
+
+1. `docker build` for `api-observatory:local`
+2. MVP size audit (default budget 1.5GB; informational for full feature coverage)
+3. Trivy scan with `--severity CRITICAL --exit-code 1` via compose service
+
+Run local stack smoke checks after image audit:
+
+```bash
+docker compose up -d
+docker compose down
+```
+
+## Phase 13b: Floci Sandbox + Terraform Plan
+
+MSK messaging is disabled by default in dev Terraform (`enable_messaging = false`) to avoid unnecessary spend in sandbox workflows.
+
+Run the full sandbox validation chain:
+
+```bash
+just sandbox-up
+just tf-plan-local
+just sandbox-test
+just tf-destroy-local
+just sandbox-down
+```
+
+## Terraform Variables for Local Sandbox
+
+`just tf-plan-local` uses these defaults when not provided:
+
+- `TF_VAR_aws_region=us-east-1`
+- `TF_VAR_aws_profile=default`
+- `TF_VAR_availability_zones=["us-east-1a","us-east-1b"]`
+- `TF_VAR_redis_auth_token=local-dev-redis-token`
+- `TF_VAR_enable_messaging=false`
+
+Override any value inline if needed:
+
+```bash
+TF_VAR_enable_messaging=true just tf-plan-local
+```
+
+## AWS ECS Rollout (Real Cloud)
+
+From [infra/terraform/environments/dev](../../infra/terraform/environments/dev):
+
+```bash
+terraform init \
+  -backend-config="bucket=<state-bucket>" \
+  -backend-config="key=data-zoo/dev/terraform.tfstate" \
+  -backend-config="region=<aws-region>" \
+  -backend-config="dynamodb_table=<lock-table>"
+
+terraform plan
+terraform apply
+```
+
+Then validate the workload endpoint:
+
+```bash
+curl -f https://<alb-dns>/docs
+```
+
+## Verification Gates
+
+Run test gates after deployment/doc changes:
+
+```bash
+DATABASE_URL_TEST=sqlite+aiosqlite://:memory: uv run pytest tests/ services/ingestor/tests/ -q -m "unit"
+env -u DATABASE_URL_TEST uv run pytest tests/ services/ingestor/tests/ -q -m "integration or e2e"
+```
