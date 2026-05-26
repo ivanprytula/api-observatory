@@ -72,9 +72,15 @@ docker-audit-size image="api-observatory:local":
     fi
     echo "Image size check passed"
 
-# Fail if CRITICAL CVEs are found (requires Trivy)
+# Fail if CRITICAL CVEs are found (requires Trivy compose service)
 docker-scan-image image="api-observatory:local":
-    docker compose --profile security run --rm trivy image --severity CRITICAL --ignore-unfixed --exit-code 1 {{image}}
+    docker compose --profile security run --rm trivy image \
+        --scanners vuln \
+        --severity CRITICAL \
+        --ignore-unfixed \
+        --timeout 15m \
+        --exit-code 1 \
+        {{image}}
     echo "No CRITICAL CVEs detected"
 
 # Phase 13a deployment image verification gate
