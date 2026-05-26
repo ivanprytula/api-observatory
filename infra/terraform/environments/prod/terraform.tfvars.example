@@ -1,0 +1,25 @@
+# terraform.tfvars — prod environment
+# DO NOT commit sensitive values. Use TF_VAR_* env vars or AWS Secrets Manager.
+# Copy this file to terraform.tfvars and fill in your values.
+#
+# Usage:
+#   export TF_VAR_aws_profile=data-zoo-prod
+#   export TF_VAR_redis_auth_token=$(aws secretsmanager get-secret-value \
+#     --secret-id /data-zoo/prod/redis-auth-token \
+#     --query SecretString --output text \
+#     --profile data-zoo-prod)
+#   terraform apply
+
+aws_region         = "eu-central-1"  # Frankfurt (change to your region)
+aws_profile        = "data-zoo-prod"
+vpc_cidr           = "10.1.0.0/16"
+availability_zones = ["eu-central-1a", "eu-central-1b", "eu-central-1c"]  # 3 AZs for HA
+github_repository  = "ivanprytula/api-observatory"
+image_tag          = "latest"
+
+# Sensitive values — DO NOT set here. Use TF_VAR_* env var instead:
+# export TF_VAR_redis_auth_token=...
+# redis_auth_token    → set via TF_VAR_redis_auth_token (never in this file)
+
+# ACM certificate ARN for your domain (create in AWS console, then set here)
+# acm_certificate_arn = "arn:aws:acm:eu-central-1:123456789012:certificate/..."

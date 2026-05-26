@@ -22,7 +22,7 @@ variable "availability_zones" {
 
 variable "github_repository" {
   type    = string
-  default = "ivanprytula/data-pipeline-async"
+  default = "ivanprytula/api-observatory"
 }
 
 variable "redis_auth_token" {

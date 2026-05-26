@@ -11,8 +11,8 @@ Track: A — Product and Onboarding
 ## Step 1: Clone & Navigate to Project
 
 ```bash
-git clone https://github.com/ivanprytula/data-pipeline-async.git
-cd data-pipeline-async
+git clone https://github.com/ivanprytula/api-observatory.git
+cd api-observatory
 ```
 
 ---
@@ -187,7 +187,7 @@ Prerequisites:
 Common bootstrap commands:
 
 ```bash
-repo="ivanprytula/data-pipeline-async"
+repo="ivanprytula/api-observatory"
 
 # Repository-wide defaults
 scripts/ops/01-gh-actions-config.sh vars set AWS_REGION eu-central-1 --repo "$repo"

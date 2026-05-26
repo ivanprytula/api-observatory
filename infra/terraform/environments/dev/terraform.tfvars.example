@@ -14,7 +14,7 @@ aws_region         = "eu-central-1"  # Frankfurt (change to your region)
 aws_profile        = "data-zoo-dev"
 vpc_cidr           = "10.0.0.0/16"
 availability_zones = ["eu-central-1a", "eu-central-1b"]  # Frankfurt AZs (update per region)
-github_repository  = "ivanprytula/data-pipeline-async"
+github_repository  = "ivanprytula/api-observatory"
 image_tag          = "develop"
 enable_messaging   = false  # Keep false in sandbox/local plan to avoid MSK cost
 
