@@ -1,0 +1,130 @@
+version: 2
+
+# IMPORTANT:
+# Dependabot reads this config from the repository default branch.
+# Keep this file in sync on the default branch to ensure target-branch rules apply.
+
+updates:
+  # Python package updates (pip)
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: monthly
+    target-branch: develop
+    open-pull-requests-limit: 3
+    reviewers:
+      - ivanp
+    assignees:
+      - ivanp
+    labels:
+      - "dependencies"
+      - "type/dependency"
+      - "area/python-packages"
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    pull-request-branch-name:
+      separator: "/"
+    rebase-strategy: auto
+    versioning-strategy: auto
+    groups:
+      python-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Python package updates (uv)
+  - package-ecosystem: uv
+    directory: "/"
+    schedule:
+      interval: monthly
+    target-branch: develop
+    open-pull-requests-limit: 3
+    reviewers:
+      - ivanprytula
+    assignees:
+      - ivanprytula
+    labels:
+      - "dependencies"
+      - "python.uv"
+      - "type/dependency"
+      - "area/python-packages"
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    pull-request-branch-name:
+      separator: "/"
+    rebase-strategy: auto
+    versioning-strategy: auto
+    groups:
+      uv-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Docker base image updates
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: tuesday
+      time: "03:00"  # 3 AM UTC
+      timezone: "UTC"
+    target-branch: develop
+    open-pull-requests-limit: 5
+    reviewers:
+      - ivanprytula
+    assignees:
+      - ivanprytula
+    labels:
+      - "dependencies"
+      - "type/dependency"
+      - "area/docker-images"
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    pull-request-branch-name:
+      separator: "/"
+    rebase-strategy: auto
+
+  # GitHub Actions updates (automatically pins action refs to full commit SHAs)
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: wednesday
+      time: "03:00"  # 3 AM UTC
+      timezone: "UTC"
+    target-branch: develop
+    open-pull-requests-limit: 5
+    reviewers:
+      - ivanprytula
+    assignees:
+      - ivanprytula
+    labels:
+      - "dependencies"
+      - "type/dependency"
+      - "area/github-actions"
+      - "security"
+    commit-message:
+      prefix: "chore(actions): update"
+      include: "scope"
+    pull-request-branch-name:
+      separator: "/"
+    rebase-strategy: auto
+
+# Note: Dependabot security updates are managed separately in GitHub Security.
+# Depending on repo settings, those PRs may still target default-branch behavior.
