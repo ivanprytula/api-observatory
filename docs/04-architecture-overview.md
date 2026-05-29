@@ -122,16 +122,16 @@ Probe detects schema drift
 ### 3. LangGraph Agent Enrichment
 
 ```text
-POST /api/v1/agent/enrich/{record_id}
+POST /api/v1/agent/enrich/{observation_id}
   └─ get_agent() → StateGraph execution
-       ├─ fetch_context  → SELECT related records (RAG)
+       ├─ fetch_context  → SELECT related observations (RAG)
        ├─ classify       → gpt-4o-mini (structured output, ~500ms)
        ├─ [if priority≥4 or category=unknown]
        │    └─ deep_analyze → gpt-4o (~1-2s)
        ├─ format_result  → build response payload
-       └─ publish        → UPDATE record + INSERT enrichment
+       └─ publish        → UPDATE observation + INSERT enrichment
 
-POST /api/v1/agent/enrich/{record_id}/review  (HITL mode)
+POST /api/v1/agent/enrich/{observation_id}/review  (HITL mode)
   └─ get_agent_hitl() → StateGraph pauses before "publish"
        └─ checkpointer saves state in Redis
             └─ POST /api/v1/agent/runs/{run_id}/resume {"approve": true}
@@ -231,7 +231,7 @@ returns historical events normally.
 
 ### OpenAI API
 
-**When**: Record enrichment agent calls classification or deep analysis nodes.
+**When**: observation enrichment agent calls classification or deep analysis nodes.
 
 **Why dual-model**: `gpt-4o-mini` costs ~10x less than `gpt-4o`. Routing rule: mini for all
 `classify` calls; escalate to full model only when `priority >= 4` or `category == "unknown"`.

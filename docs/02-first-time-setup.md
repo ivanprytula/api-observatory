@@ -72,6 +72,7 @@ Start the core services — database, cache, message broker, API, and MongoDB:
 
 ```bash
 just up          # db, redis, redpanda, ingestor, mongodb
+just migrate     # apply Alembic migrations explicitly (safe to re-run)
 ```
 
 **Optional — only if your work touches AWS services (S3, SQS, DynamoDB):**
@@ -105,8 +106,7 @@ just test-aws-connectivity
 
 For a description of every service and its port, see [What Just Happened](#what-just-happened) below.
 
-Note about Floci / Terraform
-----------------------------
+### Note about Floci / Terraform
 
 If you plan to use the Floci (local AWS simulator) workflows, the project uses Terraform for local infra definitions. That requires:
 
@@ -255,7 +255,7 @@ PostgreSQL (tests)     auto-provisioned → Ephemeral DB via testcontainers
 
 Alembic migrations were applied, creating tables:
 
-- `records` — ingested data records
+- `observations` — ingested data observations
 - `pipeline_jobs` — job execution history
 - And others based on current phase
 
@@ -297,14 +297,14 @@ For canonical command workflows, use **[03 — Daily Development](03-daily-devel
 ### Submit a Test Request
 
 ```bash
-# Create a record via API
-curl -X POST https://localhost/api/v1/records \
+# Create a observation via API
+curl -X POST https://localhost/api/v1/observations \
   -H "Content-Type: application/json" \
   -d '{"source": "test", "timestamp": "2024-04-22T12:00:00", "data": {}}' \
   -k  # -k ignores self-signed certificate warning
 
-# Query records
-curl -X GET https://localhost/api/v1/records -k
+# Query observations
+curl -X GET https://localhost/api/v1/observations -k
 ```
 
 For additional API usage and request patterns, use Swagger at `https://localhost/api/docs`.

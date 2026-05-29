@@ -197,6 +197,7 @@ db-reset:
     docker compose rm -sfv ingestor db
     docker compose up -d db
     @bash -c 'until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done'
+    just migrate
     docker compose up -d ingestor
     @bash -c 'until curl -sf http://localhost:8000/readyz > /dev/null 2>&1; do sleep 1; done && echo "stack ready"'
 

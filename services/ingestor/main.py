@@ -34,7 +34,7 @@ from services.ingestor.core.logging import set_cid, setup_logging
 from services.ingestor.core.scheduler import JobScheduler
 from services.ingestor.core.sentry import setup_sentry
 from services.ingestor.core.tenant import TenantMiddleware
-from services.ingestor.database import AsyncSessionLocal, Base, engine, get_db
+from services.ingestor.database import AsyncSessionLocal, engine, get_db
 from services.ingestor.fetch import close_http_client
 
 # from services.ingestor.fetch_aiohttp import close_http_session
@@ -228,23 +228,6 @@ async def lifespan(app: FastAPI):
 
     logger.info("startup", extra={"event": "application_started"})
     _validate_production_security_settings()
-
-    # For local/dev/test runs we bootstrap schema directly from SQLAlchemy metadata.
-    # This keeps "zero Alembic migrations" viable for early MVP iterations.
-    if settings.environment.lower() in {
-        "development",
-        "dev",
-        "testing",
-        "test",
-        "local",
-    }:
-        try:
-            async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
-            logger.info("schema_bootstrap_complete")
-        except Exception as e:
-            logger.warning("schema_bootstrap_failed", extra={"error": str(e)})
-            raise
 
     # Initialize session store (always-on, not gated by redis_enabled)
     try:

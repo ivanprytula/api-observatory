@@ -184,13 +184,13 @@ Expected: ~50 tests, 10–30 seconds
 ### Single Test File
 
 ```bash
-uv run pytest tests/unit/crud/test_records.py -v
+uv run pytest tests/unit/crud/test_observations.py -v
 ```
 
 ### Single Test by Name
 
 ```bash
-uv run pytest tests/ -k test_create_record -v
+uv run pytest tests/ -k test_create_observation -v
 ```
 
 ### With Coverage Report
@@ -328,7 +328,7 @@ Use these quick checks after touching auth, middleware, or route dependencies.
 ### Session Login with Explicit Role
 
 ```bash
-curl -i -X POST "http://localhost:8000/api/v1/records/auth/login?user_id=alice&role=writer"
+curl -i -X POST "http://localhost:8000/api/v1/observations/auth/login?user_id=alice&role=writer"
 ```
 
 Expected: `Set-Cookie: session_id=...` in response headers.
@@ -336,7 +336,7 @@ Expected: `Set-Cookie: session_id=...` in response headers.
 ### Writer Route (Should Succeed for writer/admin)
 
 ```bash
-curl -i -X PATCH "http://localhost:8000/api/v1/records/1/secure/archive" \
+curl -i -X PATCH "http://localhost:8000/api/v1/observations/1/secure/archive" \
   --cookie "session_id=<SESSION_ID>"
 ```
 
@@ -345,7 +345,7 @@ Expected: `200 OK` for `writer`/`admin`, `403` for `viewer`.
 ### Admin Route (Should Fail for writer)
 
 ```bash
-curl -i -X DELETE "http://localhost:8000/api/v1/records/1/secure/delete" \
+curl -i -X DELETE "http://localhost:8000/api/v1/observations/1/secure/delete" \
   --cookie "session_id=<SESSION_ID>"
 ```
 
@@ -354,9 +354,9 @@ Expected: `403` unless session role is `admin`.
 ### JWT Write Route (v2)
 
 ```bash
-TOKEN=$(curl -s -X POST "http://localhost:8000/api/v2/records/auth/token" | jq -r '.access_token')
+TOKEN=$(curl -s -X POST "http://localhost:8000/api/v2/observations/auth/token" | jq -r '.access_token')
 
-curl -i -X POST "http://localhost:8000/api/v2/records/jwt" \
+curl -i -X POST "http://localhost:8000/api/v2/observations/jwt" \
   -H "Authorization: Bearer ${TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{"source":"rbac-check","timestamp":"2026-01-01T00:00:00","data":{"ok":true},"tags":["smoke"]}'
@@ -437,7 +437,7 @@ Use the new dashboard control surface for operator workflows:
 - Open `http://localhost:8003/admin` for Admin Workflows.
 - Refresh worker health from the Worker Health panel.
 - Lookup one task ID from the Task Lookup panel.
-- Trigger one-record reruns from Manual Rerun.
+- Trigger one-observation reruns from Manual Rerun.
 - Create role-aware test sessions from Session Bootstrap (RBAC).
 
 These UI actions call existing ingestor APIs and are useful for fast operational checks without crafting manual curl commands.
@@ -445,16 +445,16 @@ These UI actions call existing ingestor APIs and are useful for fast operational
 ### Manual HTTP Requests
 
 ```bash
-# Create a record
-curl -X POST http://localhost:8000/api/v1/records \
+# Create a observation
+curl -X POST http://localhost:8000/api/v1/observations \
   -H "Content-Type: application/json" \
   -d '{"source": "cli", "timestamp": "2024-04-22T12:00:00", "data": {}}'
 
-# Fetch records
-curl -X GET http://localhost:8000/api/v1/records
+# Fetch observations
+curl -X GET http://localhost:8000/api/v1/observations
 
 # With pagination
-curl -X GET 'http://localhost:8000/api/v1/records?limit=10&offset=0'
+curl -X GET 'http://localhost:8000/api/v1/observations?limit=10&offset=0'
 ```
 
 ### Using HTTP Client Script
@@ -516,7 +516,7 @@ xdg-open http://localhost:9090
 
 - `http_requests_total` — All HTTP requests by method/endpoint/status
 - `http_request_duration_seconds` — Response time histogram
-- `pipeline_records_ingested_total` — Records processed
+- `pipeline_observations_ingested_total` — observations processed
 - `pipeline_job_executions_total` — Scheduled job runs
 - `background_jobs_submitted_total` — Batch jobs submitted
 
@@ -549,11 +549,11 @@ Then:
 -- List tables
 \dt
 
--- Show schema of records table
-\d records
+-- Show schema of observations table
+\d observations
 
--- Query records
-SELECT id, source, created_at FROM records LIMIT 10;
+-- Query observations
+SELECT id, source, created_at FROM observations LIMIT 10;
 
 -- Check migrations applied
 SELECT version, description, installed_on FROM alembic_version;
