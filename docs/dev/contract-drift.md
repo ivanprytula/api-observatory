@@ -14,7 +14,7 @@ emits a `drift.detected` event over Redis pub/sub if any field changed.
 
 ### ContractSnapshot
 
-A point-in-time record of a source's declared JSON schema.
+A point-in-time observation of a source's declared JSON schema.
 
 | Field | Description |
 |-------|-------------|
@@ -46,7 +46,7 @@ previous one.  A value of 100 means the schemas are identical.  Breaking changes
 ### Fingerprint short-circuit
 
 If the incoming schema has the **same SHA-256 fingerprint** as the previous
-snapshot, the service skips the diff entirely, records a snapshot with
+snapshot, the service skips the diff entirely, observations a snapshot with
 `compatibility_score = 100.0`, and returns `drift_event = None`.  No pub/sub
 event is published.
 

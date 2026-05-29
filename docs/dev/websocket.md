@@ -1,12 +1,12 @@
 # WebSocket Real-Time Stream
 
-Receive live events from the ingestor — record ingestions, job progress updates,
+Receive live events from the ingestor — observation ingestions, job progress updates,
 and contract drift notifications — over a persistent WebSocket connection.
 
 ## Endpoint
 
 ```text
-WS /ws/records/stream
+WS /ws/observations/stream
 ```
 
 Authentication token is passed as a query parameter because browsers cannot set
@@ -18,7 +18,7 @@ If `api_v1_bearer_token` is configured in the environment the connection require
 a token.
 
 ```text
-WS /ws/records/stream?token=<bearer_token>
+WS /ws/observations/stream?token=<bearer_token>
 ```
 
 ### Close codes
@@ -35,14 +35,14 @@ without a `?token=` parameter.
 
 All messages are JSON objects with a `type` field and an `ts` ISO timestamp.
 
-### `record.created`
+### `observation.created`
 
-Emitted when a new pipeline record is ingested.
+Emitted when a new pipeline observation is ingested.
 
 ```json
 {
-  "type": "record.created",
-  "record_id": 42,
+  "type": "observation.created",
+  "observation_id": 42,
   "source": "api.example.com",
   "ts": "2026-01-01T12:00:00.000000"
 }
@@ -58,7 +58,7 @@ Emitted during long-running background jobs.
   "job_id": "ingest-batch-7",
   "status": "running",
   "progress": 0.65,
-  "message": "processed 650 / 1000 records",
+  "message": "processed 650 / 1000 observations",
   "ts": "2026-01-01T12:00:01.000000"
 }
 ```
@@ -107,16 +107,16 @@ The connection is then closed by the server.
 npm install -g wscat
 
 # Connect (no auth)
-wscat -c "ws://localhost:8000/ws/records/stream"
+wscat -c "ws://localhost:8000/ws/observations/stream"
 
 # Connect (with token)
-wscat -c "ws://localhost:8000/ws/records/stream?token=mysecret"
+wscat -c "ws://localhost:8000/ws/observations/stream?token=mysecret"
 ```
 
 ### Browser (JavaScript)
 
 ```javascript
-const ws = new WebSocket('ws://localhost:8000/ws/records/stream?token=mysecret');
+const ws = new WebSocket('ws://localhost:8000/ws/observations/stream?token=mysecret');
 
 ws.onmessage = (event) => {
   const msg = JSON.parse(event.data);
@@ -136,7 +136,7 @@ ws.onclose = (event) => {
 import asyncio, json, websockets
 
 async def listen() -> None:
-    url = "ws://localhost:8000/ws/records/stream?token=mysecret"
+    url = "ws://localhost:8000/ws/observations/stream?token=mysecret"
     async with websockets.connect(url) as ws:
         async for raw in ws:
             msg = json.loads(raw)
@@ -159,7 +159,7 @@ POST /api/v1/...          ─→  repository layer
                                 ├─ persist to PostgreSQL
                                 └─ pubsub.publish_*()  ─→  Redis channel: ingestor:events
                                                                  │
-WS /ws/records/stream   ←─  subscribe_events()  ←──────────────┘
+WS /ws/observations/stream   ←─  subscribe_events()  ←──────────────┘
 ```
 
 `subscribe_events()` opens a dedicated Redis connection per WebSocket session

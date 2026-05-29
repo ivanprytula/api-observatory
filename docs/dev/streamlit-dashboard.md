@@ -53,13 +53,13 @@ INGESTOR_URL=https://api.example.com uv run streamlit run streamlit_app.py
 
 ## Live Stream panel
 
-The WebSocket panel connects to `WS /ws/records/stream`.  Click **Connect** to
+The WebSocket panel connects to `WS /ws/observations/stream`.  Click **Connect** to
 start receiving events.  The panel auto-refreshes every second while connected.
 Events accumulate up to 50 messages; older ones are dropped automatically.
 
 Message types:
 
-- `record.created` — a new pipeline record was ingested
+- `observation.created` — a new pipeline observation was ingested
 - `drift.detected` — a contract drift event was persisted
 - `job.progress` — background job progress update
 - `ping` — server keepalive (every 30 s)
@@ -76,7 +76,7 @@ streamlit_app.py
 │                ─── GET /api/v1/sources
 │                ─── GET /api/v1/contracts/sources/{id}/drift-events
 │
-└── websockets ────── WS /ws/records/stream     ─── ingestor (Redis pub/sub)
+└── websockets ────── WS /ws/observations/stream     ─── ingestor (Redis pub/sub)
      (daemon thread)
 ```
 

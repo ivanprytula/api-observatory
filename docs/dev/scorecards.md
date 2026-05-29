@@ -13,7 +13,7 @@ answers: "In the last N days, how reliable was this API?"
 | `avg_latency_ms` | Mean latency across all probes in the window |
 | `error_count` | Absolute number of failed probes |
 | `error_budget_burn_rate` | How fast the provider consumes its SLO error budget |
-| `sample_count` | Total probes recorded in the window |
+| `sample_count` | Total probes observationed in the window |
 
 ### Error-budget burn rate
 
