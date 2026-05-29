@@ -62,7 +62,7 @@ class TestFlattenSchema:
         flat = _flatten_schema({"items": [1, 2, 3]})
         assert flat["items"] == "array"
 
-    def test_empty_nested_object_only_records_parent(self) -> None:
+    def test_empty_nested_object_only_observations_parent(self) -> None:
         flat = _flatten_schema({"meta": {}})
         assert flat["meta"] == "object"
         assert len(flat) == 1

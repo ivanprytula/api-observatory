@@ -136,9 +136,9 @@ class CostValueRow(BaseModel):
     """Cost-to-value breakdown for a single source.
 
     Dimensions:
-    - ``cost_per_record_usd``: average cost to produce one successful ingestion record.
+    - ``cost_per_observation_usd``: average cost to produce one successful ingestion observation.
     - ``cost_per_insight_usd``: average cost to produce one actionable drift insight.
-    Both are ``None`` when the denominator is zero (no records or no insights yet).
+    Both are ``None`` when the denominator is zero (no observations or no insights yet).
     """
 
     source_id: int = Field(..., description="Source profile ID.")
@@ -157,12 +157,12 @@ class CostValueRow(BaseModel):
     total_cost_usd: float = Field(
         ..., ge=0.0, description="Total spend in USD across the window."
     )
-    successful_records: int = Field(
+    successful_observations: int = Field(
         ...,
         ge=0,
         description=(
             "Ingestion calls that did NOT result in a breaking drift event. "
-            "These are the calls that produced clean, usable records."
+            "These are the calls that produced clean, usable observations."
         ),
     )
     insights_generated: int = Field(
@@ -170,9 +170,12 @@ class CostValueRow(BaseModel):
         ge=0,
         description="Drift events produced in the window (each = one actionable insight).",
     )
-    cost_per_record_usd: float | None = Field(
+    cost_per_observation_usd: float | None = Field(
         None,
-        description="total_cost_usd / successful_records. Null when successful_records is 0.",
+        description=(
+            "total_cost_usd / successful_observations. "
+            "Null when successful_observations is 0."
+        ),
     )
     cost_per_insight_usd: float | None = Field(
         None,
@@ -291,7 +294,7 @@ class FreshnessSourceRow(BaseModel):
     - ``ok``: last snapshot is within the SLA threshold.
     - ``warning``: last snapshot age is between 75 % and 100 % of the threshold.
     - ``breached``: last snapshot age exceeds the threshold.
-    - ``no_data``: no snapshots recorded in the window.
+    - ``no_data``: no snapshots observationed in the window.
     """
 
     source_id: int = Field(..., description="Source profile ID.")
@@ -469,7 +472,7 @@ class CostSummarySection(BaseModel):
         None,
         description=(
             "Average cost per drift insight across sources with non-zero spend. "
-            "Null when no spend is recorded."
+            "Null when no spend is observationed."
         ),
     )
     highest_cost_source_name: str | None = Field(

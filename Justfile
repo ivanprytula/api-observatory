@@ -96,7 +96,7 @@ up-aws:
     @bash -c 'for i in $(seq 1 30); do curl -sf http://localhost:4566/_floci/health > /dev/null 2>&1 && exit 0 || sleep 1; done; echo "⚠️  Floci health check timed out after 30s" >&2; exit 1'
     awslocal s3 mb s3://data-pipeline-local || true
     awslocal sqs create-queue --queue-name pipeline-events || true
-    awslocal dynamodb create-table --table-name records --attribute-definitions AttributeName=id,AttributeType=S --key-schema AttributeName=id,KeyType=HASH --billing-mode PAY_PER_REQUEST || true
+    awslocal dynamodb create-table --table-name observations --attribute-definitions AttributeName=id,AttributeType=S --key-schema AttributeName=id,KeyType=HASH --billing-mode PAY_PER_REQUEST || true
     @echo "✅ Floci up and configured"
 
 # Test Floci connectivity

@@ -7,8 +7,8 @@ Modeled on app/cache.py singleton pattern:
 
 Advanced Python patterns demonstrated:
 - TypeVar + Generic: EventPayload[T] typed event envelope (Phase 1 spec)
-- Observer pattern: publish_record_created called from records router
-  after successful DB write (record creation triggers the event)
+- Observer pattern: publish_observation_created called from observations router
+  after successful DB write (observation creation triggers the event)
 - Circuit breaker (Phase 4): _send_to_kafka is wrapped with @circuit_breaker
   so repeated Kafka failures open the circuit and stop hammering the broker
 """
@@ -24,12 +24,12 @@ from aiokafka.errors import KafkaError
 
 from libs.contracts.events import (
     EVENT_DOC_SCRAPED,
-    EVENT_RECORD_CREATED,
-    TOPIC_RECORD_CREATED,
+    EVENT_OBSERVATION_CREATED,
+    TOPIC_OBSERVATION_CREATED,
     TOPIC_SCRAPED,
     DocScrapedPayload,
     EventPayload,
-    RecordCreatedPayload,
+    ObservationCreatedPayload,
 )
 from libs.platform.circuit_breaker import CircuitOpenError, circuit_breaker
 from services.ingestor import pubsub as _pubsub
@@ -94,43 +94,51 @@ async def disconnect_producer() -> None:
 # ---------------------------------------------------------------------------
 # Publisher
 # ---------------------------------------------------------------------------
-async def publish_record_created(record_id: int, payload: dict[str, Any]) -> None:
-    """Publish a record.created event to TOPIC_RECORD_CREATED.
+async def publish_observation_created(
+    observation_id: int, payload: dict[str, Any]
+) -> None:
+    """Publish a observation.created event to TOPIC_OBSERVATION_CREATED.
 
     Fail-open: KafkaError and CircuitOpenError are logged as warnings; the
     request is never failed. No-op if producer is not connected.
 
     Args:
-        record_id: Primary key of the newly created record.
-        payload: Additional record fields to include in the event.
+        observation_id: Primary key of the newly created observation.
+        payload: Additional observation fields to include in the event.
     """
     if _producer is None:
         return
 
-    event_payload: RecordCreatedPayload = {"record_id": record_id, **payload}
-    event: EventPayload[RecordCreatedPayload] = EventPayload(
-        event_type=EVENT_RECORD_CREATED,
+    event_payload: ObservationCreatedPayload = {
+        "observation_id": observation_id,
+        **payload,
+    }
+    event: EventPayload[ObservationCreatedPayload] = EventPayload(
+        event_type=EVENT_OBSERVATION_CREATED,
         payload=event_payload,
     )
 
     try:
         await _send_to_kafka(
-            TOPIC_RECORD_CREATED,
+            TOPIC_OBSERVATION_CREATED,
             json.dumps(event.to_dict()).encode(),
         )
         logger.debug(
             "event_published",
-            extra={"event_type": EVENT_RECORD_CREATED, "record_id": record_id},
+            extra={
+                "event_type": EVENT_OBSERVATION_CREATED,
+                "observation_id": observation_id,
+            },
         )
     except (KafkaError, CircuitOpenError) as exc:
         logger.warning(
             "kafka_publish_failed",
-            extra={"error": str(exc), "record_id": record_id},
+            extra={"error": str(exc), "observation_id": observation_id},
         )
     # Also publish to Redis Pub/Sub so the FastAPI WS endpoint and
     # the Django Channels bridge can stream the event in real time.
     source = payload.get("source", "")
-    await _pubsub.publish_record_created(record_id, source)
+    await _pubsub.publish_observation_created(observation_id, source)
 
 
 async def publish_doc_scraped(source: str, count: int) -> None:

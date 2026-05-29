@@ -48,8 +48,8 @@ from services.ingestor.metrics import (  # noqa: F401 — imported to register m
     enrich_duration_seconds,
     job_duration_seconds,
     job_executions_total,
-    records_created_total,
-    records_upsert_conflicts_total,
+    observations_created_total,
+    observations_upsert_conflicts_total,
 )
 from services.ingestor.notifications import notify_background_task_failed
 from services.ingestor.rate_limiting import limiter
@@ -65,8 +65,8 @@ from services.ingestor.routers import (
     health_ingestion_jobs,
     insights,
     notifications,
-    records,
-    records_v2,
+    observations,
+    observations_v2,
     reporting,
     scorecards,
     scraper,
@@ -374,16 +374,16 @@ async def lifespan(app: FastAPI):
 # OpenAPI tag group descriptions
 _OPENAPI_TAGS: list[dict[str, str]] = [
     {
-        "name": "records",
+        "name": "observations",
         "description": (
-            "Core CRUD for pipeline records. Write endpoints (POST, PATCH, DELETE) "
+            "Core CRUD for pipeline observations. Write endpoints (POST, PATCH, DELETE) "
             "require a valid session cookie or bearer token. Rate-limited at 1 000 req/min per IP."
         ),
     },
     {
-        "name": "records-v2 — advanced rate limiting",
+        "name": "observations-v2 — advanced rate limiting",
         "description": (
-            "Extended record endpoints demonstrating token-bucket and "
+            "Extended observation endpoints demonstrating token-bucket and "
             "sliding-window rate limiting, "
             "stateless JWT auth, cursor pagination, concurrent enrichment, idempotent upsert, "
             "and the N+1 query demo."
@@ -398,22 +398,22 @@ _OPENAPI_TAGS: list[dict[str, str]] = [
     },
     {
         "name": "analytics",
-        "description": "Aggregated analytics queries over the records table (read-only).",
+        "description": "Aggregated analytics queries over the observations table (read-only).",
     },
     {
         "name": "scraper",
         "description": (
             "On-demand web scraper that fetches external URLs and stores "
-            "results as records."
+            "results as observations."
         ),
     },
     {
         "name": "vector-search",
-        "description": "Semantic indexing and querying against vectorized records.",
+        "description": "Semantic indexing and querying against vectorized observations.",
     },
     {
         "name": "websocket",
-        "description": "Real-time WebSocket feed of record-created events.",
+        "description": "Real-time WebSocket feed of observation-created events.",
     },
     {
         "name": "health",
@@ -434,7 +434,7 @@ _OPENAPI_TAGS: list[dict[str, str]] = [
     {
         "name": "agent",
         "description": (
-            "AI agent orchestration endpoints for asynchronous record "
+            "AI agent orchestration endpoints for asynchronous observation "
             "analysis workflows."
         ),
     },
@@ -505,7 +505,7 @@ app = FastAPI(
     version=settings.app_version,
     description=(
         "Async data pipeline platform built on FastAPI, SQLAlchemy 2.0, and asyncpg.\n\n"
-        "The API now spans authenticated record ingestion, advanced rate-limiting demos, "
+        "The API now spans authenticated observation ingestion, advanced rate-limiting demos, "
         "analytics, scraping, vector search, background processing, notifications, "
         "Mongo-backed aggregations, agent workflows, source registry management, "
         "contract drift detection, operational insights, subscriptions, reporting, "
@@ -514,14 +514,14 @@ app = FastAPI(
         "API keys with scoped permissions and revocation, protected API docs, baseline "
         "security headers, and rate limiting on sensitive endpoints.\n\n"
         "**Representative endpoints:**\n"
-        "- `POST /api/v1/records` — core record creation with fixed-window rate limiting\n"
-        "- `POST /api/v2/records/token-bucket` — burst-tolerant token-bucket limiter\n"
-        "- `POST /api/v2/records/sliding-window` — exact sliding-window limiter\n"
+        "- `POST /api/v1/observations` — core observation creation w/ fixed-window rate limiting\n"
+        "- `POST /api/v2/observations/token-bucket` — burst-tolerant token-bucket limiter\n"
+        "- `POST /api/v2/observations/sliding-window` — exact sliding-window limiter\n"
         "- `POST /api/v1/api-keys` — issue scoped tenant API keys\n"
         "- `GET /api/v1/source-registry` — manage external source profiles\n"
         "- `GET /api/v1/contract-drift/events` — inspect compatibility drift signals\n"
         "- `GET /api/v1/insights` — retrieve operational recommendations and anomalies\n"
-        "- `GET /ws/records` — subscribe to real-time record events"
+        "- `GET /ws/observations` — subscribe to real-time observation events"
     ),
     lifespan=lifespan,
     openapi_tags=_OPENAPI_TAGS,
@@ -615,8 +615,8 @@ app.add_middleware(TenantMiddleware)
 app.add_middleware(CorrelationIdMiddleware)
 
 app.include_router(auth.router)
-app.include_router(records.router)
-app.include_router(records_v2.router)
+app.include_router(observations.router)
+app.include_router(observations_v2.router)
 app.include_router(scraper.router)
 app.include_router(analytics.router)
 app.include_router(agent.router, prefix="/api/v1/agent", tags=["agent"])

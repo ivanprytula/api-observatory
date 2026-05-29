@@ -1,6 +1,6 @@
 # api-observatory
 
-Async FastAPI service for API reliability monitoring, contract drift detection, scorecard reporting, and LangGraph-powered record enrichment.
+Async FastAPI service for API reliability monitoring, contract drift detection, scorecard reporting, and LangGraph-powered observation enrichment.
 
 **MVP status**: Commits 1-12 complete. All core features shippable.
 

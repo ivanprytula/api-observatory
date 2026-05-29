@@ -30,13 +30,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from libs.platform.circuit_breaker import CircuitBreaker, CircuitOpenError
 from libs.platform.retry import IdempotencyKeyTracker, exponential_backoff
-from services.ingestor.api_schemas.records import RecordRequest
+from services.ingestor.api_schemas.observations import ObservationRequest
 from services.ingestor.api_schemas.scorecards import HealthSampleCreate
 from services.ingestor.constants import SOURCE_HEALTH_TIMEOUT_SECONDS
 from services.ingestor.fetch import get_http_client
-from services.ingestor.models import Record, SourceProfile
-from services.ingestor.repositories import records as crud
-from services.ingestor.repositories.scorecards import record_health_sample
+from services.ingestor.models import Observation, SourceProfile
+from services.ingestor.repositories import observations as crud
+from services.ingestor.repositories.scorecards import observation_health_sample
 
 
 logger = logging.getLogger(__name__)
@@ -109,7 +109,7 @@ async def run_source_probe(db: AsyncSession, source_id: int) -> dict[str, Any]:
 
     elapsed_ms = round((time.monotonic() - start) * 1000, 2)
 
-    await record_health_sample(
+    await observation_health_sample(
         db,
         HealthSampleCreate(
             source_id=source_id,
@@ -141,20 +141,20 @@ async def run_source_probe(db: AsyncSession, source_id: int) -> dict[str, Any]:
 
 async def ingest_api_single(
     db: AsyncSession,
-    request: RecordRequest,
+    request: ObservationRequest,
     idempotency_key: str | None = None,
-) -> Record | None:
-    """Ingest a single record from API (sync on write).
+) -> Observation | None:
+    """Ingest a single observation from API (sync on write).
 
     This is the API ingestion pattern: immediate write + response.
 
     Args:
         db: Active async database session.
-        request: RecordRequest payload from API.
+        request: ObservationRequest payload from API.
         idempotency_key: Optional key for deduplication (prevents double-writes on retry).
 
     Returns:
-        Inserted Record ORM instance, or None if duplicate (with idempotency_key).
+        Inserted Observation ORM instance, or None if duplicate (with idempotency_key).
 
     Notes:
         - Deduplication is in-memory (per-process). For distributed systems, use database
@@ -173,32 +173,32 @@ async def ingest_api_single(
             return None
         _dedup_tracker.mark_seen(idempotency_key)
 
-    record = await crud.create_record(db, request)
+    observation = await crud.create_observation(db, request)
 
     logger.info(
         "ingest_api_single_created",
         extra={
-            "record_id": record.id,
-            "source": record.source,
+            "observation_id": observation.id,
+            "source": observation.source,
             "idempotency_key": idempotency_key,
         },
     )
 
-    return record
+    return observation
 
 
 async def ingest_api_batch(
     db: AsyncSession,
-    requests: list[RecordRequest],
+    requests: list[ObservationRequest],
     idempotency_key_prefix: str | None = None,
 ) -> dict[str, Any]:
-    """Ingest a batch of records from API (bulk insert, optimized).
+    """Ingest a batch of observations from API (bulk insert, optimized).
 
     API ingestion pattern for bulk uploads: batch insert + summary response.
 
     Args:
         db: Active async database session.
-        requests: List of RecordRequest payloads.
+        requests: List of ObservationRequest payloads.
         idempotency_key_prefix: Optional prefix for batch deduplication.
 
     Returns:
@@ -227,16 +227,16 @@ async def ingest_api_batch(
         _dedup_tracker.mark_seen(batch_key)
 
     try:
-        records = await crud.create_records_batch(db, requests)
+        observations = await crud.create_observations_batch(db, requests)
         logger.info(
             "ingest_api_batch_created",
             extra={
-                "inserted": len(records),
+                "inserted": len(observations),
                 "batch_key": batch_key,
-                "sources": set(r.source for r in records),
+                "sources": set(r.source for r in observations),
             },
         )
-        return {"inserted": len(records), "errors": 0, "first_error": None}
+        return {"inserted": len(observations), "errors": 0, "first_error": None}
 
     except Exception as e:
         logger.error(
@@ -262,7 +262,7 @@ async def ingest_scheduled_batch_example(db: AsyncSession) -> dict[str, Any]:
     This is a placeholder job that demonstrates the pattern. For each new data source,
     create a similar job:
     1. Fetch from external source (API, S3, Kafka, etc)
-    2. Transform to RecordRequest list
+    2. Transform to ObservationRequest list
     3. Bulk insert with deduplication
     4. Return metrics
 
@@ -305,7 +305,7 @@ async def ingest_scheduled_batch_example(db: AsyncSession) -> dict[str, Any]:
 
         # 1. Fetch external data (stub for example)
         source_name = "example_source"
-        records_data = [
+        observations_data = [
             {
                 "source": source_name,
                 "timestamp": datetime.now(UTC),
@@ -314,8 +314,8 @@ async def ingest_scheduled_batch_example(db: AsyncSession) -> dict[str, Any]:
             }
         ]
 
-        # 2. Transform to RecordRequest
-        requests = [RecordRequest(**r) for r in records_data]
+        # 2. Transform to ObservationRequest
+        requests = [ObservationRequest(**r) for r in observations_data]
 
         # 3. Bulk insert
         batch_result = await ingest_api_batch(
@@ -342,10 +342,10 @@ async def ingest_scheduled_batch_example(db: AsyncSession) -> dict[str, Any]:
 
 
 @exponential_backoff(max_retries=2, base_delay=5.0)
-async def archive_old_records(db: AsyncSession) -> dict[str, Any]:
-    """Scheduled job to move old records to cold storage (Pillar 2 archival).
+async def archive_old_observations(db: AsyncSession) -> dict[str, Any]:
+    """Scheduled job to move old observations to cold storage (Pillar 2 archival).
 
-    Runs daily to move records >30 days old to records_archive partitions.
+    Runs daily to move observations >30 days old to observations_archive partitions.
 
     Args:
         db: Active async database session (injected by scheduler).
@@ -355,15 +355,17 @@ async def archive_old_records(db: AsyncSession) -> dict[str, Any]:
 
     Notes:
         - Works in tandem with Pillar 2 data retention strategy.
-        - For implementation: UPDATE records SET archive_date=NOW()
+        - For implementation: UPDATE observations SET archive_date=NOW()
           WHERE created_at < NOW() - INTERVAL '30 days'
         - Placeholder for now (Pillar 5 implementation).
     """
     from services.ingestor.cache import redis_lock
 
-    async with redis_lock("job:archive_old_records", ttl_seconds=600) as acquired:
+    async with redis_lock("job:archive_old_observations", ttl_seconds=600) as acquired:
         if not acquired:
-            logger.info("job_skipped_lock_held", extra={"job": "archive_old_records"})
+            logger.info(
+                "job_skipped_lock_held", extra={"job": "archive_old_observations"}
+            )
             return {
                 "archived": 0,
                 "deleted": 0,
@@ -373,7 +375,7 @@ async def archive_old_records(db: AsyncSession) -> dict[str, Any]:
 
         # TODO: Implement archive logic using data-retention-archival.md strategy
         logger.info(
-            "archive_old_records_placeholder",
+            "archive_old_observations_placeholder",
             extra={"status": "pending_implementation"},
         )
         return {
@@ -395,27 +397,29 @@ async def get_ingestion_health(db: AsyncSession) -> dict[str, Any]:
     Used by `/health/ingestion` endpoint for monitoring and alerting.
 
     Returns:
-        Dict with: records_count, last_record_time, api_insert_latency_ms, etc.
+        Dict with: observations_count, last_observation_time, api_insert_latency_ms, etc.
     """
     try:
-        # Count recent records (last 24 hours)
-        stmt = select(Record).where(
-            Record.created_at >= datetime.now(UTC) - timedelta(days=1)
+        # Count recent observations (last 24 hours)
+        stmt = select(Observation).where(
+            Observation.created_at >= datetime.now(UTC) - timedelta(days=1)
         )
         result = await db.execute(stmt)
-        records_24h = len(result.scalars().all())
+        observations_24h = len(result.scalars().all())
 
-        # Get last record timestamp
-        stmt = select(Record).order_by(Record.created_at.desc()).limit(1)
+        # Get last observation timestamp
+        stmt = select(Observation).order_by(Observation.created_at.desc()).limit(1)
         result = await db.execute(stmt)
-        last_record = result.scalar_one_or_none()
-        last_record_time = last_record.created_at if last_record else None
+        last_observation = result.scalar_one_or_none()
+        last_observation_time = (
+            last_observation.created_at if last_observation else None
+        )
 
         return {
             "status": "healthy",
-            "records_24h": records_24h,
-            "last_record_time": last_record_time.isoformat()
-            if last_record_time
+            "observations_24h": observations_24h,
+            "last_observation_time": last_observation_time.isoformat()
+            if last_observation_time
             else None,
             "ingestion_enabled": True,
         }
@@ -446,7 +450,7 @@ async def get_ingestion_health(db: AsyncSession) -> dict[str, Any]:
 #
 # Participants:
 #   IngestionCommand         — abstract command (priority, deadline, execute, undo)
-#   SingleRecordIngestCommand — concrete command: single-record ingest
+#   SingleObservationIngestCommand — concrete command: single-observation ingest
 #   BatchIngestCommand       — concrete command: bulk ingest
 #   PriorityJobQueue         — invoker: heapq-backed, deadline-aware scheduler
 #
@@ -506,23 +510,23 @@ class IngestionCommand(ABC):
     async def undo(self) -> None:  # noqa: B027 — intentional concrete no-op base
         """Optional rollback action (no-op by default).
 
-        Override when the command can be undone (e.g., delete inserted records,
+        Override when the command can be undone (e.g., delete inserted observations,
         publish a compensating Kafka event).
         """
 
 
 @dataclass
-class SingleRecordIngestCommand(IngestionCommand):
-    """Concrete Command: ingest a single record at a given priority.
+class SingleObservationIngestCommand(IngestionCommand):
+    """Concrete Command: ingest a single observation at a given priority.
 
     Args:
-        request:         Validated record payload.
+        request:         Validated observation payload.
         priority:        Urgency level (default: PRIORITY_NORMAL).
         deadline:        Hard cut-off time; None = no deadline.
         idempotency_key: Optional dedup key forwarded to ingest_api_single.
     """
 
-    request: RecordRequest
+    request: ObservationRequest
     _priority: int = field(default=PRIORITY_NORMAL)
     _deadline: datetime | None = field(default=None)
     idempotency_key: str | None = field(default=None)
@@ -540,27 +544,27 @@ class SingleRecordIngestCommand(IngestionCommand):
         return f"single_ingest:{self.request.source}"
 
     async def execute(self, db: AsyncSession) -> dict[str, Any]:
-        """Run single-record ingest and return summary."""
-        record = await ingest_api_single(db, self.request, self.idempotency_key)
+        """Run single-observation ingest and return summary."""
+        observation = await ingest_api_single(db, self.request, self.idempotency_key)
         return {
             "command": self.name,
-            "record_id": record.id if record else None,
-            "skipped": record is None,
+            "observation_id": observation.id if observation else None,
+            "skipped": observation is None,
         }
 
 
 @dataclass
 class BatchIngestCommand(IngestionCommand):
-    """Concrete Command: bulk-ingest a list of records at a given priority.
+    """Concrete Command: bulk-ingest a list of observations at a given priority.
 
     Args:
-        requests:              List of validated record payloads.
+        requests:              List of validated observation payloads.
         priority:              Urgency level (default: PRIORITY_NORMAL).
         deadline:              Hard cut-off time; None = no deadline.
         idempotency_key_prefix: Optional prefix for batch dedup.
     """
 
-    requests: list[RecordRequest]
+    requests: list[ObservationRequest]
     _priority: int = field(default=PRIORITY_NORMAL)
     _deadline: datetime | None = field(default=None)
     idempotency_key_prefix: str | None = field(default=None)
@@ -600,7 +604,7 @@ class PriorityJobQueue:
 
         queue = PriorityJobQueue()
         queue.enqueue(BatchIngestCommand(requests, _priority=PRIORITY_LOW))
-        queue.enqueue(SingleRecordIngestCommand(req, _priority=PRIORITY_HIGH))
+        queue.enqueue(SingleObservationIngestCommand(req, _priority=PRIORITY_HIGH))
 
         async with AsyncSessionLocal() as db:
             result = await queue.run_next(db)

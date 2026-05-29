@@ -1,10 +1,10 @@
-"""Integration tests for Step 8 — concurrent record enrichment endpoint.
+"""Integration tests for Step 8 — concurrent observation enrichment endpoint.
 
-Tests POST /api/v2/records/enrich:
+Tests POST /api/v2/observations/enrich:
   - Happy path with mocked fetch
-  - Partial failures (some records fail, others succeed)
-  - Missing record IDs (not found in DB)
-  - All records fail
+  - Partial failures (some observations fail, others succeed)
+  - Missing observation IDs (not found in DB)
+  - All observations fail
   - Semaphore limits concurrency
   - Request validation (too many IDs, empty list)
 """
@@ -16,11 +16,11 @@ import pytest
 from httpx import AsyncClient
 
 from services.ingestor.constants import ENRICH_MAX_IDS, ENRICH_SEMAPHORE_LIMIT
-from tests.shared.payloads import RECORD_API
+from tests.shared.payloads import OBSERVATION_API
 
 
-_URL = "/api/v2/records/enrich"
-_RECORD = RECORD_API
+_URL = "/api/v2/observations/enrich"
+_OBSERVATION = OBSERVATION_API
 
 # External API mock response
 _MOCK_POST = {"id": 1, "title": "Mock Title", "body": "Mock body text"}
@@ -29,12 +29,12 @@ _MOCK_POST = {"id": 1, "title": "Mock Title", "body": "Mock body text"}
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-async def _create_records(client: AsyncClient, n: int) -> list[int]:
-    """Create n records and return their IDs."""
+async def _create_observations(client: AsyncClient, n: int) -> list[int]:
+    """Create n observations and return their IDs."""
     ids = []
     for i in range(n):
-        payload = {**_RECORD, "source": f"enrich-test-{i}"}
-        r = await client.post("/api/v1/records", json=payload)
+        payload = {**_OBSERVATION, "source": f"enrich-test-{i}"}
+        r = await client.post("/api/v1/observations", json=payload)
         assert r.status_code == 201
         ids.append(r.json()["id"])
     return ids
@@ -45,14 +45,14 @@ async def _create_records(client: AsyncClient, n: int) -> list[int]:
 # ---------------------------------------------------------------------------
 @pytest.mark.integration
 async def test_enrich_happy_path(client: AsyncClient) -> None:
-    """All records enriched successfully — enriched_count == len(record_ids)."""
-    ids = await _create_records(client, 3)
+    """All observations enriched successfully — enriched_count == len(observation_ids)."""
+    ids = await _create_observations(client, 3)
 
     with patch(
         "services.ingestor.fetch.fetch_with_retry", new_callable=AsyncMock
     ) as mock_fetch:
         mock_fetch.return_value = _MOCK_POST
-        r = await client.post(_URL, json={"record_ids": ids})
+        r = await client.post(_URL, json={"observation_ids": ids})
 
     assert r.status_code == 200
     body = r.json()
@@ -61,7 +61,7 @@ async def test_enrich_happy_path(client: AsyncClient) -> None:
     assert body["duration_ms"] >= 0
     assert len(body["results"]) == 3
 
-    # Verify per-record shape
+    # Verify per-observation shape
     for result in body["results"]:
         assert result["enriched"] is True
         assert result["external_title"] == "Mock Title"
@@ -70,15 +70,15 @@ async def test_enrich_happy_path(client: AsyncClient) -> None:
 
 
 @pytest.mark.integration
-async def test_enrich_single_record(client: AsyncClient) -> None:
-    """Single record enriched returns 200 with 1 result."""
-    ids = await _create_records(client, 1)
+async def test_enrich_single_observation(client: AsyncClient) -> None:
+    """Single observation enriched returns 200 with 1 result."""
+    ids = await _create_observations(client, 1)
 
     with patch(
         "services.ingestor.fetch.fetch_with_retry", new_callable=AsyncMock
     ) as mock_fetch:
         mock_fetch.return_value = _MOCK_POST
-        r = await client.post(_URL, json={"record_ids": ids})
+        r = await client.post(_URL, json={"observation_ids": ids})
 
     assert r.status_code == 200
     body = r.json()
@@ -92,8 +92,8 @@ async def test_enrich_single_record(client: AsyncClient) -> None:
 # ---------------------------------------------------------------------------
 @pytest.mark.integration
 async def test_enrich_partial_failure(client: AsyncClient) -> None:
-    """Some records fail — failed ones appear with enriched=False, others succeed."""
-    ids = await _create_records(client, 4)
+    """Some observations fail — failed ones appear with enriched=False, others succeed."""
+    ids = await _create_observations(client, 4)
 
     call_count = 0
 
@@ -106,7 +106,7 @@ async def test_enrich_partial_failure(client: AsyncClient) -> None:
         return _MOCK_POST
 
     with patch("services.ingestor.fetch.fetch_with_retry", side_effect=flaky_fetch):
-        r = await client.post(_URL, json={"record_ids": ids})
+        r = await client.post(_URL, json={"observation_ids": ids})
 
     assert r.status_code == 200
     body = r.json()
@@ -114,7 +114,7 @@ async def test_enrich_partial_failure(client: AsyncClient) -> None:
     assert body["failed_count"] > 0  # At least one failed
     assert body["enriched_count"] > 0  # At least one succeeded
 
-    # Failed records have error populated
+    # Failed observations have error populated
     failed = [res for res in body["results"] if not res["enriched"]]
     for f in failed:
         assert f["error"] is not None
@@ -124,14 +124,14 @@ async def test_enrich_partial_failure(client: AsyncClient) -> None:
 @pytest.mark.integration
 async def test_enrich_all_fail(client: AsyncClient) -> None:
     """All enrichments fail — endpoint still returns 200 with failed_count = n."""
-    ids = await _create_records(client, 2)
+    ids = await _create_observations(client, 2)
 
     with patch(
         "services.ingestor.fetch.fetch_with_retry",
         new_callable=AsyncMock,
         side_effect=Exception("All down"),
     ):
-        r = await client.post(_URL, json={"record_ids": ids})
+        r = await client.post(_URL, json={"observation_ids": ids})
 
     assert r.status_code == 200
     body = r.json()
@@ -143,16 +143,16 @@ async def test_enrich_all_fail(client: AsyncClient) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Missing / unknown record IDs
+# Missing / unknown observation IDs
 # ---------------------------------------------------------------------------
 @pytest.mark.integration
-async def test_enrich_nonexistent_records(client: AsyncClient) -> None:
-    """Non-existent record IDs are returned with enriched=False and 'not found' error."""
+async def test_enrich_nonexistent_observations(client: AsyncClient) -> None:
+    """Non-existent observation IDs are returned with enriched=False and 'not found' error."""
     with patch(
         "services.ingestor.fetch.fetch_with_retry", new_callable=AsyncMock
     ) as mock_fetch:
         mock_fetch.return_value = _MOCK_POST
-        r = await client.post(_URL, json={"record_ids": [999999, 999998]})
+        r = await client.post(_URL, json={"observation_ids": [999999, 999998]})
 
     assert r.status_code == 200
     body = r.json()
@@ -166,14 +166,14 @@ async def test_enrich_nonexistent_records(client: AsyncClient) -> None:
 @pytest.mark.integration
 async def test_enrich_mixed_existing_and_missing(client: AsyncClient) -> None:
     """Mix of real and missing IDs — missing ones fail, real ones succeed."""
-    ids = await _create_records(client, 2)
+    ids = await _create_observations(client, 2)
     mixed_ids = ids + [999999]  # append non-existent
 
     with patch(
         "services.ingestor.fetch.fetch_with_retry", new_callable=AsyncMock
     ) as mock_fetch:
         mock_fetch.return_value = _MOCK_POST
-        r = await client.post(_URL, json={"record_ids": mixed_ids})
+        r = await client.post(_URL, json={"observation_ids": mixed_ids})
 
     assert r.status_code == 200
     body = r.json()
@@ -188,7 +188,7 @@ async def test_enrich_mixed_existing_and_missing(client: AsyncClient) -> None:
 @pytest.mark.integration
 async def test_enrich_respects_semaphore_limit(client: AsyncClient) -> None:
     """Concurrent inflight count never exceeds ENRICH_SEMAPHORE_LIMIT."""
-    ids = await _create_records(client, ENRICH_SEMAPHORE_LIMIT + 5)
+    ids = await _create_observations(client, ENRICH_SEMAPHORE_LIMIT + 5)
 
     concurrent_peak = 0
     current_concurrent = 0
@@ -207,7 +207,7 @@ async def test_enrich_respects_semaphore_limit(client: AsyncClient) -> None:
         return _MOCK_POST
 
     with patch("services.ingestor.fetch.fetch_with_retry", side_effect=tracked_fetch):
-        r = await client.post(_URL, json={"record_ids": ids})
+        r = await client.post(_URL, json={"observation_ids": ids})
 
     assert r.status_code == 200
     body = r.json()
@@ -221,15 +221,17 @@ async def test_enrich_respects_semaphore_limit(client: AsyncClient) -> None:
 # ---------------------------------------------------------------------------
 @pytest.mark.integration
 async def test_enrich_empty_list_rejected(client: AsyncClient) -> None:
-    """Empty record_ids list is rejected with 422."""
-    r = await client.post(_URL, json={"record_ids": []})
+    """Empty observation_ids list is rejected with 422."""
+    r = await client.post(_URL, json={"observation_ids": []})
     assert r.status_code == 422
 
 
 @pytest.mark.integration
 async def test_enrich_too_many_ids_rejected(client: AsyncClient) -> None:
-    """More than ENRICH_MAX_IDS record IDs are rejected with 422."""
-    r = await client.post(_URL, json={"record_ids": list(range(ENRICH_MAX_IDS + 1))})
+    """More than ENRICH_MAX_IDS observation IDs are rejected with 422."""
+    r = await client.post(
+        _URL, json={"observation_ids": list(range(ENRICH_MAX_IDS + 1))}
+    )
     assert r.status_code == 422
 
 
@@ -246,13 +248,13 @@ async def test_enrich_missing_body_rejected(client: AsyncClient) -> None:
 @pytest.mark.integration
 async def test_enrich_response_shape(client: AsyncClient) -> None:
     """Verify complete EnrichResponse shape is returned."""
-    ids = await _create_records(client, 2)
+    ids = await _create_observations(client, 2)
 
     with patch(
         "services.ingestor.fetch.fetch_with_retry", new_callable=AsyncMock
     ) as mock_fetch:
         mock_fetch.return_value = _MOCK_POST
-        r = await client.post(_URL, json={"record_ids": ids})
+        r = await client.post(_URL, json={"observation_ids": ids})
 
     assert r.status_code == 200
     body = r.json()
@@ -263,9 +265,9 @@ async def test_enrich_response_shape(client: AsyncClient) -> None:
     assert "duration_ms" in body
     assert "results" in body
 
-    # Per-record fields
+    # Per-observation fields
     for result in body["results"]:
-        assert "record_id" in result
+        assert "observation_id" in result
         assert "source" in result
         assert "enriched" in result
         assert "error" in result

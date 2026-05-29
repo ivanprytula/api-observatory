@@ -40,7 +40,7 @@ def _cutoff_utc_naive(days: int) -> datetime:
     return _now_utc_naive() - timedelta(days=days)
 
 
-async def record_health_sample(
+async def observation_health_sample(
     db: AsyncSession,
     payload: HealthSampleCreate,
 ) -> HealthSampleResponse:

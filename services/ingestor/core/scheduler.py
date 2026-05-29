@@ -30,8 +30,8 @@ Example usage:
     )
     async def ingest_daily_batch(db: AsyncSession) -> dict[str, Any]:
         '''Scheduled job handler — called by scheduler at 00:00 UTC daily.'''
-        records = await fetch_external_source()
-        inserted = await crud.create_records_batch(db, records)
+            observations = await fetch_external_source()
+                inserted = await crud.create_observations_batch(db, observations)
         return {"inserted": len(inserted), "source": "daily_batch"}
 
     # In app lifespan:

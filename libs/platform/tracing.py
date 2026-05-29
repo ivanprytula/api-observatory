@@ -90,7 +90,7 @@ def get_trace_id() -> str | None:
     - The span context is invalid (e.g., no-op tracer)
 
     Used by log formatters to inject trace_id into structured log output
-    so log records can be correlated with Jaeger traces.
+    so log observations can be correlated with Jaeger traces.
     """
     try:
         from opentelemetry import trace

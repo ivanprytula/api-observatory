@@ -80,7 +80,7 @@ async def _seed_samples(
 class TestHealthSamplesApi:
     """POST /api/v1/scorecards/samples."""
 
-    async def test_record_sample_returns_201(self, client: AsyncClient) -> None:
+    async def test_observation_sample_returns_201(self, client: AsyncClient) -> None:
         source_id = await _create_source(client, "sc-sample-create")
         resp = await client.post(
             "/api/v1/scorecards/samples",
@@ -93,7 +93,7 @@ class TestHealthSamplesApi:
         assert body["is_success"] is True
         assert "id" in body
 
-    async def test_record_failed_sample(self, client: AsyncClient) -> None:
+    async def test_observation_failed_sample(self, client: AsyncClient) -> None:
         source_id = await _create_source(client, "sc-sample-fail")
         resp = await client.post(
             "/api/v1/scorecards/samples",

@@ -202,7 +202,7 @@ async def verify_api_key(
     if db_key.tenant_id is not None:
         tenant_context.set(db_key.tenant_id)
 
-    # Record last-used timestamp asynchronously (fire-and-forget update).
+    # Observation last-used timestamp asynchronously (fire-and-forget update).
     await _touch_last_used(db, db_key.id)
 
     logger.info(
@@ -247,8 +247,8 @@ async def _touch_last_used(db: AsyncSession, api_key_id: int) -> None:
 #: All valid scope tokens recognised by this service.
 VALID_SCOPES: frozenset[str] = frozenset(
     [
-        "records:read",
-        "records:write",
+        "observations:read",
+        "observations:write",
         "sources:read",
         "sources:write",
         "drift:read",
@@ -272,13 +272,15 @@ def require_scope(scope: str):
 
     Usage::
 
-        @router.get("/records", dependencies=[Depends(require_scope("records:read"))])
-        async def list_records(...): ...
+        @router.get("/observations", dependencies=[Depends(require_scope("observations:read"))])
+        async def list_observations(...): ...
 
     Or injected to get the context::
 
-        @router.get("/records")
-        async def list_records(ctx: Annotated[dict, Depends(require_scope("records:read"))]): ...
+        @router.get("/observations")
+        async def list_observations(
+        ctx: Annotated[dict,
+        Depends(require_scope("observations:read"))]): ...
     """
 
     async def _check(ctx: ApiKeyContext) -> dict[str, Any]:

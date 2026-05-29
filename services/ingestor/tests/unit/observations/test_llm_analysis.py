@@ -4,13 +4,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import AsyncClient
 
-from services.ingestor.api_schemas.records import RecordClassification
-from services.ingestor.models import Record
+from services.ingestor.api_schemas.observations import ObservationClassification
+from services.ingestor.models import Observation
 
 
 @pytest.fixture
-def mock_record():
-    return Record(
+def mock_observation():
+    return Observation(
         id=1,
         source="test-source",
         timestamp=datetime.now(UTC).replace(tzinfo=None),
@@ -23,17 +23,19 @@ def mock_record():
 
 @pytest.mark.unit
 class TestLLMAnalysis:
-    @patch("services.ingestor.routers.records.settings")
-    @patch("services.ingestor.routers.records.get_record_op")
-    @patch("services.ingestor.routers.records.vs_bridge.search_record_documents")
-    @patch("services.ingestor.routers.records.AsyncOpenAI")
-    async def test_analyze_record_success(
+    @patch("services.ingestor.routers.observations.settings")
+    @patch("services.ingestor.routers.observations.get_observation_op")
+    @patch(
+        "services.ingestor.routers.observations.vs_bridge.search_observation_documents"
+    )
+    @patch("services.ingestor.routers.observations.AsyncOpenAI")
+    async def test_analyze_observation_success(
         self,
         mock_openai_class,
         mock_search,
-        mock_get_record,
+        mock_get_observation,
         mock_settings,
-        mock_record,
+        mock_observation,
         client: AsyncClient,
     ):
         # Mock Settings
@@ -42,7 +44,7 @@ class TestLLMAnalysis:
         mock_settings.openai_model = "gpt-4o"
 
         # Mock DB lookup
-        mock_get_record.return_value = mock_record
+        mock_get_observation.return_value = mock_observation
 
         # Mock Vector Search
         mock_search.return_value = {"results": [{"text": "some context"}]}
@@ -51,7 +53,7 @@ class TestLLMAnalysis:
         mock_openai_instance = mock_openai_class.return_value
         mock_completion = MagicMock()
         mock_completion.choices = [MagicMock()]
-        mock_completion.choices[0].message.parsed = RecordClassification(
+        mock_completion.choices[0].message.parsed = ObservationClassification(
             category="test", priority=1, summary="test summary", sentiment="neutral"
         )
         mock_completion.usage.prompt_tokens = 10
@@ -61,26 +63,26 @@ class TestLLMAnalysis:
             return_value=mock_completion
         )
 
-        response = await client.post("/api/v1/records/1/analyze")
+        response = await client.post("/api/v1/observations/1/analyze")
 
         assert response.status_code == 200
         data = response.json()
         assert data["category"] == "test"
         assert data["priority"] == 1
 
-        mock_get_record.assert_called_once()
+        mock_get_observation.assert_called_once()
         mock_search.assert_called_once()
         mock_openai_instance.beta.chat.completions.parse.assert_called_once()
 
-    @patch("services.ingestor.routers.records.settings")
-    @patch("services.ingestor.routers.records.get_record_op")
-    @patch("services.ingestor.routers.records.AsyncOpenAI")
-    async def test_analyze_record_stream_success(
+    @patch("services.ingestor.routers.observations.settings")
+    @patch("services.ingestor.routers.observations.get_observation_op")
+    @patch("services.ingestor.routers.observations.AsyncOpenAI")
+    async def test_analyze_observation_stream_success(
         self,
         mock_openai_class,
-        mock_get_record,
+        mock_get_observation,
         mock_settings,
-        mock_record,
+        mock_observation,
         client: AsyncClient,
     ):
         # Mock Settings
@@ -88,7 +90,7 @@ class TestLLMAnalysis:
         mock_settings.openai_api_key = "test-key"
         mock_settings.openai_model = "gpt-4o"
 
-        mock_get_record.return_value = mock_record
+        mock_get_observation.return_value = mock_observation
 
         mock_openai_instance = mock_openai_class.return_value
 
@@ -101,7 +103,7 @@ class TestLLMAnalysis:
             return_value=mock_stream_gen()
         )
 
-        response = await client.post("/api/v1/records/1/analyze/stream")
+        response = await client.post("/api/v1/observations/1/analyze/stream")
 
         assert response.status_code == 200
         assert "text/event-stream" in response.headers["content-type"]
@@ -110,31 +112,31 @@ class TestLLMAnalysis:
         assert "data: chunk1" in content
         assert "data: chunk2" in content
 
-    @patch("services.ingestor.routers.records.settings")
-    @patch("services.ingestor.routers.records.get_record_op")
-    async def test_analyze_record_disabled(
-        self, mock_get_record, mock_settings, mock_record, client: AsyncClient
+    @patch("services.ingestor.routers.observations.settings")
+    @patch("services.ingestor.routers.observations.get_observation_op")
+    async def test_analyze_observation_disabled(
+        self, mock_get_observation, mock_settings, mock_observation, client: AsyncClient
     ):
         # Mock Settings: Disabled
         mock_settings.openai_enabled = False
-        mock_get_record.return_value = mock_record
+        mock_get_observation.return_value = mock_observation
 
-        response = await client.post("/api/v1/records/1/analyze")
+        response = await client.post("/api/v1/observations/1/analyze")
 
         assert response.status_code == 501
         assert "disabled" in response.json()["detail"]
 
-    @patch("services.ingestor.routers.records.settings")
-    @patch("services.ingestor.routers.records.get_record_op")
-    async def test_analyze_record_missing_key(
-        self, mock_get_record, mock_settings, mock_record, client: AsyncClient
+    @patch("services.ingestor.routers.observations.settings")
+    @patch("services.ingestor.routers.observations.get_observation_op")
+    async def test_analyze_observation_missing_key(
+        self, mock_get_observation, mock_settings, mock_observation, client: AsyncClient
     ):
         # Mock Settings: Enabled but no key
         mock_settings.openai_enabled = True
         mock_settings.openai_api_key = None
-        mock_get_record.return_value = mock_record
+        mock_get_observation.return_value = mock_observation
 
-        response = await client.post("/api/v1/records/1/analyze")
+        response = await client.post("/api/v1/observations/1/analyze")
 
         assert response.status_code == 501
         assert "missing" in response.json()["detail"]

@@ -28,7 +28,7 @@ from services.ingestor.database import get_db
 from services.ingestor.repositories.scorecards import (
     get_scorecard,
     list_scorecards,
-    record_health_sample,
+    observation_health_sample,
 )
 
 
@@ -52,7 +52,7 @@ _R422 = {
     "/samples",
     response_model=HealthSampleResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Record a provider health probe",
+    summary="Observation a provider health probe",
     responses={**_R422},
 )
 async def create_health_sample(
@@ -66,7 +66,7 @@ async def create_health_sample(
     represents a single synthetic or real request made to the provider:
     its latency, whether it succeeded, and optional HTTP status and region.
     """
-    return await record_health_sample(db, payload)
+    return await observation_health_sample(db, payload)
 
 
 @router.get(

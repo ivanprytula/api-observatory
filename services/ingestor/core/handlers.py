@@ -66,7 +66,7 @@ def wrap_job_handler(
 
             duration = asyncio.get_event_loop().time() - start_time
 
-            # Record success in health metrics
+            # Observation success in health metrics
             job_obj._health.last_run_at = datetime.now(UTC)
             job_obj._health.last_run_duration_seconds = duration
             job_obj._health.success_count += 1
@@ -87,7 +87,7 @@ def wrap_job_handler(
             return result
 
         except TimeoutError as e:
-            # Record timeout in health metrics
+            # Observation timeout in health metrics
             job_obj._health.last_run_at = datetime.now(UTC)
             job_obj._health.failure_count += 1
             job_obj._health.last_error = str(e) or "timeout exceeded"
@@ -105,7 +105,7 @@ def wrap_job_handler(
             raise
 
         except asyncio.CancelledError:
-            # Always preserve cancellation without recording as failure
+            # Always preserve cancellation without observationing as failure
             logger.info(
                 "job_execution_cancelled",
                 extra={"job_name": job_obj.name},
@@ -113,7 +113,7 @@ def wrap_job_handler(
             raise
 
         except Exception as e:
-            # Record failure in health metrics
+            # Observation failure in health metrics
             job_obj._health.last_run_at = datetime.now(UTC)
             job_obj._health.failure_count += 1
             job_obj._health.last_error = str(e)

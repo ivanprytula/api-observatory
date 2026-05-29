@@ -1,11 +1,11 @@
 meta {
-  name: Stream Enrich Record (SSE)
+  name: Stream Enrich observation (SSE)
   type: http
   seq: 4
 }
 
 get {
-  url: {{baseUrl}}/api/v1/agent/enrich/{{record_id}}/stream
+  url: {{baseUrl}}/api/v1/agent/enrich/{{observation_id}}/stream
   body: none
   auth: bearer
 }
@@ -27,7 +27,7 @@ docs {
 
   Final event:
     event: done
-    data: {"run_id": "...", "record_id": 1, "classification": {...}, "analysis": "...", "published": true, "hitl_paused": false}
+    data: {"run_id": "...", "observation_id": 1, "classification": {...}, "analysis": "...", "published": true, "hitl_paused": false}
 
   Bruno does not render streaming responses in real time — use curl or a browser EventSource for live output:
     curl -N -H "Authorization: Bearer <token>" http://localhost:8000/api/v1/agent/enrich/1/stream

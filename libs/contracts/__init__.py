@@ -1,9 +1,9 @@
 """libs.contracts — shared data contracts across service boundaries.
 
 Intended contents (define in Phase 3, services adopt in Phase 4):
-- events     : domain event envelopes (RecordIngested, RecordProcessed, …)
+- events     : domain event envelopes (ObservationIngested, ObservationProcessed, …)
 - schemas    : shared Pydantic v2 request/response DTOs used by >1 service
-- types      : common type aliases and enumerations (RecordStatus, SourceType, …)
+- types      : common type aliases and enumerations (ObservationStatus, SourceType, …)
 - pagination : standard paginated response wrapper
 
 Design constraints:
@@ -13,19 +13,19 @@ Design constraints:
 - Keep modules small and focused — one concept per file
 
 Usage pattern (once populated):
-    from libs.contracts.events import RecordIngested
+    from libs.contracts.events import ObservationIngested
     from libs.contracts.schemas import PaginatedResponse
-    from libs.contracts.types import RecordStatus
+    from libs.contracts.types import ObservationStatus
 """
 
 from libs.contracts.events import (
     EVENT_DOC_SCRAPED,
-    EVENT_RECORD_CREATED,
-    TOPIC_RECORD_CREATED,
+    EVENT_OBSERVATION_CREATED,
+    TOPIC_OBSERVATION_CREATED,
     TOPIC_SCRAPED,
     DocScrapedPayload,
     EventPayload,
-    RecordCreatedPayload,
+    ObservationCreatedPayload,
 )
 from libs.contracts.schemas import (
     BackgroundBatchSubmitResponse,
@@ -46,11 +46,11 @@ from libs.contracts.schemas import (
 
 __all__ = [
     "EventPayload",
-    "RecordCreatedPayload",
+    "ObservationCreatedPayload",
     "DocScrapedPayload",
-    "EVENT_RECORD_CREATED",
+    "EVENT_OBSERVATION_CREATED",
     "EVENT_DOC_SCRAPED",
-    "TOPIC_RECORD_CREATED",
+    "TOPIC_OBSERVATION_CREATED",
     "TOPIC_SCRAPED",
     "PaginationMeta",
     "NotificationDispatchResult",

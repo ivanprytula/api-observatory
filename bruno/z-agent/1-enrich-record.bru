@@ -1,11 +1,11 @@
 meta {
-  name: Enrich Record (full run)
+  name: Enrich observation (full run)
   type: http
   seq: 1
 }
 
 post {
-  url: {{baseUrl}}/api/v1/agent/enrich/{{record_id}}
+  url: {{baseUrl}}/api/v1/agent/enrich/{{observation_id}}
   body: none
   auth: bearer
 }

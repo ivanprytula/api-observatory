@@ -6,10 +6,10 @@ from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from services.ingestor.agent.state import AgentState
-from services.ingestor.api_schemas.records import RecordClassification
+from services.ingestor.api_schemas.observations import ObservationClassification
 from services.ingestor.config import settings
-from services.ingestor.events import publish_record_created
-from services.ingestor.vector_search import search_record_documents
+from services.ingestor.events import publish_observation_created
+from services.ingestor.vector_search import search_observation_documents
 
 
 try:
@@ -24,11 +24,11 @@ logger = logging.getLogger(__name__)
 
 
 async def fetch_context_node(state: AgentState) -> dict[str, Any]:
-    source = state["record"].get("source")
-    raw_data = state["record"].get("raw_data", {})
+    source = state["observation"].get("source")
+    raw_data = state["observation"].get("raw_data", {})
     query_text = f"Source: {source}, Data: {json.dumps(raw_data)}"
     try:
-        context_results = await search_record_documents(query=query_text, top_k=3)
+        context_results = await search_observation_documents(query=query_text, top_k=3)
         context_docs = [r.get("text", "") for r in context_results.get("results", [])]
         context_text = "\n---\n".join(context_docs)
     except Exception as exc:
@@ -43,14 +43,14 @@ async def classify_node(state: AgentState) -> dict[str, Any]:
     client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     system_prompt = (
-        "You are a senior data analyst. Analyze the following record. "
+        "You are a senior data analyst. Analyze the following observation. "
         "Return the analysis as a structured JSON object matching the requested schema."
     )
     user_prompt = (
-        f"Context from similar records:\n{state.get('rag_context', '')}\n\n"
-        f"Record to analyze:\n"
-        f"Source: {state['record'].get('source')}\n"
-        f"Data: {json.dumps(state['record'].get('raw_data', {}))}\n"
+        f"Context from similar observations:\n{state.get('rag_context', '')}\n\n"
+        f"Observation to analyze:\n"
+        f"Source: {state['observation'].get('source')}\n"
+        f"Data: {json.dumps(state['observation'].get('raw_data', {}))}\n"
     )
 
     try:
@@ -60,7 +60,7 @@ async def classify_node(state: AgentState) -> dict[str, Any]:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            response_format=RecordClassification,
+            response_format=ObservationClassification,
         )
         parsed = completion.choices[0].message.parsed
         return {"classification": parsed}
@@ -77,13 +77,13 @@ async def deep_analyze_node(state: AgentState) -> dict[str, Any]:
     classification_str = c.model_dump_json() if c else "None"
 
     system_prompt = (
-        "Perform a deep, comprehensive analysis of the record, considering"
+        "Perform a deep, comprehensive analysis of the observation, considering"
         " the classification and context."
     )
     user_prompt = (
         f"Context:\n{state.get('rag_context', '')}\n\n"
         f"Classification:\n{classification_str}\n\n"
-        f"Record:\n{json.dumps(state['record'])}\n"
+        f"Observation:\n{json.dumps(state['observation'])}\n"
     )
 
     try:
@@ -111,16 +111,16 @@ async def format_result_node(state: AgentState) -> dict[str, Any]:
 
 
 async def publish_node(state: AgentState) -> dict[str, Any]:
-    record_id = state.get("record_id")
+    observation_id = state.get("observation_id")
     result = state.get("result", "")
 
-    await publish_record_created(record_id, {"analysis_result": result})
+    await publish_observation_created(observation_id, {"analysis_result": result})
 
     try:
         await insert_scraped_doc(
             source="agent",
-            url=f"agent://record/{record_id}",
-            title=f"Analysis for {record_id}",
+            url=f"agent://observation/{observation_id}",
+            title=f"Analysis for {observation_id}",
             content=result,
         )
     except Exception as exc:

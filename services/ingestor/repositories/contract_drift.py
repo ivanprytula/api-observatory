@@ -49,7 +49,7 @@ def _flatten_schema(payload: dict[str, Any], prefix: str = "") -> dict[str, str]
         value_type = _value_type(value)
 
         if isinstance(value, dict):
-            # Record the parent node type so scalar<->object transitions are visible.
+            # Observation the parent node type so scalar<->object transitions are visible.
             flat[path] = value_type
             if value:
                 flat.update(_flatten_schema(value, path))
@@ -166,7 +166,7 @@ async def create_contract_snapshot(
 
     new_fingerprint = _fingerprint(payload.payload_schema)
 
-    # Short-circuit: identical schema — persist the record but skip diff.
+    # Short-circuit: identical schema — persist the observation but skip diff.
     if latest is not None and latest.schema_fingerprint == new_fingerprint:
         snapshot = ContractSnapshot(
             source_id=payload.source_id,

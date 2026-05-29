@@ -1,6 +1,6 @@
 """Async Redis caching layer — fail-open on connection errors.
 
-This module provides a read cache for single-record lookups. All cache
+This module provides a read cache for single-observation lookups. All cache
 operations are wrapped in try/except to prevent Redis failures from affecting
 the API (fail-open pattern).
 
@@ -25,18 +25,18 @@ from redis.asyncio import Redis
 
 from services.ingestor.constants import (
     CACHE_KEY_LIST_PREFIX,
-    CACHE_KEY_RECORD,
+    CACHE_KEY_OBSERVATION,
     CACHE_LIST_MAX_LIMIT,
     CACHE_LIST_MAX_SKIP,
     CACHE_LOCK_DEFAULT_TTL_SECONDS,
     CACHE_LOCK_PREFIX,
     CACHE_TTL_LIST,
-    CACHE_TTL_RECORD,
+    CACHE_TTL_OBSERVATION,
 )
 
 
 if TYPE_CHECKING:
-    from services.ingestor.api_schemas.records import RecordResponse
+    from services.ingestor.api_schemas.observations import ObservationResponse
 
 
 # singleton instance (initialized in lifespan startup)
@@ -71,14 +71,14 @@ async def disconnect_cache() -> None:
     logger.info("cache_disconnected")
 
 
-async def get_record(record_id: int) -> RecordResponse | None:
-    """Retrieve a cached record by ID.
+async def get_observation(observation_id: int) -> ObservationResponse | None:
+    """Retrieve a cached observation by ID.
 
     Args:
-        record_id: Record primary key
+        observation_id: Observation primary key
 
     Returns:
-        RecordResponse if found in cache and valid JSON, else None
+        ObservationResponse if found in cache and valid JSON, else None
 
     Fails open: returns None on any error (connection, deserialization)
     """
@@ -86,18 +86,18 @@ async def get_record(record_id: int) -> RecordResponse | None:
         return None
 
     try:
-        from services.ingestor.api_schemas.records import RecordResponse
+        from services.ingestor.api_schemas.observations import ObservationResponse
 
-        key = CACHE_KEY_RECORD.format(record_id=record_id)
+        key = CACHE_KEY_OBSERVATION.format(observation_id=observation_id)
         cached_json = await _client.get(key)
         if cached_json is None:
             return None
         # Deserialize from JSON via Pydantic
-        return RecordResponse.model_validate_json(cached_json)
+        return ObservationResponse.model_validate_json(cached_json)
     except Exception as e:
         logger.warning(
             "cache_get_error",
-            extra={"record_id": record_id, "error": str(e)},
+            extra={"observation_id": observation_id, "error": str(e)},
         )
         from services.ingestor.metrics import cache_errors_total
 
@@ -105,14 +105,16 @@ async def get_record(record_id: int) -> RecordResponse | None:
         return None
 
 
-async def set_record(
-    record_id: int, record: RecordResponse, ttl: int = CACHE_TTL_RECORD
+async def set_observation(
+    observation_id: int,
+    observation: ObservationResponse,
+    ttl: int = CACHE_TTL_OBSERVATION,
 ) -> None:
-    """Store a record in cache.
+    """Store a observation in cache.
 
     Args:
-        record_id: Record primary key
-        record: RecordResponse instance (will be JSON serialized)
+        observation_id: Observation primary key
+        observation: ObservationResponse instance (will be JSON serialized)
         ttl: Time-to-live in seconds (default: 1 hour)
 
     Fails open: logs warning + increments error counter on failure
@@ -121,25 +123,25 @@ async def set_record(
         return
 
     try:
-        key = CACHE_KEY_RECORD.format(record_id=record_id)
-        json_data = record.model_dump_json()
+        key = CACHE_KEY_OBSERVATION.format(observation_id=observation_id)
+        json_data = observation.model_dump_json()
         await _client.setex(key, ttl, json_data)
-        logger.info("cache_set", extra={"record_id": record_id, "ttl": ttl})
+        logger.info("cache_set", extra={"observation_id": observation_id, "ttl": ttl})
     except Exception as e:
         logger.warning(
             "cache_set_error",
-            extra={"record_id": record_id, "error": str(e)},
+            extra={"observation_id": observation_id, "error": str(e)},
         )
         from services.ingestor.metrics import cache_errors_total
 
         cache_errors_total.labels(operation="set").inc()
 
 
-async def invalidate_record(record_id: int) -> None:
-    """Delete a cached record.
+async def invalidate_observation(observation_id: int) -> None:
+    """Delete a cached observation.
 
     Args:
-        record_id: Record primary key to invalidate
+        observation_id: Observation primary key to invalidate
 
     Fails open: logs warning + increments error counter on failure
     """
@@ -147,13 +149,13 @@ async def invalidate_record(record_id: int) -> None:
         return
 
     try:
-        key = CACHE_KEY_RECORD.format(record_id=record_id)
+        key = CACHE_KEY_OBSERVATION.format(observation_id=observation_id)
         await _client.delete(key)
-        logger.info("cache_invalidate", extra={"record_id": record_id})
+        logger.info("cache_invalidate", extra={"observation_id": observation_id})
     except Exception as e:
         logger.warning(
             "cache_invalidate_error",
-            extra={"record_id": record_id, "error": str(e)},
+            extra={"observation_id": observation_id, "error": str(e)},
         )
         from services.ingestor.metrics import cache_errors_total
 
@@ -167,7 +169,7 @@ def _list_cache_key(source: str, skip: int, limit: int) -> str:
     """Build list cache key for a paginated query.
 
     Args:
-        source: Record source name.
+        source: Observation source name.
         skip: Pagination offset.
         limit: Page size.
 
@@ -182,11 +184,11 @@ def _should_skip_list_cache(skip: int, limit: int) -> bool:
     return skip > CACHE_LIST_MAX_SKIP or limit > CACHE_LIST_MAX_LIMIT
 
 
-async def get_records_list(source: str, skip: int, limit: int) -> list | None:
-    """Return a cached list of records for the given source/skip/limit, or None.
+async def get_observations_list(source: str, skip: int, limit: int) -> list | None:
+    """Return a cached list of observations for the given source/skip/limit, or None.
 
     Args:
-        source: Record source filter.
+        source: Observation source filter.
         skip: Pagination offset.
         limit: Page size.
 
@@ -212,14 +214,14 @@ async def get_records_list(source: str, skip: int, limit: int) -> list | None:
         return None
 
 
-async def set_records_list(source: str, skip: int, limit: int, data: list) -> None:
+async def set_observations_list(source: str, skip: int, limit: int, data: list) -> None:
     """Persist a paginated list to cache with a short TTL.
 
     Args:
-        source: Record source filter.
+        source: Observation source filter.
         skip: Pagination offset.
         limit: Page size.
-        data: Serialisable list of record dicts.
+        data: Serialisable list of observation dicts.
     """
     import json
 
@@ -236,7 +238,7 @@ async def set_records_list(source: str, skip: int, limit: int, data: list) -> No
         )
 
 
-async def invalidate_records_list_by_source(source: str) -> None:
+async def invalidate_observations_list_by_source(source: str) -> None:
     """Delete all list cache entries for a given source using SCAN.
 
     Args:
@@ -314,20 +316,20 @@ async def redis_lock(
 # =============================================================================
 #
 # Pain diagnosed:
-#   Redis calls for hot single-record reads add ~1–3 ms network round-trips each.
+#   Redis calls for hot single-observation reads add ~1–3 ms network round-trips each.
 #   An in-process Least-Recently-Used cache absorbs the vast majority of repeated
 #   lookups with zero I/O.
 #
 # Solution — Proxy pattern:
-#   LruRecordCache implements the same read interface as the module-level Redis
-#   functions (get_record / set_record / invalidate_record).  Callers are
+#   LruObservationCache implements the same read interface as the module-level Redis
+#   functions (get_observation / set_observation / invalidate_observation).  Callers are
 #   unaware of whether they are talking to Redis or the in-process proxy —
-#   they always call get_record_with_lru().
+#   they always call get_observation_with_lru().
 #
 # Participants:
 #   _LruNode           — doubly-linked list node (O(1) splice/remove)
-#   LruRecordCache     — concrete proxy: LRU eviction + Redis fallback
-#   get_record_with_lru — public helper that uses the module-level proxy
+#   LruObservationCache     — concrete proxy: LRU eviction + Redis fallback
+#   get_observation_with_lru — public helper that uses the module-level proxy
 #
 # Data structure — LRU via doubly-linked list + hashmap:
 #   get   O(1)  — dict lookup + splice-to-head
@@ -338,7 +340,7 @@ async def redis_lock(
 
 
 class _LruNode:
-    """Doubly-linked list node holding one cached record."""
+    """Doubly-linked list node holding one cached observation."""
 
     __slots__ = ("key", "value", "prev", "next")
 
@@ -349,22 +351,22 @@ class _LruNode:
         self.next: _LruNode | None = None
 
 
-class LruRecordCache:
-    """In-process LRU cache — Proxy in front of the Redis record functions.
+class LruObservationCache:
+    """In-process LRU cache — Proxy in front of the Redis observation functions.
 
-    Transparently intercepts ``get_record`` and ``set_record`` calls.
+    Transparently intercepts ``get_observation`` and ``set_observation`` calls.
     On a cache miss the proxy falls through to Redis and back-fills itself.
     On eviction the entry is simply dropped from memory (Redis remains the SoT).
 
     Proxy contract:
-        ``get_record_with_lru(id)`` has the same return type as
-        ``get_record(id)`` — callers do not know which layer answered.
+        ``get_observation_with_lru(id)`` has the same return type as
+        ``get_observation(id)`` — callers do not know which layer answered.
 
     Thread-safety:
         Not thread-safe.  Wrap with ``asyncio.Lock`` for concurrent coroutines.
 
     Args:
-        capacity: Maximum number of records held in memory simultaneously.
+        capacity: Maximum number of observations held in memory simultaneously.
     """
 
     def __init__(self, capacity: int = 256) -> None:
@@ -402,9 +404,9 @@ class LruRecordCache:
     # Public LRU interface
     # ------------------------------------------------------------------
 
-    def get(self, record_id: int) -> Any | None:
+    def get(self, observation_id: int) -> Any | None:
         """Return cached value and promote to MRU, or None on miss."""
-        node = self._map.get(record_id)
+        node = self._map.get(observation_id)
         if node is None:
             self.misses += 1
             return None
@@ -414,17 +416,17 @@ class LruRecordCache:
         self.hits += 1
         return node.value
 
-    def put(self, record_id: int, value: Any) -> None:
-        """Insert or update a record; evict the LRU entry if over capacity."""
-        if record_id in self._map:
-            node = self._map[record_id]
+    def put(self, observation_id: int, value: Any) -> None:
+        """Insert or update a observation; evict the LRU entry if over capacity."""
+        if observation_id in self._map:
+            node = self._map[observation_id]
             node.value = value
             self._remove(node)
             self._prepend(node)
             return
 
-        node = _LruNode(record_id, value)
-        self._map[record_id] = node
+        node = _LruNode(observation_id, value)
+        self._map[observation_id] = node
         self._prepend(node)
 
         if len(self._map) > self._capacity:
@@ -434,9 +436,9 @@ class LruRecordCache:
                 self._remove(lru)
                 del self._map[lru.key]
 
-    def invalidate(self, record_id: int) -> None:
+    def invalidate(self, observation_id: int) -> None:
         """Remove a specific entry from the in-process cache."""
-        node = self._map.pop(record_id, None)
+        node = self._map.pop(observation_id, None)
         if node is not None:
             self._remove(node)
 
@@ -459,64 +461,66 @@ class LruRecordCache:
 
     def __repr__(self) -> str:
         return (
-            f"LruRecordCache(capacity={self._capacity}, "
+            f"LruObservationCache(capacity={self._capacity}, "
             f"size={self.size}, "
             f"hit_ratio={self.hit_ratio:.2%})"
         )
 
 
 # Module-level proxy instance (swap in tests via set_lru_cache())
-_lru: LruRecordCache = LruRecordCache()
+_lru: LruObservationCache = LruObservationCache()
 
 
-def set_lru_cache(instance: LruRecordCache) -> None:
+def set_lru_cache(instance: LruObservationCache) -> None:
     """Replace the active LRU proxy (useful in tests to reset state)."""
     global _lru
     _lru = instance
 
 
-def get_lru_cache() -> LruRecordCache:
+def get_lru_cache() -> LruObservationCache:
     """Return the active LRU proxy instance."""
     return _lru
 
 
-async def get_record_with_lru(record_id: int) -> RecordResponse | None:
+async def get_observation_with_lru(observation_id: int) -> ObservationResponse | None:
     """Proxy: check LRU first, then fall through to Redis on miss.
 
     The caller never needs to know which layer answered.
 
     Args:
-        record_id: Record primary key.
+        observation_id: Observation primary key.
 
     Returns:
-        RecordResponse from in-process LRU or Redis, or None on complete miss.
+        ObservationResponse from in-process LRU or Redis, or None on complete miss.
     """
     # 1. Check in-process LRU (zero I/O)
-    cached = _lru.get(record_id)
+    cached = _lru.get(observation_id)
     if cached is not None:
-        logger.debug("lru_hit", extra={"record_id": record_id})
+        logger.debug("lru_hit", extra={"observation_id": observation_id})
         return cached  # type: ignore[return-value]
 
     # 2. Fall through to Redis
-    redis_result = await get_record(record_id)
+    redis_result = await get_observation(observation_id)
     if redis_result is not None:
         # Back-fill the LRU so the next request is free
-        _lru.put(record_id, redis_result)
-        logger.debug("lru_backfill", extra={"record_id": record_id})
+        _lru.put(observation_id, redis_result)
+        logger.debug("lru_backfill", extra={"observation_id": observation_id})
 
     return redis_result
 
 
-async def invalidate_record_all_layers(record_id: int) -> None:
-    """Invalidate a record in both the LRU proxy and Redis.
+async def invalidate_observation_all_layers(observation_id: int) -> None:
+    """Invalidate a observation in both the LRU proxy and Redis.
 
-    Call this whenever a record is updated or deleted so both layers stay
+    Call this whenever a observation is updated or deleted so both layers stay
     consistent.  The Proxy contract requires the same interface as plain
-    ``invalidate_record`` so callers don't have to know about the LRU layer.
+    ``invalidate_observation`` so callers don't have to know about the LRU layer.
 
     Args:
-        record_id: Record primary key to invalidate.
+        observation_id: Observation primary key to invalidate.
     """
-    _lru.invalidate(record_id)
-    await invalidate_record(record_id)
-    logger.info("record_invalidated_all_layers", extra={"record_id": record_id})
+    _lru.invalidate(observation_id)
+    await invalidate_observation(observation_id)
+    logger.info(
+        "observation_invalidated_all_layers", extra={"observation_id": observation_id}
+    )

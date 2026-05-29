@@ -15,10 +15,14 @@ from .decorators import (
     DeduplicatorTransformer,
     EnricherTransformer,
     NullTransformer,
-    RecordTransformer,
+    ObservationTransformer,
     ValidatorTransformer,
 )
-from .strategies import APIRecordValidator, CSVRecordValidator, JSONRecordValidator
+from .strategies import (
+    APIObservationValidator,
+    CSVObservationValidator,
+    JSONObservationValidator,
+)
 from .types import SyncConfig
 
 
@@ -38,14 +42,14 @@ class TransformationPipelineFactory:
     """
 
     @staticmethod
-    async def create(source: DataSource) -> RecordTransformer:
+    async def create(source: DataSource) -> ObservationTransformer:
         """Build a transformation pipeline for a source.
 
         Args:
             source: The DataSource with sync_config specifying pipeline.
 
         Returns:
-            A RecordTransformer chain ready to transform records.
+            A ObservationTransformer chain ready to transform observations.
 
         Raises:
             ValueError: If sync_config contains unknown strategy_type.
@@ -60,7 +64,7 @@ class TransformationPipelineFactory:
         enrichment_rules = sync_config.get("enrichment_rules", [])
 
         # Start with terminal transformer
-        transformer: RecordTransformer = NullTransformer()
+        transformer: ObservationTransformer = NullTransformer()
 
         # Build strategy-specific validator
         strategy = TransformationPipelineFactory._build_strategy(strategy_type)
@@ -84,16 +88,16 @@ class TransformationPipelineFactory:
             strategy_type: One of 'csv', 'json', 'api'.
 
         Returns:
-            A RecordValidationStrategy instance.
+            A ObservationValidationStrategy instance.
 
         Raises:
             ValueError: If strategy_type is unknown.
         """
         if strategy_type == "csv":
-            return CSVRecordValidator()
+            return CSVObservationValidator()
         elif strategy_type == "json":
-            return JSONRecordValidator()
+            return JSONObservationValidator()
         elif strategy_type == "api":
-            return APIRecordValidator()
+            return APIObservationValidator()
         else:
             raise ValueError(f"Unknown strategy_type: {strategy_type}")

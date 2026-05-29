@@ -111,7 +111,7 @@ async def mark_outbox_publish_failed(
     event_id: int,
     error_message: str,
 ) -> OutboxEvent | None:
-    """Record a publish failure while keeping the row pending for retry."""
+    """Observation a publish failure while keeping the row pending for retry."""
     stmt = select(OutboxEvent).where(OutboxEvent.id == event_id)
     event = await db.scalar(stmt)
     if event is None:
@@ -125,7 +125,7 @@ async def mark_outbox_publish_failed(
     return event
 
 
-async def try_record_inbox_consumption(
+async def try_observation_inbox_consumption(
     db: AsyncSession,
     *,
     consumer_name: str,
@@ -133,7 +133,7 @@ async def try_record_inbox_consumption(
     event_type: str,
     payload: dict,
 ) -> bool:
-    """Record inbox processing once; return False when already consumed.
+    """Observation inbox processing once; return False when already consumed.
 
     Uses a unique constraint on (consumer_name, message_id) to guarantee
     idempotent consumer behavior under concurrency.

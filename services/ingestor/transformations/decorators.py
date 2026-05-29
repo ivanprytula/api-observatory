@@ -1,4 +1,4 @@
-"""Composable record transformers (Decorator pattern).
+"""Composable observation transformers (Decorator pattern).
 
 Each transformer wraps a previous one, forming a chain:
 - ValidatorTransformer → validates via strategy, rejects invalid, passes valid to next
@@ -18,51 +18,53 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
-    from .strategies import RecordValidationStrategy
+    from .strategies import ObservationValidationStrategy
 
 
-class RecordTransformer(ABC):
-    """Abstract interface for record transformation.
+class ObservationTransformer(ABC):
+    """Abstract interface for observation transformation.
 
     Each transformer can:
-    1. Process the record (validate, deduplicate, enrich)
+    1. Process the observation (validate, deduplicate, enrich)
     2. Optionally reject it (return None)
     3. Delegate to the next transformer in the chain
     """
 
     @abstractmethod
-    async def transform(self, record: dict) -> dict | None:
-        """Transform a record.
+    async def transform(self, observation: dict) -> dict | None:
+        """Transform a observation.
 
         Args:
-            record: The raw record dict.
+            observation: The raw observation dict.
 
         Returns:
-            Transformed record dict, or None if rejected.
+            Transformed observation dict, or None if rejected.
         """
 
 
-class NullTransformer(RecordTransformer):
+class NullTransformer(ObservationTransformer):
     """Terminal transformer (identity, no-op).
 
-    Used as the end of the chain. Simply returns the record unchanged.
+    Used as the end of the chain. Simply returns the observation unchanged.
     """
 
-    async def transform(self, record: dict) -> dict | None:
-        """Return record unchanged."""
-        return record
+    async def transform(self, observation: dict) -> dict | None:
+        """Return observation unchanged."""
+        return observation
 
 
-class ValidatorTransformer(RecordTransformer):
+class ValidatorTransformer(ObservationTransformer):
     """Validation layer (Decorator).
 
-    Uses a RecordValidationStrategy to validate the record.
+    Uses a ObservationValidationStrategy to validate the observation.
     If valid, delegates to next transformer.
     If invalid, returns None (rejects).
     """
 
     def __init__(
-        self, next_transformer: RecordTransformer, strategy: RecordValidationStrategy
+        self,
+        next_transformer: ObservationTransformer,
+        strategy: ObservationValidationStrategy,
     ):
         """Initialize with next transformer and validation strategy.
 
@@ -73,29 +75,29 @@ class ValidatorTransformer(RecordTransformer):
         self.next_transformer = next_transformer
         self.strategy = strategy
 
-    async def transform(self, record: dict) -> dict | None:
-        """Validate record, then delegate to next if valid."""
-        is_valid, error = await self.strategy.validate(record)
+    async def transform(self, observation: dict) -> dict | None:
+        """Validate observation, then delegate to next if valid."""
+        is_valid, error = await self.strategy.validate(observation)
         if not is_valid:
-            # Record rejected; return None
+            # Observation rejected; return None
             return None
 
         # Valid; pass to next transformer
-        return await self.next_transformer.transform(record)
+        return await self.next_transformer.transform(observation)
 
 
-class DeduplicatorTransformer(RecordTransformer):
+class DeduplicatorTransformer(ObservationTransformer):
     """Deduplication layer (Decorator).
 
-    Tracks content hash (MD5) of each record. Rejects duplicates.
-    First time seeing a record: passes to next transformer.
+    Tracks content hash (MD5) of each observation. Rejects duplicates.
+    First time seeing a observation: passes to next transformer.
     Duplicate: returns None (rejects).
 
     In production, the hash set would be in Redis for distributed dedup.
     For now, using in-memory set (per-request or per-sync scope).
     """
 
-    def __init__(self, next_transformer: RecordTransformer):
+    def __init__(self, next_transformer: ObservationTransformer):
         """Initialize with next transformer.
 
         Args:
@@ -106,35 +108,35 @@ class DeduplicatorTransformer(RecordTransformer):
         # In production: Redis SADD / SISMEMBER for distributed dedup
         self._seen_hashes: set[str] = set()
 
-    async def transform(self, record: dict) -> dict | None:
+    async def transform(self, observation: dict) -> dict | None:
         """Check hash; reject duplicate, pass new to next."""
-        # Compute SHA256 hash of record (treat as JSON-like for hashing)
+        # Compute SHA256 hash of observation (treat as JSON-like for hashing)
         import json
 
-        record_json = json.dumps(record, sort_keys=True, default=str)
-        record_hash = hashlib.sha256(record_json.encode()).hexdigest()
+        observation_json = json.dumps(observation, sort_keys=True, default=str)
+        observation_hash = hashlib.sha256(observation_json.encode()).hexdigest()
 
         # Check if seen before
-        if record_hash in self._seen_hashes:
+        if observation_hash in self._seen_hashes:
             # Duplicate; reject
             return None
 
-        # New record; mark as seen
-        self._seen_hashes.add(record_hash)
+        # New observation; mark as seen
+        self._seen_hashes.add(observation_hash)
 
         # Delegate to next transformer and return result
-        return await self.next_transformer.transform(record)
+        return await self.next_transformer.transform(observation)
 
 
-class EnricherTransformer(RecordTransformer):
+class EnricherTransformer(ObservationTransformer):
     """Enrichment layer (Decorator).
 
-    Adds computed fields to the record:
+    Adds computed fields to the observation:
     - _ingested_at: current timestamp (UTC)
-    - _source_hash: SHA256 of entire record (for tracking)
+    - _source_hash: SHA256 of entire observation (for tracking)
     """
 
-    def __init__(self, next_transformer: RecordTransformer):
+    def __init__(self, next_transformer: ObservationTransformer):
         """Initialize with next transformer.
 
         Args:
@@ -142,17 +144,17 @@ class EnricherTransformer(RecordTransformer):
         """
         self.next_transformer = next_transformer
 
-    async def transform(self, record: dict) -> dict | None:
+    async def transform(self, observation: dict) -> dict | None:
         """Add computed fields, then delegate to next."""
         import json
 
         # Add ingestion timestamp
-        record["_ingested_at"] = datetime.now(tz=UTC).isoformat()
+        observation["_ingested_at"] = datetime.now(tz=UTC).isoformat()
 
         # Add source hash (SHA256 of JSON representation)
-        record_json = json.dumps(record, sort_keys=True, default=str)
-        source_hash = hashlib.sha256(record_json.encode()).hexdigest()
-        record["_source_hash"] = source_hash
+        observation_json = json.dumps(observation, sort_keys=True, default=str)
+        source_hash = hashlib.sha256(observation_json.encode()).hexdigest()
+        observation["_source_hash"] = source_hash
 
         # Delegate to next transformer
-        return await self.next_transformer.transform(record)
+        return await self.next_transformer.transform(observation)

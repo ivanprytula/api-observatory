@@ -208,7 +208,7 @@ def _extract_roles(claims_or_session: dict[str, Any]) -> set[str]:
     roles = set()
     roles.update(_normalize_roles(claims_or_session.get("roles")))
     roles.update(_normalize_roles(claims_or_session.get("role")))
-    if not roles and claims_or_session.get("scope") == "records:write":
+    if not roles and claims_or_session.get("scope") == "observations:write":
         roles.add("writer")
     return roles
 

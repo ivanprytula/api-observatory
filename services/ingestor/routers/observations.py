@@ -1,4 +1,4 @@
-"""Records resource — all CRUD routes."""
+"""Observations resource — all CRUD routes."""
 
 from __future__ import annotations
 
@@ -14,16 +14,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import services.ingestor.vector_search as vs_bridge
 from services.ingestor import cache, events
-from services.ingestor.api_schemas.records import (
+from services.ingestor.api_schemas.observations import (
     BatchCreateResponse,
-    BatchRecordsRequest,
+    BatchObservationsRequest,
+    ObservationClassification,
+    ObservationListResponse,
+    ObservationRequest,
+    ObservationResponse,
     PaginationMeta,
-    RecordClassification,
-    RecordListResponse,
-    RecordRequest,
-    RecordResponse,
     SessionResponse,
-    UpdateRecordRequest,
+    UpdateObservationRequest,
 )
 from services.ingestor.auth import (
     DEFAULT_ROLE,
@@ -45,40 +45,36 @@ from services.ingestor.metrics import (
     cache_hits_total,
     cache_misses_total,
     llm_prompt_tokens_total,
-    records_created_total,
+    observations_created_total,
 )
 from services.ingestor.rate_limiting import limiter
-from services.ingestor.repositories.records import (
-    create_record as create_record_op,
-)
-from services.ingestor.repositories.records import (
-    create_records_batch as create_records_batch_op,
-)
-from services.ingestor.repositories.records import (
-    create_records_batch_naive as create_records_batch_naive_op,
-)
-from services.ingestor.repositories.records import (
-    delete_record as delete_record_op,
-)
-from services.ingestor.repositories.records import (
-    get_record as get_record_op,
-)
-from services.ingestor.repositories.records import (
-    get_records,
+from services.ingestor.repositories.observations import (
+    create_observation,
+    create_observations_batch,
+    create_observations_batch_naive,
+    get_observations,
     mark_processed,
-    soft_delete_record,
-    update_record,
+    soft_delete_observation,
+    update_observation,
+)
+from services.ingestor.repositories.observations import (
+    delete_observation as delete_observation_op,
+)
+from services.ingestor.repositories.observations import (
+    get_observation as get_observation_op,
 )
 
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix=f"{API_V1_PREFIX}/records", tags=["records"])
+router = APIRouter(prefix=f"{API_V1_PREFIX}/observations", tags=["observations"])
 
 _R404 = {
     404: {
-        "description": "Record not found.",
-        "content": {"application/json": {"example": {"detail": "Record not found"}}},
+        "description": "Observation not found.",
+        "content": {
+            "application/json": {"example": {"detail": "Observation not found"}}
+        },
     }
 }
 _R401 = {
@@ -130,45 +126,45 @@ type AdminSessionDep = Annotated[
 
 
 # ---------------------------------------------------------------------------
-# Records — single create
+# Observations — single create
 # ---------------------------------------------------------------------------
 @router.post(
     "",
-    summary="Create a record",
-    response_model=RecordResponse,
+    summary="Create a observation",
+    response_model=ObservationResponse,
     status_code=status.HTTP_201_CREATED,
     responses={**_R422, **_R429},
 )
 @limiter.limit(V1_RATE_LIMIT)
-async def create_record(
+async def create_observation_endpoint(
     request: Request,
-    body: RecordRequest,
+    body: ObservationRequest,
     db: DbDep,
-) -> RecordResponse:
-    """Create a single record.
+) -> ObservationResponse:
+    """Create a single observation.
 
     Logs are automatically tagged with correlation ID.
     Rate limit: 1000/minute per IP.
     """
-    record = await create_record_op(db, body)
-    records_created_total.labels(endpoint="single").inc()
+    observation = await create_observation(db, body)
+    observations_created_total.labels(endpoint="single").inc()
     # Publish event after successful DB write (Observer pattern — fail-open)
-    await events.publish_record_created(
-        record_id=record.id,
-        payload={"source": record.source},
+    await events.publish_observation_created(
+        observation_id=observation.id,
+        payload={"source": observation.source},
     )
-    return RecordResponse.model_validate(record)
+    return ObservationResponse.model_validate(observation)
 
 
 # ---------------------------------------------------------------------------
 @router.post(
     "/batch",
-    summary="Batch-create records",
+    summary="Batch-create observations",
     response_model=BatchCreateResponse,
     status_code=status.HTTP_201_CREATED,
     responses={**_R422},
     description=(
-        "Bulk-create records.\n\n"
+        "Bulk-create observations.\n\n"
         "**`?impl` query parameter** — internal implementation toggle:\n"
         "- `optimized` *(default)* — single `INSERT … RETURNING` round-trip\n"
         "- `naive` — `add_all` + N individual `REFRESH` calls (N+1 queries)\n\n"
@@ -178,8 +174,8 @@ async def create_record(
         "feature flags and A/B performance experiments work in production."
     ),
 )
-async def create_records_batch(
-    body: BatchRecordsRequest,
+async def create_observations_batch_endpoint(
+    body: BatchObservationsRequest,
     db: DbDep,
     impl: str = Query(
         default="optimized",
@@ -187,43 +183,43 @@ async def create_records_batch(
         description="Batch insert implementation: 'optimized' (INSERT RETURNING) or 'naive' (add_all + N refreshes).",  # noqa: E501
     ),
 ) -> BatchCreateResponse:
-    """Create multiple records in batch.
+    """Create multiple observations in batch.
 
     The `?impl=` parameter selects the internal database strategy without
     changing the response contract — identical JSON either way.
     """
     impl_fn = (
-        create_records_batch_op
+        create_observations_batch
         if impl == "optimized"
-        else create_records_batch_naive_op
+        else create_observations_batch_naive
     )
-    logger.info("batch_create", extra={"count": len(body.records), "impl": impl})
-    records = await impl_fn(db, body.records)
-    batch_size_histogram.observe(len(records))
-    records_created_total.labels(endpoint="batch").inc(len(records))
-    logger.info("batch_created", extra={"count": len(records), "impl": impl})
-    return BatchCreateResponse(created=len(records), impl=impl)
+    logger.info("batch_create", extra={"count": len(body.observations), "impl": impl})
+    observations = await impl_fn(db, body.observations)
+    batch_size_histogram.observe(len(observations))
+    observations_created_total.labels(endpoint="batch").inc(len(observations))
+    logger.info("batch_created", extra={"count": len(observations), "impl": impl})
+    return BatchCreateResponse(created=len(observations), impl=impl)
 
 
 # ---------------------------------------------------------------------------
-# Records — list with pagination
+# Observations — list with pagination
 # ---------------------------------------------------------------------------
 @router.get(
     "",
-    summary="List records",
-    response_model=RecordListResponse,
+    summary="List observations",
+    response_model=ObservationListResponse,
     responses={**_R422},
 )
-async def list_records(
+async def list_observations(
     db: DbDep,
     skip: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
     source: str | None = None,
-) -> RecordListResponse:
-    """List records with pagination and optional filtering by source."""
-    records, total = await get_records(db, skip, limit, source)
-    return RecordListResponse(
-        records=[RecordResponse.model_validate(r) for r in records],
+) -> ObservationListResponse:
+    """List observations with pagination and optional filtering by source."""
+    observations, total = await get_observations(db, skip, limit, source)
+    return ObservationListResponse(
+        observations=[ObservationResponse.model_validate(r) for r in observations],
         pagination=PaginationMeta(
             total=total,
             skip=skip,
@@ -234,53 +230,53 @@ async def list_records(
 
 
 # ---------------------------------------------------------------------------
-# Records — get by ID
+# Observations — get by ID
 # ---------------------------------------------------------------------------
 @router.get(
-    "/{record_id}",
-    summary="Get a record by ID",
-    response_model=RecordResponse,
+    "/{observation_id}",
+    summary="Get a observation by ID",
+    response_model=ObservationResponse,
     responses={**_R404},
 )
-async def get_record(record_id: int, db: DbDep) -> RecordResponse:
-    """Retrieve a single record by ID.
+async def get_observation(observation_id: int, db: DbDep) -> ObservationResponse:
+    """Retrieve a single observation by ID.
 
     Check cache first (Redis); on miss, fetch from DB and cache for 1 hour.
     Redis connection errors are transparent (fail-open).
     """
     # Try cache first
-    cached_record = await cache.get_record(record_id)
-    if cached_record is not None:
+    cached_observation = await cache.get_observation(observation_id)
+    if cached_observation is not None:
         cache_hits_total.labels(operation="get").inc()
-        return cached_record
+        return cached_observation
 
     # Cache miss: fetch from DB
-    record = await get_record_op(db, record_id)
-    if record is None:
+    observation = await get_observation_op(db, observation_id)
+    if observation is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Record not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Observation not found"
         )
 
     # Store in cache for future hits
-    response = RecordResponse.model_validate(record)
-    await cache.set_record(record_id, response)
+    response = ObservationResponse.model_validate(observation)
+    await cache.set_observation(observation_id, response)
     cache_misses_total.labels(operation="get").inc()
     return response
 
 
 # ---------------------------------------------------------------------------
-# Records — update by ID (partial)
+# Observations — update by ID (partial)
 # ---------------------------------------------------------------------------
 @router.patch(
-    "/{record_id}",
-    summary="Partially update a record",
-    response_model=RecordResponse,
+    "/{observation_id}",
+    summary="Partially update a observation",
+    response_model=ObservationResponse,
     responses={**_R404, **_R422},
 )
-async def update_record_endpoint(
-    record_id: int, body: UpdateRecordRequest, db: DbDep
-) -> RecordResponse:
-    """Update a record with provided fields (partial update).
+async def update_observation_endpoint(
+    observation_id: int, body: UpdateObservationRequest, db: DbDep
+) -> ObservationResponse:
+    """Update a observation with provided fields (partial update).
 
     All fields are optional. Only provided fields are updated; others are
     left unchanged.
@@ -290,87 +286,87 @@ async def update_record_endpoint(
     {"source": "new-source", "tags": ["updated", "tags"]}
     ```
     """
-    record = await update_record(db, record_id, body)
-    if record is None:
+    observation = await update_observation(db, observation_id, body)
+    if observation is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Record not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Observation not found"
         )
-    return RecordResponse.model_validate(record)
+    return ObservationResponse.model_validate(observation)
 
 
 # ---------------------------------------------------------------------------
-# Records — mark as processed
+# Observations — mark as processed
 # ---------------------------------------------------------------------------
 @router.patch(
-    "/{record_id}/process",
-    summary="Mark a record as processed",
-    response_model=RecordResponse,
+    "/{observation_id}/process",
+    summary="Mark a observation as processed",
+    response_model=ObservationResponse,
     responses={**_R404},
 )
-async def process_record(record_id: int, db: DbDep) -> RecordResponse:
-    """Mark a record as processed.
+async def process_observation(observation_id: int, db: DbDep) -> ObservationResponse:
+    """Mark a observation as processed.
 
     Invalidates any cached version so next GET reflects updated state.
     """
-    record = await mark_processed(db, record_id)
-    if record is None:
+    observation = await mark_processed(db, observation_id)
+    if observation is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Record not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Observation not found"
         )
     # Invalidate cache so next read gets fresh data
-    await cache.invalidate_record(record_id)
-    return RecordResponse.model_validate(record)
+    await cache.invalidate_observation(observation_id)
+    return ObservationResponse.model_validate(observation)
 
 
 # ---------------------------------------------------------------------------
-# Records — soft-delete (archive)
+# Observations — soft-delete (archive)
 # ---------------------------------------------------------------------------
 @router.patch(
-    "/{record_id}/archive",
-    summary="Archive (soft-delete) a record",
-    response_model=RecordResponse,
+    "/{observation_id}/archive",
+    summary="Archive (soft-delete) a observation",
+    response_model=ObservationResponse,
     responses={**_R404},
 )
-async def archive_record(record_id: int, db: DbDep) -> RecordResponse:
-    """Soft-delete (archive) a record.
+async def archive_observation(observation_id: int, db: DbDep) -> ObservationResponse:
+    """Soft-delete (archive) a observation.
 
     Logs are automatically tagged with request correlation ID (cid).
     """
-    logger.info("record_archive", extra={"id": record_id})
-    record = await soft_delete_record(db, record_id)
-    if record is None:
+    logger.info("observation_archive", extra={"id": observation_id})
+    observation = await soft_delete_observation(db, observation_id)
+    if observation is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Record not found or already archived",
+            detail="Observation not found or already archived",
         )
-    logger.info("record_archived", extra={"id": record_id})
-    return RecordResponse.model_validate(record)
+    logger.info("observation_archived", extra={"id": observation_id})
+    return ObservationResponse.model_validate(observation)
 
 
 # ---------------------------------------------------------------------------
-# Records — delete
+# Observations — delete
 # ---------------------------------------------------------------------------
 @router.delete(
-    "/{record_id}",
-    summary="Hard-delete a record",
+    "/{observation_id}",
+    summary="Hard-delete a observation",
     status_code=status.HTTP_204_NO_CONTENT,
     responses={**_R404},
 )
-async def delete_record(record_id: int, db: DbDep) -> None:
-    """Hard-delete a record.
+async def delete_observation(observation_id: int, db: DbDep) -> None:
+    """Hard-delete a observation.
 
     Invalidates any cached version.
     Logs are automatically tagged with request correlation ID (cid).
     """
-    logger.info("record_delete", extra={"id": record_id})
-    record = await delete_record_op(db, record_id)
-    if record is None:
+    logger.info("observation_delete", extra={"id": observation_id})
+    observation = await delete_observation_op(db, observation_id)
+    if observation is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Record not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Observation not found"
         )
-    # Invalidate cache since record no longer exists
-    await cache.invalidate_record(record_id)
-    logger.info("record_deleted", extra={"id": record_id})
+    # Invalidate cache since observation no longer exists
+    await cache.invalidate_observation(observation_id)
+    logger.info("observation_deleted", extra={"id": observation_id})
 
 
 # ============================================================================
@@ -399,94 +395,94 @@ async def login_session(user_id: str, role: str = DEFAULT_ROLE) -> SessionRespon
 
 
 @router.get(
-    "/{record_id}/secure",
-    summary="Get record with session auth",
-    response_model=RecordResponse,
+    "/{observation_id}/secure",
+    summary="Get observation with session auth",
+    response_model=ObservationResponse,
     responses={**_R401, **_R404},
 )
-async def get_record_secured(
-    record_id: int,
+async def get_observation_secured(
+    observation_id: int,
     db: DbDep,
     session: SessionDep,
-) -> RecordResponse:
-    """Get record with session-based auth (learning example).
+) -> ObservationResponse:
+    """Get observation with session-based auth (learning example).
 
     Requires valid session cookie. Try:
-    1. POST /api/v1/records/auth/login?user_id=testuser
-    2. GET /api/v1/records/1/secure (with cookie from step 1)
+    1. POST /api/v1/observations/auth/login?user_id=testuser
+    2. GET /api/v1/observations/1/secure (with cookie from step 1)
 
     Production: Use JWT or centralized session store (Redis).
     """
     logger.info(
-        "get_record_secured",
-        extra={"record_id": record_id, "user_id": session.get("user_id")},
+        "get_observation_secured",
+        extra={"observation_id": observation_id, "user_id": session.get("user_id")},
     )
-    record = await get_record_op(db, record_id)
-    if record is None:
+    observation = await get_observation_op(db, observation_id)
+    if observation is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Record not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Observation not found"
         )
-    return RecordResponse.model_validate(record)
+    return ObservationResponse.model_validate(observation)
 
 
 @router.patch(
-    "/{record_id}/secure/archive",
-    summary="Archive record with session RBAC (writer/admin)",
-    response_model=RecordResponse,
+    "/{observation_id}/secure/archive",
+    summary="Archive observation with session RBAC (writer/admin)",
+    response_model=ObservationResponse,
     responses={**_R401, **_R403, **_R404},
 )
-async def archive_record_secured(
-    record_id: int,
+async def archive_observation_secured(
+    observation_id: int,
     db: DbDep,
     session: WriterSessionDep,
-) -> RecordResponse:
-    """Archive a record with session RBAC (writer/admin)."""
+) -> ObservationResponse:
+    """Archive a observation with session RBAC (writer/admin)."""
     logger.info(
-        "record_archive_secure",
-        extra={"id": record_id, "user_id": session.get("user_id")},
+        "observation_archive_secure",
+        extra={"id": observation_id, "user_id": session.get("user_id")},
     )
-    record = await soft_delete_record(db, record_id)
-    if record is None:
+    observation = await soft_delete_observation(db, observation_id)
+    if observation is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Record not found or already archived",
+            detail="Observation not found or already archived",
         )
-    return RecordResponse.model_validate(record)
+    return ObservationResponse.model_validate(observation)
 
 
 @router.delete(
-    "/{record_id}/secure/delete",
-    summary="Hard-delete record with session RBAC (admin only)",
+    "/{observation_id}/secure/delete",
+    summary="Hard-delete observation with session RBAC (admin only)",
     status_code=status.HTTP_204_NO_CONTENT,
     responses={**_R401, **_R403, **_R404},
 )
-async def delete_record_secured(
-    record_id: int,
+async def delete_observation_secured(
+    observation_id: int,
     db: DbDep,
     session: AdminSessionDep,
 ) -> None:
-    """Hard-delete a record with session RBAC (admin-only)."""
+    """Hard-delete a observation with session RBAC (admin-only)."""
     logger.info(
-        "record_delete_secure",
-        extra={"id": record_id, "user_id": session.get("user_id")},
+        "observation_delete_secure",
+        extra={"id": observation_id, "user_id": session.get("user_id")},
     )
-    record = await delete_record_op(db, record_id)
-    if record is None:
+    observation = await delete_observation_op(db, observation_id)
+    if observation is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Record not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Observation not found"
         )
-    await cache.invalidate_record(record_id)
+    await cache.invalidate_observation(observation_id)
 
 
 @router.post(
     "/batch/protected",
-    summary="Batch-create records with bearer token auth",
+    summary="Batch-create observations with bearer token auth",
     response_model=BatchCreateResponse,
     status_code=status.HTTP_201_CREATED,
     responses={**_R401, **_R422},
 )
-async def create_records_batch_protected(
-    body: BatchRecordsRequest,
+async def create_observations_batch_protected(
+    body: BatchObservationsRequest,
     db: DbDep,
     token: BearerTokenDep,
 ) -> BatchCreateResponse:
@@ -495,20 +491,20 @@ async def create_records_batch_protected(
     Requires: Authorization: Bearer <token>
     Set API_V1_BEARER_TOKEN in .env, then:
 
-    curl -X POST http://localhost:8000/api/v1/records/batch/protected \\
+    curl -X POST http://localhost:8000/api/v1/observations/batch/protected \\
       -H "Authorization: Bearer dev-secret-bearer-token" \\
       -H "Content-Type: application/json" \\
-      -d '{"records": [...]}'
+      -d '{"observations": [...]}'
 
     Production: Use API key rotation, rate limiting per key, audit logs.
     """
     logger.info(
         "batch_protected_create",
-        extra={"count": len(body.records), "token_prefix": token[:10]},
+        extra={"count": len(body.observations), "token_prefix": token[:10]},
     )
-    records = await create_records_batch_op(db, body.records)
-    logger.info("batch_protected_created", extra={"count": len(records)})
-    return BatchCreateResponse(created=len(records), impl="optimized")
+    observations = await create_observations_batch(db, body.observations)
+    logger.info("batch_protected_created", extra={"count": len(observations)})
+    return BatchCreateResponse(created=len(observations), impl="optimized")
 
 
 # ============================================================================
@@ -517,26 +513,26 @@ async def create_records_batch_protected(
 
 
 @router.post(
-    "/{record_id}/analyze",
-    summary="Analyze a record with AI (RAG + OpenAI)",
-    response_model=RecordClassification,
+    "/{observation_id}/analyze",
+    summary="Analyze a observation with AI (RAG + OpenAI)",
+    response_model=ObservationClassification,
     responses={**_R404},
 )
-async def analyze_record(
-    record_id: int,
+async def analyze_observation(
+    observation_id: int,
     db: DbDep,
-) -> RecordClassification | None:
-    """Analyze a record using OpenAI and RAG context.
+) -> ObservationClassification | None:
+    """Analyze a observation using OpenAI and RAG context.
 
-    1. Fetches record from DB.
+    1. Fetches observation from DB.
     2. Retrieves context from vector search.
-    3. Calls OpenAI with structured output (RecordClassification).
+    3. Calls OpenAI with structured output (ObservationClassification).
     4. Logs prompt token usage to Prometheus.
     """
-    record = await get_record_op(db, record_id)
-    if record is None:
+    observation = await get_observation_op(db, observation_id)
+    if observation is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Record not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Observation not found"
         )
 
     if not settings.openai_enabled or not settings.openai_api_key:
@@ -545,10 +541,12 @@ async def analyze_record(
             detail="LLM analysis is disabled or OPENAI_API_KEY is missing",
         )
 
-    # RAG: Search for similar records to provide context
-    query_text = f"Source: {record.source}, Data: {json.dumps(record.raw_data)}"
+    # RAG: Search for similar observations to provide context
+    query_text = (
+        f"Source: {observation.source}, Data: {json.dumps(observation.raw_data)}"
+    )
     try:
-        context_results = await vs_bridge.search_record_documents(
+        context_results = await vs_bridge.search_observation_documents(
             query=query_text,
             top_k=3,
         )
@@ -562,17 +560,17 @@ async def analyze_record(
 
     # Build augmented prompt
     system_prompt = (
-        "You are a senior data analyst. Analyze the following record. "
-        "Use the provided context from similar records if relevant. "
+        "You are a senior data analyst. Analyze the following observation. "
+        "Use the provided context from similar observations if relevant. "
         "Return the analysis as a structured JSON object matching the requested schema."
     )
     user_prompt = (
-        f"Context from similar records:\n{context_text}\n\n"
-        f"Record to analyze:\n"
-        f"Source: {record.source}\n"
-        f"Timestamp: {record.timestamp}\n"
-        f"Data: {json.dumps(record.raw_data)}\n"
-        f"Tags: {', '.join(record.tags)}"
+        f"Context from similar observations:\n{context_text}\n\n"
+        f"Observation to analyze:\n"
+        f"Source: {observation.source}\n"
+        f"Timestamp: {observation.timestamp}\n"
+        f"Data: {json.dumps(observation.raw_data)}\n"
+        f"Tags: {', '.join(observation.tags)}"
     )
 
     try:
@@ -583,7 +581,7 @@ async def analyze_record(
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            response_format=RecordClassification,
+            response_format=ObservationClassification,
         )
     except Exception as exc:
         logger.error("llm_analyze_failed", extra={"error": str(exc)})
@@ -602,16 +600,16 @@ async def analyze_record(
     return completion.choices[0].message.parsed
 
 
-@router.post("/{record_id}/analyze/stream")
-async def analyze_record_stream(
-    record_id: int,
+@router.post("/{observation_id}/analyze/stream")
+async def analyze_observation_stream(
+    observation_id: int,
     db: DbDep,
 ) -> StreamingResponse:
-    """Stream record analysis from OpenAI (Server-Sent Events)."""
-    record = await get_record_op(db, record_id)
-    if record is None:
+    """Stream observation analysis from OpenAI (Server-Sent Events)."""
+    observation = await get_observation_op(db, observation_id)
+    if observation is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Record not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Observation not found"
         )
 
     if not settings.openai_enabled or not settings.openai_api_key:
@@ -631,11 +629,12 @@ async def analyze_record_stream(
                 messages=[
                     {
                         "role": "system",
-                        "content": "Analyze this record and provide insights.",
+                        "content": "Analyze this observation and provide insights.",
                     },
                     {
                         "role": "user",
-                        "content": f"Source: {record.source}, Data: {json.dumps(record.raw_data)}",
+                        "content": f"Source: {observation.source}, "
+                        f"Data: {json.dumps(observation.raw_data)}",
                     },
                 ],
                 stream=True,

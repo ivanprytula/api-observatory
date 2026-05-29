@@ -1,11 +1,11 @@
 meta {
-  name: Enrich Record (HITL review — pauses before publish)
+  name: Enrich observation (HITL review — pauses before publish)
   type: http
   seq: 2
 }
 
 post {
-  url: {{baseUrl}}/api/v1/agent/enrich/{{record_id}}/review
+  url: {{baseUrl}}/api/v1/agent/enrich/{{observation_id}}/review
   body: none
   auth: bearer
 }

@@ -73,7 +73,7 @@ class CircuitBreaker:
         async with breaker:
             await do_something()
 
-    The context manager records success/failure automatically based on whether
+    The context manager observations success/failure automatically based on whether
     an exception escaped the block.
     """
 
@@ -124,12 +124,12 @@ class CircuitBreaker:
 
     async def __aexit__(self, exc_type, exc_value, tb) -> bool | None:
         if exc_type is None:
-            await self._record_success()
+            await self._observation_success()
         else:
-            await self._record_failure()
+            await self._observation_failure()
         return False
 
-    async def _record_success(self) -> None:
+    async def _observation_success(self) -> None:
         async with self._lock:
             if self._state is CircuitState.HALF_OPEN:
                 self._half_open_success_count += 1
@@ -141,7 +141,7 @@ class CircuitBreaker:
             else:
                 self._failure_count = 0
 
-    async def _record_failure(self) -> None:
+    async def _observation_failure(self) -> None:
         async with self._lock:
             if self._state is CircuitState.HALF_OPEN:
                 self._state = CircuitState.OPEN
@@ -265,7 +265,7 @@ class _CircuitBreaker:
         Raises:
             CircuitOpenError: When the circuit is OPEN and the probe window has
                               not yet elapsed.
-            Exception: Re-raises any exception raised by func (after recording
+            Exception: Re-raises any exception raised by func (after observationing
                        the failure).
         """
         lock = self._get_lock()

@@ -6,7 +6,7 @@ Both detectors follow the same pattern:
 - Callers are responsible for persisting the signal via the repository
 - All detectors are deterministic and synchronous for easy unit testing
 
-Fail-open helpers (``record_*`` functions) wrap the detector + persistence
+Fail-open helpers (``observation_*`` functions) wrap the detector + persistence
 in a try/except so a DB failure never blocks the hot request path.
 """
 
@@ -261,7 +261,7 @@ def evaluate_key_suspicion(
 # ---------------------------------------------------------------------------
 
 
-async def record_source_noise(
+async def observation_source_noise(
     *,
     source_name: str,
     request_count: int,
@@ -309,7 +309,7 @@ async def record_source_noise(
         return False
 
 
-async def record_key_suspicion(
+async def observation_key_suspicion(
     *,
     key_prefix: str,
     window_seconds: int,

@@ -23,12 +23,12 @@ async def test_event_idempotency(db: AsyncSession) -> None:
     # First insert
     event1, created1 = await create_processed_event(
         db,
-        kafka_topic="records.events",
+        kafka_topic="observations.events",
         kafka_partition=0,
         kafka_offset=100,
         idempotency_key=idempotency_key,
-        event_type="record.created",
-        payload={"record_id": 1},
+        event_type="observation.created",
+        payload={"observation_id": 1},
     )
     assert created1 is True
     assert event1.idempotency_key == idempotency_key
@@ -37,12 +37,12 @@ async def test_event_idempotency(db: AsyncSession) -> None:
     # Second insert with same key should return existing event
     event2, created2 = await create_processed_event(
         db,
-        kafka_topic="records.events",
+        kafka_topic="observations.events",
         kafka_partition=0,
         kafka_offset=101,
         idempotency_key=idempotency_key,
-        event_type="record.created",
-        payload={"record_id": 1},
+        event_type="observation.created",
+        payload={"observation_id": 1},
     )
     assert created2 is False
     assert event2.id == event1.id  # Same event ID
@@ -56,12 +56,12 @@ async def test_event_idempotency_with_different_data(db: AsyncSession) -> None:
     # First insert
     event1, created1 = await create_processed_event(
         db,
-        kafka_topic="records.events",
+        kafka_topic="observations.events",
         kafka_partition=0,
         kafka_offset=200,
         idempotency_key=idempotency_key,
-        event_type="record.created",
-        payload={"record_id": 1},
+        event_type="observation.created",
+        payload={"observation_id": 1},
     )
     original_payload = event1.payload
     original_offset = event1.kafka_offset
@@ -69,12 +69,12 @@ async def test_event_idempotency_with_different_data(db: AsyncSession) -> None:
     # Try to insert with different offset (simulates retry)
     event2, created2 = await create_processed_event(
         db,
-        kafka_topic="records.events",
+        kafka_topic="observations.events",
         kafka_partition=0,
         kafka_offset=999,  # Different offset (retry scenario)
         idempotency_key=idempotency_key,
-        event_type="record.created",
-        payload={"record_id": 1},
+        event_type="observation.created",
+        payload={"observation_id": 1},
     )
 
     # Same event ID, original offset preserved (idempotency win)
@@ -92,12 +92,12 @@ async def test_event_idempotency_with_failure(db: AsyncSession) -> None:
     # Create event
     event, created = await create_processed_event(
         db,
-        kafka_topic="records.events",
+        kafka_topic="observations.events",
         kafka_partition=0,
         kafka_offset=300,
         idempotency_key=idempotency_key,
-        event_type="record.created",
-        payload={"record_id": 1},
+        event_type="observation.created",
+        payload={"observation_id": 1},
     )
     assert created is True
     assert event.status == "pending"

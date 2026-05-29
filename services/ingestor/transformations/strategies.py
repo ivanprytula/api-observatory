@@ -1,7 +1,7 @@
-"""Record validation strategies (Strategy pattern).
+"""Observation validation strategies (Strategy pattern).
 
 Each source type (CSV, JSON, API) has different validation rules.
-This module defines the RecordValidationStrategy interface and pluggable implementations.
+This module defines the ObservationValidationStrategy interface and pluggable implementations.
 """
 
 from __future__ import annotations
@@ -10,19 +10,19 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 
 
-class RecordValidationStrategy(ABC):
-    """Abstract interface for record validation.
+class ObservationValidationStrategy(ABC):
+    """Abstract interface for observation validation.
 
-    Each validator is responsible for checking that a record conforms to
+    Each validator is responsible for checking that a observation conforms to
     source-specific requirements (required fields, types, value ranges).
     """
 
     @abstractmethod
-    async def validate(self, record: dict) -> tuple[bool, str | None]:
-        """Validate a record.
+    async def validate(self, observation: dict) -> tuple[bool, str | None]:
+        """Validate a observation.
 
         Args:
-            record: The raw record dict to validate.
+            observation: The raw observation dict to validate.
 
         Returns:
             Tuple of (is_valid, error_message).
@@ -31,7 +31,7 @@ class RecordValidationStrategy(ABC):
         """
 
 
-class CSVRecordValidator(RecordValidationStrategy):
+class CSVObservationValidator(ObservationValidationStrategy):
     """Validator for CSV/tabular sources.
 
     Enforces:
@@ -42,22 +42,22 @@ class CSVRecordValidator(RecordValidationStrategy):
 
     REQUIRED_FIELDS = ["id", "price", "timestamp"]
 
-    async def validate(self, record: dict) -> tuple[bool, str | None]:
-        """Validate CSV-sourced record."""
+    async def validate(self, observation: dict) -> tuple[bool, str | None]:
+        """Validate CSV-sourced observation."""
         # Check required fields exist
         for field in self.REQUIRED_FIELDS:
-            if field not in record or record[field] is None:
+            if field not in observation or observation[field] is None:
                 return False, f"Missing required field: {field}"
 
         # Validate and coerce types
-        if not await self._validate_id(record.get("id")):
+        if not await self._validate_id(observation.get("id")):
             return False, "Invalid 'id': must be non-empty string"
 
-        is_valid, error = await self._validate_price(record.get("price"))
+        is_valid, error = await self._validate_price(observation.get("price"))
         if not is_valid:
             return False, error
 
-        is_valid, error = await self._validate_timestamp(record.get("timestamp"))
+        is_valid, error = await self._validate_timestamp(observation.get("timestamp"))
         if not is_valid:
             return False, error
 
@@ -94,46 +94,46 @@ class CSVRecordValidator(RecordValidationStrategy):
             return False, f"Invalid timestamp format: {e}"
 
 
-class JSONRecordValidator(RecordValidationStrategy):
+class JSONObservationValidator(ObservationValidationStrategy):
     """Validator for JSON/nested sources.
 
     More lenient than CSV: allows nested structures,
     optional fields, flexible schema.
     """
 
-    async def validate(self, record: dict) -> tuple[bool, str | None]:
-        """Validate JSON-sourced record.
+    async def validate(self, observation: dict) -> tuple[bool, str | None]:
+        """Validate JSON-sourced observation.
 
-        Basic checks: is dict, has 'id', record not empty.
+        Basic checks: is dict, has 'id', observation not empty.
         """
-        if not isinstance(record, dict):
-            return False, "Record must be dict/object"
+        if not isinstance(observation, dict):
+            return False, "Observation must be dict/object"
 
-        if "id" not in record or record["id"] is None:
+        if "id" not in observation or observation["id"] is None:
             return False, "Missing required field: 'id'"
 
-        if len(record) == 0:
-            return False, "Record cannot be empty"
+        if len(observation) == 0:
+            return False, "Observation cannot be empty"
 
         return True, None
 
 
-class APIRecordValidator(RecordValidationStrategy):
+class APIObservationValidator(ObservationValidationStrategy):
     """Validator for API sources (minimal, trust contract).
 
     Assumes the API already validates; we do minimal checking
     to catch only obvious schema mismatches.
     """
 
-    async def validate(self, record: dict) -> tuple[bool, str | None]:
-        """Validate API-sourced record (permissive).
+    async def validate(self, observation: dict) -> tuple[bool, str | None]:
+        """Validate API-sourced observation (permissive).
 
-        Only check: record is dict and not empty.
+        Only check: observation is dict and not empty.
         """
-        if not isinstance(record, dict):
-            return False, "Record must be dict/object"
+        if not isinstance(observation, dict):
+            return False, "Observation must be dict/object"
 
-        if len(record) == 0:
-            return False, "Record cannot be empty"
+        if len(observation) == 0:
+            return False, "Observation cannot be empty"
 
         return True, None

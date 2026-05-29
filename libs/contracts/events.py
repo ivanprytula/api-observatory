@@ -8,17 +8,17 @@ from __future__ import annotations
 from typing import Any, TypedDict
 
 
-EVENT_RECORD_CREATED = "record.created"
+EVENT_OBSERVATION_CREATED = "observation.created"
 EVENT_DOC_SCRAPED = "doc.scraped"
 
-TOPIC_RECORD_CREATED = "records.events"
+TOPIC_OBSERVATION_CREATED = "observations.events"
 TOPIC_SCRAPED = "scraped.events"
 
 
-class RecordCreatedPayload(TypedDict, total=False):
-    """Payload contract for record.created events."""
+class ObservationCreatedPayload(TypedDict, total=False):
+    """Payload contract for observation.created events."""
 
-    record_id: int
+    observation_id: int
     source: str
     timestamp: str
     data: dict[str, Any]
@@ -49,10 +49,10 @@ class EventPayload[T]:
 
 __all__ = [
     "EventPayload",
-    "RecordCreatedPayload",
+    "ObservationCreatedPayload",
     "DocScrapedPayload",
-    "EVENT_RECORD_CREATED",
+    "EVENT_OBSERVATION_CREATED",
     "EVENT_DOC_SCRAPED",
-    "TOPIC_RECORD_CREATED",
+    "TOPIC_OBSERVATION_CREATED",
     "TOPIC_SCRAPED",
 ]

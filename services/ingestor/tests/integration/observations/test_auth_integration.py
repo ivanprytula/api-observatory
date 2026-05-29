@@ -12,16 +12,16 @@ from datetime import datetime
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.ingestor.api_schemas.records import RecordRequest
+from services.ingestor.api_schemas.observations import ObservationRequest
 
 
 class TestSessionAuth:
     """Tests for session-based auth routes."""
 
     async def test_login_session_creates_session(self, client: AsyncClient) -> None:
-        """POST /api/v1/records/auth/login creates a session cookie."""
+        """POST /api/v1/observations/auth/login creates a session cookie."""
         response = await client.post(
-            "/api/v1/records/auth/login",
+            "/api/v1/observations/auth/login",
             params={"user_id": "testuser"},
         )
         assert response.status_code == 200
@@ -31,60 +31,60 @@ class TestSessionAuth:
         assert isinstance(data["session_id"], str)
         assert len(data["session_id"]) > 0
 
-    async def test_get_record_secured_requires_session(
-        self, client: AsyncClient, db: AsyncSession, record_timestamp: datetime
+    async def test_get_observation_secured_requires_session(
+        self, client: AsyncClient, db: AsyncSession, observation_timestamp: datetime
     ) -> None:
-        """GET /api/v1/records/{id}/secure requires valid session cookie."""
-        from services.ingestor.repositories import records as crud
+        """GET /api/v1/observations/{id}/secure requires valid session cookie."""
+        from services.ingestor.repositories import observations as crud
 
-        record = await crud.create_record(
+        observation = await crud.create_observation(
             db,
-            RecordRequest(source="test", timestamp=record_timestamp, data={}),
+            ObservationRequest(source="test", timestamp=observation_timestamp, data={}),
         )
 
         # Without session, should get 401
-        response = await client.get(f"/api/v1/records/{record.id}/secure")
+        response = await client.get(f"/api/v1/observations/{observation.id}/secure")
         assert response.status_code == 401
 
-    async def test_get_record_secured_with_valid_session(
-        self, client: AsyncClient, db: AsyncSession, record_timestamp
+    async def test_get_observation_secured_with_valid_session(
+        self, client: AsyncClient, db: AsyncSession, observation_timestamp
     ) -> None:
-        """GET /api/v1/records/{id}/secure succeeds with valid session cookie."""
-        from services.ingestor.repositories import records as crud
+        """GET /api/v1/observations/{id}/secure succeeds with valid session cookie."""
+        from services.ingestor.repositories import observations as crud
 
-        # Create a record
-        record = await crud.create_record(
+        # Create a observation
+        observation = await crud.create_observation(
             db,
-            RecordRequest(source="test", timestamp=record_timestamp, data={}),
+            ObservationRequest(source="test", timestamp=observation_timestamp, data={}),
         )
 
         # Login to get session
         login_response = await client.post(
-            "/api/v1/records/auth/login",
+            "/api/v1/observations/auth/login",
             params={"user_id": "testuser"},
         )
         session_id = login_response.json()["session_id"]
 
         # Set session cookie on client instance (not per-request)
         client.cookies.set("session_id", session_id)
-        response = await client.get(f"/api/v1/records/{record.id}/secure")
+        response = await client.get(f"/api/v1/observations/{observation.id}/secure")
         assert response.status_code == 200
-        assert response.json()["id"] == record.id
+        assert response.json()["id"] == observation.id
 
-    async def test_get_record_secured_with_expired_session(
-        self, client: AsyncClient, db: AsyncSession, record_timestamp
+    async def test_get_observation_secured_with_expired_session(
+        self, client: AsyncClient, db: AsyncSession, observation_timestamp
     ) -> None:
-        """GET /api/v1/records/{id}/secure fails with expired session."""
+        """GET /api/v1/observations/{id}/secure fails with expired session."""
         import uuid
         from datetime import UTC, datetime, timedelta
 
         from services.ingestor import auth
-        from services.ingestor.repositories import records
+        from services.ingestor.repositories import observations as observations_repo
 
-        # Create a record
-        record = await records.create_record(
+        # Create a observation
+        observation = await observations_repo.create_observation(
             db,
-            RecordRequest(source="test", timestamp=record_timestamp, data={}),
+            ObservationRequest(source="test", timestamp=observation_timestamp, data={}),
         )
 
         # Create an expired session directly in the fake redis
@@ -102,69 +102,69 @@ class TestSessionAuth:
 
         # Set expired session cookie on client instance
         client.cookies.set("session_id", session_id)
-        response = await client.get(f"/api/v1/records/{record.id}/secure")
+        response = await client.get(f"/api/v1/observations/{observation.id}/secure")
         assert response.status_code == 401
         assert "expired" in response.json()["detail"].lower()
 
-    async def test_archive_record_secured_requires_writer_or_admin(
-        self, client: AsyncClient, db: AsyncSession, record_timestamp
+    async def test_archive_observation_secured_requires_writer_or_admin(
+        self, client: AsyncClient, db: AsyncSession, observation_timestamp
     ) -> None:
         """RBAC secure archive endpoint denies viewer role and allows writer role."""
-        from services.ingestor.repositories import records as crud
+        from services.ingestor.repositories import observations as crud
 
-        record = await crud.create_record(
+        observation = await crud.create_observation(
             db,
-            RecordRequest(source="test", timestamp=record_timestamp, data={}),
+            ObservationRequest(source="test", timestamp=observation_timestamp, data={}),
         )
 
         viewer_login = await client.post(
-            "/api/v1/records/auth/login",
+            "/api/v1/observations/auth/login",
             params={"user_id": "viewer-user", "role": "viewer"},
         )
         client.cookies.set("session_id", viewer_login.json()["session_id"])
         viewer_response = await client.patch(
-            f"/api/v1/records/{record.id}/secure/archive"
+            f"/api/v1/observations/{observation.id}/secure/archive"
         )
         assert viewer_response.status_code == 403
 
         writer_login = await client.post(
-            "/api/v1/records/auth/login",
+            "/api/v1/observations/auth/login",
             params={"user_id": "writer-user", "role": "writer"},
         )
         client.cookies.set("session_id", writer_login.json()["session_id"])
         writer_response = await client.patch(
-            f"/api/v1/records/{record.id}/secure/archive"
+            f"/api/v1/observations/{observation.id}/secure/archive"
         )
         assert writer_response.status_code == 200
 
-    async def test_delete_record_secured_requires_admin(
-        self, client: AsyncClient, db: AsyncSession, record_timestamp
+    async def test_delete_observation_secured_requires_admin(
+        self, client: AsyncClient, db: AsyncSession, observation_timestamp
     ) -> None:
         """RBAC secure delete endpoint allows only admin role."""
-        from services.ingestor.repositories import records as crud
+        from services.ingestor.repositories import observations as crud
 
-        record = await crud.create_record(
+        observation = await crud.create_observation(
             db,
-            RecordRequest(source="test", timestamp=record_timestamp, data={}),
+            ObservationRequest(source="test", timestamp=observation_timestamp, data={}),
         )
 
         writer_login = await client.post(
-            "/api/v1/records/auth/login",
+            "/api/v1/observations/auth/login",
             params={"user_id": "writer-user", "role": "writer"},
         )
         client.cookies.set("session_id", writer_login.json()["session_id"])
         writer_response = await client.delete(
-            f"/api/v1/records/{record.id}/secure/delete"
+            f"/api/v1/observations/{observation.id}/secure/delete"
         )
         assert writer_response.status_code == 403
 
         admin_login = await client.post(
-            "/api/v1/records/auth/login",
+            "/api/v1/observations/auth/login",
             params={"user_id": "admin-user", "role": "admin"},
         )
         client.cookies.set("session_id", admin_login.json()["session_id"])
         admin_response = await client.delete(
-            f"/api/v1/records/{record.id}/secure/delete"
+            f"/api/v1/observations/{observation.id}/secure/delete"
         )
         assert admin_response.status_code == 204
 
@@ -176,14 +176,14 @@ class TestBearerTokenAuth:
     that auth is disabled and endpoints are accessible without tokens.
     """
 
-    async def test_create_records_batch_protected_works_when_disabled(
+    async def test_create_observations_batch_protected_works_when_disabled(
         self, client: AsyncClient
     ) -> None:
-        """POST /api/v1/records/batch/protected works when token auth is disabled (.env not set)."""
+        """POST observations/batch/protected works when token auth is disabled(.env not set)."""
         response = await client.post(
-            "/api/v1/records/batch/protected",
+            "/api/v1/observations/batch/protected",
             json={
-                "records": [
+                "observations": [
                     {"source": "test", "timestamp": "2024-01-01T00:00:00", "data": {}},
                 ]
             },
@@ -228,10 +228,10 @@ class TestProtectedDocs:
 class TestRateLimitHandler:
     """Tests for rate limit exceeded handler."""
 
-    async def test_create_record_endpoint_works(self, client: AsyncClient) -> None:
-        """Create record endpoint works (rate limit applied)."""
+    async def test_create_observation_endpoint_works(self, client: AsyncClient) -> None:
+        """Create observation endpoint works (rate limit applied)."""
         response = await client.post(
-            "/api/v1/records",
+            "/api/v1/observations",
             json={"source": "test", "timestamp": "2024-01-01T00:00:00", "data": {}},
         )
         assert response.status_code == 201

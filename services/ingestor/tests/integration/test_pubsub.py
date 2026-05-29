@@ -17,7 +17,7 @@ import services.ingestor.pubsub as pubsub_module
 from services.ingestor.pubsub import (
     PUBSUB_CHANNEL,
     publish_event,
-    publish_record_created,
+    publish_observation_created,
     subscribe_events,
 )
 
@@ -57,20 +57,20 @@ async def test_publish_event_writes_to_channel(real_redis) -> None:
     assert data["value"] == 42
 
 
-async def test_publish_record_created_includes_required_fields(real_redis) -> None:
-    """publish_record_created() envelope contains record_id, source, and ts."""
+async def test_publish_observation_created_includes_required_fields(real_redis) -> None:
+    """publish_observation_created() envelope contains observation_id, source, and ts."""
     pubsub = real_redis.pubsub()
     await pubsub.subscribe(PUBSUB_CHANNEL)
 
-    await publish_record_created(record_id=99, source="test.source")
+    await publish_observation_created(observation_id=99, source="test.source")
     await asyncio.sleep(0.1)
     msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
     await pubsub.unsubscribe(PUBSUB_CHANNEL)
 
     assert msg is not None
     data = json.loads(msg["data"])
-    assert data["type"] == "record.created"
-    assert data["record_id"] == 99
+    assert data["type"] == "observation.created"
+    assert data["observation_id"] == 99
     assert data["source"] == "test.source"
     assert "ts" in data
 
@@ -94,8 +94,8 @@ async def test_subscribe_events_yields_published_messages(real_redis) -> None:
     # Give subscriber time to attach
     await asyncio.sleep(0.1)
 
-    await publish_event("record.created", {"record_id": 1, "source": "a"})
-    await publish_event("record.created", {"record_id": 2, "source": "b"})
+    await publish_event("observation.created", {"observation_id": 1, "source": "a"})
+    await publish_event("observation.created", {"observation_id": 2, "source": "b"})
 
     try:
         await asyncio.wait_for(consumer_task, timeout=3.0)
@@ -104,8 +104,8 @@ async def test_subscribe_events_yields_published_messages(real_redis) -> None:
         pytest.fail("subscribe_events() did not yield 2 messages within 3 s")
 
     assert len(received) == 2
-    assert received[0]["record_id"] == 1
-    assert received[1]["record_id"] == 2
+    assert received[0]["observation_id"] == 1
+    assert received[1]["observation_id"] == 2
 
 
 async def test_publish_is_fail_open_when_client_is_none(
@@ -114,4 +114,4 @@ async def test_publish_is_fail_open_when_client_is_none(
     """publish_event() silently no-ops when the Redis client is not connected."""
     monkeypatch.setattr(pubsub_module, "_pubsub_client", None)
     # Should not raise
-    await publish_event("record.created", {"record_id": 0, "source": "x"})
+    await publish_event("observation.created", {"observation_id": 0, "source": "x"})

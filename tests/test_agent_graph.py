@@ -3,16 +3,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langgraph.checkpoint.memory import MemorySaver
 
-from services.ingestor.api_schemas.records import RecordClassification
+from services.ingestor.api_schemas.observations import ObservationClassification
 
 
 pytestmark = pytest.mark.asyncio
 
 
 @pytest.fixture
-def mock_search_record_documents():
+def mock_search_observation_documents():
     with patch(
-        "services.ingestor.agent.nodes.search_record_documents", new_callable=AsyncMock
+        "services.ingestor.agent.nodes.search_observation_documents",
+        new_callable=AsyncMock,
     ) as mock:
         mock.return_value = {"results": [{"text": "mocked context"}]}
         yield mock
@@ -27,7 +28,7 @@ def mock_openai():
         # mock parse (for classify_node)
         parse_mock = AsyncMock()
         mock_response = MagicMock()
-        mock_parsed = RecordClassification(
+        mock_parsed = ObservationClassification(
             category="test", priority=2, summary="test", sentiment="neutral"
         )
         mock_response.choices = [MagicMock(message=MagicMock(parsed=mock_parsed))]
@@ -47,9 +48,10 @@ def mock_openai():
 
 
 @pytest.fixture
-def mock_publish_record_created():
+def mock_publish_observation_created():
     with patch(
-        "services.ingestor.agent.nodes.publish_record_created", new_callable=AsyncMock
+        "services.ingestor.agent.nodes.publish_observation_created",
+        new_callable=AsyncMock,
     ) as mock:
         yield mock
 
@@ -64,7 +66,7 @@ def mock_insert_scraped_doc():
 
 from services.ingestor.agent.graph import (  # noqa: E402
     build_graph,
-    record_enrichment_agent,
+    observation_enrichment_agent,
 )
 
 
@@ -78,23 +80,28 @@ def mock_redis_saver():
 
 
 async def test_low_priority_skips_deep_analyze(
-    mock_search_record_documents,
+    mock_search_observation_documents,
     mock_openai,
-    mock_publish_record_created,
+    mock_publish_observation_created,
     mock_insert_scraped_doc,
 ):
     # Setup mock to return priority 2
-    mock_parsed = RecordClassification(
+    mock_parsed = ObservationClassification(
         category="test", priority=2, summary="test", sentiment="neutral"
     )
     mock_openai.beta.chat.completions.parse.return_value.choices[
         0
     ].message.parsed = mock_parsed
 
-    initial_state = {"record_id": 1, "record": {"source": "test", "raw_data": {}}}
+    initial_state = {
+        "observation_id": 1,
+        "observation": {"source": "test", "raw_data": {}},
+    }
 
     config = {"configurable": {"thread_id": "1"}}
-    final_state = await record_enrichment_agent.ainvoke(initial_state, config=config)
+    final_state = await observation_enrichment_agent.ainvoke(
+        initial_state, config=config
+    )
 
     assert final_state["analysis_depth"] == "standard"
     assert (
@@ -103,64 +110,77 @@ async def test_low_priority_skips_deep_analyze(
 
 
 async def test_high_priority_routes_to_deep_analyze(
-    mock_search_record_documents,
+    mock_search_observation_documents,
     mock_openai,
-    mock_publish_record_created,
+    mock_publish_observation_created,
     mock_insert_scraped_doc,
 ):
     # Setup mock to return priority 5
-    mock_parsed = RecordClassification(
+    mock_parsed = ObservationClassification(
         category="test", priority=5, summary="test", sentiment="neutral"
     )
     mock_openai.beta.chat.completions.parse.return_value.choices[
         0
     ].message.parsed = mock_parsed
 
-    initial_state = {"record_id": 1, "record": {"source": "test", "raw_data": {}}}
+    initial_state = {
+        "observation_id": 1,
+        "observation": {"source": "test", "raw_data": {}},
+    }
 
     config = {"configurable": {"thread_id": "2"}}
-    final_state = await record_enrichment_agent.ainvoke(initial_state, config=config)
+    final_state = await observation_enrichment_agent.ainvoke(
+        initial_state, config=config
+    )
 
     assert final_state["analysis_depth"] == "deep"
     assert mock_openai.chat.completions.create.call_count == 1
 
 
 async def test_unknown_category_routes_to_deep_analyze(
-    mock_search_record_documents,
+    mock_search_observation_documents,
     mock_openai,
-    mock_publish_record_created,
+    mock_publish_observation_created,
     mock_insert_scraped_doc,
 ):
-    mock_parsed = RecordClassification(
+    mock_parsed = ObservationClassification(
         category="unknown", priority=1, summary="test", sentiment="neutral"
     )
     mock_openai.beta.chat.completions.parse.return_value.choices[
         0
     ].message.parsed = mock_parsed
 
-    initial_state = {"record_id": 1, "record": {"source": "test", "raw_data": {}}}
+    initial_state = {
+        "observation_id": 1,
+        "observation": {"source": "test", "raw_data": {}},
+    }
 
     config = {"configurable": {"thread_id": "3"}}
-    final_state = await record_enrichment_agent.ainvoke(initial_state, config=config)
+    final_state = await observation_enrichment_agent.ainvoke(
+        initial_state, config=config
+    )
 
     assert final_state["analysis_depth"] == "deep"
     assert mock_openai.chat.completions.create.call_count == 1
 
 
 async def test_hitl_pauses_before_publish(
-    mock_search_record_documents,
+    mock_search_observation_documents,
     mock_openai,
-    mock_publish_record_created,
+    mock_publish_observation_created,
     mock_insert_scraped_doc,
 ):
-    mock_parsed = RecordClassification(
+    mock_parsed = ObservationClassification(
         category="test", priority=2, summary="test", sentiment="neutral"
     )
     mock_openai.beta.chat.completions.parse.return_value.choices[
         0
     ].message.parsed = mock_parsed
 
-    initial_state = {"record_id": 1, "record": {"source": "test", "raw_data": {}}}
+    initial_state = {
+        "observation_id": 1,
+        "observation": {"source": "test", "raw_data": {}},
+    }
 
     # Use in-memory checkpointer so HITL state can be retrieved after pause
     memory_saver = MemorySaver()
@@ -172,7 +192,7 @@ async def test_hitl_pauses_before_publish(
     await hitl_agent.ainvoke(initial_state, config=config)
 
     # Check if we didn't call publish yet
-    assert mock_publish_record_created.call_count == 0
+    assert mock_publish_observation_created.call_count == 0
     assert mock_insert_scraped_doc.call_count == 0
 
     # State should indicate we are next going to publish
@@ -181,20 +201,23 @@ async def test_hitl_pauses_before_publish(
 
 
 async def test_hitl_resume_approves(
-    mock_search_record_documents,
+    mock_search_observation_documents,
     mock_openai,
-    mock_publish_record_created,
+    mock_publish_observation_created,
     mock_insert_scraped_doc,
 ):
     # Setup mock to return priority 2
-    mock_parsed = RecordClassification(
+    mock_parsed = ObservationClassification(
         category="test", priority=2, summary="test", sentiment="neutral"
     )
     mock_openai.beta.chat.completions.parse.return_value.choices[
         0
     ].message.parsed = mock_parsed
 
-    initial_state = {"record_id": 1, "record": {"source": "test", "raw_data": {}}}
+    initial_state = {
+        "observation_id": 1,
+        "observation": {"source": "test", "raw_data": {}},
+    }
 
     memory_saver = MemorySaver()
     hitl_agent = build_graph().compile(
@@ -208,26 +231,29 @@ async def test_hitl_resume_approves(
     final_state = await hitl_agent.ainvoke(None, config=config)
 
     # Verify that the publish node successfully executed on resume
-    assert mock_publish_record_created.call_count == 1
+    assert mock_publish_observation_created.call_count == 1
     assert mock_insert_scraped_doc.call_count == 1
     assert final_state["analysis_depth"] == "standard"
 
 
 async def test_hitl_resume_rejects(
-    mock_search_record_documents,
+    mock_search_observation_documents,
     mock_openai,
-    mock_publish_record_created,
+    mock_publish_observation_created,
     mock_insert_scraped_doc,
 ):
     # Setup mock to return priority 2
-    mock_parsed = RecordClassification(
+    mock_parsed = ObservationClassification(
         category="test", priority=2, summary="test", sentiment="neutral"
     )
     mock_openai.beta.chat.completions.parse.return_value.choices[
         0
     ].message.parsed = mock_parsed
 
-    initial_state = {"record_id": 1, "record": {"source": "test", "raw_data": {}}}
+    initial_state = {
+        "observation_id": 1,
+        "observation": {"source": "test", "raw_data": {}},
+    }
 
     memory_saver = MemorySaver()
     hitl_agent = build_graph().compile(
@@ -245,21 +271,24 @@ async def test_hitl_resume_rejects(
     assert state.values.get("error") == "rejected_by_human"
 
     # Verify that the publish node was skipped
-    assert mock_publish_record_created.call_count == 0
+    assert mock_publish_observation_created.call_count == 0
     assert mock_insert_scraped_doc.call_count == 0
 
 
 async def test_stream_emits_node_events(
-    mock_search_record_documents,
+    mock_search_observation_documents,
     mock_openai,
-    mock_publish_record_created,
+    mock_publish_observation_created,
     mock_insert_scraped_doc,
 ):
-    initial_state = {"record_id": 1, "record": {"source": "test", "raw_data": {}}}
+    initial_state = {
+        "observation_id": 1,
+        "observation": {"source": "test", "raw_data": {}},
+    }
     config = {"configurable": {"thread_id": "7"}}
 
     events = []
-    async for event in record_enrichment_agent.astream(
+    async for event in observation_enrichment_agent.astream(
         initial_state, config=config, stream_mode="updates"
     ):
         events.append(event)

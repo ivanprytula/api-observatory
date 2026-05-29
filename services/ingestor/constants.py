@@ -27,11 +27,11 @@ MAX_PAGE_SIZE: int = 1000
 # ---------------------------------------------------------------------------
 # Batch operations
 # ---------------------------------------------------------------------------
-MAX_BATCH_SIZE: int = 1000  # records per /batch request
+MAX_BATCH_SIZE: int = 1000  # observations per /batch request
 MIN_BATCH_SIZE: int = 1
 
 # ---------------------------------------------------------------------------
-# Record field validation
+# Observation field validation
 # ---------------------------------------------------------------------------
 SOURCE_MAX_LENGTH: int = 255
 SOURCE_MIN_LENGTH: int = 1
@@ -65,8 +65,8 @@ JITTER_MAX_SECONDS: float = 10.0  # maximum random offset
 # Concurrent enrichment (Step 8)
 # ---------------------------------------------------------------------------
 ENRICH_SEMAPHORE_LIMIT: int = 10  # cap concurrent external API calls
-ENRICH_MAX_IDS: int = 50  # max record IDs per /enrich request
-ENRICH_MIN_IDS: int = 1  # min record IDs per /enrich request
+ENRICH_MAX_IDS: int = 50  # max observation IDs per /enrich request
+ENRICH_MIN_IDS: int = 1  # min observation IDs per /enrich request
 
 # ---------------------------------------------------------------------------
 # Idempotent upsert (Step 9)
@@ -77,7 +77,7 @@ UPSERT_MODE_STRICT: str = "strict"  # 201 on create, 409 on conflict
 # ---------------------------------------------------------------------------
 # Caching — Redis
 # ---------------------------------------------------------------------------
-CACHE_KEY_RECORD: str = "dp:record:{record_id}"  # Redis key namespace
+CACHE_KEY_OBSERVATION: str = "dp:observation:{observation_id}"  # Redis key namespace
 
 # ---------------------------------------------------------------------------
 # Source Registry
@@ -137,10 +137,10 @@ REPORTING_DEFAULT_EXPORT_FORMAT: str = "json"
 REPORTING_EXEC_SUMMARY_DEFAULT_SOURCE_LIMIT: int = 50
 REPORTING_EXEC_SUMMARY_MAX_ACTIONS: int = 20
 
-CACHE_TTL_RECORD: int = 3600  # 1 hour — single records are stable
+CACHE_TTL_OBSERVATION: int = 3600  # 1 hour — single observations are stable
 
 # List cache (Phase 13.4) — write-heavy workload; short TTL with namespace invalidation
-CACHE_KEY_LIST_PREFIX: str = "dp:records:list"
+CACHE_KEY_LIST_PREFIX: str = "dp:observations:list"
 CACHE_TTL_LIST: int = 30  # 30 seconds for list pages
 CACHE_LIST_MAX_SKIP: int = 500  # skip cache for large offsets (memory bloat prevention)
 CACHE_LIST_MAX_LIMIT: int = 50  # skip cache for large pages
@@ -171,12 +171,12 @@ NOTIFICATION_SEVERITY_CRITICAL: str = "critical"
 # ---------------------------------------------------------------------------
 # Vector search / AI gateway (Pillar 9)
 # ---------------------------------------------------------------------------
-VECTOR_SEARCH_MIN_RECORD_IDS: int = 1
-VECTOR_SEARCH_MAX_RECORD_IDS: int = 100
+VECTOR_SEARCH_MIN_OBSERVATION_IDS: int = 1
+VECTOR_SEARCH_MAX_OBSERVATION_IDS: int = 100
 VECTOR_SEARCH_DEFAULT_TOP_K: int = 5
 VECTOR_SEARCH_MAX_TOP_K: int = 25
 VECTOR_SEARCH_HTTP_TIMEOUT_SECONDS_DEFAULT: int = 10
-VECTOR_SEARCH_DEFAULT_COLLECTION: str = "records"
+VECTOR_SEARCH_DEFAULT_COLLECTION: str = "observations"
 # ---------------------------------------------------------------------------
 # Scrapers (Phase 3)
 # ---------------------------------------------------------------------------

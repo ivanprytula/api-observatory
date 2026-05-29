@@ -38,10 +38,10 @@ API_DRIFT = f"{INGESTOR_URL}/api/v1/contracts/sources/{{source_id}}/drift-events
 API_HEALTH = f"{INGESTOR_URL}/health"
 API_READYZ = f"{INGESTOR_URL}/readyz"
 API_METRICS = f"{INGESTOR_URL}/metrics"
-API_AGENT_ENRICH = f"{INGESTOR_URL}/api/v1/agent/enrich/{{record_id}}"
-API_AGENT_REVIEW = f"{INGESTOR_URL}/api/v1/agent/enrich/{{record_id}}/review"
+API_AGENT_ENRICH = f"{INGESTOR_URL}/api/v1/agent/enrich/{{observation_id}}"
+API_AGENT_REVIEW = f"{INGESTOR_URL}/api/v1/agent/enrich/{{observation_id}}/review"
 API_AGENT_RESUME = f"{INGESTOR_URL}/api/v1/agent/runs/{{run_id}}/resume"
-API_AGENT_STREAM = f"{INGESTOR_URL}/api/v1/agent/enrich/{{record_id}}/stream"
+API_AGENT_STREAM = f"{INGESTOR_URL}/api/v1/agent/enrich/{{observation_id}}/stream"
 
 
 REFRESH_INTERVAL = 30  # seconds between auto-refreshes for health / drift panels
@@ -338,7 +338,7 @@ else:
 
 st.header("Live Stream")
 st.caption(
-    "Receives `record.created`, `drift.detected`, `job.progress`, and `ping` events."
+    "Receives `observation.created`, `drift.detected`, `job.progress`, and `ping` events."
 )
 
 col_connect, col_clear = st.columns([1, 1])
@@ -369,7 +369,7 @@ def _render_messages() -> None:
         ts = m.get("ts", "")[:19].replace("T", " ")
         mtype = m.get("type", "unknown")
         icon = {
-            "record.created": "📥",
+            "observation.created": "📥",
             "drift.detected": "⚠️",
             "job.progress": "⏳",
             "ping": "💓",
@@ -392,7 +392,7 @@ if st.session_state.ws_connected:
     _ws_token: str = st.session_state.get("access_token", "")
     _ws_url: str = (
         INGESTOR_URL.replace("http://", "ws://").replace("https://", "wss://")
-        + "/ws/records/stream"
+        + "/ws/observations/stream"
     )
     if _ws_token:
         _ws_url = f"{_ws_url}?token={_ws_token}"
@@ -461,7 +461,7 @@ _render_messages()
 
 st.header("🤖 Agent Enrichment")
 st.caption(
-    "Invoke the LangGraph enrichment agent against any record. "
+    "Invoke the LangGraph enrichment agent against any observation. "
     "Choose full-auto, Human-in-the-Loop (HITL), or SSE streaming."
 )
 
@@ -476,14 +476,14 @@ agent_tab_full, agent_tab_hitl, agent_tab_stream = st.tabs(
 with agent_tab_full:
     col_rid, col_go = st.columns([2, 1])
     _full_rid = col_rid.number_input(
-        "Record ID", min_value=1, value=1, step=1, key="agent_full_rid"
+        "Observation ID", min_value=1, value=1, step=1, key="agent_full_rid"
     )
     if col_go.button("▶ Enrich", key="agent_full_run"):
         with st.spinner("Running enrichment agent…"):
             try:
                 with httpx.Client(timeout=60.0) as _c:
                     _r = _c.post(
-                        API_AGENT_ENRICH.format(record_id=int(_full_rid)),
+                        API_AGENT_ENRICH.format(observation_id=int(_full_rid)),
                         headers=_agent_headers,
                     )
                     _r.raise_for_status()
@@ -510,14 +510,14 @@ with agent_tab_full:
 with agent_tab_hitl:
     col_hrid, col_hgo = st.columns([2, 1])
     _hitl_rid = col_hrid.number_input(
-        "Record ID", min_value=1, value=1, step=1, key="agent_hitl_rid"
+        "Observation ID", min_value=1, value=1, step=1, key="agent_hitl_rid"
     )
     if col_hgo.button("👁 Start Review", key="agent_hitl_start"):
         with st.spinner("Starting HITL enrichment…"):
             try:
                 with httpx.Client(timeout=60.0) as _c:
                     _r = _c.post(
-                        API_AGENT_REVIEW.format(record_id=int(_hitl_rid)),
+                        API_AGENT_REVIEW.format(observation_id=int(_hitl_rid)),
                         headers=_agent_headers,
                     )
                     _r.raise_for_status()
@@ -588,11 +588,11 @@ with agent_tab_hitl:
 with agent_tab_stream:
     col_srid, col_sgo = st.columns([2, 1])
     _stream_rid = col_srid.number_input(
-        "Record ID", min_value=1, value=1, step=1, key="agent_stream_rid"
+        "Observation ID", min_value=1, value=1, step=1, key="agent_stream_rid"
     )
     if col_sgo.button("📡 Stream", key="agent_stream_run"):
         st.session_state["agent_stream_events"] = []
-        _stream_url = API_AGENT_STREAM.format(record_id=int(_stream_rid))
+        _stream_url = API_AGENT_STREAM.format(observation_id=int(_stream_rid))
         _event_placeholder = st.empty()
         try:
             with httpx.Client(timeout=120.0) as _c:

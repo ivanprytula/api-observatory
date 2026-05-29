@@ -12,7 +12,7 @@ from typing import Any, Literal
 from uuid import uuid4
 
 from services.ingestor import jobs
-from services.ingestor.api_schemas.records import RecordRequest
+from services.ingestor.api_schemas.observations import ObservationRequest
 from services.ingestor.database import AsyncSessionLocal
 from services.ingestor.metrics import (
     background_jobs_active,
@@ -53,13 +53,13 @@ class BackgroundWorkerPool:
         worker_count: int,
         queue_size: int,
         max_tracked_tasks: int,
-        processor: Callable[[list[RecordRequest]], Awaitable[dict[str, Any]]]
+        processor: Callable[[list[ObservationRequest]], Awaitable[dict[str, Any]]]
         | None = None,
         on_task_failed: Callable[[BackgroundTaskStatus], Awaitable[None]] | None = None,
     ) -> None:
         self._worker_count = worker_count
-        self._queue: asyncio.Queue[tuple[str, list[RecordRequest]]] = asyncio.Queue(
-            maxsize=queue_size
+        self._queue: asyncio.Queue[tuple[str, list[ObservationRequest]]] = (
+            asyncio.Queue(maxsize=queue_size)
         )
         self._workers: list[asyncio.Task[None]] = []
         self._statuses: dict[str, BackgroundTaskStatus] = {}
@@ -108,7 +108,7 @@ class BackgroundWorkerPool:
         logger.info("background_worker_pool_stopped")
 
     async def submit_batch_ingest(
-        self, records: list[RecordRequest]
+        self, observations: list[ObservationRequest]
     ) -> BackgroundTaskStatus:
         """Queue a large batch ingestion task for asynchronous processing."""
         if not self._running:
@@ -120,14 +120,14 @@ class BackgroundWorkerPool:
         status = BackgroundTaskStatus(
             task_id=task_id,
             status="queued",
-            batch_size=len(records),
+            batch_size=len(observations),
             queued_at=datetime.now(UTC),
         )
         self._statuses[task_id] = status
         self._order.append(task_id)
         self._trim_status_history()
 
-        self._queue.put_nowait((task_id, records))
+        self._queue.put_nowait((task_id, observations))
         background_jobs_submitted_total.labels(kind="batch_ingest").inc()
         background_jobs_in_queue.set(self._queue.qsize())
 
@@ -162,7 +162,7 @@ class BackgroundWorkerPool:
         """Continuously consume queued tasks until cancellation."""
         while True:
             try:
-                task_id, records = await self._queue.get()
+                task_id, observations = await self._queue.get()
             except asyncio.CancelledError:
                 raise
 
@@ -173,7 +173,7 @@ class BackgroundWorkerPool:
             background_jobs_in_queue.set(self._queue.qsize())
 
             try:
-                result = await self._processor(records)
+                result = await self._processor(observations)
                 status.status = "succeeded"
                 status.result = result
                 background_jobs_processed_total.labels(
@@ -225,12 +225,14 @@ class BackgroundWorkerPool:
                 background_jobs_active.dec()
                 background_jobs_in_queue.set(self._queue.qsize())
 
-    async def _default_processor(self, records: list[RecordRequest]) -> dict[str, Any]:
+    async def _default_processor(
+        self, observations: list[ObservationRequest]
+    ) -> dict[str, Any]:
         """Default processing strategy: ingest via existing batch ingestion logic."""
         async with AsyncSessionLocal() as session:
             return await jobs.ingest_api_batch(
                 session,
-                records,
+                observations,
                 idempotency_key_prefix=f"bg-batch-{datetime.now(UTC).date()}",
             )
 

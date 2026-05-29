@@ -3,7 +3,7 @@
 Call ``setup_json_logger(service_name)`` once at service startup (inside the
 lifespan startup block, or at module level for non-FastAPI scripts).
 
-Every log record emitted to stdout includes:
+Every log observation emitted to stdout includes:
 
     timestamp   ISO-8601 (auto)
     level       "INFO" / "WARNING" / ...  (auto)
@@ -27,7 +27,7 @@ from pythonjsonlogger.json import JsonFormatter
 
 
 class _ServiceJsonFormatter(JsonFormatter):
-    """JSON formatter that injects the *service* field into every record."""
+    """JSON formatter that injects the *service* field into every observation."""
 
     def __init__(self, service_name: str, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -36,20 +36,20 @@ class _ServiceJsonFormatter(JsonFormatter):
     def add_fields(
         self,
         log_data: dict[str, Any],
-        record: logging.LogRecord,
+        observation: logging.LogObservation,
         message_dict: dict[str, Any],
     ) -> None:
-        super().add_fields(log_data, record, message_dict)
+        super().add_fields(log_data, observation, message_dict)
         log_data["service"] = self._service_name
         # Promote `level` to a top-level field for log aggregator filters
-        log_data["level"] = record.levelname
+        log_data["level"] = observation.levelname
 
 
 def setup_json_logger(service_name: str) -> None:
     """Configure the root logger with a JSON formatter for *service_name*.
 
     Args:
-        service_name: Short identifier emitted in every log record's
+        service_name: Short identifier emitted in every log observation's
             ``service`` field (e.g. ``"processor"``, ``"inference``").
 
     The log level is taken from the ``LOG_LEVEL`` environment variable

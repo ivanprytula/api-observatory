@@ -9,12 +9,12 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from services.ingestor.database import Base
-from services.ingestor.models import Record
+from services.ingestor.models import Observation
 from services.ingestor.services_lifecycle import _warm_list_cache
 
 
 class WarmCall(TypedDict):
-    """Captured args passed to set_records_list during warmup."""
+    """Captured args passed to set_observations_list during warmup."""
 
     source: str
     skip: int
@@ -48,37 +48,37 @@ async def test_warm_list_cache_populates_top_sources(
         # alpha has highest volume, then beta, then gamma
         session.add_all(
             [
-                Record(
+                Observation(
                     source="alpha",
                     timestamp=now - timedelta(minutes=1),
                     raw_data={"n": 1},
                     tags=["a"],
                 ),
-                Record(
+                Observation(
                     source="alpha",
                     timestamp=now - timedelta(minutes=2),
                     raw_data={"n": 2},
                     tags=["a"],
                 ),
-                Record(
+                Observation(
                     source="alpha",
                     timestamp=now - timedelta(minutes=3),
                     raw_data={"n": 3},
                     tags=["a"],
                 ),
-                Record(
+                Observation(
                     source="beta",
                     timestamp=now - timedelta(minutes=4),
                     raw_data={"n": 4},
                     tags=["b"],
                 ),
-                Record(
+                Observation(
                     source="beta",
                     timestamp=now - timedelta(minutes=5),
                     raw_data={"n": 5},
                     tags=["b"],
                 ),
-                Record(
+                Observation(
                     source="gamma",
                     timestamp=now - timedelta(minutes=6),
                     raw_data={"n": 6},
@@ -94,7 +94,7 @@ async def test_warm_list_cache_populates_top_sources(
 
     calls: list[WarmCall] = []
 
-    async def fake_set_records_list(
+    async def fake_set_observations_list(
         source: str, skip: int, limit: int, data: list
     ) -> None:
         calls.append(
@@ -107,7 +107,7 @@ async def test_warm_list_cache_populates_top_sources(
         )
 
     monkeypatch.setattr(
-        "services.ingestor.cache.set_records_list", fake_set_records_list
+        "services.ingestor.cache.set_observations_list", fake_set_observations_list
     )
 
     await _warm_list_cache()

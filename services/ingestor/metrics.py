@@ -7,7 +7,7 @@ a process, so registering the same name twice raises a ValueError.
 
 Metric naming convention (Prometheus best practice):
   <namespace>_<subsystem>_<unit>_<suffix>
-  e.g. pipeline_records_created_total
+  e.g. pipeline_observations_created_total
 
 Exposed on: GET /metrics (text/plain; version=0.0.4)
 
@@ -23,20 +23,20 @@ from prometheus_client import Counter, Gauge, Histogram
 # Counters
 # ---------------------------------------------------------------------------
 
-records_created_total = Counter(
-    name="pipeline_records_created_total",
-    documentation="Number of records successfully inserted (all endpoints combined).",
+observations_created_total = Counter(
+    name="pipeline_observations_created_total",
+    documentation="Number of observations successfully inserted (all endpoints combined).",
     labelnames=["endpoint"],
 )
-"""Incremented on every successful record INSERT.
+"""Incremented on every successful observation INSERT.
 
 Labels:
   endpoint: "single" | "batch" | "upsert"
 
 Usage::
 
-    from services.ingestor.metrics import records_created_total
-    records_created_total.labels(endpoint="single").inc()
+    from services.ingestor.metrics import observations_created_total
+    observations_created_total.labels(endpoint="single").inc()
 """
 
 llm_prompt_tokens_total = Counter(
@@ -51,9 +51,9 @@ Labels:
   endpoint: "analyze" | "analyze_stream"
 """
 
-records_upsert_conflicts_total = Counter(
-    name="pipeline_records_upsert_conflicts_total",
-    documentation="Number of upsert requests that hit an existing record (conflict resolved).",
+observations_upsert_conflicts_total = Counter(
+    name="pipeline_observations_upsert_conflicts_total",
+    documentation="Number of upsert requests that hit an existing observation (conflict resolved).",
     labelnames=["mode"],
 )
 """Incremented when upsert detects a (source, timestamp) conflict.
@@ -94,15 +94,15 @@ Usage::
 
 batch_size_histogram = Histogram(
     name="pipeline_batch_insert_size",
-    documentation="Distribution of batch insert sizes (number of records per /batch request).",
+    documentation="Distribution of batch insert sizes (number of observations per /batch request).",
     buckets=[1, 5, 10, 25, 50, 100, 250, 500, 1000],
 )
-"""Observe the batch size on every POST /api/v1/records/batch call.
+"""Observe the batch size on every POST /api/v1/observations/batch call.
 
 Usage::
 
     from services.ingestor.metrics import batch_size_histogram
-    batch_size_histogram.observe(len(records))
+    batch_size_histogram.observe(len(observations))
 """
 
 enrich_duration_seconds = Histogram(
@@ -119,10 +119,10 @@ enrich_duration_seconds = Histogram(
 
 cache_hits_total = Counter(
     name="pipeline_cache_hits_total",
-    documentation="Number of successful cache hits (record retrieved from cache).",
+    documentation="Number of successful cache hits (observation retrieved from cache).",
     labelnames=["operation"],
 )
-"""Incremented when cache.get_record() returns a cached value.
+"""Incremented when cache.get_observation() returns a cached value.
 
 Labels:
   operation: "get" | "list" (currently only "get" in use)
@@ -130,10 +130,10 @@ Labels:
 
 cache_misses_total = Counter(
     name="pipeline_cache_misses_total",
-    documentation="Number of cache misses (record not in cache, fetched from DB).",
+    documentation="Number of cache misses (observation not in cache, fetched from DB).",
     labelnames=["operation"],
 )
-"""Incremented when cache.get_record() returns None (cache miss).
+"""Incremented when cache.get_observation() returns None (cache miss).
 
 Labels:
   operation: "get" | "list" (currently only "get" in use)

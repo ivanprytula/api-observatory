@@ -12,7 +12,7 @@ Dependencies:
   - app/fetch.py (fetch_from_external_api, fetch_with_retry)
 
 Run only E2E tests:
-    uv run pytest tests/integration/records/test_e2e_fetch.py -v
+    uv run pytest tests/integration/observations/test_e2e_fetch.py -v
 
 Run all tests including E2E (normally skipped):
     uv run pytest -v -m e2e

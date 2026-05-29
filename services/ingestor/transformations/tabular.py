@@ -31,7 +31,7 @@ class TabularPreviewResult:
     backend_used: str
     row_count: int
     columns: list[str]
-    records: list[dict[str, Any]]
+    observations: list[dict[str, Any]]
     numeric_summaries: list[NumericSummary]
     recommendation: str
     truncated: bool
@@ -53,7 +53,7 @@ class TabularETLEngine:
     def preview(
         *,
         backend: ETLBackend,
-        records: list[dict[str, Any]],
+        observations: list[dict[str, Any]],
         select_columns: list[str] | None = None,
         rename_columns: dict[str, str] | None = None,
         filter_equals: dict[str, Any] | None = None,
@@ -73,7 +73,7 @@ class TabularETLEngine:
         if normalized_backend == "polars":
             return TabularETLEngine._preview_with_polars(
                 backend_requested=normalized_backend,
-                records=records,
+                observations=observations,
                 select_columns=select_columns,
                 rename_columns=rename_columns,
                 filter_equals=filter_equals,
@@ -85,7 +85,7 @@ class TabularETLEngine:
         if normalized_backend == "pandas":
             return TabularETLEngine._preview_with_pandas(
                 backend_requested=normalized_backend,
-                records=records,
+                observations=observations,
                 select_columns=select_columns,
                 rename_columns=rename_columns,
                 filter_equals=filter_equals,
@@ -100,7 +100,7 @@ class TabularETLEngine:
     def _preview_with_polars(
         *,
         backend_requested: str,
-        records: list[dict[str, Any]],
+        observations: list[dict[str, Any]],
         select_columns: list[str] | None,
         rename_columns: dict[str, str] | None,
         filter_equals: dict[str, Any] | None,
@@ -109,7 +109,7 @@ class TabularETLEngine:
         numeric_fields: list[str] | None,
         preview_limit: int,
     ) -> TabularPreviewResult:
-        frame = pl.from_dicts(records)
+        frame = pl.from_dicts(observations)
         frame = _apply_polars_ops(
             frame,
             select_columns=select_columns,
@@ -126,7 +126,7 @@ class TabularETLEngine:
             backend_used="polars",
             row_count=row_count,
             columns=preview.columns,
-            records=preview.to_dicts(),
+            observations=preview.to_dicts(),
             numeric_summaries=numeric_summaries,
             recommendation=(
                 "Polars is the default production ETL backend for predictable memory use "
@@ -139,7 +139,7 @@ class TabularETLEngine:
     def _preview_with_pandas(
         *,
         backend_requested: str,
-        records: list[dict[str, Any]],
+        observations: list[dict[str, Any]],
         select_columns: list[str] | None,
         rename_columns: dict[str, str] | None,
         filter_equals: dict[str, Any] | None,
@@ -148,7 +148,7 @@ class TabularETLEngine:
         numeric_fields: list[str] | None,
         preview_limit: int,
     ) -> TabularPreviewResult:
-        frame = pd.DataFrame.from_records(records)
+        frame = pd.DataFrame.from_observations(observations)
         frame = _apply_pandas_ops(
             frame,
             select_columns=select_columns,
@@ -160,13 +160,15 @@ class TabularETLEngine:
         numeric_summaries = _summarize_pandas(frame, numeric_fields or [])
         row_count = len(frame.index)
         preview = frame.head(preview_limit)
-        sanitized_records = preview.where(pd.notna(preview), None).to_dict("records")
+        sanitized_observations = preview.where(pd.notna(preview), None).to_dict(
+            "observations"
+        )
         return TabularPreviewResult(
             backend_requested=backend_requested,
             backend_used="pandas",
             row_count=row_count,
             columns=list(preview.columns),
-            records=sanitized_records,
+            observations=sanitized_observations,
             numeric_summaries=numeric_summaries,
             recommendation=(
                 "Pandas remains available for compatibility and notebook workflows, but "

@@ -9,47 +9,47 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import services.ingestor.vector_search as vector_search
-from services.ingestor.api_schemas.records import RecordRequest
-from services.ingestor.repositories import records as crud
+from services.ingestor.api_schemas.observations import ObservationRequest
+from services.ingestor.repositories import observations as crud
 
 
 @pytest.mark.integration
-async def test_vector_search_index_records_endpoint(
+async def test_vector_search_index_observations_endpoint(
     client: AsyncClient,
     db: AsyncSession,
-    record_timestamp,
+    observation_timestamp,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    record = await crud.create_record(
+    observation = await crud.create_observation(
         db,
-        RecordRequest(
+        ObservationRequest(
             source="vector-index",
-            timestamp=record_timestamp,
+            timestamp=observation_timestamp,
             data={"summary": "hello vector"},
             tags=["semantic"],
         ),
     )
 
     async def _fake_index(
-        records: list[Any], collection: str | None = None
+        observations: list[Any], collection: str | None = None
     ) -> dict[str, Any]:
-        assert len(records) == 1
-        assert records[0].id == record.id
-        return {"indexed_count": 1, "collection": collection or "records"}
+        assert len(observations) == 1
+        assert observations[0].id == observation.id
+        return {"indexed_count": 1, "collection": collection or "observations"}
 
-    monkeypatch.setattr(vector_search, "index_record_documents", _fake_index)
+    monkeypatch.setattr(vector_search, "index_observation_documents", _fake_index)
 
     response = await client.post(
-        "/api/v1/vector-search/index/records",
-        json={"record_ids": [record.id, 99999]},
+        "/api/v1/vector-search/index/observations",
+        json={"observation_ids": [observation.id, 99999]},
     )
 
     assert response.status_code == 200
     body = response.json()
     assert body["requested_count"] == 2
     assert body["indexed_count"] == 1
-    assert body["missing_record_ids"] == [99999]
-    assert body["collection"] == "records"
+    assert body["missing_observation_ids"] == [99999]
+    assert body["collection"] == "observations"
 
 
 @pytest.mark.integration
@@ -63,7 +63,7 @@ async def test_vector_search_query_endpoint(
         collection: str | None = None,
         filters: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        assert query == "find alpha records"
+        assert query == "find alpha observations"
         assert top_k == 3
         assert filters == {"must": [{"key": "source", "match": "vector-index"}]}
         return {
@@ -78,12 +78,12 @@ async def test_vector_search_query_endpoint(
             "query": query,
         }
 
-    monkeypatch.setattr(vector_search, "search_record_documents", _fake_search)
+    monkeypatch.setattr(vector_search, "search_observation_documents", _fake_search)
 
     response = await client.post(
         "/api/v1/vector-search/query",
         json={
-            "query": "find alpha records",
+            "query": "find alpha observations",
             "top_k": 3,
             "filters": {"must": [{"key": "source", "match": "vector-index"}]},
         },
@@ -92,7 +92,7 @@ async def test_vector_search_query_endpoint(
     assert response.status_code == 200
     body = response.json()
     assert body["count"] == 1
-    assert body["collection"] == "records"
+    assert body["collection"] == "observations"
     assert body["results"][0]["id"] == 7
 
 
@@ -115,39 +115,44 @@ async def test_vector_search_health_endpoint(
 
 
 @pytest.mark.integration
-async def test_vector_search_index_recent_records_endpoint(
+async def test_vector_search_index_recent_observations_endpoint(
     client: AsyncClient,
     db: AsyncSession,
-    record_timestamp,
+    observation_timestamp,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    older = await crud.create_record(
+    older = await crud.create_observation(
         db,
-        RecordRequest(
+        ObservationRequest(
             source="vector-recent",
-            timestamp=record_timestamp,
+            timestamp=observation_timestamp,
             data={"summary": "older"},
             tags=["semantic"],
         ),
     )
-    newer = await crud.create_record(
+    newer = await crud.create_observation(
         db,
-        RecordRequest(
+        ObservationRequest(
             source="vector-recent",
-            timestamp=record_timestamp.replace(hour=record_timestamp.hour + 1),
+            timestamp=observation_timestamp.replace(
+                hour=observation_timestamp.hour + 1
+            ),
             data={"summary": "newer"},
             tags=["semantic"],
         ),
     )
 
     async def _fake_index(
-        records: list[Any], collection: str | None = None
+        observations: list[Any], collection: str | None = None
     ) -> dict[str, Any]:
-        # Recent indexing should return latest records first.
-        assert [record.id for record in records] == [newer.id]
-        return {"indexed_count": len(records), "collection": collection or "records"}
+        # Recent indexing should return latest observations first.
+        assert [observation.id for observation in observations] == [newer.id]
+        return {
+            "indexed_count": len(observations),
+            "collection": collection or "observations",
+        }
 
-    monkeypatch.setattr(vector_search, "index_record_documents", _fake_index)
+    monkeypatch.setattr(vector_search, "index_observation_documents", _fake_index)
 
     response = await client.post(
         "/api/v1/vector-search/index/recent",
@@ -158,8 +163,8 @@ async def test_vector_search_index_recent_records_endpoint(
     body = response.json()
     assert body["requested_count"] == 1
     assert body["indexed_count"] == 1
-    assert body["missing_record_ids"] == []
-    assert body["collection"] == "records"
+    assert body["missing_observation_ids"] == []
+    assert body["collection"] == "observations"
 
     # Keep local references used to satisfy linting for setup data intent.
     assert older.id != newer.id

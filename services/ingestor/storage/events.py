@@ -41,11 +41,11 @@ async def create_processed_event(
 
     Args:
         session: Active async database session.
-        kafka_topic: Topic this event came from (e.g., "records.events").
+        kafka_topic: Topic this event came from (e.g., "observations.events").
         kafka_partition: Partition number.
         kafka_offset: Byte offset in the partition.
         idempotency_key: Unique key for deduplication (usually event_id or hash).
-        event_type: Event type string (e.g., "record.created").
+        event_type: Event type string (e.g., "observation.created").
         payload: JSON event data.
 
     Returns:

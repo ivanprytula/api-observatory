@@ -37,7 +37,7 @@ class ApiKeyCreate(BaseModel):
             "example": {
                 "name": "ci-read-key",
                 "tenant_id": 1,
-                "scopes": ["records:read", "sources:read"],
+                "scopes": ["observations:read", "sources:read"],
                 "expires_at": None,
             }
         }

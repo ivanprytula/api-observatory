@@ -19,7 +19,7 @@ from services.ingestor.main import app
 
 
 _BACKGROUND_BATCH = {
-    "records": [
+    "observations": [
         {
             "source": "bg-api-example-1",
             "timestamp": "2024-01-15T10:00:00",

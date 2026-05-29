@@ -165,48 +165,48 @@ class TestEnvironmentVariableOverrides:
 
 
 # ---------------------------------------------------------------------------
-# Record Fixtures Behavior
+# Observation Fixtures Behavior
 # ---------------------------------------------------------------------------
 @pytest.mark.integration
-class TestRecordFixtures:
-    """Record fixtures create predictable test data."""
+class TestObservationFixtures:
+    """Observation fixtures create predictable test data."""
 
-    async def test_created_record_fixture_produces_valid_record(
-        self, created_record: dict
+    async def test_created_observation_fixture_produces_valid_observation(
+        self, created_observation: dict
     ) -> None:
-        """created_record fixture produces a valid record with expected fields."""
-        assert "id" in created_record
-        assert "source" in created_record
-        assert isinstance(created_record["id"], int)
-        assert isinstance(created_record["source"], str)
+        """created_observation fixture produces a valid observation with expected fields."""
+        assert "id" in created_observation
+        assert "source" in created_observation
+        assert isinstance(created_observation["id"], int)
+        assert isinstance(created_observation["source"], str)
         # raw_data field should be present (API call response)
-        assert "raw_data" in created_record or "data" in created_record
+        assert "raw_data" in created_observation or "data" in created_observation
 
-    async def test_created_records_fixture_produces_multiple(
-        self, created_records: list[dict]
+    async def test_created_observations_fixture_produces_multiple(
+        self, created_observations: list[dict]
     ) -> None:
-        """created_records fixture produces exactly 3 records."""
-        assert len(created_records) == 3
+        """created_observations fixture produces exactly 3 observations."""
+        assert len(created_observations) == 3
 
-        # Each record is valid
-        for record in created_records:
-            assert "id" in record
-            assert record["source"].startswith("source-")
+        # Each observation is valid
+        for observation in created_observations:
+            assert "id" in observation
+            assert observation["source"].startswith("source-")
 
-    async def test_record_payload_fixture_is_mutable_copy(
-        self, record_payload: dict
+    async def test_observation_payload_fixture_is_mutable_copy(
+        self, observation_payload: dict
     ) -> None:
-        """record_payload fixture returns a mutable copy."""
+        """observation_payload fixture returns a mutable copy."""
         # Should be able to modify without affecting original
-        record_payload["source"] = "modified"
-        assert record_payload["source"] == "modified"
+        observation_payload["source"] = "modified"
+        assert observation_payload["source"] == "modified"
 
-    async def test_created_record_has_tags_lowercased(
-        self, created_record: dict
+    async def test_created_observation_has_tags_lowercased(
+        self, created_observation: dict
     ) -> None:
         """Tags are normalized to lowercase (per validator)."""
-        # created_record is from RECORD_API which has ["Stock", "NASDAQ"]
-        tags = created_record["tags"]
+        # created_observation is from OBSERVATION_API which has ["Stock", "NASDAQ"]
+        tags = created_observation["tags"]
         # Pydantic validator should lowercase them
         assert all(tag.islower() for tag in tags)
 

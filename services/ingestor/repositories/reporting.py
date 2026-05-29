@@ -355,9 +355,9 @@ async def get_cost_value_chart(
 
     Three dimensions are computed for each source:
 
-    - **cost_per_record_usd**: total spend divided by the number of
+    - **cost_per_observation_usd**: total spend divided by the number of
       ingestion calls (snapshots) that did *not* produce a breaking drift
-      event.  Breaking calls still cost money but deliver no usable record.
+      event.  Breaking calls still cost money but deliver no usable observation.
     - **cost_per_insight_usd**: total spend divided by the number of drift
       events generated — each event is one actionable schema-change insight.
     - Team rollups aggregate both dimensions across all sources belonging
@@ -414,7 +414,7 @@ async def get_cost_value_chart(
         .all()
     )
 
-    # Index: snapshot_ids that produced a breaking event (cost but no good record).
+    # Index: snapshot_ids that produced a breaking event (cost but no good observation).
     breaking_snapshot_ids: set[int] = {
         event.current_snapshot_id
         for event in drift_events
@@ -437,15 +437,15 @@ async def get_cost_value_chart(
         breaking_calls = sum(
             1 for s in source_snapshots if s.id in breaking_snapshot_ids
         )
-        successful_records = total_calls - breaking_calls
+        successful_observations = total_calls - breaking_calls
         insights = insights_by_source.get(source.id, 0)
 
         unit_cost = source.cost_per_call_usd or 0.0
         total_cost = round(unit_cost * total_calls, 6)
 
-        cost_per_record: float | None = None
-        if successful_records > 0 and total_cost > 0:
-            cost_per_record = round(total_cost / successful_records, 6)
+        cost_per_observation: float | None = None
+        if successful_observations > 0 and total_cost > 0:
+            cost_per_observation = round(total_cost / successful_observations, 6)
 
         cost_per_insight: float | None = None
         if insights > 0 and total_cost > 0:
@@ -459,9 +459,9 @@ async def get_cost_value_chart(
                 cost_per_call_usd=unit_cost,
                 total_calls=total_calls,
                 total_cost_usd=total_cost,
-                successful_records=successful_records,
+                successful_observations=successful_observations,
                 insights_generated=insights,
-                cost_per_record_usd=cost_per_record,
+                cost_per_observation_usd=cost_per_observation,
                 cost_per_insight_usd=cost_per_insight,
             )
         )

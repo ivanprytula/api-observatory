@@ -1,13 +1,13 @@
 from typing import TypedDict
 
-from services.ingestor.api_schemas.records import RecordClassification
+from services.ingestor.api_schemas.observations import ObservationClassification
 
 
 class AgentState(TypedDict):
-    record_id: int
-    record: dict
+    observation_id: int
+    observation: dict
     rag_context: str
-    classification: RecordClassification | None
+    classification: ObservationClassification | None
     analysis_depth: str  # "standard" | "deep"
     result: str
     error: str | None

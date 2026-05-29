@@ -21,7 +21,7 @@ class TestAuthorizationPolicy:
                 action="api_key_scope_guard",
                 principal_type="api_key",
                 scopes={"admin"},
-                required_scopes={"records:write"},
+                required_scopes={"observations:write"},
             )
         )
 
@@ -33,8 +33,8 @@ class TestAuthorizationPolicy:
             AuthorizationInput(
                 action="api_key_scope_guard",
                 principal_type="api_key",
-                scopes={"records:read"},
-                required_scopes={"records:write"},
+                scopes={"observations:read"},
+                required_scopes={"observations:write"},
             )
         )
 

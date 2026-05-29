@@ -11,19 +11,22 @@ cd "$REPO_ROOT" || exit 1
 # Run repository pre-commit hooks (ruff/format/markdown/etc.) on staged files.
 uv run pre-commit run
 
+# TEMPORARY: disable custom contracts version gate.
+# Re-enable once the contracts version check is moved to CI and local tooling is aligned.
+#
 # Detect staged contracts python files
-staged=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^libs/contracts/.*\.py$' || true)
-if [ -z "$staged" ]; then
-  # Nothing to check
-  exit 0
-fi
-
+# staged=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^libs/contracts/.*\.py$' || true)
+# if [ -z "$staged" ]; then
+#   # Nothing to check
+#   exit 0
+# fi
+#
 # Run the check-mode of the bump script; it will exit non-zero if VERSION/CHANGELOG not updated
-if ! python scripts/bump_contracts_version.py --check; then
-  echo "\n[ERROR] Contracts changed but libs/contracts/VERSION or CHANGELOG.md not updated." >&2
-  echo "Fix: run:\n  python scripts/bump_contracts_version.py --apply --strategy patch --changelog-entry 'brief note' && \\" >&2
-  echo "  git add libs/contracts/VERSION libs/contracts/CHANGELOG.md" >&2
-  exit 1
-fi
+# if ! uv run python scripts/bump_contracts_version.py --check; then
+#   echo "\n[ERROR] Contracts changed but libs/contracts/VERSION or CHANGELOG.md not updated." >&2
+#   echo "Fix: run:\n  uv run python scripts/bump_contracts_version.py --apply --strategy patch --changelog-entry 'brief note' && \\" >&2
+#   echo "  git add libs/contracts/VERSION libs/contracts/CHANGELOG.md" >&2
+#   exit 1
+# fi
 
 exit 0

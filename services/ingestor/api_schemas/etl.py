@@ -38,7 +38,7 @@ class ETLPreviewRequest(BaseModel):
             "examples": [
                 {
                     "backend": "polars",
-                    "records": [
+                    "observations": [
                         {"provider": "alpha", "latency_ms": 110, "status": "ok"},
                         {"provider": "beta", "latency_ms": 190, "status": "warn"},
                     ],
@@ -56,10 +56,10 @@ class ETLPreviewRequest(BaseModel):
         default="polars",
         description="Requested ETL backend. Supported: polars, pandas, dask.",
     )
-    records: list[dict[str, Any]] = Field(
+    observations: list[dict[str, Any]] = Field(
         ...,
         min_length=1,
-        description="Small in-memory batch of records used for ETL preview execution.",
+        description="Small in-memory batch of observations used for ETL preview execution.",
     )
     rename_columns: dict[str, str] | None = Field(
         default=None,
@@ -101,7 +101,7 @@ class ETLPreviewResponse(BaseModel):
     columns: list[str] = Field(
         ..., description="Ordered output columns after ETL steps."
     )
-    records: list[dict[str, Any]] = Field(
+    observations: list[dict[str, Any]] = Field(
         ..., description="Preview rows after ETL operations have been applied."
     )
     numeric_summaries: list[NumericFieldSummary] = Field(

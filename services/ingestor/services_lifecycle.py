@@ -116,18 +116,18 @@ async def _warm_list_cache() -> None:
     try:
         from sqlalchemy import func, select, text
 
-        from services.ingestor.cache import set_records_list
+        from services.ingestor.cache import set_observations_list
         from services.ingestor.constants import (
             CACHE_WARM_TOP_N_SOURCES,
             DEFAULT_PAGE_SIZE,
         )
         from services.ingestor.database import AsyncSessionLocal
-        from services.ingestor.models import Record
+        from services.ingestor.models import Observation
 
         async with AsyncSessionLocal() as session:
             stmt = (
-                select(Record.source, func.count(Record.id).label("cnt"))
-                .group_by(Record.source)
+                select(Observation.source, func.count(Observation.id).label("cnt"))
+                .group_by(Observation.source)
                 .order_by(text("cnt DESC"))
                 .limit(CACHE_WARM_TOP_N_SOURCES)
             )
@@ -139,13 +139,13 @@ async def _warm_list_cache() -> None:
                 async with AsyncSessionLocal() as session:
                     from sqlalchemy import select as sa_select
 
-                    records_result = await session.execute(
-                        sa_select(Record)
-                        .where(Record.source == source)
-                        .order_by(Record.id.desc())
+                    observations_result = await session.execute(
+                        sa_select(Observation)
+                        .where(Observation.source == source)
+                        .order_by(Observation.id.desc())
                         .limit(DEFAULT_PAGE_SIZE)
                     )
-                    page = records_result.scalars().all()
+                    page = observations_result.scalars().all()
                     data = [
                         {
                             "id": r.id,
@@ -154,7 +154,7 @@ async def _warm_list_cache() -> None:
                         }
                         for r in page
                     ]
-                    await set_records_list(
+                    await set_observations_list(
                         source=source, skip=0, limit=DEFAULT_PAGE_SIZE, data=data
                     )
                     logger.info(

@@ -18,9 +18,9 @@ from services.ingestor.transformations.decorators import (
 )
 from services.ingestor.transformations.factory import TransformationPipelineFactory
 from services.ingestor.transformations.strategies import (
-    APIRecordValidator,
-    CSVRecordValidator,
-    JSONRecordValidator,
+    APIObservationValidator,
+    CSVObservationValidator,
+    JSONObservationValidator,
 )
 from services.ingestor.transformations.types import SyncConfig
 
@@ -29,28 +29,28 @@ class TestStrategyPattern:
     """Test validation strategies (Strategy pattern)."""
 
     @pytest.mark.asyncio
-    async def test_csv_validator_valid_record(self) -> None:
-        """CSV validator accepts valid record."""
-        validator = CSVRecordValidator()
-        record = {
+    async def test_csv_validator_valid_observation(self) -> None:
+        """CSV validator accepts valid observation."""
+        validator = CSVObservationValidator()
+        observation = {
             "id": "123",
             "price": "99.99",
             "timestamp": "2024-01-15T10:00:00Z",
         }
-        is_valid, error = await validator.validate(record)
+        is_valid, error = await validator.validate(observation)
         assert is_valid
         assert error is None
 
     @pytest.mark.asyncio
     async def test_csv_validator_missing_field(self) -> None:
-        """CSV validator rejects record with missing field."""
-        validator = CSVRecordValidator()
-        record = {
+        """CSV validator rejects observation with missing field."""
+        validator = CSVObservationValidator()
+        observation = {
             "id": "123",
             "price": "99.99",
             # missing timestamp
         }
-        is_valid, error = await validator.validate(record)
+        is_valid, error = await validator.validate(observation)
         assert not is_valid
         assert error is not None
         assert "Missing required field" in error
@@ -58,32 +58,32 @@ class TestStrategyPattern:
     @pytest.mark.asyncio
     async def test_csv_validator_invalid_price(self) -> None:
         """CSV validator rejects non-numeric price."""
-        validator = CSVRecordValidator()
-        record = {
+        validator = CSVObservationValidator()
+        observation = {
             "id": "123",
             "price": "not-a-number",
             "timestamp": "2024-01-15T10:00:00Z",
         }
-        is_valid, error = await validator.validate(record)
+        is_valid, error = await validator.validate(observation)
         assert not is_valid
         assert error is not None
         assert "numeric" in error.lower()
 
     @pytest.mark.asyncio
-    async def test_json_validator_valid_record(self) -> None:
+    async def test_json_validator_valid_observation(self) -> None:
         """JSON validator accepts dict with id."""
-        validator = JSONRecordValidator()
-        record = {"id": "xyz", "nested": {"field": "value"}}
-        is_valid, error = await validator.validate(record)
+        validator = JSONObservationValidator()
+        observation = {"id": "xyz", "nested": {"field": "value"}}
+        is_valid, error = await validator.validate(observation)
         assert is_valid
         assert error is None
 
     @pytest.mark.asyncio
     async def test_json_validator_missing_id(self) -> None:
-        """JSON validator rejects record without id."""
-        validator = JSONRecordValidator()
-        record = {"field": "value"}
-        is_valid, error = await validator.validate(record)
+        """JSON validator rejects observation without id."""
+        validator = JSONObservationValidator()
+        observation = {"field": "value"}
+        is_valid, error = await validator.validate(observation)
         assert not is_valid
         assert error is not None
         assert "Missing required field" in error
@@ -91,9 +91,9 @@ class TestStrategyPattern:
     @pytest.mark.asyncio
     async def test_api_validator_accepts_any_dict(self) -> None:
         """API validator is permissive (only checks dict not empty)."""
-        validator = APIRecordValidator()
-        record = {"id": "123", "anything": "goes"}
-        is_valid, error = await validator.validate(record)
+        validator = APIObservationValidator()
+        observation = {"id": "123", "anything": "goes"}
+        is_valid, error = await validator.validate(observation)
         assert is_valid
         assert error is None
 
@@ -103,39 +103,39 @@ class TestDecoratorPattern:
 
     @pytest.mark.asyncio
     async def test_validator_transformer_valid(self) -> None:
-        """ValidatorTransformer passes valid record to next."""
-        strategy = CSVRecordValidator()
+        """ValidatorTransformer passes valid observation to next."""
+        strategy = CSVObservationValidator()
         null = NullTransformer()
         validator = ValidatorTransformer(null, strategy)
 
-        record = {
+        observation = {
             "id": "123",
             "price": "99.99",
             "timestamp": "2024-01-15T10:00:00Z",
         }
-        result = await validator.transform(record)
+        result = await validator.transform(observation)
         assert result is not None
         assert result["id"] == "123"
 
     @pytest.mark.asyncio
     async def test_validator_transformer_invalid(self) -> None:
-        """ValidatorTransformer rejects invalid record."""
-        strategy = CSVRecordValidator()
+        """ValidatorTransformer rejects invalid observation."""
+        strategy = CSVObservationValidator()
         null = NullTransformer()
         validator = ValidatorTransformer(null, strategy)
 
-        record = {"id": "123"}  # missing required fields
-        result = await validator.transform(record)
+        observation = {"id": "123"}  # missing required fields
+        result = await validator.transform(observation)
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_deduplicator_transformer_new_record(self) -> None:
-        """DeduplicatorTransformer passes new record to next."""
+    async def test_deduplicator_transformer_new_observation(self) -> None:
+        """DeduplicatorTransformer passes new observation to next."""
         null = NullTransformer()
         dedup = DeduplicatorTransformer(null)
 
-        record1 = {"id": "123", "value": "a"}
-        result1 = await dedup.transform(record1)
+        observation1 = {"id": "123", "value": "a"}
+        result1 = await dedup.transform(observation1)
         assert result1 is not None
 
     @pytest.mark.asyncio
@@ -144,12 +144,12 @@ class TestDecoratorPattern:
         null = NullTransformer()
         dedup = DeduplicatorTransformer(null)
 
-        record = {"id": "123", "value": "a"}
-        result1 = await dedup.transform(record)
+        observation = {"id": "123", "value": "a"}
+        result1 = await dedup.transform(observation)
         assert result1 is not None
 
-        # Same record again
-        result2 = await dedup.transform(record)
+        # Same observation again
+        result2 = await dedup.transform(observation)
         assert result2 is None  # Rejected as duplicate
 
     @pytest.mark.asyncio
@@ -158,8 +158,8 @@ class TestDecoratorPattern:
         null = NullTransformer()
         enricher = EnricherTransformer(null)
 
-        record = {"id": "123", "value": "a"}
-        result = await enricher.transform(record)
+        observation = {"id": "123", "value": "a"}
+        result = await enricher.transform(observation)
 
         assert result is not None
         assert "_ingested_at" in result
@@ -173,15 +173,15 @@ class TestDecoratorPattern:
         null = NullTransformer()
         enricher = EnricherTransformer(null)
         dedup = DeduplicatorTransformer(enricher)
-        validator = ValidatorTransformer(dedup, CSVRecordValidator())
+        validator = ValidatorTransformer(dedup, CSVObservationValidator())
 
-        # Valid record
-        record = {
+        # Valid observation
+        observation = {
             "id": "123",
             "price": "99.99",
             "timestamp": "2024-01-15T10:00:00Z",
         }
-        result = await validator.transform(record)
+        result = await validator.transform(observation)
 
         # Should have passed through all layers
         assert result is not None
@@ -209,12 +209,12 @@ class TestFactoryPattern:
         pipeline = await TransformationPipelineFactory.create(source)
 
         # Pipeline should be able to validate
-        valid_record = {
+        valid_observation = {
             "id": "123",
             "price": "99.99",
             "timestamp": "2024-01-15T10:00:00Z",
         }
-        result = await pipeline.transform(valid_record)
+        result = await pipeline.transform(valid_observation)
         assert result is not None
 
     @pytest.mark.asyncio
@@ -231,8 +231,8 @@ class TestFactoryPattern:
         source = MockSource()
         pipeline = await TransformationPipelineFactory.create(source)
 
-        valid_record = {"id": "123", "nested": "value"}
-        result = await pipeline.transform(valid_record)
+        valid_observation = {"id": "123", "nested": "value"}
+        result = await pipeline.transform(valid_observation)
         assert result is not None
 
     @pytest.mark.asyncio
@@ -249,12 +249,12 @@ class TestFactoryPattern:
         source = MockSource()
         pipeline = await TransformationPipelineFactory.create(source)
 
-        record = {"id": "123"}
-        result1 = await pipeline.transform(record)
+        observation = {"id": "123"}
+        result1 = await pipeline.transform(observation)
         assert result1 is not None
 
-        # Same record again should be rejected
-        result2 = await pipeline.transform(record)
+        # Same observation again should be rejected
+        result2 = await pipeline.transform(observation)
         assert result2 is None
 
     @pytest.mark.asyncio
@@ -271,8 +271,8 @@ class TestFactoryPattern:
         source = MockSource()
         pipeline = await TransformationPipelineFactory.create(source)
 
-        record = {"id": "123"}
-        result = await pipeline.transform(record)
+        observation = {"id": "123"}
+        result = await pipeline.transform(observation)
 
         assert result is not None
         assert "_ingested_at" in result

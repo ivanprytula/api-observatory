@@ -73,7 +73,7 @@ async def list_signals(
     offset: int | None = Query(
         None,
         ge=0,
-        description="Offset from the first record.",
+        description="Offset from the first observation.",
     ),
 ) -> AbuseSignalListResponse:
     effective_page_size = limit if limit is not None else page_size

@@ -5,7 +5,7 @@ Used for two purposes:
 
 1. **Publishing** (ingestor → Redis) — called by ``events.py`` and ``jobs.py``
    whenever a significant event occurs:
-   - ``type: record.created`` — after a successful DB write
+   - ``type: observation.created`` — after a successful DB write
    - ``type: job.progress``  — from priority-queue job execution steps
 
 2. **Subscribing** (Redis → FastAPI WS) — the WebSocket router subscribes to
@@ -19,7 +19,7 @@ Architecture:
        │
        └─► Redis PUBLISH  "ingestor:events"
                 │
-                ├─► FastAPI WS /ws/records/stream  → Browser
+                ├─► FastAPI WS /ws/observations/stream  → Browser
                 │
                 └─► Django Channels bridge task    → portal WS → Browser
 
@@ -27,7 +27,7 @@ Channel name: ``ingestor:events``  (one channel, multiplexed by ``type`` field).
 
 Message envelope (JSON-serialised):
 
-    {"type": "record.created", "record_id": 1, "source": "...", "ts": "..."}
+    {"type": "observation.created", "observation_id": 1, "source": "...", "ts": "..."}
     {"type": "job.progress",   "job_id": "...", "status": "running",
      "progress": 0.4, "message": "Batch 2/5 complete"}
 
@@ -98,7 +98,7 @@ async def publish_event(event_type: str, payload: dict[str, Any]) -> None:
     pub/sub failure.
 
     Args:
-        event_type: Discriminator string — ``"record.created"`` or
+        event_type: Discriminator string — ``"observation.created"`` or
             ``"job.progress"``.  Clients use this field to route messages.
         payload:    Event-specific fields merged into the envelope.
     """
@@ -121,16 +121,16 @@ async def publish_event(event_type: str, payload: dict[str, Any]) -> None:
         )
 
 
-async def publish_record_created(record_id: int, source: str) -> None:
-    """Convenience wrapper — publish a ``record.created`` event.
+async def publish_observation_created(observation_id: int, source: str) -> None:
+    """Convenience wrapper — publish a ``observation.created`` event.
 
     Args:
-        record_id: Primary key of the newly created record.
-        source:    Source identifier for the record.
+        observation_id: Primary key of the newly created observation.
+        source:    Source identifier for the observation.
     """
     await publish_event(
-        "record.created",
-        {"record_id": record_id, "source": source},
+        "observation.created",
+        {"observation_id": observation_id, "source": source},
     )
 
 
@@ -212,7 +212,7 @@ async def subscribe_events() -> AsyncGenerator[dict[str, Any]]:
 
     Yields:
         Parsed event envelope dict, e.g.
-        ``{"type": "record.created", "record_id": 1, ...}``.
+        ``{"type": "observation.created", "observation_id": 1, ...}``.
 
     Note:
         If Redis is not configured (``settings.redis_enabled`` is False) the

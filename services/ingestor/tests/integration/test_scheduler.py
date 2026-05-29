@@ -257,7 +257,7 @@ class TestHandlerWrapper:
 
     @pytest.mark.asyncio
     async def test_handler_cancellation_preserves_status(self) -> None:
-        """Test that cancellation doesn't record failure."""
+        """Test that cancellation doesn't observation failure."""
 
         async def cancellable_handler(db: AsyncSession) -> dict:
             await asyncio.sleep(10)
@@ -282,7 +282,7 @@ class TestHandlerWrapper:
             await task
 
         # Cancellation should not update failure count
-        # (handler wrapper preserves CancelledError without recording as failure)
+        # (handler wrapper preserves CancelledError without observationing as failure)
 
 
 # ============================================================================
@@ -303,7 +303,7 @@ class TestJobsRegistry:
         # Should have registered example jobs
         assert len(scheduler._jobs) > 0
         assert "ingest_scheduled_batch_example" in scheduler._jobs
-        assert "archive_old_records" in scheduler._jobs
+        assert "archive_old_observations" in scheduler._jobs
 
     def test_registered_jobs_have_correct_config(self) -> None:
         """Test that registered jobs have correct configuration."""
@@ -316,7 +316,7 @@ class TestJobsRegistry:
         assert "batch" in batch_job.tags
         assert "example" in batch_job.tags
 
-        archive_job = scheduler._jobs["archive_old_records"]
+        archive_job = scheduler._jobs["archive_old_observations"]
         assert archive_job.max_retries == 2
         assert archive_job.timeout_seconds == 600
         assert "archive" in archive_job.tags

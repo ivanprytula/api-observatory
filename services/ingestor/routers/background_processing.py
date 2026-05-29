@@ -6,10 +6,10 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 
-from services.ingestor.api_schemas.records import (
+from services.ingestor.api_schemas.observations import (
     BackgroundBatchSubmitResponse,
     BackgroundTaskStatusResponse,
-    BatchRecordsRequest,
+    BatchObservationsRequest,
 )
 from services.ingestor.constants import API_V1_PREFIX
 from services.ingestor.core.background_workers import BackgroundWorkerPool
@@ -32,7 +32,7 @@ def set_worker_pool(worker_pool: BackgroundWorkerPool | None) -> None:
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def submit_background_batch_ingest(
-    payload: BatchRecordsRequest,
+    payload: BatchObservationsRequest,
 ) -> BackgroundBatchSubmitResponse:
     """Queue a large batch ingest task for worker-pool execution."""
     if _worker_pool is None or not _worker_pool.running:
@@ -42,7 +42,7 @@ async def submit_background_batch_ingest(
         )
 
     try:
-        submitted = await _worker_pool.submit_batch_ingest(payload.records)
+        submitted = await _worker_pool.submit_batch_ingest(payload.observations)
     except RuntimeError as exc:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,

@@ -14,24 +14,24 @@ from services.ingestor.constants import (
     SLIDING_WINDOW_LIMIT,
     TOKEN_BUCKET_CAPACITY,
 )
-from services.ingestor.routers import records_v2
-from tests.shared.payloads import RECORD_API
+from services.ingestor.routers import observations_v2
+from tests.shared.payloads import OBSERVATION_API
 
 
-_RECORD = RECORD_API
-_TOKEN_BUCKET_URL = "/api/v2/records/token-bucket"
-_SLIDING_WINDOW_URL = "/api/v2/records/sliding-window"
+_OBSERVATION = OBSERVATION_API
+_TOKEN_BUCKET_URL = "/api/v2/observations/token-bucket"
+_SLIDING_WINDOW_URL = "/api/v2/observations/sliding-window"
 
 
 @pytest_asyncio.fixture(autouse=True)
 async def _reset_v2_limiters() -> None:
     """Reset module-level rate limiter state before each test."""
-    tb = records_v2._token_bucket
+    tb = observations_v2._token_bucket
     tb._buckets = defaultdict(
         lambda: (float(tb.capacity), __import__("time").monotonic())
     )
 
-    sw = records_v2._sliding_window
+    sw = observations_v2._sliding_window
     sw._windows = defaultdict(deque)
 
 
@@ -39,20 +39,20 @@ async def _reset_v2_limiters() -> None:
 # Token bucket — happy path
 # ---------------------------------------------------------------------------
 @pytest.mark.integration
-async def test_v2_token_bucket_create_record(client: AsyncClient) -> None:
-    """POST to token-bucket endpoint creates a record (201)."""
-    r = await client.post(_TOKEN_BUCKET_URL, json=_RECORD)
+async def test_v2_token_bucket_create_observation(client: AsyncClient) -> None:
+    """POST to token-bucket endpoint creates a observation (201)."""
+    r = await client.post(_TOKEN_BUCKET_URL, json=_OBSERVATION)
 
     assert r.status_code == 201
     body = r.json()
-    assert body["source"] == _RECORD["source"]
+    assert body["source"] == _OBSERVATION["source"]
     assert "id" in body
 
 
 @pytest.mark.integration
 async def test_v2_token_bucket_response_headers(client: AsyncClient) -> None:
     """Token-bucket response includes rate-limit headers."""
-    r = await client.post(_TOKEN_BUCKET_URL, json=_RECORD)
+    r = await client.post(_TOKEN_BUCKET_URL, json=_OBSERVATION)
 
     assert r.status_code == 201
     assert r.headers["X-RateLimit-Strategy"] == "token-bucket"
@@ -65,11 +65,11 @@ async def test_v2_token_bucket_rate_limited(client: AsyncClient) -> None:
     """Exhaust token bucket → 429 with Retry-After header."""
     # Drain the bucket (capacity = TOKEN_BUCKET_CAPACITY)
     for i in range(TOKEN_BUCKET_CAPACITY):
-        r = await client.post(_TOKEN_BUCKET_URL, json=_RECORD)
+        r = await client.post(_TOKEN_BUCKET_URL, json=_OBSERVATION)
         assert r.status_code == 201, f"Request {i + 1} failed unexpectedly"
 
     # Next request should be rate-limited
-    r = await client.post(_TOKEN_BUCKET_URL, json=_RECORD)
+    r = await client.post(_TOKEN_BUCKET_URL, json=_OBSERVATION)
 
     assert r.status_code == 429
     body = r.json()
@@ -91,20 +91,20 @@ async def test_v2_token_bucket_validation_422(client: AsyncClient) -> None:
 # Sliding window — happy path
 # ---------------------------------------------------------------------------
 @pytest.mark.integration
-async def test_v2_sliding_window_create_record(client: AsyncClient) -> None:
-    """POST to sliding-window endpoint creates a record (201)."""
-    r = await client.post(_SLIDING_WINDOW_URL, json=_RECORD)
+async def test_v2_sliding_window_create_observation(client: AsyncClient) -> None:
+    """POST to sliding-window endpoint creates a observation (201)."""
+    r = await client.post(_SLIDING_WINDOW_URL, json=_OBSERVATION)
 
     assert r.status_code == 201
     body = r.json()
-    assert body["source"] == _RECORD["source"]
+    assert body["source"] == _OBSERVATION["source"]
     assert "id" in body
 
 
 @pytest.mark.integration
 async def test_v2_sliding_window_response_headers(client: AsyncClient) -> None:
     """Sliding-window response includes rate-limit headers."""
-    r = await client.post(_SLIDING_WINDOW_URL, json=_RECORD)
+    r = await client.post(_SLIDING_WINDOW_URL, json=_OBSERVATION)
 
     assert r.status_code == 201
     assert r.headers["X-RateLimit-Strategy"] == "sliding-window"
@@ -117,11 +117,11 @@ async def test_v2_sliding_window_rate_limited(client: AsyncClient) -> None:
     """Exhaust sliding window → 429 with Retry-After header."""
     # Fill the window (limit = SLIDING_WINDOW_LIMIT)
     for _ in range(SLIDING_WINDOW_LIMIT):
-        r = await client.post(_SLIDING_WINDOW_URL, json=_RECORD)
+        r = await client.post(_SLIDING_WINDOW_URL, json=_OBSERVATION)
         assert r.status_code == 201
 
     # Next request should be rate-limited
-    r = await client.post(_SLIDING_WINDOW_URL, json=_RECORD)
+    r = await client.post(_SLIDING_WINDOW_URL, json=_OBSERVATION)
 
     assert r.status_code == 429
     body = r.json()
@@ -134,8 +134,8 @@ async def test_v2_sliding_window_rate_limited(client: AsyncClient) -> None:
 @pytest.mark.integration
 async def test_v2_sliding_window_remaining_decrements(client: AsyncClient) -> None:
     """Remaining count decreases with each request."""
-    r1 = await client.post(_SLIDING_WINDOW_URL, json=_RECORD)
-    r2 = await client.post(_SLIDING_WINDOW_URL, json=_RECORD)
+    r1 = await client.post(_SLIDING_WINDOW_URL, json=_OBSERVATION)
+    r2 = await client.post(_SLIDING_WINDOW_URL, json=_OBSERVATION)
 
     remaining_1 = int(r1.headers["X-RateLimit-Remaining"])
     remaining_2 = int(r2.headers["X-RateLimit-Remaining"])

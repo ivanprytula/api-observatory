@@ -53,8 +53,8 @@ _graph = build_graph()
 # Default checkpointer for unit tests and local runs without Redis is MemorySaver.
 # This ensures that checkpoints work out-of-the-box in all test suites and modules.
 memory_saver = MemorySaver()
-record_enrichment_agent = _graph.compile(checkpointer=memory_saver)
-record_enrichment_agent_hitl = _graph.compile(
+observation_enrichment_agent = _graph.compile(checkpointer=memory_saver)
+observation_enrichment_agent_hitl = _graph.compile(
     checkpointer=memory_saver, interrupt_before=["publish"]
 )
 
@@ -76,9 +76,9 @@ def get_agent():
                     "redis_checkpointer_failed",
                     extra={"error": str(e), "fallback": "memory"},
                 )
-                _redis_agent = record_enrichment_agent
+                _redis_agent = observation_enrichment_agent
         else:
-            _redis_agent = record_enrichment_agent
+            _redis_agent = observation_enrichment_agent
     return _redis_agent
 
 
@@ -97,9 +97,9 @@ def get_agent_hitl():
                     "redis_checkpointer_failed",
                     extra={"error": str(e), "fallback": "memory"},
                 )
-                _redis_agent_hitl = record_enrichment_agent_hitl
+                _redis_agent_hitl = observation_enrichment_agent_hitl
         else:
-            _redis_agent_hitl = record_enrichment_agent_hitl
+            _redis_agent_hitl = observation_enrichment_agent_hitl
     return _redis_agent_hitl
 
 

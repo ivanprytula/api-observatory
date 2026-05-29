@@ -1,11 +1,11 @@
 meta {
-  name: Setup — Create Test Record
+  name: Setup — Create Test observation
   type: http
   seq: 0
 }
 
 post {
-  url: {{baseUrl}}/api/v1/records
+  url: {{baseUrl}}/api/v1/observations
   body: json
   auth: none
 }
@@ -28,6 +28,6 @@ assert {
 
 script:post-response {
   if (res.status === 201) {
-    bru.setEnvVar("record_id", res.body.id.toString());
+    bru.setEnvVar("observation_id", res.body.id.toString());
   }
 }

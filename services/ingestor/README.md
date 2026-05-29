@@ -1,6 +1,6 @@
 # ingestor
 
-Write-side CQRS service. Ingests pipeline records into PostgreSQL via a REST API,
+Write-side CQRS service. Ingests pipeline observations into PostgreSQL via a REST API,
 manages scraping jobs, and publishes events to Redpanda.
 
 ## Quick Start
@@ -56,12 +56,12 @@ FastAPI routes (routers/)
 | ------ | --------------------------- | -------------------------------- |
 | GET    | `/readyz`                   | Readiness probe                  |
 | GET    | `/healthz`                  | Liveness probe                   |
-| GET    | `/api/v1/records`           | List records with pagination     |
-| POST   | `/api/v1/records`           | Create a record                  |
-| GET    | `/api/v1/records/{id}`      | Retrieve a record                |
-| PUT    | `/api/v1/records/{id}`      | Update a record                  |
-| DELETE | `/api/v1/records/{id}`      | Delete a record                  |
-| POST   | `/api/v1/records/batch`     | Bulk create up to 1 000 records  |
+| GET    | `/api/v1/observations`           | List observations with pagination     |
+| POST   | `/api/v1/observations`           | Create an observation                  |
+| GET    | `/api/v1/observations/{id}`      | Retrieve an observation                |
+| PUT    | `/api/v1/observations/{id}`      | Update an observation                  |
+| DELETE | `/api/v1/observations/{id}`      | Delete an observation                  |
+| POST   | `/api/v1/observations/batch`     | Bulk create up to 1 000 observations  |
 | POST   | `/api/v1/webhooks/{source}` | Receive an inbound webhook event |
 
 ## Running Tests

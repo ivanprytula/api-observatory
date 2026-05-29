@@ -120,7 +120,7 @@ class SourceProfileListResponse(BaseModel):
     items: list[SourceProfileResponse] = Field(
         ..., description="Page of source profiles."
     )
-    total: int = Field(..., description="Total matching records (unpaged).")
+    total: int = Field(..., description="Total matching observations (unpaged).")
     offset: int = Field(..., description="Current page offset.")
     limit: int = Field(..., description="Page size used.")
 

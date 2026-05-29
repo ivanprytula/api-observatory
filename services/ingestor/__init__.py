@@ -1,4 +1,4 @@
-"""Ingestor service — write-side CQRS, record ingestion and Postgres owner.
+"""Ingestor service — write-side CQRS, observation ingestion and Postgres owner.
 
 Entry point: ``uvicorn ingestor.main:app``
 
@@ -8,6 +8,6 @@ Key submodules:
 - models: SQLAlchemy 2.0 ORM (Mapped[T] style)
 - schemas: Pydantic v2 request/response schemas
 - database: engine, sessionmaker, get_db dependency
-- cache: Redis single-record and list cache, distributed lock
+- cache: Redis single-observation and list cache, distributed lock
 - jobs: APScheduler background jobs
 """

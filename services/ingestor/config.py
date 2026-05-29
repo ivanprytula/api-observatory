@@ -332,7 +332,7 @@ class Settings(BaseSettings):
 
     vector_search_collection: str = Field(
         default=VECTOR_SEARCH_DEFAULT_COLLECTION,
-        description="Default inference collection used for semantic record search.",
+        description="Default inference collection used for semantic observation search.",
     )
 
     vector_search_http_timeout_seconds: int = Field(
@@ -351,11 +351,11 @@ class Settings(BaseSettings):
     # ============ LLM Integration (Phase 2) ============
     openai_enabled: bool = Field(
         default=False,
-        description="Enable OpenAI-based record analysis. Requires OPENAI_API_KEY.",
+        description="Enable OpenAI-based observation analysis. Requires OPENAI_API_KEY.",
     )
     openai_api_key: str | None = Field(
         default=None,
-        description="OpenAI API key for record analysis.",
+        description="OpenAI API key for observation analysis.",
     )
     openai_model: str = Field(
         default="gpt-4o-mini",

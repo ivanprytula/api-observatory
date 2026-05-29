@@ -17,14 +17,14 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from libs.platform.retry import IdempotencyKeyTracker
-from services.ingestor.api_schemas.records import RecordRequest
+from services.ingestor.api_schemas.observations import ObservationRequest
 from services.ingestor.jobs import (
-    archive_old_records,
+    archive_old_observations,
     ingest_api_batch,
     ingest_api_single,
     ingest_scheduled_batch_example,
 )
-from services.ingestor.models import Record
+from services.ingestor.models import Observation
 
 
 # ============================================================================
@@ -94,10 +94,10 @@ class TestApiIngestion:
 
     @pytest.mark.asyncio
     async def test_ingest_api_single_success(self) -> None:
-        """Test single record ingestion succeeds."""
+        """Test single observation ingestion succeeds."""
         mock_db = AsyncMock(spec=AsyncSession)
 
-        test_record = Record(
+        test_observation = Observation(
             id=1,
             source="test_source",
             timestamp=datetime.now(UTC),
@@ -106,11 +106,11 @@ class TestApiIngestion:
         )
 
         with patch(
-            "services.ingestor.jobs.crud.create_record", new_callable=AsyncMock
+            "services.ingestor.jobs.crud.create_observation", new_callable=AsyncMock
         ) as mock_create:
-            mock_create.return_value = test_record
+            mock_create.return_value = test_observation
 
-            request = RecordRequest(
+            request = ObservationRequest(
                 source="test_source",
                 timestamp=datetime.now(UTC),
                 data={"test": "data"},
@@ -119,19 +119,19 @@ class TestApiIngestion:
 
             result = await ingest_api_single(mock_db, request)
 
-            assert result == test_record
+            assert result == test_observation
             mock_create.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_ingest_api_single_with_idempotency(self) -> None:
-        """Test single record ingestion with idempotency key."""
+        """Test single observation ingestion with idempotency key."""
         mock_db = AsyncMock(spec=AsyncSession)
 
         with patch("services.ingestor.jobs._dedup_tracker") as mock_tracker:
             # Simulate duplicate
             mock_tracker.is_duplicate.return_value = True
 
-            request = RecordRequest(
+            request = ObservationRequest(
                 source="test_source",
                 timestamp=datetime.now(UTC),
                 data={"test": "data"},
@@ -150,8 +150,8 @@ class TestApiIngestion:
         """Test batch ingestion succeeds."""
         mock_db = AsyncMock(spec=AsyncSession)
 
-        mock_records = [
-            Record(
+        mock_observations = [
+            Observation(
                 id=i,
                 source="test_source",
                 timestamp=datetime.now(UTC),
@@ -162,12 +162,13 @@ class TestApiIngestion:
         ]
 
         with patch(
-            "services.ingestor.jobs.crud.create_records_batch", new_callable=AsyncMock
+            "services.ingestor.jobs.crud.create_observations_batch",
+            new_callable=AsyncMock,
         ) as mock_create:
-            mock_create.return_value = mock_records
+            mock_create.return_value = mock_observations
 
             requests = [
-                RecordRequest(
+                ObservationRequest(
                     source="test_source",
                     timestamp=datetime.now(UTC),
                     data={"index": i},
@@ -188,12 +189,13 @@ class TestApiIngestion:
         mock_db = AsyncMock(spec=AsyncSession)
 
         with patch(
-            "services.ingestor.jobs.crud.create_records_batch", new_callable=AsyncMock
+            "services.ingestor.jobs.crud.create_observations_batch",
+            new_callable=AsyncMock,
         ) as mock_create:
             mock_create.side_effect = ValueError("DB error")
 
             requests = [
-                RecordRequest(
+                ObservationRequest(
                     source="test_source",
                     timestamp=datetime.now(UTC),
                     data={"index": i},
@@ -217,7 +219,7 @@ class TestApiIngestion:
             mock_tracker.is_duplicate.return_value = True
 
             requests = [
-                RecordRequest(
+                ObservationRequest(
                     source="test_source",
                     timestamp=datetime.now(UTC),
                     data={"index": i},
@@ -272,12 +274,12 @@ class TestArchiveJob:
     """Test suite for archive job."""
 
     @pytest.mark.asyncio
-    async def test_archive_old_records_template(self) -> None:
+    async def test_archive_old_observations_template(self) -> None:
         """Test archive job template (placeholder)."""
         mock_db = AsyncMock(spec=AsyncSession)
 
         # Archive job is a template placeholder for now
-        result = await archive_old_records(mock_db)
+        result = await archive_old_observations(mock_db)
 
         # Should return dict with expected keys
         assert isinstance(result, dict)

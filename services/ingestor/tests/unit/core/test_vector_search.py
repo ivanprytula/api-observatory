@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 import services.ingestor.vector_search as vector_search
-from services.ingestor.models import Record
+from services.ingestor.models import Observation
 
 
 class _FakeResponse:
@@ -44,8 +44,8 @@ class _FakeHttpClient:
         return _FakeResponse({"status": "ok", "qdrant_connected": True})
 
 
-def _build_record() -> Record:
-    return Record(
+def _build_observation() -> Observation:
+    return Observation(
         id=42,
         source="vector.example",
         timestamp=datetime(2026, 4, 23, 12, 0, 0),
@@ -55,10 +55,10 @@ def _build_record() -> Record:
     )
 
 
-def test_build_record_search_document_contains_searchable_text() -> None:
-    record = _build_record()
+def test_build_observation_search_document_contains_searchable_text() -> None:
+    observation = _build_observation()
 
-    document = vector_search.build_record_search_document(record)
+    document = vector_search.build_observation_search_document(observation)
 
     assert document["id"] == 42
     assert "source: vector.example" in document["text"]
@@ -66,7 +66,7 @@ def test_build_record_search_document_contains_searchable_text() -> None:
     assert document["metadata"]["tags"] == ["alpha", "beta"]
 
 
-async def test_index_record_documents_calls_inference(
+async def test_index_observation_documents_calls_inference(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client = _FakeHttpClient()
@@ -76,7 +76,7 @@ async def test_index_record_documents_calls_inference(
 
     monkeypatch.setattr(vector_search, "get_http_client", _fake_get_http_client)
 
-    result = await vector_search.index_record_documents([_build_record()])
+    result = await vector_search.index_observation_documents([_build_observation()])
 
     assert result["indexed_count"] == 1
     assert client.calls[0]["url"].endswith("/index")

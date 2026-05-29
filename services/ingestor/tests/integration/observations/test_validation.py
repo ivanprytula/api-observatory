@@ -10,11 +10,11 @@ import pytest
 from httpx import AsyncClient
 from pydantic import ValidationError
 
-from services.ingestor.api_schemas.records import RecordRequest
-from tests.shared.payloads import RECORD_API
+from services.ingestor.api_schemas.observations import ObservationRequest
+from tests.shared.payloads import OBSERVATION_API
 
 
-_RECORD = RECORD_API
+_OBSERVATION = OBSERVATION_API
 
 
 # ---------------------------------------------------------------------------
@@ -23,10 +23,10 @@ _RECORD = RECORD_API
 @pytest.mark.integration
 async def test_validation_missing_required_field_source(client: AsyncClient) -> None:
     """Missing source (required field) → 422."""
-    bad = {**_RECORD}
+    bad = {**_OBSERVATION}
     del bad["source"]
 
-    r = await client.post("/api/v1/records", json=bad)
+    r = await client.post("/api/v1/observations", json=bad)
 
     assert r.status_code == 422
     body = r.json()
@@ -39,10 +39,10 @@ async def test_validation_missing_required_field_source(client: AsyncClient) -> 
 @pytest.mark.integration
 async def test_validation_missing_required_field_data(client: AsyncClient) -> None:
     """Missing data (required field) → 422."""
-    bad = {**_RECORD}
+    bad = {**_OBSERVATION}
     del bad["data"]
 
-    r = await client.post("/api/v1/records", json=bad)
+    r = await client.post("/api/v1/observations", json=bad)
 
     assert r.status_code == 422
 
@@ -50,7 +50,7 @@ async def test_validation_missing_required_field_data(client: AsyncClient) -> No
 @pytest.mark.integration
 async def test_validation_empty_source_string(client: AsyncClient) -> None:
     """Empty source (violates min_length=1) → 422."""
-    r = await client.post("/api/v1/records", json={**_RECORD, "source": ""})
+    r = await client.post("/api/v1/observations", json={**_OBSERVATION, "source": ""})
 
     assert r.status_code == 422
     body = r.json()
@@ -62,7 +62,9 @@ async def test_validation_source_too_long(client: AsyncClient) -> None:
     """Source exceeds max_length (255) → 422."""
     long_source = "x" * 256
 
-    r = await client.post("/api/v1/records", json={**_RECORD, "source": long_source})
+    r = await client.post(
+        "/api/v1/observations", json={**_OBSERVATION, "source": long_source}
+    )
 
     assert r.status_code == 422
 
@@ -76,7 +78,9 @@ async def test_validation_source_localhost_rejected(client: AsyncClient) -> None
 
     Week 2 Milestone 5: Domain-specific validation rule.
     """
-    r = await client.post("/api/v1/records", json={**_RECORD, "source": "localhost"})
+    r = await client.post(
+        "/api/v1/observations", json={**_OBSERVATION, "source": "localhost"}
+    )
 
     assert r.status_code == 422
     body = r.json()
@@ -91,7 +95,9 @@ async def test_validation_source_localhost_case_insensitive(
 ) -> None:
     """Localhost validation is case-insensitive."""
     for variant in ["LOCALHOST", "LocalHost", "LoCalHost"]:
-        r = await client.post("/api/v1/records", json={**_RECORD, "source": variant})
+        r = await client.post(
+            "/api/v1/observations", json={**_OBSERVATION, "source": variant}
+        )
         assert r.status_code == 422, f"Failed for source={variant}"
 
 
@@ -101,7 +107,9 @@ async def test_validation_source_127_0_0_1_rejected(client: AsyncClient) -> None
 
     127.0.0.1 is the IPv4 loopback address, same as 'localhost'.
     """
-    r = await client.post("/api/v1/records", json={**_RECORD, "source": "127.0.0.1"})
+    r = await client.post(
+        "/api/v1/observations", json={**_OBSERVATION, "source": "127.0.0.1"}
+    )
 
     assert r.status_code == 422
     body = r.json()
@@ -114,7 +122,9 @@ async def test_validation_source_127_0_0_1_rejected(client: AsyncClient) -> None
 @pytest.mark.integration
 async def test_validation_source_ipv6_loopback_rejected(client: AsyncClient) -> None:
     """IPv6 loopback (::1) is rejected as invalid source."""
-    r = await client.post("/api/v1/records", json={**_RECORD, "source": "::1"})
+    r = await client.post(
+        "/api/v1/observations", json={**_OBSERVATION, "source": "::1"}
+    )
 
     assert r.status_code == 422
     body = r.json()
@@ -126,9 +136,11 @@ async def test_validation_source_0_0_0_0_rejected(client: AsyncClient) -> None:
     """IPv4 wildcard (0.0.0.0) is rejected as invalid source.
 
     0.0.0.0 is the 'any address' used for binding servers, not a valid
-    external source for records.
+    external source for observations.
     """
-    r = await client.post("/api/v1/records", json={**_RECORD, "source": "0.0.0.0"})
+    r = await client.post(
+        "/api/v1/observations", json={**_OBSERVATION, "source": "0.0.0.0"}
+    )
 
     assert r.status_code == 422
     body = r.json()
@@ -139,7 +151,7 @@ async def test_validation_source_0_0_0_0_rejected(client: AsyncClient) -> None:
 @pytest.mark.integration
 async def test_validation_source_ipv6_wildcard_rejected(client: AsyncClient) -> None:
     """IPv6 wildcard (::) is rejected as invalid source."""
-    r = await client.post("/api/v1/records", json={**_RECORD, "source": "::"})
+    r = await client.post("/api/v1/observations", json={**_OBSERVATION, "source": "::"})
 
     assert r.status_code == 422
     body = r.json()
@@ -156,8 +168,8 @@ async def test_validation_timestamp_future_rejected(client: AsyncClient) -> None
     Timestamps far in future (2099) should be rejected.
     """
     r = await client.post(
-        "/api/v1/records",
-        json={**_RECORD, "timestamp": "2099-01-01T00:00:00"},
+        "/api/v1/observations",
+        json={**_OBSERVATION, "timestamp": "2099-01-01T00:00:00"},
     )
 
     assert r.status_code == 422
@@ -170,8 +182,8 @@ async def test_validation_timestamp_future_rejected(client: AsyncClient) -> None
 async def test_validation_timestamp_past_accepted(client: AsyncClient) -> None:
     """Past timestamps should be accepted."""
     r = await client.post(
-        "/api/v1/records",
-        json={**_RECORD, "timestamp": "2020-01-01T00:00:00"},
+        "/api/v1/observations",
+        json={**_OBSERVATION, "timestamp": "2020-01-01T00:00:00"},
     )
 
     assert r.status_code == 201
@@ -181,8 +193,8 @@ async def test_validation_timestamp_past_accepted(client: AsyncClient) -> None:
 async def test_validation_timestamp_invalid_format(client: AsyncClient) -> None:
     """Invalid ISO 8601 format → 422."""
     r = await client.post(
-        "/api/v1/records",
-        json={**_RECORD, "timestamp": "not-a-date"},
+        "/api/v1/observations",
+        json={**_OBSERVATION, "timestamp": "not-a-date"},
     )
 
     assert r.status_code == 422
@@ -198,8 +210,8 @@ async def test_validation_tags_normalized_to_lowercase(client: AsyncClient) -> N
     Week 2 Milestone 5: Validators can transform, not just validate.
     """
     r = await client.post(
-        "/api/v1/records",
-        json={**_RECORD, "tags": ["NASDAQ", "Tech", "STOCK"]},
+        "/api/v1/observations",
+        json={**_OBSERVATION, "tags": ["NASDAQ", "Tech", "STOCK"]},
     )
 
     assert r.status_code == 201
@@ -212,8 +224,8 @@ async def test_validation_tags_normalized_to_lowercase(client: AsyncClient) -> N
 async def test_validation_tags_too_many(client: AsyncClient) -> None:
     """Tags exceed max_items (10) → 422."""
     r = await client.post(
-        "/api/v1/records",
-        json={**_RECORD, "tags": [f"tag-{i}" for i in range(11)]},
+        "/api/v1/observations",
+        json={**_OBSERVATION, "tags": [f"tag-{i}" for i in range(11)]},
     )
 
     assert r.status_code == 422
@@ -223,8 +235,8 @@ async def test_validation_tags_too_many(client: AsyncClient) -> None:
 async def test_validation_tags_empty_allowed(client: AsyncClient) -> None:
     """Empty tags list is allowed (default_factory=[])."""
     r = await client.post(
-        "/api/v1/records",
-        json={**_RECORD, "tags": []},
+        "/api/v1/observations",
+        json={**_OBSERVATION, "tags": []},
     )
 
     assert r.status_code == 201
@@ -238,7 +250,7 @@ async def test_validation_tags_empty_allowed(client: AsyncClient) -> None:
 @pytest.mark.integration
 async def test_validation_data_accepts_empty_dict(client: AsyncClient) -> None:
     """Data field can be empty dict."""
-    r = await client.post("/api/v1/records", json={**_RECORD, "data": {}})
+    r = await client.post("/api/v1/observations", json={**_OBSERVATION, "data": {}})
 
     assert r.status_code == 201
     body = r.json()
@@ -255,7 +267,9 @@ async def test_validation_data_accepts_complex_dict(client: AsyncClient) -> None
         "null": None,
         "number": 42.5,
     }
-    r = await client.post("/api/v1/records", json={**_RECORD, "data": complex_data})
+    r = await client.post(
+        "/api/v1/observations", json={**_OBSERVATION, "data": complex_data}
+    )
 
     assert r.status_code == 201
     body = r.json()
@@ -271,7 +285,7 @@ async def test_validation_error_response_structure(client: AsyncClient) -> None:
 
     Pydantic v2 returns standardized validation error format.
     """
-    r = await client.post("/api/v1/records", json={})  # Empty request
+    r = await client.post("/api/v1/observations", json={})  # Empty request
 
     assert r.status_code == 422
     body = r.json()
@@ -296,7 +310,7 @@ async def test_validation_multiple_errors_reported(client: AsyncClient) -> None:
         # data is missing
         "tags": ["VALID"],
     }
-    r = await client.post("/api/v1/records", json=bad_data)
+    r = await client.post("/api/v1/observations", json=bad_data)
 
     assert r.status_code == 422
     body = r.json()
@@ -310,34 +324,34 @@ async def test_validation_multiple_errors_reported(client: AsyncClient) -> None:
 # ---------------------------------------------------------------------------
 @pytest.mark.integration
 async def test_validation_batch_size_minimum(client: AsyncClient) -> None:
-    """Batch with 0 records (MIN_BATCH_SIZE=1) → 422."""
-    r = await client.post("/api/v1/records/batch", json={"records": []})
+    """Batch with 0 observations (MIN_BATCH_SIZE=1) → 422."""
+    r = await client.post("/api/v1/observations/batch", json={"observations": []})
 
     assert r.status_code == 422
 
 
 @pytest.mark.integration
 async def test_validation_batch_size_maximum(client: AsyncClient) -> None:
-    """Batch with >1000 records (MAX_BATCH_SIZE=1000) → 422."""
-    payload = {"records": [_RECORD] * 1001}
+    """Batch with >1000 observations (MAX_BATCH_SIZE=1000) → 422."""
+    payload = {"observations": [_OBSERVATION] * 1001}
 
-    r = await client.post("/api/v1/records/batch", json=payload)
+    r = await client.post("/api/v1/observations/batch", json=payload)
 
     assert r.status_code == 422
 
 
 @pytest.mark.integration
-async def test_validation_batch_validates_each_record(client: AsyncClient) -> None:
-    """If any record in batch is invalid, entire batch is rejected."""
+async def test_validation_batch_validates_each_observation(client: AsyncClient) -> None:
+    """If any observation in batch is invalid, entire batch is rejected."""
     payload = {
-        "records": [
-            _RECORD,  # Valid
-            {**_RECORD, "source": "127.0.0.1"},  # Invalid (loopback IP)
-            _RECORD,  # Would be valid but batch is rejected
+        "observations": [
+            _OBSERVATION,  # Valid
+            {**_OBSERVATION, "source": "127.0.0.1"},  # Invalid (loopback IP)
+            _OBSERVATION,  # Would be valid but batch is rejected
         ]
     }
 
-    r = await client.post("/api/v1/records/batch", json=payload)
+    r = await client.post("/api/v1/observations/batch", json=payload)
 
     assert r.status_code == 422
 
@@ -352,7 +366,9 @@ async def test_validation_error_messages_helpful(client: AsyncClient) -> None:
     Week 2 Milestone 5: "Error messages are helpful"
     """
     # Send localhost
-    r = await client.post("/api/v1/records", json={**_RECORD, "source": "localhost"})
+    r = await client.post(
+        "/api/v1/observations", json={**_OBSERVATION, "source": "localhost"}
+    )
 
     assert r.status_code == 422
     body = r.json()
@@ -371,13 +387,13 @@ async def test_validation_timestamp_tz_aware_utc_stripped(
     client: AsyncClient,
 ) -> None:
     """Tz-aware UTC timestamp is stripped to naive and accepted."""
-    record = RecordRequest(
+    observation = ObservationRequest(
         source="test.example.com",
         timestamp=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
         data={"v": 1},
     )
-    assert record.timestamp.tzinfo is None
-    assert record.timestamp == datetime(2024, 1, 15, 10, 0, 0)
+    assert observation.timestamp.tzinfo is None
+    assert observation.timestamp == datetime(2024, 1, 15, 10, 0, 0)
 
 
 @pytest.mark.integration
@@ -386,12 +402,12 @@ async def test_validation_timestamp_tz_aware_custom_stripped(
 ) -> None:
     """Tz-aware timestamp with arbitrary offset is stripped to naive."""
     ts = datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC)
-    record = RecordRequest(
+    observation = ObservationRequest(
         source="test.example.com",
         timestamp=ts,
         data={"v": 1},
     )
-    assert record.timestamp.tzinfo is None
+    assert observation.timestamp.tzinfo is None
 
 
 @pytest.mark.integration
@@ -401,7 +417,7 @@ async def test_validation_timestamp_future_tz_aware_rejected(
     """Tz-aware future timestamp is rejected after tz-stripping."""
     future_ts = datetime(2099, 1, 1, tzinfo=UTC)
     with pytest.raises(ValidationError, match="future"):
-        RecordRequest(
+        ObservationRequest(
             source="test.example.com",
             timestamp=future_ts,
             data={"v": 1},

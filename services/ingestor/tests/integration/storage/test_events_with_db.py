@@ -24,12 +24,12 @@ class TestEventsWithDB:
         """Insert ProcessedEvent with CRUD function."""
         event, created = await create_processed_event(
             db,
-            kafka_topic="records.events",
+            kafka_topic="observations.events",
             kafka_partition=0,
             kafka_offset=1,
             idempotency_key="insert-test-001",
-            event_type="record.created",
-            payload={"record_id": 1, "action": "create"},
+            event_type="observation.created",
+            payload={"observation_id": 1, "action": "create"},
         )
         assert created is True
         assert event.id is not None
@@ -40,21 +40,21 @@ class TestEventsWithDB:
         # Insert test events
         await create_processed_event(
             db,
-            kafka_topic="records.events",
+            kafka_topic="observations.events",
             kafka_partition=0,
             kafka_offset=2,
             idempotency_key="retrieve-test-001",
-            event_type="record.created",
-            payload={"record_id": 2},
+            event_type="observation.created",
+            payload={"observation_id": 2},
         )
         await create_processed_event(
             db,
-            kafka_topic="records.events",
+            kafka_topic="observations.events",
             kafka_partition=0,
             kafka_offset=3,
             idempotency_key="retrieve-test-002",
-            event_type="record.created",
-            payload={"record_id": 3},
+            event_type="observation.created",
+            payload={"observation_id": 3},
         )
 
         # Retrieve pending events
@@ -66,12 +66,12 @@ class TestEventsWithDB:
         """Update event status from pending → processing → completed."""
         event, _ = await create_processed_event(
             db,
-            kafka_topic="records.events",
+            kafka_topic="observations.events",
             kafka_partition=0,
             kafka_offset=4,
             idempotency_key="update-test-001",
-            event_type="record.created",
-            payload={"record_id": 4},
+            event_type="observation.created",
+            payload={"observation_id": 4},
         )
         assert event.status == "pending"
 
@@ -87,12 +87,12 @@ class TestEventsWithDB:
         """Event can be marked as failed with error details."""
         event, _ = await create_processed_event(
             db,
-            kafka_topic="records.events",
+            kafka_topic="observations.events",
             kafka_partition=0,
             kafka_offset=5,
             idempotency_key="error-test-001",
-            event_type="record.created",
-            payload={"record_id": 5},
+            event_type="observation.created",
+            payload={"observation_id": 5},
         )
 
         # Mark as failed

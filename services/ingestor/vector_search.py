@@ -1,4 +1,4 @@
-"""AI gateway bridge for record indexing and semantic search."""
+"""AI gateway bridge for observation indexing and semantic search."""
 
 from __future__ import annotations
 
@@ -8,45 +8,48 @@ from typing import Any
 
 from services.ingestor.config import settings
 from services.ingestor.fetch import get_http_client
-from services.ingestor.models import Record
+from services.ingestor.models import Observation
 
 
-def build_record_search_document(record: Record) -> dict[str, Any]:
-    """Convert one record into the AI gateway indexing payload."""
-    raw_data_json = json.dumps(record.raw_data, sort_keys=True, default=str)
-    tags_text = ", ".join(record.tags) if record.tags else ""
+def build_observation_search_document(observation: Observation) -> dict[str, Any]:
+    """Convert one observation into the AI gateway indexing payload."""
+    raw_data_json = json.dumps(observation.raw_data, sort_keys=True, default=str)
+    tags_text = ", ".join(observation.tags) if observation.tags else ""
 
     text_parts = [
-        f"source: {record.source}",
-        f"timestamp: {record.timestamp.isoformat()}",
+        f"source: {observation.source}",
+        f"timestamp: {observation.timestamp.isoformat()}",
         f"tags: {tags_text}",
         f"data: {raw_data_json}",
     ]
 
     return {
-        "id": record.id,
+        "id": observation.id,
         "text": "\n".join(text_parts),
         "metadata": {
-            "source": record.source,
-            "timestamp": record.timestamp.isoformat(),
-            "tags": record.tags,
-            "processed": record.processed,
+            "source": observation.source,
+            "timestamp": observation.timestamp.isoformat(),
+            "tags": observation.tags,
+            "processed": observation.processed,
         },
     }
 
 
-async def index_record_documents(
-    records: Sequence[Record],
+async def index_observation_documents(
+    observations: Sequence[Observation],
     collection: str | None = None,
 ) -> dict[str, Any]:
-    """Send record documents to the AI gateway indexing endpoint."""
+    """Send observation documents to the AI gateway indexing endpoint."""
     collection_name = collection or settings.vector_search_collection
     client = await get_http_client()
     response = await client.post(
         f"{settings.inference_url.rstrip('/')}/index",
         json={
             "collection": collection_name,
-            "documents": [build_record_search_document(record) for record in records],
+            "documents": [
+                build_observation_search_document(observation)
+                for observation in observations
+            ],
         },
         timeout=settings.vector_search_http_timeout_seconds,
     )
@@ -58,13 +61,13 @@ async def index_record_documents(
     return body
 
 
-async def search_record_documents(
+async def search_observation_documents(
     query: str,
     top_k: int,
     collection: str | None = None,
     filters: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Query the AI gateway semantic-search endpoint for indexed records."""
+    """Query the AI gateway semantic-search endpoint for indexed observations."""
     collection_name = collection or settings.vector_search_collection
     client = await get_http_client()
     response = await client.post(

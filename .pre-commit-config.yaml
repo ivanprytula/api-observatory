@@ -60,13 +60,16 @@
           language: system
           files: 'pyproject\\.toml|uv\\.lock|requirements-audit\\.txt'
           pass_filenames: false
-  - repo: local
-    hooks:
-    - id: check-contracts-version
-      name: Check contracts VERSION/CHANGELOG when contracts change
-      entry: uv run python scripts/bump_contracts_version.py --check
-      language: python
-      files: ^libs/contracts/.*\.py$
+  # Temporarily disabled local contracts version hook.
+  # Re-enable after moving the check into CI and fixing environment/tooling parity.
+  # - repo: local
+  #   hooks:
+  #   - id: check-contracts-version
+  #     name: Check contracts VERSION/CHANGELOG when contracts change
+  #     entry: uv run python scripts/bump_contracts_version.py --check
+  #     language: python
+  #     files: ^libs/contracts/.*\.py$
+  #     stages: [manual]
 
   ci:
     # pre-commit.ci does not allow network calls

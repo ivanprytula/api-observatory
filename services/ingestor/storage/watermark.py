@@ -26,8 +26,8 @@ class WatermarkManager:
     """Manages sync watermarks (last successful sync timestamps).
 
     Watermarks enable incremental syncs:
-    - First sync: sync all records (watermark = None)
-    - Subsequent syncs: sync records modified since watermark
+    - First sync: sync all observations (watermark = None)
+    - Subsequent syncs: sync observations modified since watermark
     """
 
     def __init__(self, db: AsyncSession):

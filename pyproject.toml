@@ -104,6 +104,7 @@ markers = [
     "unit: Fast, isolated unit tests (no I/O, no DB)",
     "integration: Tests that touch DB/ASGI client",
     "e2e: End-to-end or long-running tests (skipped by default)",
+    "aws: Floci/LocalStack AWS emulator dependent tests",
     "browser: Browser-based tests using Playwright (may require system dependencies)",
     "mongo: MongoDB-dependent tests (skipped if MongoDB unavailable)",
 ]

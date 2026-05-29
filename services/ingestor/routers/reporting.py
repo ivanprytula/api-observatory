@@ -202,7 +202,7 @@ async def get_reporting_cost_value(
     For each source three cost efficiency ratios are computed over the
     selected window:
 
-    - **cost_per_record_usd** — spend divided by successful ingestion calls
+    - **cost_per_observation_usd** — spend divided by successful ingestion calls
       (calls that did not result in a breaking schema drift event).
     - **cost_per_insight_usd** — spend divided by actionable drift events
       generated (each drift event = one schema-change insight).

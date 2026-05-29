@@ -10,7 +10,7 @@ import logging
 from fastapi import APIRouter, HTTPException, status
 
 from services.ingestor import events
-from services.ingestor.api_schemas.records import ScrapeResponse
+from services.ingestor.api_schemas.observations import ScrapeResponse
 from services.ingestor.constants import API_V1_PREFIX
 from services.ingestor.scrapers import ScraperFactory, ScraperTimeoutError
 

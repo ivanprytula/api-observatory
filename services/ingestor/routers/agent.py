@@ -12,9 +12,11 @@ from services.ingestor.agent.graph import (
     get_agent,
     get_agent_hitl,
 )
-from services.ingestor.api_schemas.records import AgentRunResponse
+from services.ingestor.api_schemas.observations import AgentRunResponse
 from services.ingestor.database import get_db
-from services.ingestor.repositories.records import get_record as get_record_op
+from services.ingestor.repositories.observations import (
+    get_observation as get_observation_op,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -26,20 +28,22 @@ class ResumeRequest(BaseModel):
     approve: bool
 
 
-@router.post("/enrich/{record_id}", response_model=AgentRunResponse)
-async def enrich_record(record_id: int, db: AsyncSession = Depends(get_db)):
-    record = await get_record_op(db, record_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Record not found")
+@router.post("/enrich/{observation_id}", response_model=AgentRunResponse)
+async def enrich_observation(observation_id: int, db: AsyncSession = Depends(get_db)):
+    observation = await get_observation_op(db, observation_id)
+    if not observation:
+        raise HTTPException(status_code=404, detail="Observation not found")
 
     run_id = str(uuid.uuid4())
     initial_state = {
-        "record_id": record_id,
-        "record": {
-            "source": record.source,
-            "raw_data": record.raw_data,
-            "tags": record.tags,
-            "timestamp": record.timestamp.isoformat() if record.timestamp else None,
+        "observation_id": observation_id,
+        "observation": {
+            "source": observation.source,
+            "raw_data": observation.raw_data,
+            "tags": observation.tags,
+            "timestamp": observation.timestamp.isoformat()
+            if observation.timestamp
+            else None,
         },
     }
 
@@ -49,7 +53,7 @@ async def enrich_record(record_id: int, db: AsyncSession = Depends(get_db)):
 
     return AgentRunResponse(
         run_id=run_id,
-        record_id=record_id,
+        observation_id=observation_id,
         classification=final_state.get("classification"),
         analysis=final_state.get("result", ""),
         published=True,
@@ -57,20 +61,24 @@ async def enrich_record(record_id: int, db: AsyncSession = Depends(get_db)):
     )
 
 
-@router.post("/enrich/{record_id}/review", response_model=AgentRunResponse)
-async def enrich_record_review(record_id: int, db: AsyncSession = Depends(get_db)):
-    record = await get_record_op(db, record_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Record not found")
+@router.post("/enrich/{observation_id}/review", response_model=AgentRunResponse)
+async def enrich_observation_review(
+    observation_id: int, db: AsyncSession = Depends(get_db)
+):
+    observation = await get_observation_op(db, observation_id)
+    if not observation:
+        raise HTTPException(status_code=404, detail="Observation not found")
 
     run_id = str(uuid.uuid4())
     initial_state = {
-        "record_id": record_id,
-        "record": {
-            "source": record.source,
-            "raw_data": record.raw_data,
-            "tags": record.tags,
-            "timestamp": record.timestamp.isoformat() if record.timestamp else None,
+        "observation_id": observation_id,
+        "observation": {
+            "source": observation.source,
+            "raw_data": observation.raw_data,
+            "tags": observation.tags,
+            "timestamp": observation.timestamp.isoformat()
+            if observation.timestamp
+            else None,
         },
     }
 
@@ -80,7 +88,7 @@ async def enrich_record_review(record_id: int, db: AsyncSession = Depends(get_db
 
     return AgentRunResponse(
         run_id=run_id,
-        record_id=record_id,
+        observation_id=observation_id,
         classification=final_state.get("classification"),
         analysis=final_state.get("result", ""),
         published=False,
@@ -110,7 +118,7 @@ async def resume_run(run_id: str, body: ResumeRequest):
 
     return AgentRunResponse(
         run_id=run_id,
-        record_id=final_state.get("record_id"),
+        observation_id=final_state.get("observation_id"),
         classification=final_state.get("classification"),
         analysis=final_state.get("result", ""),
         published=published,
@@ -118,20 +126,24 @@ async def resume_run(run_id: str, body: ResumeRequest):
     )
 
 
-@router.get("/enrich/{record_id}/stream")
-async def stream_enrich_record(record_id: int, db: AsyncSession = Depends(get_db)):
-    record = await get_record_op(db, record_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Record not found")
+@router.get("/enrich/{observation_id}/stream")
+async def stream_enrich_observation(
+    observation_id: int, db: AsyncSession = Depends(get_db)
+):
+    observation = await get_observation_op(db, observation_id)
+    if not observation:
+        raise HTTPException(status_code=404, detail="Observation not found")
 
     run_id = str(uuid.uuid4())
     initial_state = {
-        "record_id": record_id,
-        "record": {
-            "source": record.source,
-            "raw_data": record.raw_data,
-            "tags": record.tags,
-            "timestamp": record.timestamp.isoformat() if record.timestamp else None,
+        "observation_id": observation_id,
+        "observation": {
+            "source": observation.source,
+            "raw_data": observation.raw_data,
+            "tags": observation.tags,
+            "timestamp": observation.timestamp.isoformat()
+            if observation.timestamp
+            else None,
         },
     }
 
@@ -175,7 +187,7 @@ async def stream_enrich_record(record_id: int, db: AsyncSession = Depends(get_db
 
             done_data = {
                 "run_id": run_id,
-                "record_id": record_id,
+                "observation_id": observation_id,
                 "classification": final_state_vals.get("classification").model_dump()
                 if final_state_vals.get("classification")
                 else None,

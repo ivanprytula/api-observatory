@@ -293,7 +293,7 @@ class UrlSeenStrategy(ABC):
 
     @abstractmethod
     def mark_seen(self, url: str) -> None:
-        """Record that this URL has been requested."""
+        """Observation that this URL has been requested."""
 
     @abstractmethod
     def reset(self) -> None:

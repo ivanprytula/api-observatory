@@ -31,13 +31,13 @@ from services.ingestor.constants import (
     UPSERT_MODE_IDEMPOTENT,
     UPSERT_MODE_STRICT,
     VECTOR_SEARCH_DEFAULT_TOP_K,
-    VECTOR_SEARCH_MAX_RECORD_IDS,
+    VECTOR_SEARCH_MAX_OBSERVATION_IDS,
     VECTOR_SEARCH_MAX_TOP_K,
-    VECTOR_SEARCH_MIN_RECORD_IDS,
+    VECTOR_SEARCH_MIN_OBSERVATION_IDS,
 )
 
 
-class RecordRequest(BaseModel):
+class ObservationRequest(BaseModel):
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -56,7 +56,7 @@ class RecordRequest(BaseModel):
         min_length=SOURCE_MIN_LENGTH,
         max_length=SOURCE_MAX_LENGTH,
         description=(
-            "Origin identifier for this record - a hostname, service name, or sensor ID. "
+            "Origin identifier for this observation - a hostname, service name, or sensor ID. "
             "Cannot be a loopback or wildcard address (localhost, 127.0.0.1, ::1, 0.0.0.0)."
         ),
         examples=["sensor.prod.us-east-1", "api.payments.internal"],
@@ -137,7 +137,7 @@ class RecordRequest(BaseModel):
         return [t.lower() for t in v]
 
 
-class UpdateRecordRequest(BaseModel):
+class UpdateObservationRequest(BaseModel):
     """Partial update schema — all fields are optional."""
 
     source: str | None = Field(
@@ -208,7 +208,7 @@ class UpdateRecordRequest(BaseModel):
         return [t.lower() for t in v]
 
 
-class RecordResponse(BaseModel):
+class ObservationResponse(BaseModel):
     id: int = Field(..., description="Auto-incremented primary key.")
     source: str = Field(..., description="Origin identifier, as provided on creation.")
     timestamp: datetime = Field(..., description="Observation timestamp (naive UTC).")
@@ -218,10 +218,10 @@ class RecordResponse(BaseModel):
         examples=[{"temperature": 22.5, "humidity": 60}],
     )
     tags: list[str] = Field(
-        ..., description="Labels applied to this record (always lowercase)."
+        ..., description="Labels applied to this observation (always lowercase)."
     )
     processed: bool = Field(
-        ..., description="True if the record has been marked as processed."
+        ..., description="True if the observation has been marked as processed."
     )
     # audit columns from TimestampMixin
     created_at: datetime = Field(..., description="Row creation timestamp (UTC).")
@@ -235,32 +235,32 @@ class RecordResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class BatchRecordsRequest(BaseModel):
-    records: list[RecordRequest] = Field(
+class BatchObservationsRequest(BaseModel):
+    observations: list[ObservationRequest] = Field(
         ..., min_length=MIN_BATCH_SIZE, max_length=MAX_BATCH_SIZE
     )
 
 
-class RecordListResponse(BaseModel):
-    records: list[RecordResponse]
+class ObservationListResponse(BaseModel):
+    observations: list[ObservationResponse]
     pagination: PaginationMeta
 
 
 class EnrichRequest(BaseModel):
     """Request payload for the concurrent enrichment endpoint."""
 
-    record_ids: list[int] = Field(
+    observation_ids: list[int] = Field(
         ...,
         min_length=ENRICH_MIN_IDS,
         max_length=ENRICH_MAX_IDS,
-        description=f"Record IDs to enrich (1–{ENRICH_MAX_IDS} IDs per call)",
+        description=f"Observation IDs to enrich (1–{ENRICH_MAX_IDS} IDs per call)",
     )
 
 
-class EnrichedRecord(BaseModel):
-    """Single enrichment result — the original record plus external metadata."""
+class EnrichedObservation(BaseModel):
+    """Single enrichment result — the original observation plus external metadata."""
 
-    record_id: int
+    observation_id: int
     source: str
     external_title: str | None = None
     external_body: str | None = None
@@ -271,31 +271,31 @@ class EnrichedRecord(BaseModel):
 
 
 class EnrichResponse(BaseModel):
-    """Response from POST /api/v2/records/enrich."""
+    """Response from POST /api/v2/observations/enrich."""
 
     enriched_count: int
     failed_count: int
     duration_ms: float
-    results: list[EnrichedRecord]
+    results: list[EnrichedObservation]
 
 
 class AgentRunResponse(BaseModel):
     model_config = {"from_attributes": True}
 
     run_id: str
-    record_id: int
-    classification: RecordClassification | None = None
+    observation_id: int
+    classification: ObservationClassification | None = None
     analysis: str
     published: bool
     hitl_paused: bool
 
 
-class RecordClassification(BaseModel):
-    """Pydantic structured output for record analysis."""
+class ObservationClassification(BaseModel):
+    """Pydantic structured output for observation analysis."""
 
-    category: str = Field(..., description="The main category of the record")
+    category: str = Field(..., description="The main category of the observation")
     priority: int = Field(..., ge=1, le=5, description="Priority level 1-5")
-    summary: str = Field(..., description="Short summary of the record")
+    summary: str = Field(..., description="Short summary of the observation")
     sentiment: str = Field(
         ..., description="Sentiment analysis: positive, negative, or neutral"
     )
@@ -306,25 +306,25 @@ class RecordClassification(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class UpsertRequest(RecordRequest):
-    """Request payload for POST /api/v2/records/upsert.
+class UpsertRequest(ObservationRequest):
+    """Request payload for POST /api/v2/observations/upsert.
 
-    Inherits all fields and validators from RecordRequest.
+    Inherits all fields and validators from ObservationRequest.
     The (source, timestamp) pair is the idempotency key — a second upsert
-    with the same pair returns the existing record rather than creating a duplicate.
+    with the same pair returns the existing observation rather than creating a duplicate.
     """
 
 
 class UpsertResponse(BaseModel):
-    """Response from POST /api/v2/records/upsert.
+    """Response from POST /api/v2/observations/upsert.
 
     Attributes:
-        record: The record (newly created or pre-existing).
+        observation: The observation (newly created or pre-existing).
         created: True if a new row was inserted; False if an existing row was returned.
         mode: The conflict resolution mode used ("idempotent" or "strict").
     """
 
-    record: RecordResponse
+    observation: ObservationResponse
     created: bool
     mode: str = UPSERT_MODE_IDEMPOTENT
 
@@ -350,13 +350,13 @@ class CursorPaginationResponse(BaseModel):
     """Response for cursor-based pagination.
 
     Attributes:
-        records: List of records in this page.
+        observations: List of observations in this page.
         next_cursor: Opaque cursor for the next page (None if no more results).
-        has_more: True if more records exist beyond this page.
+        has_more: True if more observations exist beyond this page.
         limit: The limit used for this request.
     """
 
-    records: list[RecordResponse]
+    observations: list[ObservationResponse]
     next_cursor: str | None = None
     has_more: bool = False
     limit: int
@@ -368,13 +368,13 @@ class CursorPaginationResponse(BaseModel):
 
 
 class VectorSearchIndexRequest(BaseModel):
-    """Request payload for indexing records into the AI gateway collection."""
+    """Request payload for indexing observations into the AI gateway collection."""
 
-    record_ids: list[int] = Field(
+    observation_ids: list[int] = Field(
         ...,
-        min_length=VECTOR_SEARCH_MIN_RECORD_IDS,
-        max_length=VECTOR_SEARCH_MAX_RECORD_IDS,
-        description="Record IDs to embed and index into the vector collection.",
+        min_length=VECTOR_SEARCH_MIN_OBSERVATION_IDS,
+        max_length=VECTOR_SEARCH_MAX_OBSERVATION_IDS,
+        description="Observation IDs to embed and index into the vector collection.",
     )
     collection: str | None = Field(
         default=None,
@@ -383,19 +383,19 @@ class VectorSearchIndexRequest(BaseModel):
 
 
 class VectorSearchReindexRecentRequest(BaseModel):
-    """Request payload for indexing a recent window of active records."""
+    """Request payload for indexing a recent window of active observations."""
 
     source: str | None = Field(
         default=None,
         min_length=1,
         max_length=255,
-        description="Optional source filter for recent records.",
+        description="Optional source filter for recent observations.",
     )
     limit: int = Field(
-        default=VECTOR_SEARCH_MAX_RECORD_IDS,
+        default=VECTOR_SEARCH_MAX_OBSERVATION_IDS,
         ge=1,
-        le=VECTOR_SEARCH_MAX_RECORD_IDS,
-        description="Maximum number of recent records to index.",
+        le=VECTOR_SEARCH_MAX_OBSERVATION_IDS,
+        description="Maximum number of recent observations to index.",
     )
     collection: str | None = Field(
         default=None,
@@ -404,7 +404,7 @@ class VectorSearchReindexRecentRequest(BaseModel):
 
 
 class VectorSearchQueryRequest(BaseModel):
-    """Request payload for semantic search over indexed records."""
+    """Request payload for semantic search over indexed observations."""
 
     query: str = Field(..., min_length=1, description="Semantic search query text.")
     top_k: int = Field(

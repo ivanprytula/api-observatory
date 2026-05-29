@@ -12,7 +12,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.ingestor.api_schemas.records import (
+from services.ingestor.api_schemas.observations import (
     LogoutRequest,
     RefreshRequest,
     TokenResponse,
@@ -31,7 +31,7 @@ from services.ingestor.auth import (
 from services.ingestor.constants import API_V1_PREFIX, AUTH_LOGIN_RATE_LIMIT
 from services.ingestor.database import get_db
 from services.ingestor.rate_limiting import limiter
-from services.ingestor.repositories.records import (
+from services.ingestor.repositories.observations import (
     create_user,
     get_user_by_username,
 )

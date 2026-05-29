@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import services.ingestor.vector_search as vector_search
-from services.ingestor.api_schemas.records import (
+from services.ingestor.api_schemas.observations import (
     VectorSearchHealthResponse,
     VectorSearchIndexRequest,
     VectorSearchIndexResponse,
@@ -21,7 +21,7 @@ from services.ingestor.api_schemas.records import (
 )
 from services.ingestor.constants import API_V1_PREFIX
 from services.ingestor.database import get_db
-from services.ingestor.models import Record
+from services.ingestor.models import Observation
 
 
 logger = logging.getLogger(__name__)
@@ -54,42 +54,44 @@ async def vector_search_health() -> VectorSearchHealthResponse:
 
 
 @router.post(
-    "/index/records",
+    "/index/observations",
     response_model=VectorSearchIndexResponse,
     status_code=status.HTTP_200_OK,
 )
-async def index_records_for_vector_search(
+async def index_observations_for_vector_search(
     payload: VectorSearchIndexRequest,
     db: DbDep,
 ) -> VectorSearchIndexResponse:
-    """Index selected records into the AI gateway vector collection."""
-    record_ids = list(dict.fromkeys(payload.record_ids))
+    """Index selected observations into the AI gateway vector collection."""
+    observation_ids = list(dict.fromkeys(payload.observation_ids))
     stmt = (
-        select(Record)
-        .where(Record.id.in_(record_ids), Record.deleted_at.is_(None))
-        .order_by(Record.id)
+        select(Observation)
+        .where(Observation.id.in_(observation_ids), Observation.deleted_at.is_(None))
+        .order_by(Observation.id)
     )
-    records = list((await db.execute(stmt)).scalars().all())
-    if not records:
+    observations = list((await db.execute(stmt)).scalars().all())
+    if not observations:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No active records found for indexing",
+            detail="No active observations found for indexing",
         )
 
-    found_ids = {record.id for record in records}
-    missing_record_ids = [
-        record_id for record_id in record_ids if record_id not in found_ids
+    found_ids = {observation.id for observation in observations}
+    missing_observation_ids = [
+        observation_id
+        for observation_id in observation_ids
+        if observation_id not in found_ids
     ]
 
     try:
-        raw = await vector_search.index_record_documents(
-            records,
+        raw = await vector_search.index_observation_documents(
+            observations,
             collection=payload.collection,
         )
     except (httpx.HTTPError, ValueError) as exc:
         logger.warning(
             "vector_search_index_failed",
-            extra={"error": str(exc), "requested_count": len(record_ids)},
+            extra={"error": str(exc), "requested_count": len(observation_ids)},
         )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -97,9 +99,9 @@ async def index_records_for_vector_search(
         ) from exc
 
     return VectorSearchIndexResponse(
-        requested_count=len(record_ids),
-        indexed_count=int(raw.get("indexed_count", len(records))),
-        missing_record_ids=missing_record_ids,
+        requested_count=len(observation_ids),
+        indexed_count=int(raw.get("indexed_count", len(observations))),
+        missing_observation_ids=missing_observation_ids,
         collection=str(
             raw.get(
                 "collection",
@@ -117,9 +119,9 @@ async def index_records_for_vector_search(
 async def query_vector_search(
     payload: VectorSearchQueryRequest,
 ) -> VectorSearchQueryResponse:
-    """Query semantically similar indexed records via the AI gateway."""
+    """Query semantically similar indexed observations via the AI gateway."""
     try:
-        raw = await vector_search.search_record_documents(
+        raw = await vector_search.search_observation_documents(
             query=payload.query,
             top_k=payload.top_k,
             collection=payload.collection,
@@ -146,26 +148,26 @@ async def query_vector_search(
     response_model=VectorSearchIndexResponse,
     status_code=status.HTTP_200_OK,
 )
-async def index_recent_records_for_vector_search(
+async def index_recent_observations_for_vector_search(
     payload: VectorSearchReindexRecentRequest,
     db: DbDep,
 ) -> VectorSearchIndexResponse:
-    """Index a recent window of active records for operational backfill."""
-    stmt = select(Record).where(Record.deleted_at.is_(None))
+    """Index a recent window of active observations for operational backfill."""
+    stmt = select(Observation).where(Observation.deleted_at.is_(None))
     if payload.source is not None:
-        stmt = stmt.where(Record.source == payload.source)
+        stmt = stmt.where(Observation.source == payload.source)
 
-    stmt = stmt.order_by(Record.timestamp.desc()).limit(payload.limit)
-    records = list((await db.execute(stmt)).scalars().all())
-    if not records:
+    stmt = stmt.order_by(Observation.timestamp.desc()).limit(payload.limit)
+    observations = list((await db.execute(stmt)).scalars().all())
+    if not observations:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No active records found for recent indexing",
+            detail="No active observations found for recent indexing",
         )
 
     try:
-        raw = await vector_search.index_record_documents(
-            records,
+        raw = await vector_search.index_observation_documents(
+            observations,
             collection=payload.collection,
         )
     except (httpx.HTTPError, ValueError) as exc:
@@ -183,9 +185,9 @@ async def index_recent_records_for_vector_search(
         ) from exc
 
     return VectorSearchIndexResponse(
-        requested_count=len(records),
-        indexed_count=int(raw.get("indexed_count", len(records))),
-        missing_record_ids=[],
+        requested_count=len(observations),
+        indexed_count=int(raw.get("indexed_count", len(observations))),
+        missing_observation_ids=[],
         collection=str(
             raw.get(
                 "collection",

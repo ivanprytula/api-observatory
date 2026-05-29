@@ -11,10 +11,10 @@ from services.ingestor.transformations.tabular import TabularETLEngine
 
 
 def preview_etl_transform(payload: ETLPreviewRequest) -> ETLPreviewResponse:
-    """Run a bounded ETL preview for a small record batch."""
+    """Run a bounded ETL preview for a small observation batch."""
     result = TabularETLEngine.preview(
         backend=payload.backend,  # ty: ignore[arg-type]
-        records=payload.records,
+        observations=payload.observations,
         rename_columns=payload.rename_columns,
         select_columns=payload.select_columns,
         filter_equals=payload.filter_equals,
@@ -27,7 +27,7 @@ def preview_etl_transform(payload: ETLPreviewRequest) -> ETLPreviewResponse:
         backend_used=result.backend_used,
         row_count=result.row_count,
         columns=result.columns,
-        records=result.records,
+        observations=result.observations,
         numeric_summaries=[
             NumericFieldSummary(
                 field=item.field,

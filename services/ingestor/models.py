@@ -69,7 +69,7 @@ class ProcessedEvent(Base, TimestampMixin):
     # Event payload storage
     event_type: Mapped[str] = mapped_column(
         String(100), nullable=False
-    )  # e.g., "record.created"
+    )  # e.g., "observation.created"
     payload: Mapped[dict] = mapped_column(JSON, nullable=False)
 
     # Processing state tracking
@@ -118,7 +118,7 @@ class OutboxEvent(Base, TimestampMixin):
 
 
 class InboxConsumption(Base, TimestampMixin):
-    """Inbox deduplication record keyed by (consumer_name, message_id)."""
+    """Inbox deduplication observation keyed by (consumer_name, message_id)."""
 
     __tablename__ = "inbox_consumptions"
     __table_args__ = (
@@ -141,17 +141,19 @@ class InboxConsumption(Base, TimestampMixin):
     )
 
 
-class Record(Base, TimestampMixin):
-    __tablename__ = "records"
+class Observation(Base, TimestampMixin):
+    __tablename__ = "observations"
     __table_args__ = (
         Index(
-            "ix_records_active_source",
+            "ix_observations_active_source",
             "source",
             postgresql_where=text("deleted_at IS NULL"),
         ),
-        Index("ix_records_timestamp", "timestamp"),
-        Index("ix_records_processed", "processed"),
-        UniqueConstraint("source", "timestamp", name="uq_records_source_timestamp"),
+        Index("ix_observations_timestamp", "timestamp"),
+        Index("ix_observations_processed", "processed"),
+        UniqueConstraint(
+            "source", "timestamp", name="uq_observations_source_timestamp"
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -164,7 +166,7 @@ class Record(Base, TimestampMixin):
     tenant_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     def __repr__(self) -> str:
-        return f"<Record id={self.id} source={self.source!r}>"
+        return f"<Observation id={self.id} source={self.source!r}>"
 
 
 class User(Base, TimestampMixin):
@@ -313,7 +315,7 @@ class ApiKey(Base, TimestampMixin):
     - key_hash: SHA-256 of the full raw key — used for constant-time verification.
 
     Scopes are stored as a JSON list of strings, e.g.:
-    ``["records:read", "records:write", "sources:read"]``
+    ``["observations:read", "observations:write", "sources:read"]``
 
     The full raw key is returned only once (at creation time) and never stored.
     """
@@ -392,11 +394,11 @@ class SecurityAuditEvent(Base):
 
 
 class AbuseSignal(Base, TimestampMixin):
-    """Mutable record of a detected abuse pattern.
+    """Mutable observation of a detected abuse pattern.
 
     Captures both automated detector findings and manually raised signals.
     Unlike SecurityAuditEvent (append-only, hash-chained), AbuseSignal is
-    a mutable operational record: it can be resolved, annotated, and queried
+    a mutable operational observation: it can be resolved, annotated, and queried
     for open/closed state.
 
     Signal lifecycle: open → resolved (set resolved_at + resolved_by).

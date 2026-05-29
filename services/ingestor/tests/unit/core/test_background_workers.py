@@ -7,12 +7,12 @@ from typing import Any
 
 import pytest
 
-from services.ingestor.api_schemas.records import RecordRequest
+from services.ingestor.api_schemas.observations import ObservationRequest
 from services.ingestor.core.background_workers import BackgroundWorkerPool
 
 
-def _record(source: str) -> RecordRequest:
-    return RecordRequest(
+def _observation(source: str) -> ObservationRequest:
+    return ObservationRequest(
         source=source,
         timestamp="2026-04-22T12:00:00Z",
         data={"value": 1},
@@ -36,9 +36,9 @@ async def _wait_for_terminal_state(
 
 
 async def test_background_worker_pool_processes_successful_task() -> None:
-    async def processor(records: list[RecordRequest]) -> dict[str, Any]:
+    async def processor(observations: list[ObservationRequest]) -> dict[str, Any]:
         await asyncio.sleep(0.01)
-        return {"inserted": len(records), "errors": 0, "first_error": None}
+        return {"inserted": len(observations), "errors": 0, "first_error": None}
 
     pool = BackgroundWorkerPool(
         worker_count=1,
@@ -49,7 +49,7 @@ async def test_background_worker_pool_processes_successful_task() -> None:
     await pool.start()
 
     try:
-        submitted = await pool.submit_batch_ingest([_record("bg-success")])
+        submitted = await pool.submit_batch_ingest([_observation("bg-success")])
         terminal_status = await _wait_for_terminal_state(pool, submitted.task_id)
 
         assert terminal_status == "succeeded"
@@ -62,8 +62,8 @@ async def test_background_worker_pool_processes_successful_task() -> None:
 
 
 async def test_background_worker_pool_marks_failed_task() -> None:
-    async def processor(records: list[RecordRequest]) -> dict[str, Any]:
-        raise RuntimeError(f"boom-{len(records)}")
+    async def processor(observations: list[ObservationRequest]) -> dict[str, Any]:
+        raise RuntimeError(f"boom-{len(observations)}")
 
     pool = BackgroundWorkerPool(
         worker_count=1,
@@ -74,7 +74,7 @@ async def test_background_worker_pool_marks_failed_task() -> None:
     await pool.start()
 
     try:
-        submitted = await pool.submit_batch_ingest([_record("bg-failure")])
+        submitted = await pool.submit_batch_ingest([_observation("bg-failure")])
         terminal_status = await _wait_for_terminal_state(pool, submitted.task_id)
 
         assert terminal_status == "failed"
@@ -89,8 +89,8 @@ async def test_background_worker_pool_marks_failed_task() -> None:
 async def test_background_worker_pool_invokes_failure_callback() -> None:
     callback_calls: list[str] = []
 
-    async def processor(records: list[RecordRequest]) -> dict[str, Any]:
-        raise RuntimeError(f"boom-{len(records)}")
+    async def processor(observations: list[ObservationRequest]) -> dict[str, Any]:
+        raise RuntimeError(f"boom-{len(observations)}")
 
     async def on_failed(task_status) -> None:
         callback_calls.append(task_status.task_id)
@@ -105,7 +105,7 @@ async def test_background_worker_pool_invokes_failure_callback() -> None:
     await pool.start()
 
     try:
-        submitted = await pool.submit_batch_ingest([_record("bg-callback")])
+        submitted = await pool.submit_batch_ingest([_observation("bg-callback")])
         terminal_status = await _wait_for_terminal_state(pool, submitted.task_id)
 
         assert terminal_status == "failed"
@@ -115,8 +115,8 @@ async def test_background_worker_pool_invokes_failure_callback() -> None:
 
 
 async def test_background_worker_pool_trims_old_statuses() -> None:
-    async def processor(records: list[RecordRequest]) -> dict[str, Any]:
-        return {"inserted": len(records), "errors": 0, "first_error": None}
+    async def processor(observations: list[ObservationRequest]) -> dict[str, Any]:
+        return {"inserted": len(observations), "errors": 0, "first_error": None}
 
     pool = BackgroundWorkerPool(
         worker_count=1,
@@ -127,10 +127,10 @@ async def test_background_worker_pool_trims_old_statuses() -> None:
     await pool.start()
 
     try:
-        first = await pool.submit_batch_ingest([_record("bg-trim-1")])
+        first = await pool.submit_batch_ingest([_observation("bg-trim-1")])
         await _wait_for_terminal_state(pool, first.task_id)
 
-        second = await pool.submit_batch_ingest([_record("bg-trim-2")])
+        second = await pool.submit_batch_ingest([_observation("bg-trim-2")])
         await _wait_for_terminal_state(pool, second.task_id)
 
         assert pool.get_task_status(first.task_id) is None

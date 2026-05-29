@@ -1,18 +1,18 @@
 """FastAPI WebSocket endpoint — real-time event stream.
 
-Endpoint: ``WS /ws/records/stream``
+Endpoint: ``WS /ws/observations/stream``
 
 Streams all ingestor events to connected browser (or any WS client) in
 real time.  Events are multiplexed on a single connection and distinguished
 by their ``type`` field:
 
-    {"type": "record.created", "record_id": 1, "source": "...", "ts": "..."}
+    {"type": "observation.created", "observation_id": 1, "source": "...", "ts": "..."}
     {"type": "job.progress",   "job_id": "...", "status": "running",
      "progress": 0.4, "message": "Batch 2/5 complete"}
 
 Architecture:
 
-    Browser  ─────────────────────────────  WS /ws/records/stream
+    Browser  ─────────────────────────────  WS /ws/observations/stream
                                                     │
                                             subscribe_events()
                                                     │
@@ -113,8 +113,8 @@ _manager = _ConnectionManager()
 # ---------------------------------------------------------------------------
 
 
-@router.websocket("/ws/records/stream")
-async def records_stream(
+@router.websocket("/ws/observations/stream")
+async def observations_stream(
     websocket: WebSocket,
     token: Annotated[str | None, Depends(_ws_token)] = None,
 ) -> None:
@@ -131,7 +131,7 @@ async def records_stream(
     Message shape (JSON):
         Each message is a JSON object with a ``type`` discriminator field:
 
-        - ``{"type": "record.created", "record_id": int, "source": str, "ts": str}``
+        - ``{"type": "observation.created", "observation_id": int, "source": str, "ts": str}``
         - ``{"type": "job.progress",   "job_id": str, "status": str,
              "progress": float, "message": str, "ts": str}``
         - ``{"type": "ping"}`` — keepalive sent every 30 s by the server

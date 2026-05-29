@@ -16,7 +16,7 @@ from services.ingestor.pubsub import (
     publish_drift_event,
     publish_event,
     publish_job_progress,
-    publish_record_created,
+    publish_observation_created,
 )
 
 
@@ -32,7 +32,7 @@ pytestmark = pytest.mark.unit
 def capture_publish(
     monkeypatch: pytest.MonkeyPatch,
 ) -> list[tuple[str, dict[str, Any]]]:
-    """Replace publish_event with a no-op that records (event_type, payload) tuples."""
+    """Replace publish_event with a no-op that observations (event_type, payload) tuples."""
     calls: list[tuple[str, dict[str, Any]]] = []
 
     async def _fake(event_type: str, payload: dict[str, Any]) -> None:
@@ -86,22 +86,22 @@ async def test_publish_event_fail_open_on_redis_error(
     mock.publish = AsyncMock(side_effect=ConnectionError("redis down"))
     monkeypatch.setattr(pubsub_module, "_pubsub_client", mock)
     # Must not raise
-    await publish_event("record.created", {"record_id": 1, "source": "s"})
+    await publish_event("observation.created", {"observation_id": 1, "source": "s"})
 
 
 # ---------------------------------------------------------------------------
-# publish_record_created
+# publish_observation_created
 # ---------------------------------------------------------------------------
 
 
-async def test_publish_record_created_envelope(
+async def test_publish_observation_created_envelope(
     capture_publish: list[tuple[str, dict[str, Any]]],
 ) -> None:
-    await publish_record_created(record_id=5, source="test.src")
+    await publish_observation_created(observation_id=5, source="test.src")
     assert len(capture_publish) == 1
     event_type, payload = capture_publish[0]
-    assert event_type == "record.created"
-    assert payload["record_id"] == 5
+    assert event_type == "observation.created"
+    assert payload["observation_id"] == 5
     assert payload["source"] == "test.src"
 
 

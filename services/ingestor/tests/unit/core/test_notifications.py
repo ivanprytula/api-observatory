@@ -16,8 +16,8 @@ class _FakeResponse:
 
 
 class _FakeAsyncClient:
-    def __init__(self, recorder: list[dict[str, Any]]) -> None:
-        self._recorder = recorder
+    def __init__(self, observationer: list[dict[str, Any]]) -> None:
+        self._observationer = observationer
 
     async def __aenter__(self) -> _FakeAsyncClient:
         return self
@@ -31,7 +31,7 @@ class _FakeAsyncClient:
         json: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
     ) -> _FakeResponse:
-        self._recorder.append({"url": url, "json": json, "headers": headers})
+        self._observationer.append({"url": url, "json": json, "headers": headers})
         return _FakeResponse()
 
 

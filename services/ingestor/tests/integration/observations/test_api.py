@@ -7,13 +7,13 @@ import time
 import pytest
 from httpx import AsyncClient
 
-from tests.shared.payloads import RECORD_API
+from tests.shared.payloads import OBSERVATION_API
 
 
 logger = logging.getLogger(__name__)
 
 
-_RECORD = RECORD_API
+_OBSERVATION = OBSERVATION_API
 
 
 # ---------------------------------------------------------------------------
@@ -81,12 +81,12 @@ async def test_readyz_returns_503_when_db_unreachable() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Create single record
+# Create single observation
 # ---------------------------------------------------------------------------
 @pytest.mark.integration
-async def test_create_record(client: AsyncClient) -> None:
+async def test_create_observation(client: AsyncClient) -> None:
     # Act
-    r = await client.post("/api/v1/records", json=_RECORD)
+    r = await client.post("/api/v1/observations", json=_OBSERVATION)
 
     # Assert
     assert r.status_code == 201
@@ -98,26 +98,27 @@ async def test_create_record(client: AsyncClient) -> None:
 
 
 @pytest.mark.integration
-async def test_create_record_missing_source(client: AsyncClient) -> None:
-    bad = {**_RECORD}
+async def test_create_observation_missing_source(client: AsyncClient) -> None:
+    bad = {**_OBSERVATION}
     del bad["source"]
 
-    r = await client.post("/api/v1/records", json=bad)
+    r = await client.post("/api/v1/observations", json=bad)
 
     assert r.status_code == 422
 
 
 @pytest.mark.integration
-async def test_create_record_empty_source(client: AsyncClient) -> None:
-    r = await client.post("/api/v1/records", json={**_RECORD, "source": ""})
+async def test_create_observation_empty_source(client: AsyncClient) -> None:
+    r = await client.post("/api/v1/observations", json={**_OBSERVATION, "source": ""})
 
     assert r.status_code == 422
 
 
 @pytest.mark.integration
-async def test_create_record_future_timestamp(client: AsyncClient) -> None:
+async def test_create_observation_future_timestamp(client: AsyncClient) -> None:
     r = await client.post(
-        "/api/v1/records", json={**_RECORD, "timestamp": "2099-01-01T00:00:00"}
+        "/api/v1/observations",
+        json={**_OBSERVATION, "timestamp": "2099-01-01T00:00:00"},
     )
 
     assert r.status_code == 422
@@ -128,9 +129,11 @@ async def test_create_record_future_timestamp(client: AsyncClient) -> None:
 # ---------------------------------------------------------------------------
 @pytest.mark.integration
 async def test_create_batch(client: AsyncClient) -> None:
-    payload = {"records": [_RECORD, {**_RECORD, "source": "b.example.com"}]}
+    payload = {
+        "observations": [_OBSERVATION, {**_OBSERVATION, "source": "b.example.com"}]
+    }
 
-    r = await client.post("/api/v1/records/batch", json=payload)
+    r = await client.post("/api/v1/observations/batch", json=payload)
 
     assert r.status_code == 201
     assert r.json()["created"] == 2
@@ -138,9 +141,9 @@ async def test_create_batch(client: AsyncClient) -> None:
 
 @pytest.mark.integration
 async def test_batch_too_large(client: AsyncClient) -> None:
-    payload = {"records": [_RECORD] * 1001}
+    payload = {"observations": [_OBSERVATION] * 1001}
 
-    r = await client.post("/api/v1/records/batch", json=payload)
+    r = await client.post("/api/v1/observations/batch", json=payload)
 
     assert r.status_code == 422
 
@@ -151,9 +154,11 @@ async def test_batch_too_large(client: AsyncClient) -> None:
 @pytest.mark.integration
 async def test_batch_impl_optimized_returns_correct_count(client: AsyncClient) -> None:
     """optimized impl (INSERT RETURNING) — same contract as default."""
-    payload = {"records": [_RECORD, {**_RECORD, "source": "opt.example.com"}]}
+    payload = {
+        "observations": [_OBSERVATION, {**_OBSERVATION, "source": "opt.example.com"}]
+    }
 
-    r = await client.post("/api/v1/records/batch?impl=optimized", json=payload)
+    r = await client.post("/api/v1/observations/batch?impl=optimized", json=payload)
 
     assert r.status_code == 201
     body = r.json()
@@ -164,9 +169,11 @@ async def test_batch_impl_optimized_returns_correct_count(client: AsyncClient) -
 @pytest.mark.integration
 async def test_batch_impl_naive_returns_correct_count(client: AsyncClient) -> None:
     """naive impl (add_all + N refreshes) — identical JSON output, different internals."""
-    payload = {"records": [_RECORD, {**_RECORD, "source": "naive.example.com"}]}
+    payload = {
+        "observations": [_OBSERVATION, {**_OBSERVATION, "source": "naive.example.com"}]
+    }
 
-    r = await client.post("/api/v1/records/batch?impl=naive", json=payload)
+    r = await client.post("/api/v1/observations/batch?impl=naive", json=payload)
 
     assert r.status_code == 201
     body = r.json()
@@ -177,10 +184,10 @@ async def test_batch_impl_naive_returns_correct_count(client: AsyncClient) -> No
 @pytest.mark.integration
 async def test_batch_impl_contract_identical(client: AsyncClient) -> None:
     """Both impls return the same JSON keys — the contract is impl-agnostic."""
-    payload = {"records": [_RECORD]}
+    payload = {"observations": [_OBSERVATION]}
 
-    r_opt = await client.post("/api/v1/records/batch?impl=optimized", json=payload)
-    r_naive = await client.post("/api/v1/records/batch?impl=naive", json=payload)
+    r_opt = await client.post("/api/v1/observations/batch?impl=optimized", json=payload)
+    r_naive = await client.post("/api/v1/observations/batch?impl=naive", json=payload)
 
     assert r_opt.status_code == 201
     assert r_naive.status_code == 201
@@ -192,9 +199,9 @@ async def test_batch_impl_contract_identical(client: AsyncClient) -> None:
 @pytest.mark.integration
 async def test_batch_impl_invalid_rejected(client: AsyncClient) -> None:
     """Unknown ?impl= value is rejected at the validation layer (422)."""
-    payload = {"records": [_RECORD]}
+    payload = {"observations": [_OBSERVATION]}
 
-    r = await client.post("/api/v1/records/batch?impl=magic", json=payload)
+    r = await client.post("/api/v1/observations/batch?impl=magic", json=payload)
 
     assert r.status_code == 422
 
@@ -203,39 +210,41 @@ async def test_batch_impl_invalid_rejected(client: AsyncClient) -> None:
 # List / pagination
 # ---------------------------------------------------------------------------
 @pytest.mark.integration
-async def test_list_records_empty(client: AsyncClient) -> None:
-    r = await client.get("/api/v1/records")
+async def test_list_observations_empty(client: AsyncClient) -> None:
+    r = await client.get("/api/v1/observations")
 
     assert r.status_code == 200
     body = r.json()
-    assert body["records"] == []
+    assert body["observations"] == []
     assert body["pagination"]["total"] == 0
     assert body["pagination"]["has_more"] is False
 
 
 @pytest.mark.integration
-async def test_list_records_pagination(client: AsyncClient) -> None:
+async def test_list_observations_pagination(client: AsyncClient) -> None:
     for i in range(5):
-        await client.post("/api/v1/records", json={**_RECORD, "source": f"src-{i}"})
+        await client.post(
+            "/api/v1/observations", json={**_OBSERVATION, "source": f"src-{i}"}
+        )
 
-    r = await client.get("/api/v1/records?skip=0&limit=3")
+    r = await client.get("/api/v1/observations?skip=0&limit=3")
 
     body = r.json()
-    assert len(body["records"]) == 3
+    assert len(body["observations"]) == 3
     assert body["pagination"]["total"] == 5
     assert body["pagination"]["has_more"] is True
 
 
 @pytest.mark.integration
-async def test_list_records_filter_source(client: AsyncClient) -> None:
-    await client.post("/api/v1/records", json={**_RECORD, "source": "alpha"})
-    await client.post("/api/v1/records", json={**_RECORD, "source": "beta"})
+async def test_list_observations_filter_source(client: AsyncClient) -> None:
+    await client.post("/api/v1/observations", json={**_OBSERVATION, "source": "alpha"})
+    await client.post("/api/v1/observations", json={**_OBSERVATION, "source": "beta"})
 
-    r = await client.get("/api/v1/records?source=alpha")
+    r = await client.get("/api/v1/observations?source=alpha")
 
     body = r.json()
-    assert len(body["records"]) == 1
-    assert body["records"][0]["source"] == "alpha"
+    assert len(body["observations"]) == 1
+    assert body["observations"][0]["source"] == "alpha"
 
 
 # Week 2 Milestone 2: Comprehensive pagination tests
@@ -243,33 +252,35 @@ async def test_list_records_filter_source(client: AsyncClient) -> None:
 async def test_pagination_multi_page_traversal(client: AsyncClient) -> None:
     """Test cursor-based pagination across multiple pages.
 
-    Creates 250 records and verifies we can traverse:
+    Creates 250 observations and verifies we can traverse:
     Page 1 (0-99), Page 2 (100-199), Page 3 (200-249)
     """
-    # Setup: Create 250 records
+    # Setup: Create 250 observations
     for i in range(250):
-        await client.post("/api/v1/records", json={**_RECORD, "data": {"idx": i}})
+        await client.post(
+            "/api/v1/observations", json={**_OBSERVATION, "data": {"idx": i}}
+        )
 
     # Page 1: skip=0, limit=100
-    r1 = await client.get("/api/v1/records?skip=0&limit=100")
+    r1 = await client.get("/api/v1/observations?skip=0&limit=100")
     body1 = r1.json()
-    assert len(body1["records"]) == 100
+    assert len(body1["observations"]) == 100
     assert body1["pagination"]["skip"] == 0
     assert body1["pagination"]["limit"] == 100
     assert body1["pagination"]["total"] == 250
     assert body1["pagination"]["has_more"] is True  # 100 < 250
 
     # Page 2: skip=100, limit=100
-    r2 = await client.get("/api/v1/records?skip=100&limit=100")
+    r2 = await client.get("/api/v1/observations?skip=100&limit=100")
     body2 = r2.json()
-    assert len(body2["records"]) == 100
+    assert len(body2["observations"]) == 100
     assert body2["pagination"]["skip"] == 100
     assert body2["pagination"]["has_more"] is True  # 200 < 250
 
     # Page 3: skip=200, limit=100 (partial page)
-    r3 = await client.get("/api/v1/records?skip=200&limit=100")
+    r3 = await client.get("/api/v1/observations?skip=200&limit=100")
     body3 = r3.json()
-    assert len(body3["records"]) == 50  # Only 50 left
+    assert len(body3["observations"]) == 50  # Only 50 left
     assert body3["pagination"]["skip"] == 200
     assert body3["pagination"]["has_more"] is False  # 300 >= 250
 
@@ -277,34 +288,38 @@ async def test_pagination_multi_page_traversal(client: AsyncClient) -> None:
 @pytest.mark.integration
 async def test_pagination_last_page_detection(client: AsyncClient) -> None:
     """Verify has_more is False on the last page."""
-    # Setup: Create 50 records
+    # Setup: Create 50 observations
     for i in range(50):
-        await client.post("/api/v1/records", json={**_RECORD, "data": {"idx": i}})
+        await client.post(
+            "/api/v1/observations", json={**_OBSERVATION, "data": {"idx": i}}
+        )
 
-    # Request with limit that exactly fits remaining records
-    r = await client.get("/api/v1/records?skip=0&limit=50")
+    # Request with limit that exactly fits remaining observations
+    r = await client.get("/api/v1/observations?skip=0&limit=50")
     body = r.json()
-    assert len(body["records"]) == 50
+    assert len(body["observations"]) == 50
     assert body["pagination"]["has_more"] is False
 
 
 @pytest.mark.integration
 async def test_pagination_boundary_conditions(client: AsyncClient) -> None:
     """Test edge cases: skip at boundary, limit at boundary."""
-    # Setup: Create exactly 100 records
+    # Setup: Create exactly 100 observations
     for i in range(100):
-        await client.post("/api/v1/records", json={**_RECORD, "data": {"idx": i}})
+        await client.post(
+            "/api/v1/observations", json={**_OBSERVATION, "data": {"idx": i}}
+        )
 
-    # Skip to last record (99), request with limit=1
-    r = await client.get("/api/v1/records?skip=99&limit=1")
+    # Skip to last observation (99), request with limit=1
+    r = await client.get("/api/v1/observations?skip=99&limit=1")
     body = r.json()
-    assert len(body["records"]) == 1
+    assert len(body["observations"]) == 1
     assert body["pagination"]["has_more"] is False
 
-    # Skip beyond all records (should return empty)
-    r = await client.get("/api/v1/records?skip=100&limit=10")
+    # Skip beyond all observations (should return empty)
+    r = await client.get("/api/v1/observations?skip=100&limit=10")
     body = r.json()
-    assert len(body["records"]) == 0
+    assert len(body["observations"]) == 0
     assert body["pagination"]["total"] == 100
     assert body["pagination"]["has_more"] is False
 
@@ -312,14 +327,16 @@ async def test_pagination_boundary_conditions(client: AsyncClient) -> None:
 @pytest.mark.integration
 async def test_pagination_default_limit(client: AsyncClient) -> None:
     """Verify default limit is 100 when omitted."""
-    # Setup: Create 150 records
+    # Setup: Create 150 observations
     for i in range(150):
-        await client.post("/api/v1/records", json={**_RECORD, "data": {"idx": i}})
+        await client.post(
+            "/api/v1/observations", json={**_OBSERVATION, "data": {"idx": i}}
+        )
 
     # Request without limit parameter (should default to 100)
-    r = await client.get("/api/v1/records")
+    r = await client.get("/api/v1/observations")
     body = r.json()
-    assert len(body["records"]) == 100
+    assert len(body["observations"]) == 100
     assert body["pagination"]["limit"] == 100
     assert body["pagination"]["has_more"] is True  # 100 < 150
 
@@ -327,25 +344,27 @@ async def test_pagination_default_limit(client: AsyncClient) -> None:
 @pytest.mark.integration
 async def test_pagination_cursor_preservation(client: AsyncClient) -> None:
     """Verify pagination cursor (skip) is preserved accurately across requests."""
-    # Setup: Create 35 records (will test page boundaries)
+    # Setup: Create 35 observations (will test page boundaries)
     for i in range(35):
-        await client.post("/api/v1/records", json={**_RECORD, "source": f"src-{i % 5}"})
+        await client.post(
+            "/api/v1/observations", json={**_OBSERVATION, "source": f"src-{i % 5}"}
+        )
 
     # Get page 1
-    r1 = await client.get("/api/v1/records?skip=0&limit=10")
-    page1_ids = [rec["id"] for rec in r1.json()["records"]]
+    r1 = await client.get("/api/v1/observations?skip=0&limit=10")
+    page1_ids = [rec["id"] for rec in r1.json()["observations"]]
 
     # Get page 2 using returned skip
-    r2 = await client.get("/api/v1/records?skip=10&limit=10")
-    page2_ids = [rec["id"] for rec in r2.json()["records"]]
+    r2 = await client.get("/api/v1/observations?skip=10&limit=10")
+    page2_ids = [rec["id"] for rec in r2.json()["observations"]]
 
     # Get page 3 using returned skip
-    r3 = await client.get("/api/v1/records?skip=20&limit=10")
-    page3_ids = [rec["id"] for rec in r3.json()["records"]]
+    r3 = await client.get("/api/v1/observations?skip=20&limit=10")
+    page3_ids = [rec["id"] for rec in r3.json()["observations"]]
 
     # Get page 4 (partial)
-    r4 = await client.get("/api/v1/records?skip=30&limit=10")
-    page4_ids = [rec["id"] for rec in r4.json()["records"]]
+    r4 = await client.get("/api/v1/observations?skip=30&limit=10")
+    page4_ids = [rec["id"] for rec in r4.json()["observations"]]
 
     # Verify no overlaps and no gaps
     all_ids = page1_ids + page2_ids + page3_ids + page4_ids
@@ -357,18 +376,18 @@ async def test_pagination_cursor_preservation(client: AsyncClient) -> None:
 # Get by ID
 # ---------------------------------------------------------------------------
 @pytest.mark.integration
-async def test_get_record(client: AsyncClient) -> None:
-    created = (await client.post("/api/v1/records", json=_RECORD)).json()
+async def test_get_observation(client: AsyncClient) -> None:
+    created = (await client.post("/api/v1/observations", json=_OBSERVATION)).json()
 
-    r = await client.get(f"/api/v1/records/{created['id']}")
+    r = await client.get(f"/api/v1/observations/{created['id']}")
 
     assert r.status_code == 200
     assert r.json()["id"] == created["id"]
 
 
 @pytest.mark.integration
-async def test_get_nonexistent_record(client: AsyncClient) -> None:
-    r = await client.get("/api/v1/records/99999")
+async def test_get_nonexistent_observation(client: AsyncClient) -> None:
+    r = await client.get("/api/v1/observations/99999")
 
     assert r.status_code == 404
 
@@ -378,9 +397,9 @@ async def test_get_nonexistent_record(client: AsyncClient) -> None:
 # ---------------------------------------------------------------------------
 @pytest.mark.integration
 async def test_mark_processed(client: AsyncClient) -> None:
-    created = (await client.post("/api/v1/records", json=_RECORD)).json()
+    created = (await client.post("/api/v1/observations", json=_OBSERVATION)).json()
 
-    r = await client.patch(f"/api/v1/records/{created['id']}/process")
+    r = await client.patch(f"/api/v1/observations/{created['id']}/process")
 
     assert r.status_code == 200
     assert r.json()["processed"] is True
@@ -388,7 +407,7 @@ async def test_mark_processed(client: AsyncClient) -> None:
 
 @pytest.mark.integration
 async def test_mark_processed_nonexistent(client: AsyncClient) -> None:
-    r = await client.patch("/api/v1/records/99999/process")
+    r = await client.patch("/api/v1/observations/99999/process")
 
     assert r.status_code == 404
 
@@ -397,20 +416,20 @@ async def test_mark_processed_nonexistent(client: AsyncClient) -> None:
 # Delete
 # ---------------------------------------------------------------------------
 @pytest.mark.integration
-async def test_delete_record(client: AsyncClient) -> None:
-    created = (await client.post("/api/v1/records", json=_RECORD)).json()
+async def test_delete_observation(client: AsyncClient) -> None:
+    created = (await client.post("/api/v1/observations", json=_OBSERVATION)).json()
 
-    r = await client.delete(f"/api/v1/records/{created['id']}")
+    r = await client.delete(f"/api/v1/observations/{created['id']}")
 
     assert r.status_code == 204
     # Verify it's actually gone
-    r = await client.get(f"/api/v1/records/{created['id']}")
+    r = await client.get(f"/api/v1/observations/{created['id']}")
     assert r.status_code == 404
 
 
 @pytest.mark.integration
-async def test_delete_record_not_found(client: AsyncClient) -> None:
-    r = await client.delete("/api/v1/records/99999")
+async def test_delete_observation_not_found(client: AsyncClient) -> None:
+    r = await client.delete("/api/v1/observations/99999")
 
     assert r.status_code == 404
 
@@ -419,37 +438,39 @@ async def test_delete_record_not_found(client: AsyncClient) -> None:
 # Archive (soft-delete)
 # ---------------------------------------------------------------------------
 @pytest.mark.integration
-async def test_archive_record(client: AsyncClient) -> None:
-    created = (await client.post("/api/v1/records", json=_RECORD)).json()
-    record_id = created["id"]
+async def test_archive_observation(client: AsyncClient) -> None:
+    created = (await client.post("/api/v1/observations", json=_OBSERVATION)).json()
+    observation_id = created["id"]
 
-    r = await client.patch(f"/api/v1/records/{record_id}/archive")
+    r = await client.patch(f"/api/v1/observations/{observation_id}/archive")
 
     assert r.status_code == 200
     body = r.json()
     assert body["deleted_at"] is not None
 
-    # Archived record is hidden from GET and list
-    assert (await client.get(f"/api/v1/records/{record_id}")).status_code == 404
-    listing = (await client.get("/api/v1/records")).json()
-    assert all(rec["id"] != record_id for rec in listing["records"])
+    # Archived observation is hidden from GET and list
+    assert (
+        await client.get(f"/api/v1/observations/{observation_id}")
+    ).status_code == 404
+    listing = (await client.get("/api/v1/observations")).json()
+    assert all(rec["id"] != observation_id for rec in listing["observations"])
 
 
 @pytest.mark.integration
-async def test_archive_record_not_found(client: AsyncClient) -> None:
-    r = await client.patch("/api/v1/records/99999/archive")
+async def test_archive_observation_not_found(client: AsyncClient) -> None:
+    r = await client.patch("/api/v1/observations/99999/archive")
 
     assert r.status_code == 404
 
 
 @pytest.mark.integration
-async def test_archive_record_idempotent(client: AsyncClient) -> None:
-    created = (await client.post("/api/v1/records", json=_RECORD)).json()
-    record_id = created["id"]
-    await client.patch(f"/api/v1/records/{record_id}/archive")
+async def test_archive_observation_idempotent(client: AsyncClient) -> None:
+    created = (await client.post("/api/v1/observations", json=_OBSERVATION)).json()
+    observation_id = created["id"]
+    await client.patch(f"/api/v1/observations/{observation_id}/archive")
 
     # Second archive attempt returns 404 — already archived
-    r = await client.patch(f"/api/v1/records/{record_id}/archive")
+    r = await client.patch(f"/api/v1/observations/{observation_id}/archive")
 
     assert r.status_code == 404
 

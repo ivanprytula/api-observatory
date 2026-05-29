@@ -23,10 +23,10 @@ docs {
   npm install -g wscat
 
   # Connect without auth (open endpoint during MVP)
-  wscat -c "ws://localhost:8000/ws/records/stream"
+  wscat -c "ws://localhost:8000/ws/observations/stream"
 
   # Connect with bearer token (when auth is enabled)
-  wscat -c "ws://localhost:8000/ws/records/stream?token=<your-token>"
+  wscat -c "ws://localhost:8000/ws/observations/stream?token=<your-token>"
   ```
 
   ## Expected events

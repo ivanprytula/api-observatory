@@ -8,7 +8,7 @@ from httpx import AsyncClient
 _VALID_PAYLOAD = {
     "name": "test-key",
     "tenant_id": 42,
-    "scopes": ["records:read", "sources:read"],
+    "scopes": ["observations:read", "sources:read"],
     "expires_at": None,
 }
 
@@ -27,7 +27,7 @@ async def test_create_api_key_returns_201(client: AsyncClient) -> None:
     assert body["name"] == "test-key"
     assert body["tenant_id"] == 42
     assert body["is_active"] is True
-    assert set(body["scopes"]) == {"records:read", "sources:read"}
+    assert set(body["scopes"]) == {"observations:read", "sources:read"}
     assert "key_prefix" in body
     # full_key prefix portion should match stored prefix
     assert body["full_key"][5:13] == body["key_prefix"]
@@ -147,7 +147,7 @@ async def test_list_scopes(client: AsyncClient) -> None:
     assert resp.status_code == 200
     scopes = resp.json()
     assert isinstance(scopes, list)
-    assert "records:read" in scopes
+    assert "observations:read" in scopes
     assert "admin" in scopes
 
 

@@ -23,7 +23,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.ingestor.api_schemas.records import RecordRequest
+from services.ingestor.api_schemas.observations import ObservationRequest
 
 
 pytestmark = pytest.mark.integration
@@ -97,35 +97,35 @@ class TestQueryAnalysis:
     """Query optimization tests using EXPLAIN ANALYZE (PostgreSQL)."""
 
     async def test_date_range_query_uses_index(
-        self, postgresql_async_session: AsyncSession, record_timestamp
+        self, postgresql_async_session: AsyncSession, observation_timestamp
     ) -> None:
-        """Verify date-range query uses ix_records_timestamp index.
+        """Verify date-range query uses ix_observations_timestamp index.
 
-        This test creates sample records and executes an EXPLAIN ANALYZE query
-        to verify that the ix_records_timestamp index is being used.
+        This test creates sample observations and executes an EXPLAIN ANALYZE query
+        to verify that the ix_observations_timestamp index is being used.
         """
-        from services.ingestor.repositories.records import create_record
+        from services.ingestor.repositories.observations import create_observation
 
         db = postgresql_async_session
 
         # Create test data
         for i in range(10):
-            req = RecordRequest(
+            req = ObservationRequest(
                 source="perf-test",
-                timestamp=record_timestamp + timedelta(minutes=i),
+                timestamp=observation_timestamp + timedelta(minutes=i),
                 data={"n": i},
                 tags=[],
             )
-            await create_record(db, req)
+            await create_observation(db, req)
 
         # EXPLAIN ANALYZE the date-range query
-        start = record_timestamp
-        end = record_timestamp + timedelta(hours=2)
+        start = observation_timestamp
+        end = observation_timestamp + timedelta(hours=2)
 
         query = text(
             """
             EXPLAIN (ANALYZE, FORMAT JSON)
-            SELECT * FROM records
+            SELECT * FROM observations
             WHERE deleted_at IS NULL
               AND timestamp >= :start
               AND timestamp < :end
@@ -143,27 +143,27 @@ class TestQueryAnalysis:
         assert plan["planning_ms"] is not None
         assert plan["execution_ms"] is not None
 
-    async def test_get_records_basic_query_plan(
-        self, postgresql_async_session: AsyncSession, record_timestamp
+    async def test_get_observations_basic_query_plan(
+        self, postgresql_async_session: AsyncSession, observation_timestamp
     ) -> None:
-        """Analyze the query plan for basic record fetching."""
-        from services.ingestor.repositories.records import create_record
+        """Analyze the query plan for basic observation fetching."""
+        from services.ingestor.repositories.observations import create_observation
 
         db = postgresql_async_session
 
-        # Create sample records
+        # Create sample observations
         for i in range(5):
-            req = RecordRequest(
+            req = ObservationRequest(
                 source=f"sample-{i}",
-                timestamp=record_timestamp,
+                timestamp=observation_timestamp,
                 data={"index": i},
             )
-            await create_record(db, req)
+            await create_observation(db, req)
 
         query = text(
             """
             EXPLAIN (ANALYZE, FORMAT JSON)
-            SELECT * FROM records
+            SELECT * FROM observations
             WHERE deleted_at IS NULL
             ORDER BY id
             LIMIT 100
@@ -182,32 +182,35 @@ class TestQueryAnalysis:
         assert plan["planning_ms"] < 10
 
     async def test_processed_flag_query_optimization(
-        self, postgresql_async_session: AsyncSession, record_timestamp
+        self, postgresql_async_session: AsyncSession, observation_timestamp
     ) -> None:
-        """Verify query for processed=false uses ix_records_processed index."""
-        from services.ingestor.repositories.records import create_record, mark_processed
+        """Verify query for processed=false uses ix_observations_processed index."""
+        from services.ingestor.repositories.observations import (
+            create_observation,
+            mark_processed,
+        )
 
         db = postgresql_async_session
 
-        # Create sample records
-        records = []
+        # Create sample observations
+        observations = []
         for i in range(5):
-            req = RecordRequest(
+            req = ObservationRequest(
                 source=f"sample-{i}",
-                timestamp=record_timestamp,
+                timestamp=observation_timestamp,
                 data={"index": i},
             )
-            record = await create_record(db, req)
-            records.append(record)
+            observation = await create_observation(db, req)
+            observations.append(observation)
 
-        # Mark some records processed
+        # Mark some observations processed
         for i in range(3):
-            await mark_processed(db, records[i].id)
+            await mark_processed(db, observations[i].id)
 
         query = text(
             """
             EXPLAIN (ANALYZE, FORMAT JSON)
-            SELECT * FROM records
+            SELECT * FROM observations
             WHERE deleted_at IS NULL
               AND processed = false
             ORDER BY id DESC
@@ -223,35 +226,35 @@ class TestQueryAnalysis:
         assert plan["execution_ms"] is not None
 
     async def test_soft_delete_filter_is_efficient(
-        self, postgresql_async_session: AsyncSession, record_timestamp
+        self, postgresql_async_session: AsyncSession, observation_timestamp
     ) -> None:
         """Verify soft-delete filtering via deleted_at IS NULL is efficient."""
-        from services.ingestor.repositories.records import (
-            create_record,
-            soft_delete_record,
+        from services.ingestor.repositories.observations import (
+            create_observation,
+            soft_delete_observation,
         )
 
         db = postgresql_async_session
 
-        # Create sample records
-        records = []
+        # Create sample observations
+        observations = []
         for i in range(5):
-            req = RecordRequest(
+            req = ObservationRequest(
                 source=f"sample-{i}",
-                timestamp=record_timestamp + timedelta(minutes=i),
+                timestamp=observation_timestamp + timedelta(minutes=i),
                 data={"index": i},
             )
-            record = await create_record(db, req)
-            records.append(record)
+            observation = await create_observation(db, req)
+            observations.append(observation)
 
-        # Soft-delete some records
+        # Soft-delete some observations
         for i in range(2):
-            await soft_delete_record(db, records[i].id)
+            await soft_delete_observation(db, observations[i].id)
 
         query = text(
             """
             EXPLAIN (ANALYZE, FORMAT JSON)
-            SELECT COUNT(*) FROM records
+            SELECT COUNT(*) FROM observations
             WHERE deleted_at IS NULL
             """
         )
@@ -266,27 +269,27 @@ class TestQueryAnalysis:
         assert plan["execution_ms"] < 100
 
     async def test_source_filter_combined_with_timestamp(
-        self, postgresql_async_session: AsyncSession, record_timestamp
+        self, postgresql_async_session: AsyncSession, observation_timestamp
     ) -> None:
         """Analyze performance of source + timestamp filter combination."""
-        from services.ingestor.repositories.records import create_record
+        from services.ingestor.repositories.observations import create_observation
 
         db = postgresql_async_session
 
-        # Create records with different sources
+        # Create observations with different sources
         for i in range(5):
-            req = RecordRequest(
+            req = ObservationRequest(
                 source=f"source-{i % 2}",  # Only 2 unique sources
-                timestamp=record_timestamp + timedelta(minutes=i),
+                timestamp=observation_timestamp + timedelta(minutes=i),
                 data={"idx": i},
                 tags=[],
             )
-            await create_record(db, req)
+            await create_observation(db, req)
 
         query = text(
             """
             EXPLAIN (ANALYZE, FORMAT JSON)
-            SELECT * FROM records
+            SELECT * FROM observations
             WHERE deleted_at IS NULL
               AND source = :source
               AND timestamp >= :start
@@ -314,26 +317,26 @@ class TestQueryAnalysis:
         assert plan["planning_ms"] < 20
 
     async def test_sequential_scan_for_array_aggregation(
-        self, postgresql_async_session: AsyncSession, record_timestamp
+        self, postgresql_async_session: AsyncSession, observation_timestamp
     ) -> None:
         """Verify that computing tag counts requires reading data.
 
         This test documents that while we use an index for filtering,
         processing array operations still requires reading the data.
         """
-        from services.ingestor.repositories.records import create_record
+        from services.ingestor.repositories.observations import create_observation
 
         db = postgresql_async_session
 
-        # Create sample records
+        # Create sample observations
         for i in range(5):
-            req = RecordRequest(
+            req = ObservationRequest(
                 source=f"sample-{i}",
-                timestamp=record_timestamp + timedelta(minutes=i),
+                timestamp=observation_timestamp + timedelta(minutes=i),
                 data={"index": i},
                 tags=[f"tag-{j}" for j in range(i * 2)],
             )
-            await create_record(db, req)
+            await create_observation(db, req)
 
         query = text(
             """
@@ -343,7 +346,7 @@ class TestQueryAnalysis:
                 source,
                 timestamp,
                 COALESCE(json_array_length(tags), 0) as tag_count
-            FROM records
+            FROM observations
             WHERE deleted_at IS NULL
             ORDER BY id DESC
             LIMIT 10
@@ -360,35 +363,35 @@ class TestQueryAnalysis:
         assert plan["execution_ms"] >= 0
 
     async def test_join_with_tags_performance(
-        self, postgresql_async_session: AsyncSession, record_timestamp
+        self, postgresql_async_session: AsyncSession, observation_timestamp
     ) -> None:
         """Verify joins with tags array are properly planned."""
-        from services.ingestor.repositories.records import create_record
+        from services.ingestor.repositories.observations import create_observation
 
         db = postgresql_async_session
 
-        # Create records with tags
+        # Create observations with tags
         for i in range(5):
-            req = RecordRequest(
+            req = ObservationRequest(
                 source=f"sample-{i}",
-                timestamp=record_timestamp + timedelta(minutes=i),
+                timestamp=observation_timestamp + timedelta(minutes=i),
                 data={"index": i},
                 tags=[f"tag-{j}" for j in range(i * 2)],
             )
-            await create_record(db, req)
+            await create_observation(db, req)
 
         # Query tags array
         query = text(
             """
             EXPLAIN (ANALYZE, FORMAT JSON)
             SELECT
-                records.id,
-                records.source,
-                json_array_elements_text(records.tags) as tag
-            FROM records
+                observations.id,
+                observations.source,
+                json_array_elements_text(observations.tags) as tag
+            FROM observations
             WHERE deleted_at IS NULL
               AND json_array_length(tags) > 0
-            ORDER BY records.id
+            ORDER BY observations.id
             """
         )
 
@@ -407,7 +410,7 @@ class TestIndexEffectiveness:
     async def test_timestamp_index_is_present(
         self, postgresql_async_session: AsyncSession
     ) -> None:
-        """Verify ix_records_timestamp index exists in schema."""
+        """Verify ix_observations_timestamp index exists in schema."""
         db = postgresql_async_session
 
         # Query pg_indexes to verify index exists
@@ -415,8 +418,8 @@ class TestIndexEffectiveness:
             """
             SELECT EXISTS (
                 SELECT 1 FROM pg_indexes
-                WHERE tablename = 'records'
-                  AND indexname = 'ix_records_timestamp'
+                WHERE tablename = 'observations'
+                  AND indexname = 'ix_observations_timestamp'
             )
             """
         )
@@ -424,20 +427,20 @@ class TestIndexEffectiveness:
         result = await db.execute(query)
         index_exists = result.scalar()
 
-        assert index_exists is True, "ix_records_timestamp index not found"
+        assert index_exists is True, "ix_observations_timestamp index not found"
 
     async def test_processed_index_is_present(
         self, postgresql_async_session: AsyncSession
     ) -> None:
-        """Verify ix_records_processed index exists in schema."""
+        """Verify ix_observations_processed index exists in schema."""
         db = postgresql_async_session
 
         query = text(
             """
             SELECT EXISTS (
                 SELECT 1 FROM pg_indexes
-                WHERE tablename = 'records'
-                  AND indexname = 'ix_records_processed'
+                WHERE tablename = 'observations'
+                  AND indexname = 'ix_observations_processed'
             )
             """
         )
@@ -445,34 +448,34 @@ class TestIndexEffectiveness:
         result = await db.execute(query)
         index_exists = result.scalar()
 
-        assert index_exists is False, "ix_records_processed should not exist"
+        assert index_exists is True, "ix_observations_processed index not found"
 
     async def test_partial_soft_delete_index_effective(
-        self, postgresql_async_session: AsyncSession, record_timestamp
+        self, postgresql_async_session: AsyncSession, observation_timestamp
     ) -> None:
-        """Verify the partial index on active records is working.
+        """Verify the partial index on active observations is working.
 
-        The ix_records_active_source partial index filters WHERE deleted_at IS NULL.
-        This should make queries on active records faster.
+        The ix_observations_active_source partial index filters WHERE deleted_at IS NULL.
+        This should make queries on active observations faster.
         """
-        from services.ingestor.repositories.records import create_record
+        from services.ingestor.repositories.observations import create_observation
 
         db = postgresql_async_session
 
-        # Create test records
+        # Create test observations
         for i in range(10):
-            req = RecordRequest(
+            req = ObservationRequest(
                 source=f"test-source-{i % 3}",
-                timestamp=record_timestamp + timedelta(minutes=i),
+                timestamp=observation_timestamp + timedelta(minutes=i),
                 data={"index": i},
             )
-            await create_record(db, req)
+            await create_observation(db, req)
 
         # Query that benefits from partial index
         query = text(
             """
             EXPLAIN (ANALYZE, FORMAT JSON)
-            SELECT * FROM records
+            SELECT * FROM observations
             WHERE deleted_at IS NULL
               AND source = :source
             ORDER BY id DESC

@@ -39,8 +39,8 @@ async def get_ingestion_status(db: DbDep) -> dict[str, Any]:
     Returns:
         {
             "status": "healthy" | "unhealthy",
-            "records_24h": int,
-            "last_record_time": str (ISO 8601) | null,
+            "observations_24h": int,
+            "last_observation_time": str (ISO 8601) | null,
             "ingestion_enabled": bool,
             "error": str (if unhealthy),
         }

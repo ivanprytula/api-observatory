@@ -10,7 +10,7 @@ from services.ingestor.transformations.tabular import (
 )
 
 
-_RECORDS = [
+_OBSERVATIONS = [
     {"provider": "alpha", "latency_ms": 110, "status": "ok"},
     {"provider": "beta", "latency_ms": 190, "status": "warn"},
     {"provider": "alpha", "latency_ms": 95, "status": "ok"},
@@ -23,7 +23,7 @@ class TestTabularETLEngine:
     def test_polars_preview(self) -> None:
         result = TabularETLEngine.preview(
             backend="polars",
-            records=_RECORDS,
+            observations=_OBSERVATIONS,
             rename_columns={"latency_ms": "p95_latency_ms"},
             select_columns=["provider", "p95_latency_ms"],
             sort_by="p95_latency_ms",
@@ -33,20 +33,20 @@ class TestTabularETLEngine:
         assert result.backend_used == "polars"
         assert result.row_count == 3
         assert result.columns == ["provider", "p95_latency_ms"]
-        assert result.records[0]["p95_latency_ms"] == 190
+        assert result.observations[0]["p95_latency_ms"] == 190
 
     def test_pandas_preview(self) -> None:
         result = TabularETLEngine.preview(
             backend="pandas",
-            records=_RECORDS,
+            observations=_OBSERVATIONS,
             filter_equals={"provider": "alpha"},
             sort_by="latency_ms",
             numeric_fields=["latency_ms"],
         )
         assert result.backend_used == "pandas"
         assert result.row_count == 2
-        assert all(item["provider"] == "alpha" for item in result.records)
+        assert all(item["provider"] == "alpha" for item in result.observations)
 
     def test_dask_preview_is_blocked(self) -> None:
         with pytest.raises(UnsupportedETLBackendError):
-            TabularETLEngine.preview(backend="dask", records=_RECORDS)
+            TabularETLEngine.preview(backend="dask", observations=_OBSERVATIONS)

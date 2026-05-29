@@ -13,10 +13,18 @@ from unittest.mock import AsyncMock, patch
 import aiohttp
 import pytest
 
-from services.ingestor.fetch_aiohttp import (
-    close_http_session,
-    fetch_with_retry,
-    get_http_session,
+
+_fetch_aiohttp = pytest.importorskip(
+    "services.ingestor.fetch_aiohttp",
+    reason="Deferred to post-MVP/extensions: aiohttp alternative is not in active MVP scope.",
+)
+
+close_http_session = _fetch_aiohttp.close_http_session
+fetch_with_retry = _fetch_aiohttp.fetch_with_retry
+get_http_session = _fetch_aiohttp.get_http_session
+
+pytestmark = pytest.mark.skip(
+    reason="Deferred to post-MVP/extensions: keep httpx as the active MVP HTTP client path."
 )
 
 

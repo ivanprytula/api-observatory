@@ -14,7 +14,7 @@ from services.ingestor.constants import (
 
 
 class HealthSampleCreate(BaseModel):
-    """Request body for recording one provider health probe."""
+    """Request body for observationing one provider health probe."""
 
     source_id: int = Field(..., ge=1, description="Source profile ID being probed.")
     sampled_at: datetime = Field(..., description="UTC timestamp when the probe ran.")
@@ -47,7 +47,7 @@ class HealthSampleCreate(BaseModel):
 
 
 class HealthSampleResponse(BaseModel):
-    """Single health probe record returned by the API."""
+    """Single health probe observation returned by the API."""
 
     model_config = ConfigDict(from_attributes=True)  # type: ignore[assignment]
 

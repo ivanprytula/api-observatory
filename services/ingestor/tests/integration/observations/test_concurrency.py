@@ -15,12 +15,12 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.ingestor.api_schemas.records import RecordRequest
-from tests.shared.payloads import RECORD_API
+from services.ingestor.api_schemas.observations import ObservationRequest
+from tests.shared.payloads import OBSERVATION_API
 
 
 _BASE_PAYLOAD = {
-    **RECORD_API,
+    **OBSERVATION_API,
     "source": "concurrency-test",
     "timestamp": "2024-06-01T12:00:00",
 }
@@ -33,39 +33,39 @@ _BASE_PAYLOAD = {
 class TestAsyncGather:
     """Test asyncio.gather concurrency for enrich endpoint.
 
-    Setup: Create N records, then enrich them all in parallel.
+    Setup: Create N observations, then enrich them all in parallel.
     Verifies: All requests succeed, no connection pool exhaustion.
     """
 
     async def test_enrich_concurrent_requests_all_succeed(
-        self, client: AsyncClient, db: AsyncSession, record_timestamp
+        self, client: AsyncClient, db: AsyncSession, observation_timestamp
     ) -> None:
         """Enrich N requests concurrently — all should succeed.
 
-        Real-world: Data pipeline enriches 50 records by hitting an external API.
-        Test: 5 concurrent POST /api/v2/records/enrich calls."""
-        from services.ingestor.repositories import records as crud
+        Real-world: Data pipeline enriches 50 observations by hitting an external API.
+        Test: 5 concurrent POST /api/v2/observations/enrich calls."""
+        from services.ingestor.repositories import observations as crud
 
-        # Create 5 records
-        records = []
+        # Create 5 observations
+        observations = []
         for i in range(5):
-            record = await crud.create_record(
+            observation = await crud.create_observation(
                 db,
-                RecordRequest(
+                ObservationRequest(
                     source=f"concurrent-source-{i}",
-                    timestamp=record_timestamp,
+                    timestamp=observation_timestamp,
                     data={"index": i},
                 ),
             )
-            records.append(record)
+            observations.append(observation)
 
-        record_ids = [r.id for r in records]
+        observation_ids = [r.id for r in observations]
 
         # Fire 5 concurrent enrich requests
         enrich_tasks = [
             client.post(
-                "/api/v2/records/enrich",
-                json={"record_ids": [record_ids[i]]},
+                "/api/v2/observations/enrich",
+                json={"observation_ids": [observation_ids[i]]},
             )
             for i in range(5)
         ]
@@ -79,38 +79,38 @@ class TestAsyncGather:
             assert data["enriched_count"] == 1
 
     async def test_enrich_concurrent_batch_under_semaphore(
-        self, client: AsyncClient, db: AsyncSession, record_timestamp
+        self, client: AsyncClient, db: AsyncSession, observation_timestamp
     ) -> None:
         """Concurrent enrich respects semaphore limit (default 10).
 
-        Test: 20 concurrent tasks, each enriching 1 record.
+        Test: 20 concurrent tasks, each enriching 1 observation.
         Expectation: All succeed via semaphore-controlled concurrency.
 
         Note: This test is designed for SQLite. On PostgreSQL with shared
         sessions, use client_isolated fixture instead (see postgresonly tests).
         """
-        from services.ingestor.repositories import records as crud
+        from services.ingestor.repositories import observations as crud
 
-        # Create 20 records
-        records = []
+        # Create 20 observations
+        observations = []
         for i in range(20):
-            record = await crud.create_record(
+            observation = await crud.create_observation(
                 db,
-                RecordRequest(
+                ObservationRequest(
                     source=f"semaphore-test-{i}",
-                    timestamp=record_timestamp,
+                    timestamp=observation_timestamp,
                     data={"index": i},
                 ),
             )
-            records.append(record)
+            observations.append(observation)
 
-        record_ids = [r.id for r in records]
+        observation_ids = [r.id for r in observations]
 
         # Fire 20 concurrent enrich requests
         tasks = [
             client.post(
-                "/api/v2/records/enrich",
-                json={"record_ids": [record_ids[i]]},
+                "/api/v2/observations/enrich",
+                json={"observation_ids": [observation_ids[i]]},
             )
             for i in range(20)
         ]
@@ -140,7 +140,7 @@ class TestRaceConditionHandling:
     async def test_upsert_concurrent_same_key_idempotent_mode(
         self, client_isolated: AsyncClient
     ) -> None:
-        """Idempotent mode race: one 201, one 200, same record returned.
+        """Idempotent mode race: one 201, one 200, same observation returned.
 
         Real-world: Two webhooks arrive simultaneously with the same sensor data.
         Expected behavior: One creates; the other finds and returns it.
@@ -156,8 +156,8 @@ class TestRaceConditionHandling:
 
         # Fire both concurrently
         r1, r2 = await asyncio.gather(
-            client_isolated.post("/api/v2/records/upsert", json=upsert_payload),
-            client_isolated.post("/api/v2/records/upsert", json=upsert_payload),
+            client_isolated.post("/api/v2/observations/upsert", json=upsert_payload),
+            client_isolated.post("/api/v2/observations/upsert", json=upsert_payload),
         )
 
         statuses = sorted([r1.status_code, r2.status_code])
@@ -168,11 +168,11 @@ class TestRaceConditionHandling:
             "Concurrent upserts should produce one create and one find."
         )
 
-        # Both must return the same record (no duplicates)
-        id1 = r1.json()["record"]["id"]
-        id2 = r2.json()["record"]["id"]
+        # Both must return the same observation (no duplicates)
+        id1 = r1.json()["observation"]["id"]
+        id2 = r2.json()["observation"]["id"]
         assert id1 == id2, (
-            f"Duplicate records detected: IDs differ. "
+            f"Duplicate observations detected: IDs differ. "
             f"Race condition handling failed: {id1} != {id2}"
         )
 
@@ -192,16 +192,16 @@ class TestRaceConditionHandling:
         }
 
         # First request
-        r1 = await client.post("/api/v2/records/upsert", json=upsert_payload)
+        r1 = await client.post("/api/v2/observations/upsert", json=upsert_payload)
         assert r1.status_code == 201, f"First upsert should create: {r1.text}"
 
         # Second request (same key)
-        r2 = await client.post("/api/v2/records/upsert", json=upsert_payload)
+        r2 = await client.post("/api/v2/observations/upsert", json=upsert_payload)
         assert r2.status_code == 200, f"Second upsert should find existing: {r2.text}"
 
-        # Both return same record
-        id1 = r1.json()["record"]["id"]
-        id2 = r2.json()["record"]["id"]
+        # Both return same observation
+        id1 = r1.json()["observation"]["id"]
+        id2 = r2.json()["observation"]["id"]
         assert id1 == id2
 
     @pytest.mark.postgresonly
@@ -211,7 +211,7 @@ class TestRaceConditionHandling:
         """Concurrent upserts with different keys: both should create (201).
 
         Real-world: Two different sensors send data simultaneously.
-        Expected: Both create new records (no conflict).
+        Expected: Both create new observations (no conflict).
 
         Uses client_isolated fixture to ensure concurrent requests get
         independent PostgreSQL connections (avoids asyncpg conflict).
@@ -229,18 +229,18 @@ class TestRaceConditionHandling:
 
         # Fire both concurrently (different source = different keys)
         r1, r2 = await asyncio.gather(
-            client_isolated.post("/api/v2/records/upsert", json=payload1),
-            client_isolated.post("/api/v2/records/upsert", json=payload2),
+            client_isolated.post("/api/v2/observations/upsert", json=payload1),
+            client_isolated.post("/api/v2/observations/upsert", json=payload2),
         )
 
         # Both should create
         assert r1.status_code == 201
         assert r2.status_code == 201
 
-        # Different records
-        id1 = r1.json()["record"]["id"]
-        id2 = r2.json()["record"]["id"]
-        assert id1 != id2, "Different keys should create different records"
+        # Different observations
+        id1 = r1.json()["observation"]["id"]
+        id2 = r2.json()["observation"]["id"]
+        assert id1 != id2, "Different keys should create different observations"
 
     async def test_upsert_strict_mode_sequential_conflict(
         self, client: AsyncClient
@@ -261,7 +261,7 @@ class TestRaceConditionHandling:
 
         # First upsert (creates)
         r1 = await client.post(
-            "/api/v2/records/upsert",
+            "/api/v2/observations/upsert",
             params={"mode": "strict"},
             json=upsert_payload,
         )
@@ -269,7 +269,7 @@ class TestRaceConditionHandling:
 
         # Second upsert (identical key — must fail in strict mode)
         r2 = await client.post(
-            "/api/v2/records/upsert",
+            "/api/v2/observations/upsert",
             params={"mode": "strict"},
             json=upsert_payload,
         )

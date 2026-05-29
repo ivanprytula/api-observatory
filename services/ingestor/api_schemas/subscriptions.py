@@ -53,7 +53,7 @@ class DeliveryLog(BaseModel):
     """Delivery status item for one alert event dispatch."""
 
     delivery_id: str = Field(
-        ..., description="Stable identifier for this delivery record."
+        ..., description="Stable identifier for this delivery observation."
     )
     source_id: int | None = Field(
         None, description="Associated source profile ID when applicable."
@@ -73,7 +73,7 @@ class DeliveryLog(BaseModel):
         None, description="Operational detail explaining the delivery outcome."
     )
     created_at: datetime = Field(
-        ..., description="UTC timestamp for the delivery record."
+        ..., description="UTC timestamp for the delivery observation."
     )
     metadata: dict[str, Any] = Field(default_factory=dict)
 

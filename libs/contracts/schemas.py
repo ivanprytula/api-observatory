@@ -98,7 +98,7 @@ class VectorSearchResult(BaseModel):
 
 
 class VectorSearchQueryResponse(BaseModel):
-    """Semantic-search response for indexed records."""
+    """Semantic-search response for indexed observations."""
 
     results: list[VectorSearchResult]
     count: int
@@ -107,11 +107,11 @@ class VectorSearchQueryResponse(BaseModel):
 
 
 class VectorSearchIndexResponse(BaseModel):
-    """Response from indexing records into the AI gateway."""
+    """Response from indexing observations into the AI gateway."""
 
     requested_count: int
     indexed_count: int
-    missing_record_ids: list[int] = Field(default_factory=list)
+    missing_observation_ids: list[int] = Field(default_factory=list)
     collection: str
 
 

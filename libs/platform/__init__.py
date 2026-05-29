@@ -9,7 +9,7 @@ Intended contents (migrate from ingestor/core/ in Phase 3):
 - sentry     : Sentry SDK init helper
 
 Design constraints:
-- Zero service-domain knowledge (no Record, no pipeline-specific types)
+- Zero service-domain knowledge (no Observation, no pipeline-specific types)
 - No imports from libs.contracts or any service
 - All public symbols re-exported here for a stable import surface:
     from libs.platform import retry, circuit_breaker

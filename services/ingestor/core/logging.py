@@ -60,7 +60,7 @@ def set_cid(cid: str) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Stdlib LogRecord attributes excluded from "extra" field forwarding
+# Stdlib LogObservation attributes excluded from "extra" field forwarding
 # ─────────────────────────────────────────────────────────────────────────────
 _STDLIB_ATTRS: frozenset[str] = frozenset(
     {
@@ -98,16 +98,16 @@ _STDLIB_ATTRS: frozenset[str] = frozenset(
 def _extract_extra(
     _logger: Any, _method: str, event_dict: structlog.types.EventDict
 ) -> structlog.types.EventDict:
-    """Forward ``extra={}`` fields from stdlib LogRecord into event_dict.
+    """Forward ``extra={}`` fields from stdlib LogObservation into event_dict.
 
     When stdlib code calls ``logger.info("msg", extra={"key": "val"})``,
-    the extra keys are attributes on the LogRecord.  This processor copies
+    the extra keys are attributes on the LogObservation.  This processor copies
     them into the structlog event_dict so renderers can include them.
     """
-    record: logging.LogRecord | None = event_dict.get("_record")  # type: ignore[assignment]
-    if record is None:
+    observation: logging.LogObservation | None = event_dict.get("_observation")  # type: ignore[assignment]
+    if observation is None:
         return event_dict
-    for key, value in record.__dict__.items():
+    for key, value in observation.__dict__.items():
         if key not in _STDLIB_ATTRS and not key.startswith("_"):
             event_dict.setdefault(key, value)
     return event_dict
@@ -164,7 +164,7 @@ def setup_logging() -> logging.Logger:
         else structlog.dev.ConsoleRenderer()
     )
 
-    # ProcessorFormatter bridges stdlib LogRecords through structlog processors.
+    # ProcessorFormatter bridges stdlib LogObservations through structlog processors.
     formatter = ProcessorFormatter(
         processors=[ProcessorFormatter.remove_processors_meta, renderer],
         foreign_pre_chain=shared_processors,

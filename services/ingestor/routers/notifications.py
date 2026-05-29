@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, status
 
-from services.ingestor.api_schemas.records import (
+from services.ingestor.api_schemas.observations import (
     NotificationTestRequest,
     NotificationTestResponse,
 )
