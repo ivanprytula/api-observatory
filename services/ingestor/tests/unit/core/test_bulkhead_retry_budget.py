@@ -46,14 +46,21 @@ async def test_retry_budget_caps_retries_across_calls() -> None:
 
 
 @pytest.mark.unit
-async def test_retry_budget_window_expires_tokens() -> None:
+async def test_retry_budget_window_expires_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Retry budget should permit new retries after the budget window elapses."""
     budget = RetryBudget(max_retry_tokens=1, window_seconds=0.01)
 
+    times = [100.0, 100.0, 100.02]
+
+    def fake_monotonic() -> float:
+        return times.pop(0) if times else 100.02
+
+    monkeypatch.setattr("libs.platform.retry.time.monotonic", fake_monotonic)
+
     assert await budget.consume_retry() is True
     assert await budget.consume_retry() is False
-
-    await asyncio.sleep(0.02)
 
     assert await budget.consume_retry() is True
 
