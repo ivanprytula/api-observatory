@@ -33,7 +33,8 @@ declare -a EXCLUDE_PATTERNS=(
   '\.example\.'          # *.example.* files (e.g., .env.example, secret.example.yaml)
   '/local/'              # local/ directories (e.g., infra/kubernetes/overlays/local/)
   '^\.env\.local'        # .env.local* files  '^@\.env\.test'         # .env.test files (test environment vars)
-  'conftest\.py$'        # pytest conftest.py (test fixtures)  '\.test\.'             # *.test.* test fixtures
+  'conftest\.py$'        # pytest conftest.py (test fixtures)
+  '\.test\.'            # *.test.* test fixtures          # *.test.* test fixtures
   '^scripts/testing/'    # scripts/testing/ directory (test-only scripts)
   '^tests/'              # tests/ directory (unit/integration tests)
   'services/*/tests/'    # test directories within services
