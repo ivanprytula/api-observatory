@@ -1,3 +1,5 @@
+# ─── CORE STACK ─────────────────────────────────────────────────────────────
+
 # Core services (database, message broker, API)
 up:
     docker compose up -d db redis redpanda ingestor mongodb
@@ -21,6 +23,8 @@ up-portal:
 # View logs for a specific service
 logs svc:
     docker compose logs -f {{svc}}
+
+# ─── DAILY DEV WORKFLOW ─────────────────────────────────────────────────────
 
 # Seed demo source profiles for probe/scorecard workflows
 seed-demo:
@@ -54,6 +58,8 @@ down:
 doctor:
     bash scripts/setup/00-doctor.sh
 
+# ─── DOCKER IMAGE TOOLS ─────────────────────────────────────────────────────
+
 # Build deployment image for release audit
 docker-build-image tag="api-observatory:local":
     docker build -t {{tag}} .
@@ -83,11 +89,15 @@ docker-scan-image image="api-observatory:local":
         {{image}}
     echo "No CRITICAL CVEs detected"
 
+# ─── PRE-RELEASE GATE ───────────────────────────────────────────────────────
+
 # Phase 13a deployment image verification gate
 deploy-audit tag="api-observatory:local":
     just docker-build-image {{tag}}
     just docker-audit-size {{tag}}
     just docker-scan-image {{tag}}
+
+# ─── FLOCI / AWS SANDBOX ────────────────────────────────────────────────────
 
 # Floci AWS sandbox
 up-aws:
