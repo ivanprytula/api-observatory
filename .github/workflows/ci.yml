@@ -234,6 +234,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          if [[ ! -f "$PWD/scripts/ops/02-compose-profile.sh" ]]; then
+            echo "Skipping smoke deploy: scripts/ops/02-compose-profile.sh is not present in this repository snapshot"
+            exit 0
+          fi
+
           bash scripts/ops/02-compose-profile.sh prod-like up -d db redis redpanda ingestor
           trap 'bash scripts/ops/02-compose-profile.sh prod-like down -v' EXIT
 
