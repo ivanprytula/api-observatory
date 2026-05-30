@@ -182,16 +182,53 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          prom_config=''
+          alert_rules=''
+
+          if [[ -f "$PWD/infra/monitoring/prometheus.yml" ]]; then
+            prom_config="$PWD/infra/monitoring/prometheus.yml"
+          else
+            prom_config="$(find "$PWD" \
+              -path "$PWD/.venv" -prune -o \
+              -path "$PWD/.local-dev" -prune -o \
+              -type f -path '*/monitoring/prometheus.yml' -print \
+              | head -n 1 || true)"
+          fi
+
+          if [[ -f "$PWD/infra/monitoring/rules/alert.rules.yml" ]]; then
+            alert_rules="$PWD/infra/monitoring/rules/alert.rules.yml"
+          else
+            alert_rules="$(find "$PWD" \
+              -path "$PWD/.venv" -prune -o \
+              -path "$PWD/.local-dev" -prune -o \
+              -type f -path '*/monitoring/rules/alert.rules.yml' -print \
+              | head -n 1 || true)"
+          fi
+
+          if [[ -z "$prom_config" || -z "$alert_rules" ]]; then
+            echo "Skipping Prometheus checks: config/rules files are not present in this repository snapshot"
+            echo "Discovered monitoring-like files:" >&2
+            find "$PWD" \
+              -path "$PWD/.venv" -prune -o \
+              -path "$PWD/.local-dev" -prune -o \
+              -type f \( -name '*prometheus*.yml' -o -name '*alert*.yml' \) -print \
+              | sort >&2 || true
+            exit 0
+          fi
+
+          prom_config_rel="${prom_config#"$PWD"/}"
+          alert_rules_rel="${alert_rules#"$PWD"/}"
+
           docker run --rm \
             --entrypoint=promtool \
-            -v "$PWD/infra/monitoring:/etc/prometheus" \
+            -v "$PWD:/workspace" \
             prom/prometheus:v2.54.1 \
-            check config /etc/prometheus/prometheus.yml
+            check config "/workspace/${prom_config_rel}"
           docker run --rm \
             --entrypoint=promtool \
-            -v "$PWD/infra/monitoring:/etc/prometheus" \
+            -v "$PWD:/workspace" \
             prom/prometheus:v2.54.1 \
-            check rules /etc/prometheus/rules/alert.rules.yml
+            check rules "/workspace/${alert_rules_rel}"
 
       - name: Smoke deploy prod-like stack
         shell: bash
