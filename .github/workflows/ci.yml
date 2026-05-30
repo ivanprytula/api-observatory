@@ -65,6 +65,112 @@ jobs:
       - name: Run unit tests
         run: uv run pytest -q -m unit
 
+  integration-tests:
+    name: Integration tests (postgres + redis)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17-trixie
+        env:
+          POSTGRES_DB: data_zoo_test
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_URL_TEST: postgresql+asyncpg://postgres:postgres@localhost:5432/data_zoo_test
+      REDIS_ENABLED: "true"
+      REDIS_URL: redis://localhost:6379/0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Sync dependencies
+        run: uv sync --frozen
+
+      - name: Verify service health before tests
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for _ in {1..30}; do
+            if pg_isready -h localhost -p 5432 -U postgres >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          pg_isready -h localhost -p 5432 -U postgres
+
+          for _ in {1..30}; do
+            if redis-cli -h localhost -p 6379 ping | grep -q PONG; then
+              break
+            fi
+            sleep 2
+          done
+          redis-cli -h localhost -p 6379 ping
+
+      - name: Capture dependency diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-diagnostics
+          docker ps -a > ci-diagnostics/docker-ps.txt
+          docker logs "${{ job.services.postgres.id }}" > ci-diagnostics/postgres.log 2>&1 || true
+          docker logs "${{ job.services.redis.id }}" > ci-diagnostics/redis.log 2>&1 || true
+
+      - name: Upload dependency diagnostics
+        if: failure()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: ci-dependency-diagnostics
+          path: ci-diagnostics
+
+      - name: Run integration tests with coverage gate
+        run: |
+          uv run pytest -q -m integration \
+            --junitxml=pytest-integration.xml \
+            --cov=services/ingestor \
+            --cov=libs \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage-integration.xml \
+            --cov-fail-under=80
+
+      - name: Upload integration test report
+        if: always()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: pytest-integration-report
+          path: pytest-integration.xml
+
+      - name: Upload integration coverage report
+        if: always()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: integration-coverage-xml
+          path: coverage-integration.xml
+
   docker-build:
     name: Docker build (no push)
     runs-on: ubuntu-latest

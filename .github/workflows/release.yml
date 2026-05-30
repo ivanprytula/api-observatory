@@ -8,6 +8,8 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write
+  attestations: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -43,3 +45,53 @@ jobs:
         run: |
           docker push "${IMAGE_NAME}:${GITHUB_REF_NAME}"
           docker push "${IMAGE_NAME}:latest"
+
+      - name: Resolve pushed image digest
+        id: image-digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo_digest=$(docker image inspect "${IMAGE_NAME}:${GITHUB_REF_NAME}" --format '{{index .RepoDigests 0}}')
+          digest="${repo_digest#*@}"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@9bb44ab69a66f6ad9cfb046ebd5f7fb5a6f91e2b # v3.8.2
+
+      - name: Sign image with GitHub OIDC
+        env:
+          IMAGE_DIGEST: ${{ steps.image-digest.outputs.digest }}
+        run: |
+          cosign sign --yes "${IMAGE_NAME}@${IMAGE_DIGEST}"
+
+      - name: Verify image signature
+        env:
+          IMAGE_DIGEST: ${{ steps.image-digest.outputs.digest }}
+        run: |
+          cosign verify \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/release.yml@.*" \
+            "${IMAGE_NAME}@${IMAGE_DIGEST}"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v3
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.image-digest.outputs.digest }}
+          push-to-registry: true
+
+      - name: Install Syft
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin v1.30.0
+
+      - name: Generate SBOM (SPDX JSON)
+        run: |
+          syft "${IMAGE_NAME}:${GITHUB_REF_NAME}" -o spdx-json > "sbom-${GITHUB_REF_NAME}.spdx.json"
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: sbom-${{ github.ref_name }}
+          path: sbom-${{ github.ref_name }}.spdx.json
