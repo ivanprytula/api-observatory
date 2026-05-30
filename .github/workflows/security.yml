@@ -150,6 +150,47 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: "1"
 
+  docker-images-advisory:
+    name: Docker images advisory (Trivy os+library, non-blocking)
+    runs-on: ubuntu-latest
+    needs:
+      - action-ref-validation
+      - python-deps
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        dockerfile:
+          - name: ingestor
+            path: Dockerfile
+          - name: database
+            path: infra/database/Dockerfile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Build Docker image
+        env:
+          DOCKER_BUILDKIT: "1"
+        run: |
+          docker build \
+            -t "${{ matrix.dockerfile.name }}:${{ github.sha }}" \
+            -f "${{ matrix.dockerfile.path }}" \
+            .
+
+      - name: Run Trivy advisory scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.dockerfile.name }}:${{ github.sha }}
+          format: table
+          ignore-unfixed: true
+          scanners: vuln
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+          # Advisory mode: keep visibility without blocking merges.
+          exit-code: "0"
+
   security-summary:
     name: Security summary
     runs-on: ubuntu-latest
