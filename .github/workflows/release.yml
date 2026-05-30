@@ -83,12 +83,27 @@ jobs:
       - name: Verify provenance attestation
         env:
           IMAGE_DIGEST: ${{ steps.image-digest.outputs.digest }}
+        shell: bash
         run: |
-          cosign verify-attestation \
-            --type slsaprovenance \
-            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-            --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/release.yml@.*" \
-            "${IMAGE_NAME}@${IMAGE_DIGEST}"
+          set -euo pipefail
+
+          for attempt in 1 2 3 4 5 6; do
+            if gh attestation verify "oci://${IMAGE_NAME}@${IMAGE_DIGEST}" \
+              --repo "${{ github.repository }}" \
+              --cert-identity-regex "https://github.com/${{ github.repository }}/.github/workflows/release.yml@.*" \
+              --format json > attestation-verify.json; then
+              echo "Provenance attestation verified"
+              break
+            fi
+
+            if [[ "$attempt" -eq 6 ]]; then
+              echo "Failed to verify provenance attestation after retries" >&2
+              exit 1
+            fi
+
+            echo "Attestation not yet available (attempt ${attempt}/6); retrying in 10s..."
+            sleep 10
+          done
 
       - name: Install Syft
         shell: bash
