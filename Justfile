@@ -202,6 +202,25 @@ restore-s3-mongodb s3uri:
 api-check:
     @curl -sf http://localhost:8000/readyz > /dev/null && echo "stack ready" || (echo "stack not ready — run: just up" >&2; exit 1)
 
+# Smoke deploy against the prod-like compose stack.
+smoke-deploy:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    bash scripts/ops/02-compose-profile.sh prod-like up -d db redis redpanda ingestor
+    trap 'bash scripts/ops/02-compose-profile.sh prod-like down -v' EXIT
+
+    for _ in $(seq 1 60); do
+        if curl -fsS http://localhost:8000/health >/dev/null && curl -fsS http://localhost:8000/readyz >/dev/null; then
+            echo "smoke deploy passed"
+            exit 0
+        fi
+        sleep 5
+    done
+
+    echo "smoke deploy failed" >&2
+    bash scripts/ops/02-compose-profile.sh prod-like logs ingestor
+    exit 1
+
 # Wipe DB to a clean empty state: stop → remove container+volume → restart → wait.
 db-reset:
     docker compose rm -sfv ingestor db

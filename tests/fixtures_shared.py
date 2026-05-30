@@ -88,6 +88,35 @@ from services.ingestor.main import app  # noqa: E402
 from tests.shared.payloads import OBSERVATION_API  # noqa: E402
 
 
+# Explicit shared fixture export surface for tree-level conftest re-exports.
+__all__ = [
+    "observation_timestamp",
+    "fake_redis",
+    "redis_container",
+    "real_redis",
+    "client_with_cache",
+    "_auto_provision_postgres",
+    "apply_migrations",
+    "db",
+    "client",
+    "client_isolated",
+    "test_settings",
+    "settings_with_docs_auth",
+    "settings_with_api_token",
+    "created_observation",
+    "created_observations",
+    "sample_observations_with_tags",
+    "observation_payload",
+    "postgresql_async_session",
+    "postgresql_async_session_isolated",
+    "mock_db_failure",
+    "app_with_docs_auth",
+    "app_with_api_token",
+    "pytest_configure",
+    "pytest_collection_modifyitems",
+]
+
+
 # For PostgreSQL, set pool size to match concurrent test load
 def _get_test_db_url() -> str:
     return os.environ.get("DATABASE_URL_TEST", "sqlite+aiosqlite:///:memory:")

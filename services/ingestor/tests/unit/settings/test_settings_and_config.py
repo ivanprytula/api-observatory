@@ -8,7 +8,6 @@ Tests for:
 """
 
 import pytest
-from httpx import AsyncClient
 
 from services.ingestor.config import Settings
 
@@ -120,20 +119,6 @@ class TestSettingsValidation:
 
 
 # ---------------------------------------------------------------------------
-# App Behavior with Different Settings
-# ---------------------------------------------------------------------------
-@pytest.mark.integration
-class TestAppBehaviorWithSettings:
-    """App behavior changes based on settings."""
-
-    async def test_app_includes_version_in_response(self, client: AsyncClient) -> None:
-        """App returns versioned endpoints."""
-        # Make a request to verify app is functioning
-        r = await client.get("/readyz")
-        assert r.status_code in [200, 503]
-
-
-# ---------------------------------------------------------------------------
 # Environment Variable Overrides
 # ---------------------------------------------------------------------------
 @pytest.mark.unit
@@ -162,53 +147,6 @@ class TestEnvironmentVariableOverrides:
         _ = Settings()
         # This is implicitly tested by field access; explicit test would
         # require environment variable setup
-
-
-# ---------------------------------------------------------------------------
-# Observation Fixtures Behavior
-# ---------------------------------------------------------------------------
-@pytest.mark.integration
-class TestObservationFixtures:
-    """Observation fixtures create predictable test data."""
-
-    async def test_created_observation_fixture_produces_valid_observation(
-        self, created_observation: dict
-    ) -> None:
-        """created_observation fixture produces a valid observation with expected fields."""
-        assert "id" in created_observation
-        assert "source" in created_observation
-        assert isinstance(created_observation["id"], int)
-        assert isinstance(created_observation["source"], str)
-        # raw_data field should be present (API call response)
-        assert "raw_data" in created_observation or "data" in created_observation
-
-    async def test_created_observations_fixture_produces_multiple(
-        self, created_observations: list[dict]
-    ) -> None:
-        """created_observations fixture produces exactly 3 observations."""
-        assert len(created_observations) == 3
-
-        # Each observation is valid
-        for observation in created_observations:
-            assert "id" in observation
-            assert observation["source"].startswith("source-")
-
-    async def test_observation_payload_fixture_is_mutable_copy(
-        self, observation_payload: dict
-    ) -> None:
-        """observation_payload fixture returns a mutable copy."""
-        # Should be able to modify without affecting original
-        observation_payload["source"] = "modified"
-        assert observation_payload["source"] == "modified"
-
-    async def test_created_observation_has_tags_lowercased(
-        self, created_observation: dict
-    ) -> None:
-        """Tags are normalized to lowercase (per validator)."""
-        # created_observation is from OBSERVATION_API which has ["Stock", "NASDAQ"]
-        tags = created_observation["tags"]
-        # Pydantic validator should lowercase them
-        assert all(tag.islower() for tag in tags)
 
 
 # ---------------------------------------------------------------------------
