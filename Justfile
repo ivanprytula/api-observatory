@@ -245,12 +245,31 @@ seed-source:
       -d '{"name":"seed-internal","base_url":"https://httpbin.org","health_check_path":"/get","probe_interval_seconds":60,"is_active":true}' > /dev/null
     echo "seed-source complete"
 
-# E2E smoke test: clean DB → seed admin + source → run Bruno collections → clean DB.
+# E2E smoke test: clean DB → seed admin + source → run Bruno collections.
+# On failure, reset DB to leave local state clean.
 api-test:
     #!/usr/bin/env bash
-    set -eo pipefail
-    trap 'just db-reset' EXIT
+    set -euo pipefail
+
+    cleanup_on_failure() {
+        status=$?
+        if [ "$status" -ne 0 ]; then
+            echo "[api-test] failed, running cleanup: just db-reset"
+            just db-reset
+        fi
+    }
+    trap cleanup_on_failure EXIT
+
+    echo "[api-test] step 1/4: db-reset"
     just db-reset
+
+    echo "[api-test] step 2/4: create-admin"
     just create-admin
+
+    echo "[api-test] step 3/4: seed-source"
     just seed-source
+
+    echo "[api-test] step 4/4: run bruno"
     cd bruno && bru run . -r --env local
+
+    echo "[api-test] success"
