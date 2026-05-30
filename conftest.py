@@ -1,12 +1,18 @@
 """Root pytest configuration.
 
-Shared fixtures live in `tests/conftest.py` (for tests/ subtree) and are
-re-exported in `services/ingestor/tests/conftest.py` (for services subtree).
+Pytest auto-loads each tree's local conftest modules.
 
 Post-MVP deferrals:
 - Scraping functionality/tests
 - MongoDB functionality/tests
 """
+
+import tests.conftest as shared_conftest
+
+
+for _name, _value in vars(shared_conftest).items():
+    if hasattr(_value, "_fixture_function_marker"):
+        globals()[_name] = _value
 
 # Defer non-MVP slices at collection time so they do not block unit/integration/e2e
 # runs for the active MVP scope.
