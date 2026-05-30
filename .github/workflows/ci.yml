@@ -115,20 +115,20 @@ jobs:
           set -euo pipefail
 
           for _ in {1..30}; do
-            if pg_isready -h localhost -p 5432 -U postgres >/dev/null 2>&1; then
+            if docker exec "${{ job.services.postgres.id }}" pg_isready -U postgres >/dev/null 2>&1; then
               break
             fi
             sleep 2
           done
-          pg_isready -h localhost -p 5432 -U postgres
+          docker exec "${{ job.services.postgres.id }}" pg_isready -U postgres
 
           for _ in {1..30}; do
-            if redis-cli -h localhost -p 6379 ping | grep -q PONG; then
+            if docker exec "${{ job.services.redis.id }}" redis-cli ping | grep -q PONG; then
               break
             fi
             sleep 2
           done
-          redis-cli -h localhost -p 6379 ping
+          docker exec "${{ job.services.redis.id }}" redis-cli ping
 
       - name: Capture dependency diagnostics
         if: failure()
@@ -170,6 +170,45 @@ jobs:
         with:
           name: integration-coverage-xml
           path: coverage-integration.xml
+
+  observability-gates:
+    name: Observability gates (promtool + smoke deploy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Check Prometheus alert rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$PWD/infra/monitoring:/etc/prometheus" \
+            prom/prometheus:v2.54.1 \
+            promtool check config /etc/prometheus/prometheus.yml
+          docker run --rm \
+            -v "$PWD/infra/monitoring:/etc/prometheus" \
+            prom/prometheus:v2.54.1 \
+            promtool check rules /etc/prometheus/rules/alert.rules.yml
+
+      - name: Smoke deploy prod-like stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/ops/02-compose-profile.sh prod-like up -d db redis redpanda ingestor
+          trap 'bash scripts/ops/02-compose-profile.sh prod-like down -v' EXIT
+
+          for _ in $(seq 1 60); do
+            if curl -fsS http://localhost:8000/health >/dev/null && curl -fsS http://localhost:8000/readyz >/dev/null; then
+              echo "smoke deploy passed"
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "smoke deploy failed" >&2
+          bash scripts/ops/02-compose-profile.sh prod-like logs ingestor
+          exit 1
 
   docker-build:
     name: Docker build (no push)
