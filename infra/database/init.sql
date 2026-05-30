@@ -2,16 +2,9 @@
 -- This script runs automatically when the PostgreSQL container starts
 -- (mounted to /docker-entrypoint-initdb.d/)
 
--- Create optional extensions only when they are available in the image.
--- This keeps initialization portable across postgres/postgis variants.
+-- Create required extensions.
 DO $$
 BEGIN
-	IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'postgis') THEN
-		CREATE EXTENSION IF NOT EXISTS postgis;
-	ELSE
-		RAISE NOTICE 'Extension postgis is not available; skipping';
-	END IF;
-
 	IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'vector') THEN
 		CREATE EXTENSION IF NOT EXISTS vector;
 	ELSE

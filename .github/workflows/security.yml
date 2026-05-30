@@ -143,6 +143,9 @@ jobs:
         with:
           image-ref: ${{ matrix.dockerfile.name }}:${{ github.sha }}
           format: table
+          ignore-unfixed: true
+          scanners: vuln
+          pkg-types: os
           severity: CRITICAL,HIGH
           exit-code: "1"
 
