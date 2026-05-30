@@ -145,7 +145,8 @@ jobs:
           format: table
           ignore-unfixed: true
           scanners: vuln
-          pkg-types: os
+          # For MVP, gate on base OS packages only to reduce noise from embedded binaries.
+          vuln-type: os
           severity: CRITICAL,HIGH
           exit-code: "1"
 
