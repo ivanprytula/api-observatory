@@ -17,6 +17,7 @@ from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import HTMLResponse, JSONResponse
 
 from libs.platform.auth import set_security_audit_emitter
@@ -594,6 +595,12 @@ if settings.docs_username and settings.docs_password:
 
 # Add correlation ID middleware early (runs before route handlers)
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=[
+        host.strip() for host in settings.trusted_hosts.split(",") if host.strip()
+    ],
+)
 app.add_middleware(TenantMiddleware)
 app.add_middleware(CorrelationIdMiddleware)
 

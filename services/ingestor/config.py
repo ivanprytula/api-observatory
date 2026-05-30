@@ -64,6 +64,14 @@ class Settings(BaseSettings):
         description="Global logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL",
     )
 
+    trusted_hosts: str = Field(
+        default="localhost,127.0.0.1,[::1],test",
+        description=(
+            "Comma-separated allowed Host header values for TrustedHostMiddleware. "
+            "Use '*' only in controlled development environments."
+        ),
+    )
+
     log_format: str = Field(
         default="text",
         description="Logging format: text or json",

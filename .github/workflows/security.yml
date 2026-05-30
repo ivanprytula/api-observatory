@@ -73,6 +73,12 @@ jobs:
         uses: pypa/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266 # v1.1.0
         with:
           inputs: requirements-audit.txt
+          # Temporary exception: Starlette major upgrade to 1.x is not yet
+          # compatible with current FastAPI stack in this repository.
+          # Mitigation in place: TrustedHostMiddleware configured in app.
+          # Remove this ignore once FastAPI-compatible Starlette fix lands.
+          ignore-vulns: |
+            PYSEC-2026-161
 
   codeql:
     name: CodeQL analyze

@@ -9,7 +9,7 @@ supported-markers = [
 ]
 
 [options]
-exclude-newer = "2026-05-19T12:53:45.947277932Z"
+exclude-newer = "2026-05-23T00:18:16.113708973Z"
 exclude-newer-span = "P7D"
 
 [manifest]
@@ -177,8 +177,12 @@ dependencies = [
     { name = "asyncpg", marker = "sys_platform == 'linux'" },
     { name = "fastapi", marker = "sys_platform == 'linux'" },
     { name = "httpx", marker = "sys_platform == 'linux'" },
+    { name = "idna", marker = "sys_platform == 'linux'" },
+    { name = "langchain-core", marker = "sys_platform == 'linux'" },
     { name = "langgraph", marker = "sys_platform == 'linux'" },
     { name = "langgraph-checkpoint-redis", marker = "sys_platform == 'linux'" },
+    { name = "langsmith", marker = "sys_platform == 'linux'" },
+    { name = "mako", marker = "sys_platform == 'linux'" },
     { name = "openai", marker = "sys_platform == 'linux'" },
     { name = "opentelemetry-exporter-otlp", marker = "sys_platform == 'linux'" },
     { name = "opentelemetry-instrumentation-fastapi", marker = "sys_platform == 'linux'" },
@@ -194,18 +198,21 @@ dependencies = [
     { name = "python-dotenv", marker = "sys_platform == 'linux'" },
     { name = "python-json-logger", marker = "sys_platform == 'linux'" },
     { name = "python-multipart", marker = "sys_platform == 'linux'" },
-    { name = "ragas", marker = "sys_platform == 'linux'" },
     { name = "redis", marker = "sys_platform == 'linux'" },
     { name = "sentry-sdk", extra = ["fastapi"], marker = "sys_platform == 'linux'" },
     { name = "slowapi", marker = "sys_platform == 'linux'" },
     { name = "sqlalchemy", extra = ["asyncio"], marker = "sys_platform == 'linux'" },
     { name = "streamlit", marker = "sys_platform == 'linux'" },
     { name = "structlog", marker = "sys_platform == 'linux'" },
+    { name = "urllib3", marker = "sys_platform == 'linux'" },
     { name = "uvicorn", extra = ["standard"], marker = "sys_platform == 'linux'" },
     { name = "websockets", marker = "sys_platform == 'linux'" },
 ]
 
 [package.optional-dependencies]
+eval = [
+    { name = "ragas", marker = "sys_platform == 'linux'" },
+]
 floci = [
     { name = "boto3", marker = "sys_platform == 'linux'" },
     { name = "testcontainers-floci", marker = "sys_platform == 'linux'" },
@@ -239,8 +246,12 @@ requires-dist = [
     { name = "boto3", marker = "extra == 'floci'", specifier = ">=1.28.0" },
     { name = "fastapi", specifier = ">=0.135.2" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "idna", specifier = ">=3.15" },
+    { name = "langchain-core", specifier = ">=1.3.3" },
     { name = "langgraph", specifier = ">=0.3.0" },
     { name = "langgraph-checkpoint-redis", specifier = ">=0.1.0" },
+    { name = "langsmith", specifier = ">=0.8.0" },
+    { name = "mako", specifier = ">=1.3.12" },
     { name = "openai", specifier = ">=1.55.0" },
     { name = "opentelemetry-exporter-otlp", specifier = ">=1.41.0" },
     { name = "opentelemetry-instrumentation-fastapi", specifier = ">=0.46b0" },
@@ -255,8 +266,8 @@ requires-dist = [
     { name = "pyjwt", specifier = ">=2.10.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "python-json-logger", specifier = ">=4.1.0" },
-    { name = "python-multipart", specifier = ">=0.0.9" },
-    { name = "ragas", specifier = ">=0.2.0" },
+    { name = "python-multipart", specifier = ">=0.0.27" },
+    { name = "ragas", marker = "extra == 'eval'", specifier = ">=0.2.0" },
     { name = "redis", specifier = ">=5.2.0" },
     { name = "sentry-sdk", extras = ["fastapi"], specifier = ">=2.19.2" },
     { name = "slowapi", specifier = ">=0.1.9" },
@@ -264,10 +275,11 @@ requires-dist = [
     { name = "streamlit", specifier = ">=1.45.0" },
     { name = "structlog", specifier = ">=24.4.0" },
     { name = "testcontainers-floci", marker = "extra == 'floci'", specifier = ">=0.1.1" },
+    { name = "urllib3", specifier = ">=2.7.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.45.0" },
     { name = "websockets", specifier = ">=14.0" },
 ]
-provides-extras = ["floci"]
+provides-extras = ["floci", "eval"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1051,11 +1063,11 @@ wheels = [
 
 [[package]]
 name = "idna"
-version = "3.13"
+version = "3.16"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ce/cc/762dfb036166873f0059f3b7de4565e1b5bc3d6f28a414c13da27e442f99/idna-3.13.tar.gz", hash = "sha256:585ea8fe5d69b9181ec1afba340451fba6ba764af97026f92a91d4eef164a242", size = 194210, upload-time = "2026-04-22T16:42:42.314Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1a/88/bcf9709822fe69d02c2a6a77956c98ce6ea8ca8767a9aadcedc7eb6a2390/idna-3.16.tar.gz", hash = "sha256:d7a6da03db833450fca25d2358ac9ff06cd624577a4aea3a596d5c0f77b8e03d", size = 203770, upload-time = "2026-05-22T00:16:18.781Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5d/13/ad7d7ca3808a898b4612b6fe93cde56b53f3034dcde235acb1f0e1df24c6/idna-3.13-py3-none-any.whl", hash = "sha256:892ea0cde124a99ce773decba204c5552b69c3c67ffd5f232eb7696135bc8bb3", size = 68629, upload-time = "2026-04-22T16:42:40.909Z" },
+    { url = "https://files.pythonhosted.org/packages/94/16/70255075a9859a0e3adb789b68ceb0e210dec03934245fd98d248226572f/idna-3.16-py3-none-any.whl", hash = "sha256:cc246e3a3f89580c3a951b5ad298ca4638078b2cdd4f115654332b5c26daded5", size = 74165, upload-time = "2026-05-22T00:16:16.698Z" },
 ]
 
 [[package]]
@@ -1274,7 +1286,7 @@ wheels = [
 
 [[package]]
 name = "langchain-core"
-version = "1.3.2"
+version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jsonpatch", marker = "sys_platform == 'linux'" },
@@ -1287,9 +1299,9 @@ dependencies = [
     { name = "typing-extensions", marker = "sys_platform == 'linux'" },
     { name = "uuid-utils", marker = "sys_platform == 'linux'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a8/03/7219502e8ca728d65eb44d7a3eb60239230742a70dbfc9241b9bfd61c4ab/langchain_core-1.3.2.tar.gz", hash = "sha256:fd7a50b2f28ba561fd9d7f5d2760bc9e06cf00cdf820a3ccafe88a94ffa8d5b7", size = 911813, upload-time = "2026-04-24T15:49:23.699Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/59/de/679a53472c25860837e32c0442c962fa86e95317a36460e2c9d5c91b17c2/langchain_core-1.4.0.tar.gz", hash = "sha256:1dc341eed802ed9c117c0df3923c991e5e9e226571e5725c194eeb5bd93d1a7f", size = 920260, upload-time = "2026-05-11T18:42:35.919Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7d/d5/8fa4431007cbb7cfed7590f4d6a5dea3ad724f4174d248f6642ef5ce7d05/langchain_core-1.3.2-py3-none-any.whl", hash = "sha256:d44a66127f9f8db735bdfd0ab9661bccb47a97113cfd3f2d89c74864422b7274", size = 542390, upload-time = "2026-04-24T15:49:21.991Z" },
+    { url = "https://files.pythonhosted.org/packages/0f/1a/86c38c27b81913a1c6c12448cab55defb5a1097c7dc9a4cea83f55477a2d/langchain_core-1.4.0-py3-none-any.whl", hash = "sha256:23cbbdb46e38ddd1dd5247e6167e96013eae74bea4c5949c550809970a9e565c", size = 548120, upload-time = "2026-05-11T18:42:33.992Z" },
 ]
 
 [[package]]
@@ -1308,14 +1320,14 @@ wheels = [
 
 [[package]]
 name = "langchain-protocol"
-version = "0.0.13"
+version = "0.0.15"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "typing-extensions", marker = "sys_platform == 'linux'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ba/7d/ac74b64f9d3150cc90c172490e7321b26ccc76ecef87c3629c83eda6948f/langchain_protocol-0.0.13.tar.gz", hash = "sha256:7448ca507407a6aaa28a73884d74765540e65da891a14a6e062a196412bc554c", size = 5713, upload-time = "2026-04-28T21:08:11.584Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4f/24/9777489d6fbbee64af0c8f96d4f840239c408cf694f3394672807dafc490/langchain_protocol-0.0.15.tar.gz", hash = "sha256:9ab2d11ee73944754f10e037e717098d3a6796f0e58afa9cadda6154e7655ade", size = 5862, upload-time = "2026-05-01T22:30:04.748Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d2/04/89db2cf7d839aef9c6544b9e3495f522ec3e408cbab34c9c05e41a3d87b0/langchain_protocol-0.0.13-py3-none-any.whl", hash = "sha256:47d4f2a05827bf3a66b238082bf59e8313fd3a14e1b268bdd65c85b67a6b1f6c", size = 6832, upload-time = "2026-04-28T21:08:10.564Z" },
+    { url = "https://files.pythonhosted.org/packages/1d/7a/9c97a7b9cbe4c5dc6a44cdb1545450c28f0c8ce89b9c1f0ee7fbad896263/langchain_protocol-0.0.15-py3-none-any.whl", hash = "sha256:461eb794358f83d5e42635a5797799ffec7b4702314e34edf73ac21e75d3ef79", size = 6982, upload-time = "2026-05-01T22:30:03.877Z" },
 ]
 
 [[package]]
@@ -1403,7 +1415,7 @@ wheels = [
 
 [[package]]
 name = "langsmith"
-version = "0.7.37"
+version = "0.8.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx", marker = "sys_platform == 'linux'" },
@@ -1416,9 +1428,9 @@ dependencies = [
     { name = "xxhash", marker = "sys_platform == 'linux'" },
     { name = "zstandard", marker = "sys_platform == 'linux'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e4/38/092f99a3326f0f6bb6ea62f388b16611d9cb619869ed7b0f3dae6c21c331/langsmith-0.7.37.tar.gz", hash = "sha256:e15ab27f5febbcfbaec4e6fa74ab71f0284f4c5965249cc732fe9344844290cb", size = 4433170, upload-time = "2026-04-26T21:36:41.314Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/17/eb/8883d1158c743d0aac350f09df7880714d27283497e8c80bb9fe3480f165/langsmith-0.8.5.tar.gz", hash = "sha256:3615243d99c12f4047f13042bdc05a373dce232d106a6511b3ca7b48c5af1c2c", size = 4462348, upload-time = "2026-05-15T21:31:41.093Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c6/76/fa99559d23ec9a39e1153f317a5ec99e7b967aec08b5faac04f8da603dd3/langsmith-0.7.37-py3-none-any.whl", hash = "sha256:64fc5fbf223fcdcc6ee44b08a5df4b2ab8a55e4d968e850c86b6b69fe0c258e3", size = 385948, upload-time = "2026-04-26T21:36:39.09Z" },
+    { url = "https://files.pythonhosted.org/packages/23/85/968c88a63e32a59b3e5c68afd2fe114ce0708a125db0be1a85efc25fb2ea/langsmith-0.8.5-py3-none-any.whl", hash = "sha256:efc779f9d450dcaf9d97bc8894f4926276509d6e730e05289af9a64debce06ae", size = 399564, upload-time = "2026-05-15T21:31:39.046Z" },
 ]
 
 [[package]]
@@ -1480,14 +1492,14 @@ wheels = [
 
 [[package]]
 name = "mako"
-version = "1.3.11"
+version = "1.3.12"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "markupsafe", marker = "sys_platform == 'linux'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/59/8a/805404d0c0b9f3d7a326475ca008db57aea9c5c9f2e1e39ed0faa335571c/mako-1.3.11.tar.gz", hash = "sha256:071eb4ab4c5010443152255d77db7faa6ce5916f35226eb02dc34479b6858069", size = 399811, upload-time = "2026-04-14T20:19:51.493Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/00/62/791b31e69ae182791ec67f04850f2f062716bbd205483d63a215f3e062d3/mako-1.3.12.tar.gz", hash = "sha256:9f778e93289bd410bb35daadeb4fc66d95a746f0b75777b942088b7fd7af550a", size = 400219, upload-time = "2026-04-28T19:01:08.512Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/68/a5/19d7aaa7e433713ffe881df33705925a196afb9532efc8475d26593921a6/mako-1.3.11-py3-none-any.whl", hash = "sha256:e372c6e333cf004aa736a15f425087ec977e1fcbd2966aae7f17c8dc1da27a77", size = 78503, upload-time = "2026-04-14T20:19:53.233Z" },
+    { url = "https://files.pythonhosted.org/packages/bc/b1/a0ec7a5a9db730a08daef1fdfb8090435b82465abbf758a596f0ea88727e/mako-1.3.12-py3-none-any.whl", hash = "sha256:8f61569480282dbf557145ce441e4ba888be453c30989f879f0d652e39f53ea9", size = 78521, upload-time = "2026-04-28T19:01:10.393Z" },
 ]
 
 [[package]]
@@ -2390,11 +2402,11 @@ wheels = [
 
 [[package]]
 name = "python-multipart"
-version = "0.0.26"
+version = "0.0.29"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/88/71/b145a380824a960ebd60e1014256dbb7d2253f2316ff2d73dfd8928ec2c3/python_multipart-0.0.26.tar.gz", hash = "sha256:08fadc45918cd615e26846437f50c5d6d23304da32c341f289a617127b081f17", size = 43501, upload-time = "2026-04-10T14:09:59.473Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4e/fe/70bd71a6738b09a0bdf6480ca6436b167469ca4578b2a0efbe390b4b0e70/python_multipart-0.0.29.tar.gz", hash = "sha256:643e93849196645e2dbdd81a0f8829a23123ad7f797a84a364c6fb3563f18904", size = 45678, upload-time = "2026-05-17T17:29:47.654Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9a/22/f1925cdda983ab66fc8ec6ec8014b959262747e58bdca26a4e3d1da29d56/python_multipart-0.0.26-py3-none-any.whl", hash = "sha256:c0b169f8c4484c13b0dcf2ef0ec3a4adb255c4b7d18d8e420477d2b1dd03f185", size = 28847, upload-time = "2026-04-10T14:09:58.131Z" },
+    { url = "https://files.pythonhosted.org/packages/8f/cb/769cfc37177252872a45a71f3fbdde9d51b471a3f3c14bfe95dde3407386/python_multipart-0.0.29-py3-none-any.whl", hash = "sha256:2ddcc971cef266225f54f552d8fa10bcfbb1f14446caec199060daac59ff2d69", size = 29640, upload-time = "2026-05-17T17:29:45.69Z" },
 ]
 
 [[package]]
@@ -3036,11 +3048,11 @@ wheels = [
 
 [[package]]
 name = "urllib3"
-version = "2.6.3"
+version = "2.7.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/c7/24/5f1b3bdffd70275f6661c76461e25f024d5a38a46f04aaca912426a2b1d3/urllib3-2.6.3.tar.gz", hash = "sha256:1b62b6884944a57dbe321509ab94fd4d3b307075e0c2eae991ac71ee15ad38ed", size = 435556, upload-time = "2026-01-07T16:24:43.925Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/53/0c/06f8b233b8fd13b9e5ee11424ef85419ba0d8ba0b3138bf360be2ff56953/urllib3-2.7.0.tar.gz", hash = "sha256:231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c", size = 433602, upload-time = "2026-05-07T16:13:18.596Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/39/08/aaaad47bc4e9dc8c725e68f9d04865dbcb2052843ff09c97b08904852d84/urllib3-2.6.3-py3-none-any.whl", hash = "sha256:bf272323e553dfb2e87d9bfd225ca7b0f467b919d7bbd355436d3fd37cb0acd4", size = 131584, upload-time = "2026-01-07T16:24:42.685Z" },
+    { url = "https://files.pythonhosted.org/packages/7f/3e/5db95bcf282c52709639744ca2a8b149baccf648e39c8cc87553df9eae0c/urllib3-2.7.0-py3-none-any.whl", hash = "sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897", size = 131087, upload-time = "2026-05-07T16:13:17.151Z" },
 ]
 
 [[package]]
