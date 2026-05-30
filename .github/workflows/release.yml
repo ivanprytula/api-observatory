@@ -82,6 +82,7 @@ jobs:
 
       - name: Verify provenance attestation
         env:
+          GH_TOKEN: ${{ github.token }}
           IMAGE_DIGEST: ${{ steps.image-digest.outputs.digest }}
         shell: bash
         run: |
