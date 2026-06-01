@@ -1,0 +1,29 @@
+# Terraform state — never commit
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# Override files (local workspace config)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Sensitive variable files
+*.tfvars
+!*.tfvars.example
+
+# Local backend config (contains local endpoint/bucket choices)
+backend.local.hcl
+!backend.local.hcl.example
+backend.aws.hcl
+!backend.aws.hcl.example
+
+# Plan output
+*.tfplan
+*.plan
+
+# Crash log
+crash.log

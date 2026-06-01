@@ -24,7 +24,7 @@ Two modes depending on whether you want the app container running or the app run
 ```bash
 # Mode 1: full app stack (app container + all infra) — matches README Quick Start
 just up          # db, redis, redpanda, ingestor, mongodb
-just sandbox-up  # + Floci local AWS (S3, SQS, DynamoDB)
+just sandbox-up  # + Floci local AWS (S3, SQS)
 
 # Mode 2: infra only — use when running uvicorn directly outside Docker
 bash scripts/daily/01-start-dev-services.sh  # db, redis, redpanda, mongodb, jaeger
@@ -585,6 +585,88 @@ uv run locust -f scripts/testing/locustfile.py --host http://localhost:8000
 uv run locust -f scripts/testing/locustfile.py \
   --host http://localhost:8000 \
   --users 100 --spawn-rate 10 --run-time 60s --headless
+```
+
+---
+
+## Infrastructure & Terraform (Floci)
+
+### One-Time Setup
+
+First, configure AWS sandbox profile (see [docs/setup/sandbox-aws-profile.md](setup/sandbox-aws-profile.md)):
+
+```bash
+# Add to ~/.aws/credentials
+[sandbox]
+aws_access_key_id     = test
+aws_secret_access_key = test
+
+# Add to ~/.aws/config
+[profile sandbox]
+region = eu-central-1
+```
+
+### Session Initialization
+
+```bash
+# Start Floci emulator
+just sandbox-up
+
+# Initialize Terraform backend (once per terminal session before first plan)
+just tf-init
+```
+
+### Daily Terraform Workflow
+
+```bash
+# Then iterate as many times as needed (same terminal, no re-init)
+just tf-plan-local          # Review resources to create/modify
+just tf-apply-local         # Apply the plan
+just tf-plan-local          # Make changes, plan again
+just tf-apply-local         # Apply the new plan
+# ... repeat as needed
+```
+
+**Note:** You only run `tf-init` once when you open a new terminal. Subsequent plan/apply commands in the same terminal don't need re-initialization.
+
+### State Inspection
+
+```bash
+# View all deployed resources and their attributes
+just tf-show-local
+
+# List all managed resources by ID
+just tf-state-list
+```
+
+### Full Reset
+
+```bash
+# Destroy all resources and start fresh (init → plan → apply)
+just tf-apply-local-fresh
+
+# Or manually destroy and keep state backend
+just tf-destroy-local
+```
+
+### Real AWS (Dev Environment)
+
+```bash
+# Plan against real AWS (requires AWS credentials and backend config)
+just tf-plan-dev
+
+# Apply real AWS infrastructure
+just tf-apply-dev
+```
+
+### Cleanup
+
+```bash
+# Destroy Floci infrastructure
+just tf-destroy-local
+
+# Stop Floci emulator
+just sandbox-down
 ```
 
 ---

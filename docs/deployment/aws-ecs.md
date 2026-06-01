@@ -87,7 +87,7 @@ terraform init \
   -backend-config="bucket=<state-bucket>" \
   -backend-config="key=data-zoo/dev/terraform.tfstate" \
   -backend-config="region=<aws-region>" \
-  -backend-config="dynamodb_table=<lock-table>"
+  -backend-config="use_lockfile=true"
 
 terraform plan
 terraform apply

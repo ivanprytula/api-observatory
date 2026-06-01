@@ -48,3 +48,58 @@ variable "enable_messaging" {
   type        = bool
   default     = false
 }
+
+variable "enable_iam" {
+  description = "Enable IAM/OIDC module in dev. Disable for LocalStack MVP runs."
+  type        = bool
+  default     = false
+}
+
+variable "enable_database" {
+  description = "Enable RDS database module in dev. Disable for LocalStack MVP runs."
+  type        = bool
+  default     = false
+}
+
+variable "enable_cache" {
+  description = "Enable ElastiCache module in dev. Disable for LocalStack MVP runs."
+  type        = bool
+  default     = false
+}
+
+variable "nat_gateway_count" {
+  description = "Number of NAT gateways for network module. Use 0 for LocalStack MVP runs."
+  type        = number
+  default     = 0
+}
+
+variable "ecr_services" {
+  description = "ECR repositories to create in dev. Keep this list minimal for MVP."
+  type        = list(string)
+  default     = ["ingestor", "processor"]
+}
+
+variable "db_master_password" {
+  description = "RDS master password when db_manage_master_user_password is false (LocalStack/dev sandbox)."
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
+variable "db_manage_master_user_password" {
+  description = "Use AWS managed DB password (true for AWS, false for LocalStack)."
+  type        = bool
+  default     = true
+}
+
+variable "db_create_subnet_group" {
+  description = "Create DB subnet group in module (true for AWS, often false for LocalStack)."
+  type        = bool
+  default     = true
+}
+
+variable "db_subnet_group_name" {
+  description = "Existing DB subnet group name when db_create_subnet_group is false."
+  type        = string
+  default     = null
+}

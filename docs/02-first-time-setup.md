@@ -75,10 +75,10 @@ just up          # db, redis, redpanda, ingestor, mongodb
 just migrate     # apply Alembic migrations explicitly (safe to re-run)
 ```
 
-**Optional — only if your work touches AWS services (S3, SQS, DynamoDB):**
+**Optional — only if your work touches AWS services (S3, SQS):**
 
 ```bash
-just sandbox-up  # starts Floci with S3, SQS, and DynamoDB pre-provisioned
+just sandbox-up  # starts Floci with S3 and SQS pre-provisioned
 ```
 
 Not sure? Skip it for now — `just up` covers 90% of development workflows.

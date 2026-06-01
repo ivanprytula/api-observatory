@@ -8,25 +8,25 @@ terraform {
     }
   }
 
-  # State stored in S3 with DynamoDB locking.
+  # State stored in S3 with S3 object locking.
   # Apply backend config:
   #   terraform init -backend-config="bucket=<your-state-bucket>" \
   #                  -backend-config="key=data-zoo/dev/terraform.tfstate" \
   #                  -backend-config="region=eu-central-1" \
-  #                  -backend-config="dynamodb_table=<your-lock-table>"
+  #                  -backend-config="use_lockfile=true"
   backend "s3" {}
 }
 
 provider "aws" {
   region  = var.aws_region
-  profile = var.aws_profile  # Named profile — never use 'default' for project work
+  profile = var.aws_profile  # Named profile — use [sandbox] for local emulators, real profile for AWS
 
   default_tags {
     tags = {
       Project     = "data-zoo"
       Environment = "dev"
       ManagedBy   = "terraform"
-      Repository  = "data-pipeline-async"
+      Repository  = "api-observatory"
     }
   }
 }
@@ -40,16 +40,18 @@ module "network" {
   environment        = "dev"
   vpc_cidr           = var.vpc_cidr
   availability_zones = var.availability_zones
-  nat_gateway_count  = 1    # Single NAT — saves ~$32/month in dev
+  nat_gateway_count  = var.nat_gateway_count
   app_port           = 8000
 }
 
 module "ecr" {
-  source  = "../../modules/ecr"
-  project = "data-zoo"
+  source   = "../../modules/ecr"
+  project  = "data-zoo"
+  services = var.ecr_services
 }
 
 module "iam" {
+  count  = var.enable_iam ? 1 : 0
   source            = "../../modules/iam"
   project           = "data-zoo"
   aws_region        = var.aws_region
@@ -57,6 +59,7 @@ module "iam" {
 }
 
 module "database" {
+  count  = var.enable_database ? 1 : 0
   source = "../../modules/database"
 
   project            = "data-zoo"
@@ -66,9 +69,14 @@ module "database" {
   instance_class     = "db.t3.micro"
   multi_az           = false
   backup_retention_days = 3
+  create_subnet_group          = var.db_create_subnet_group
+  db_subnet_group_name         = var.db_subnet_group_name
+  manage_master_user_password  = var.db_manage_master_user_password
+  master_password              = var.db_master_password
 }
 
 module "cache" {
+  count  = var.enable_cache ? 1 : 0
   source = "../../modules/cache"
 
   project            = "data-zoo"
@@ -103,6 +111,7 @@ module "compute" {
   sg_app_id          = module.network.sg_app_id
 
   ecr_repository_url_ingestor = module.ecr.repository_urls["ingestor"]
+  ecr_repository_url_processor = module.ecr.repository_urls["processor"]
   image_tag                   = var.image_tag
 
   # Cost guard: keep MSK disabled in dev by default (~$2.64/day saved).

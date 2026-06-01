@@ -1,0 +1,7 @@
+bucket         = "your-terraform-state-bucket"
+key            = "data-zoo/prod/terraform.tfstate"
+region         = "eu-central-1"
+encrypt        = true
+use_lockfile   = true
+# Optional: enforce CMK instead of S3-managed keys
+# kms_key_id   = "arn:aws:kms:eu-central-1:123456789012:key/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"

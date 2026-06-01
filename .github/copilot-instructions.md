@@ -169,3 +169,29 @@ Any URL supplied by a user that will be used in a server-side HTTP request must 
 - Resolved IP must not fall in private ranges: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `::1`
 - Use `ipaddress` stdlib module to check the resolved IP after DNS resolution
 - This applies to: `SourceProfile.base_url`, webhook URLs, scraper targets, any other user-controlled URL
+
+## Chat Session Reminders
+
+- Remind the user to create a new chat every 20 messages and whenever starting a new topic to avoid mixing unrelated content in one session.
+- When a session reaches the 20th message, the assistant should prepare a concise "Session Summary" ready to copy/paste into a new chat.
+- Remind the user that pasting the summary as the first message in the new chat preserves context and continuity.
+
+### Session Summary Template (copy/paste into new chat)
+
+- **Session title:** 
+- **Date:** 
+- **Message count:** 
+- **Topics covered:**
+   - 
+- **Key decisions:**
+   - 
+- **Files changed / paths:**
+   - 
+- **Commands / snippets to run:**
+   - 
+- **Outstanding questions / next steps:**
+   - 
+- **Brief context / notes:**
+   - 
+
+(End of summary)

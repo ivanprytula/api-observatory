@@ -1,4 +1,4 @@
--- PostgreSQL database initialization script for data-pipeline-async
+-- PostgreSQL database initialization script for api-observatory
 -- This script runs automatically when the PostgreSQL container starts
 -- (mounted to /docker-entrypoint-initdb.d/)
 

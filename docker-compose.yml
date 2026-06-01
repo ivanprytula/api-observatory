@@ -153,3 +153,39 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./.local-dev/tmp/trivy-cache:/root/.cache/trivy
     security_opt: [no-new-privileges:true]
+
+  # Floci Docker service (optional; started manually via: just floci-start)
+  # Docker-based Floci is more universal (works on older CPUs that lack x86-64-v3 support)
+  # To use docker-compose instead, uncomment and run: docker compose --profile aws up -d floci
+  floci:
+    image: floci/floci:latest
+    container_name: api-obs-floci
+    profiles: [aws]
+    ports:
+      - '127.0.0.1:4566:4566'
+    environment:
+      FLOCI_DEFAULT_REGION: ${AWS_REGION:-us-east-1}
+      FLOCI_DEFAULT_ACCOUNT_ID: ${AWS_ACCOUNT_ID:-000000000000}
+      FLOCI_DEFAULT_AVAILABILITY_ZONE: ${AWS_AVAILABILITY_ZONE:-us-east-1a}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      - ./.local-dev/tmp/floci-data:/tmp/floci
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:4566/_floci/health']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    security_opt: [no-new-privileges:true]
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        reservations:
+          cpus: '0.1'
+          memory: '128M'
+        limits:
+          cpus: '0.5'
+          memory: '512M'

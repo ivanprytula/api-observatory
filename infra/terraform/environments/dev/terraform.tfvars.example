@@ -1,6 +1,9 @@
-# terraform.tfvars — dev environment
-# DO NOT commit sensitive values. Use TF_VAR_* env vars or AWS SSM for secrets.
-# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars — shared dev base values
+# Keep this file environment-agnostic. Context-specific values belong in:
+# - terraform.floci.tfvars      (LocalStack/Floci)
+# - terraform.aws.tfvars        (real AWS)
+#
+# Copy this file to terraform.tfvars and fill in your shared defaults.
 #
 # Usage with AWS CLI profile:
 #   export TF_VAR_aws_profile=data-zoo-dev
@@ -10,17 +13,13 @@
 #     --profile data-zoo-dev)
 #   terraform apply
 
-aws_region         = "eu-central-1"  # Frankfurt (change to your region)
-aws_profile        = "data-zoo-dev"
+aws_region         = "us-east-1"  # LocalStack default region for local workflows
+aws_profile        = "default"
 vpc_cidr           = "10.0.0.0/16"
-availability_zones = ["eu-central-1a", "eu-central-1b"]  # Frankfurt AZs (update per region)
+availability_zones = ["us-east-1a", "us-east-1b"]
 github_repository  = "ivanprytula/api-observatory"
 image_tag          = "develop"
-enable_messaging   = false  # Keep false in sandbox/local plan to avoid MSK cost
-
-# Sensitive values — DO NOT set here. Use TF_VAR_* env var instead:
-# export TF_VAR_redis_auth_token=$(openssl rand -hex 32)
-# redis_auth_token    → set via TF_VAR_redis_auth_token (never in this file)
+ecr_services       = ["ingestor", "processor"]
 
 # ACM certificate ARN for your domain (create in AWS console, then set here)
 # acm_certificate_arn = "arn:aws:acm:eu-central-1:123456789012:certificate/..."
