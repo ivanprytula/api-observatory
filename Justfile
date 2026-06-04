@@ -166,6 +166,18 @@ api-test:
 
     echo "[api-test] success"
 
+# Run unit tests only (no DB, no Docker required)
+test-unit:
+    uv run pytest -m unit -q
+
+# Run integration tests (requires Postgres + Redis; testcontainers auto-provisions if Docker available)
+test-integration:
+    uv run pytest -m integration -q
+
+# Run e2e tests (requires full stack; skipped by default in CI)
+test-e2e:
+    uv run pytest -m e2e -q
+
 # Run Floci integration tests (verifies connectivity + runs tests)
 sandbox-test:
     #!/usr/bin/env bash
@@ -280,9 +292,77 @@ sandbox-down: floci-stop
 # Reset sandbox to a clean state
 sandbox-reset: floci-stop floci-start
 
-# ─── Terraform: Floci (local backend) ────────────────────────────────────────
+# ─── End-to-End Sandbox Testing (Floci + Ingestor + Streamlit) ─────────────
 
-# Terraform init for Floci (local backend)
+# Start ingestor service locally with Floci AWS endpoints
+# Usage: just ingestor-start (run in a separate terminal from sandbox-up)
+ingestor-start:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source scripts/aws-env.sh
+    echo "Starting ingestor with Floci endpoints..."
+    echo "AWS_ENDPOINT_URL=$AWS_ENDPOINT_URL"
+    echo "AWS_PROFILE=$AWS_PROFILE"
+    uv run uvicorn services/ingestor/main:app --reload --port 8000
+
+# Start streamlit dashboard (requires ingestor running on localhost:8000)
+# Usage: just streamlit-start (run in a separate terminal)
+streamlit-start:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Starting streamlit dashboard..."
+    streamlit run streamlit_app.py --server.port=8501
+
+# End-to-end Floci sandbox workflow: Setup for probe → S3 → drift analysis
+# Requires 3 terminals:
+#   Terminal 1: just sandbox-with-ingestor-prep
+#   Terminal 2: just ingestor-start
+#   Terminal 3: just streamlit-start
+sandbox-with-ingestor-prep:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=========================================="
+    echo "Phase 1: Starting Floci AWS emulator..."
+    echo "=========================================="
+    just sandbox-up
+
+    echo ""
+    echo "=========================================="
+    echo "Phase 1b: Starting core services (db, redis, redpanda, ingestor)..."
+    echo "=========================================="
+    just up
+
+    echo ""
+    echo "=========================================="
+    echo "Phase 2: Initializing database & seeding data..."
+    echo "=========================================="
+    just migrate
+    just create-admin
+    just seed-demo
+
+    echo ""
+    echo "=========================================="
+    echo "Ready for end-to-end testing!"
+    echo "=========================================="
+    echo ""
+    echo "✅ Services running:"
+    echo "  • Floci AWS emulator (S3, SQS)"
+    echo "  • PostgreSQL database"
+    echo "  • Ingestor API on localhost:8000"
+    echo "  • Redis, Redpanda, MongoDB"
+    echo ""
+    echo "ℹ️  Streamlit dashboard (localhost:8501) not started yet."
+    echo ""
+    echo "To monitor ingestor or start dashboard in separate terminals:"
+    echo "  • View logs:        just logs ingestor"
+    echo "  • Start dashboard:  just streamlit-start (new terminal)"
+    echo ""
+    echo "Then visit: http://localhost:8501"
+    echo "API docs:  http://localhost:8000/docs"
+    echo ""
+
+
+# Terraform init for Floci (local backend). Requires: sandbox-up, create-admin.
 tf-init: tf-preflight
     #!/usr/bin/env bash
     set -euo pipefail
@@ -292,7 +372,12 @@ tf-init: tf-preflight
     export TF_IN_AUTOMATION=1
     BACKEND_BUCKET=$(grep -E '^\s*bucket\s*=' backend.local.hcl | head -n1 | sed -E 's/^\s*bucket\s*=\s*"([^\"]+)".*/\1/')
     if [ -n "$BACKEND_BUCKET" ]; then
-        aws s3 mb "s3://$BACKEND_BUCKET" >/dev/null 2>&1 || true
+        if ! aws s3 ls "s3://$BACKEND_BUCKET" >/dev/null 2>&1; then
+            echo "Creating S3 bucket: $BACKEND_BUCKET"
+            aws s3 mb "s3://$BACKEND_BUCKET" || { echo "ERROR: Failed to create bucket (ensure sandbox-up is running)"; exit 1; }
+        else
+            echo "Bucket $BACKEND_BUCKET exists"
+        fi
     fi
     terraform init -reconfigure -upgrade -backend-config=backend.local.hcl
 
