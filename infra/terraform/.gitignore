@@ -20,6 +20,8 @@ backend.local.hcl
 !backend.local.hcl.example
 backend.aws.hcl
 !backend.aws.hcl.example
+backend.hcl
+!backend.hcl.example
 
 # Plan output
 *.tfplan

@@ -1,6 +1,11 @@
+# CLOUD PROVIDER: hashicorp/aws ~> 5.0
+# To switch providers: replace the required_providers block and the provider block below.
+# Variables, module calls, and file names are provider-neutral and stay unchanged.
+
 terraform {
   required_version = ">= 1.9"
 
+  # CLOUD PROVIDER: update source/version here when switching clouds.
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -8,23 +13,35 @@ terraform {
     }
   }
 
-  # State stored in S3 with S3 object locking.
-  # Apply backend config:
-  #   terraform init -backend-config="bucket=<your-state-bucket>" \
-  #                  -backend-config="key=data-zoo/dev/terraform.tfstate" \
-  #                  -backend-config="region=eu-central-1" \
-  #                  -backend-config="use_lockfile=true"
+  # CLOUD PROVIDER: backend type ("s3", "gcs", "azurerm") changes here.
+  # backend.hcl content also changes — file name stays backend.hcl.
   backend "s3" {}
 }
 
+# CLOUD PROVIDER: replace this block when switching (e.g. provider "google" or provider "azurerm").
 provider "aws" {
   region  = var.aws_region
-  profile = var.aws_profile  # Named profile — use [sandbox] for local emulators, real profile for AWS
+  profile = var.aws_profile  # [sandbox] profile — never collide with real credentials
+
+  # Redirect all API calls to the local emulator endpoint.
+  endpoints {
+    s3  = var.emulator_endpoint
+    ecr = var.emulator_endpoint
+    ecs = var.emulator_endpoint
+    iam = var.emulator_endpoint
+    rds = var.emulator_endpoint
+    sts = var.emulator_endpoint
+  }
+
+  skip_credentials_validation = true
+  skip_metadata_api_check     = true
+  skip_region_validation      = true
+  skip_requesting_account_id  = true
 
   default_tags {
     tags = {
       Project     = "data-zoo"
-      Environment = "dev"
+      Environment = "sandbox"
       ManagedBy   = "terraform"
       Repository  = "api-observatory"
     }
@@ -37,10 +54,10 @@ module "network" {
   source = "../../modules/network"
 
   project            = "data-zoo"
-  environment        = "dev"
+  environment        = "sandbox"
   vpc_cidr           = var.vpc_cidr
   availability_zones = var.availability_zones
-  nat_gateway_count  = var.nat_gateway_count
+  nat_gateway_count  = 0  # no NAT in local sandbox
   app_port           = 8000
 }
 
@@ -52,7 +69,8 @@ module "ecr" {
 
 module "iam" {
   count  = var.enable_iam ? 1 : 0
-  source            = "../../modules/iam"
+  source = "../../modules/iam"
+
   project           = "data-zoo"
   aws_region        = var.aws_region
   github_repository = var.github_repository
@@ -63,15 +81,15 @@ module "database" {
   source = "../../modules/database"
 
   project            = "data-zoo"
-  environment        = "dev"
+  environment        = "sandbox"
   private_subnet_ids = module.network.private_subnet_ids
   sg_db_id           = module.network.sg_db_id
   instance_class     = "db.t3.micro"
   multi_az           = false
-  backup_retention_days = 3
-  create_subnet_group          = var.db_create_subnet_group
+  backup_retention_days        = 0
+  create_subnet_group          = false
   db_subnet_group_name         = var.db_subnet_group_name
-  manage_master_user_password  = var.db_manage_master_user_password
+  manage_master_user_password  = false
   master_password              = var.db_master_password
 }
 
@@ -80,7 +98,7 @@ module "cache" {
   source = "../../modules/cache"
 
   project            = "data-zoo"
-  environment        = "dev"
+  environment        = "sandbox"
   private_subnet_ids = module.network.private_subnet_ids
   sg_cache_id        = module.network.sg_cache_id
   node_type          = "cache.t3.micro"
@@ -93,7 +111,7 @@ module "messaging" {
   source = "../../modules/messaging"
 
   project            = "data-zoo"
-  environment        = "dev"
+  environment        = "sandbox"
   private_subnet_ids = module.network.private_subnet_ids
   sg_msk_id          = module.network.sg_msk_id
 }
@@ -102,7 +120,7 @@ module "compute" {
   source = "../../modules/compute"
 
   project            = "data-zoo"
-  environment        = "dev"
+  environment        = "sandbox"
   aws_region         = var.aws_region
   vpc_id             = module.network.vpc_id
   public_subnet_ids  = module.network.public_subnet_ids
@@ -113,12 +131,10 @@ module "compute" {
   ecr_repository_url_ingestor = module.ecr.repository_urls["ingestor"]
   image_tag                   = var.image_tag
 
-  # Cost guard: keep MSK disabled in dev by default (~$2.64/day saved).
   msk_cluster_arn     = var.enable_messaging ? module.messaging[0].cluster_arn : ""
-  acm_certificate_arn = var.acm_certificate_arn
-  log_retention_days  = 14
+  acm_certificate_arn = ""
+  log_retention_days  = 1
 
-  # Dev: minimal sizing — Fargate Spot selected automatically by capacity_provider_strategy
   ingestor_cpu           = 256
   ingestor_memory        = 512
   ingestor_desired_count = 1

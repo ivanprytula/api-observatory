@@ -6,7 +6,7 @@ enable_iam                     = true
 enable_database                = true
 enable_cache                   = true
 nat_gateway_count              = 1
-ecr_services                   = ["ingestor", "processor"]
+ecr_services                   = ["ingestor"]
 
 # Real AWS defaults for RDS
 db_manage_master_user_password = true

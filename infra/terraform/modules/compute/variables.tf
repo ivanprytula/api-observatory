@@ -30,12 +30,6 @@ variable "ecr_repository_url_ingestor" {
   type        = string
 }
 
-variable "ecr_repository_url_processor" {
-  description = "ECR URL for the processor image (from modules/ecr output)."
-  type        = string
-  default     = ""
-}
-
 variable "image_tag" {
   description = "Image tag to deploy. Typically the git SHA or 'latest'."
   type        = string
@@ -86,25 +80,6 @@ variable "ingestor_memory" {
 
 variable "ingestor_desired_count" {
   description = "Desired number of ingestor tasks (ECS only)."
-  type        = number
-  default     = 1
-}
-
-# ── Processor sizing ────────────────────────────────────────────────────────────
-variable "processor_cpu" {
-  description = "Fargate CPU units for processor service."
-  type        = number
-  default     = 256
-}
-
-variable "processor_memory" {
-  description = "Fargate memory in MiB for processor service."
-  type        = number
-  default     = 512
-}
-
-variable "processor_desired_count" {
-  description = "Desired number of processor tasks (ECS only)."
   type        = number
   default     = 1
 }

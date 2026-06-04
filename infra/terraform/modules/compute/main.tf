@@ -22,13 +22,6 @@ resource "aws_cloudwatch_log_group" "ingestor" {
   tags              = { Service = "ingestor" }
 }
 
-resource "aws_cloudwatch_log_group" "processor" {
-  count             = contains(["ecs-fargate", "ecs-ec2"], var.compute_type) ? 1 : 0
-  name              = "/ecs/${var.project}/${var.environment}/processor"
-  retention_in_days = var.log_retention_days
-  tags              = { Service = "processor" }
-}
-
 # ── Shared: IAM Roles (ECS Task Execution + Task) ──────────────────────────────
 locals {
   msk_topic_base_arn = var.msk_cluster_arn != "" ? replace(var.msk_cluster_arn, ":cluster/", ":topic/") : ""
@@ -270,105 +263,6 @@ resource "aws_ecs_task_definition" "ingestor_fargate" {
   }])
 
   tags = { Service = "ingestor" }
-}
-
-# ── ECS: Processor Task Definition (port 8002) ────────────────────────────────
-resource "aws_ecs_task_definition" "processor_fargate" {
-  count                    = var.compute_type == "ecs-fargate" ? 1 : 0
-  family                   = "${var.project}-${var.environment}-processor"
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu                      = var.processor_cpu
-  memory                   = var.processor_memory
-  execution_role_arn       = aws_iam_role.ecs_task_execution[0].arn
-  task_role_arn            = aws_iam_role.ecs_task[0].arn
-
-  container_definitions = jsonencode([{
-    name      = "processor"
-    image     = "${var.ecr_repository_url_processor}:${var.image_tag}"
-    essential = true
-
-    portMappings = [{
-      containerPort = 8002
-      protocol      = "tcp"
-    }]
-
-    secrets = [
-      {
-        name      = "KAFKA_BOOTSTRAP_SERVERS"
-        valueFrom = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project}/${var.environment}/kafka-bootstrap-servers"
-      },
-      {
-        name      = "DATABASE_URL"
-        valueFrom = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project}/${var.environment}/database-url"
-      },
-    ]
-
-    environment = [
-      { name = "LOG_LEVEL", value = var.environment == "prod" ? "INFO" : "DEBUG" },
-    ]
-
-    logConfiguration = {
-      logDriver = "awslogs"
-      options = {
-        "awslogs-group"         = aws_cloudwatch_log_group.processor[0].name
-        "awslogs-region"        = var.aws_region
-        "awslogs-stream-prefix" = "ecs"
-      }
-    }
-
-    readonlyRootFilesystem = true
-    user                   = "1000:1000"
-    stopTimeout            = 30
-
-    healthCheck = {
-      command     = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health', timeout=5)\""]
-      interval    = 30
-      timeout     = 10
-      retries     = 3
-      startPeriod = 30
-    }
-  }])
-
-  tags = { Service = "processor" }
-}
-
-resource "aws_ecs_service" "processor_fargate" {
-  count           = var.compute_type == "ecs-fargate" ? 1 : 0
-  name            = "processor"
-  cluster         = aws_ecs_cluster.main[0].id
-  task_definition = aws_ecs_task_definition.processor_fargate[0].arn
-  desired_count   = var.processor_desired_count
-
-  capacity_provider_strategy {
-    capacity_provider = var.environment == "prod" ? "FARGATE" : "FARGATE_SPOT"
-    weight            = 1
-    base              = 1
-  }
-
-  network_configuration {
-    subnets          = var.private_subnet_ids
-    security_groups  = [var.sg_app_id]
-    assign_public_ip = false
-  }
-
-  deployment_controller {
-    type = "ECS"
-  }
-
-  deployment_circuit_breaker {
-    enable   = true
-    rollback = true
-  }
-
-  deployment_minimum_healthy_percent = 100
-  deployment_maximum_percent         = 200
-
-  lifecycle {
-    ignore_changes = [task_definition, desired_count]
-  }
-
-  tags = { Service = "processor" }
 }
 
 resource "aws_ecs_service" "ingestor_fargate" {

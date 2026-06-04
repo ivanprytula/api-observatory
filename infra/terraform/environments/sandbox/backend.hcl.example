@@ -1,8 +1,8 @@
-# LocalStack backend config for local Terraform workflows.
-# Copy to backend.local.hcl (gitignored) and adjust if needed.
+# Sandbox backend config (Floci / LocalStack / any S3-compatible emulator).
+# Copy to backend.hcl (gitignored) and adjust bucket/endpoint as needed.
 
-bucket                      = "data-pipeline-local"
-key                         = "data-zoo/dev/terraform.tfstate"
+bucket                      = "s3-native-lock-setup"
+key                         = "data-zoo/sandbox/terraform.tfstate"
 region                      = "eu-central-1"
 access_key                  = "test"
 secret_key                  = "test"

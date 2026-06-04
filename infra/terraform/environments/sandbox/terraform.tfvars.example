@@ -1,0 +1,20 @@
+# Sandbox tfvars example — works with Floci, LocalStack, or any S3-compatible emulator.
+# Copy to terraform.tfvars (gitignored) and adjust emulator_endpoint if needed.
+
+aws_region         = "eu-central-1"
+aws_profile        = "sandbox"
+emulator_endpoint  = "http://localhost:4566"
+
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["eu-central-1a", "eu-central-1b"]
+image_tag          = "develop"
+ecr_services       = ["ingestor"]
+
+enable_messaging = false
+enable_iam       = false
+enable_database  = true
+enable_cache     = false
+
+db_master_password   = "local-dev-db-password"
+db_subnet_group_name = null
+redis_auth_token     = "local-dev-redis-token"

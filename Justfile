@@ -229,7 +229,8 @@ deploy-audit tag="api-observatory:local":
 # ─── INFRASTRUCTURE & SANDBOX ──────────────────────────────────────────────
 
 # Terraform helper variables
-TF_DIR := "infra/terraform/environments/dev"
+TF_DIR         := "infra/terraform/environments/dev"
+TF_SANDBOX_DIR := "infra/terraform/environments/sandbox"
 
 # ─── Preflight checks ───────────────────────────────────────────────────────
 
@@ -241,15 +242,15 @@ tf-preflight:
         echo "❌ Terraform CLI not installed. Install via: brew install terraform" >&2
         exit 1
     fi
-    # Ensure at least one backend file exists (local or aws)
-    if [ ! -f {{TF_DIR}}/backend.local.hcl ] && [ ! -f {{TF_DIR}}/backend.aws.hcl ]; then
-        echo "Missing backend file in {{TF_DIR}} (backend.local.hcl or backend.aws.hcl)." >&2
-        echo "Create one from the corresponding example before running terraform commands." >&2
+    # Ensure at least one backend file exists (sandbox or aws)
+    if [ ! -f {{TF_DIR}}/backend.aws.hcl ]; then
+        echo "Missing backend.aws.hcl in {{TF_DIR}}." >&2
+        echo "Create one from backend.aws.hcl.example before running terraform commands." >&2
         exit 1
     fi
-    # Ensure at least one tfvars file exists
-    if [ ! -f {{TF_DIR}}/terraform.tfvars ] && [ ! -f {{TF_DIR}}/terraform.aws.tfvars ] && [ ! -f {{TF_DIR}}/terraform.floci.tfvars ]; then
-        echo "Missing terraform var files in {{TF_DIR}} (terraform.tfvars, terraform.aws.tfvars, or terraform.floci.tfvars)." >&2
+    # Ensure tfvars file exists
+    if [ ! -f {{TF_DIR}}/terraform.tfvars ] && [ ! -f {{TF_DIR}}/terraform.aws.tfvars ]; then
+        echo "Missing tfvars in {{TF_DIR}} (terraform.tfvars or terraform.aws.tfvars)." >&2
         echo "Create one from the corresponding example before running terraform commands." >&2
         exit 1
     fi
@@ -364,15 +365,17 @@ sandbox-with-ingestor-prep:
     echo ""
 
 
-# Terraform init for Floci (local backend). Requires: sandbox-up, create-admin.
-tf-init: tf-preflight
+# ─── Terraform: Sandbox (local emulator) ────────────────────────────────────
+
+# Init sandbox backend. Requires: sandbox-up.
+tf-sandbox-init:
     #!/usr/bin/env bash
     set -euo pipefail
     source scripts/aws-env.sh
     unset AWS_PROFILE
-    cd {{TF_DIR}}
+    cd {{TF_SANDBOX_DIR}}
     export TF_IN_AUTOMATION=1
-    BACKEND_BUCKET=$(grep -E '^\s*bucket\s*=' backend.local.hcl | head -n1 | sed -E 's/^\s*bucket\s*=\s*"([^\"]+)".*/\1/')
+    BACKEND_BUCKET=$(grep -E '^\s*bucket\s*=' backend.hcl | head -n1 | sed -E 's/^\s*bucket\s*=\s*"([^\"]+)".*/\1/')
     if [ -n "$BACKEND_BUCKET" ]; then
         if ! aws s3 ls "s3://$BACKEND_BUCKET" >/dev/null 2>&1; then
             echo "Creating S3 bucket: $BACKEND_BUCKET"
@@ -381,64 +384,62 @@ tf-init: tf-preflight
             echo "Bucket $BACKEND_BUCKET exists"
         fi
     fi
-    terraform init -reconfigure -upgrade -backend-config=backend.local.hcl
+    terraform init -reconfigure -upgrade -backend-config=backend.hcl
 
-# Terraform plan (Floci environment). Run 'just tf-init' once before first plan.
-tf-plan-local:
+# Terraform plan for sandbox. Run 'just tf-sandbox-init' once first.
+tf-sandbox-plan:
     #!/usr/bin/env bash
     set -euo pipefail
     source scripts/aws-env.sh
     export TF_IN_AUTOMATION=1
-    cd {{TF_DIR}}
+    cd {{TF_SANDBOX_DIR}}
     terraform validate
     terraform plan \
       -input=false \
       -var-file=terraform.tfvars \
-      -var-file=terraform.floci.tfvars \
       -out=tfplan
 
-# Terraform apply (Floci). Requires tfplan from 'just tf-plan-local'.
-tf-apply-local:
+# Apply saved sandbox plan.
+tf-sandbox-apply:
     #!/usr/bin/env bash
     set -euo pipefail
     source scripts/aws-env.sh
-    cd {{TF_DIR}}
+    cd {{TF_SANDBOX_DIR}}
     terraform apply tfplan
 
-# Show current Terraform state (Floci backend)
-tf-show-local:
+# Show current sandbox Terraform state.
+tf-sandbox-show:
     #!/usr/bin/env bash
     set -euo pipefail
     source scripts/aws-env.sh
-    cd {{TF_DIR}}
+    cd {{TF_SANDBOX_DIR}}
     terraform show
 
-# Show list of resources in Terraform state (Floci backend)
-tf-state-list:
+# List resources in sandbox Terraform state.
+tf-sandbox-state-list:
     #!/usr/bin/env bash
     set -euo pipefail
     source scripts/aws-env.sh
-    cd {{TF_DIR}}
+    cd {{TF_SANDBOX_DIR}}
     terraform state list
 
-# Terraform destroy (Floci)
-tf-destroy-local:
+# Destroy all sandbox resources.
+tf-sandbox-destroy:
     #!/usr/bin/env bash
     set -euo pipefail
     source scripts/aws-env.sh
-    cd {{TF_DIR}}
+    cd {{TF_SANDBOX_DIR}}
     export TF_IN_AUTOMATION=1
-    terraform destroy -auto-approve -lock=false \
-      -var-file=terraform.tfvars \
-      -var-file=terraform.floci.tfvars
+    terraform destroy -auto-approve -lock=false -var-file=terraform.tfvars
 
-# Fresh end-to-end local infra loop (clean sandbox -> plan -> apply)
-tf-apply-local-fresh: sandbox-reset
+# Fresh end-to-end sandbox loop: clean emulator -> init -> plan -> apply.
+tf-sandbox-fresh: sandbox-reset
     #!/usr/bin/env bash
     set -euo pipefail
     source scripts/aws-env.sh
-    just tf-plan-local
-    just tf-apply-local
+    just tf-sandbox-init
+    just tf-sandbox-plan
+    just tf-sandbox-apply
 
 # ─── Terraform: AWS Dev (profile-driven) ────────────────────────────────────
 

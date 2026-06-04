@@ -1,4 +1,8 @@
 # Minimal MVP stack: db, redis, redpanda, ingestor
+# Network model: All services (including Floci AWS emulator) share `api-obs` network
+# for inter-service communication (e.g., ingestor → db, ingestor → redis).
+# Host access: All services expose ports to 127.0.0.1 or 0.0.0.0 for local development.
+
 services:
   db:
     build:
@@ -35,6 +39,8 @@ services:
         limits:
           cpus: '1.0'
           memory: '1G'
+    networks:
+      - api-obs
 
   redis:
     image: redis:7-alpine
@@ -60,6 +66,8 @@ services:
         limits:
           cpus: '0.25'
           memory: '256M'
+    networks:
+      - api-obs
 
   redpanda:
     image: redpandadata/redpanda:v24.1.1
@@ -94,6 +102,8 @@ services:
         limits:
           cpus: '0.5'
           memory: '512M'
+    networks:
+      - api-obs
 
   ingestor:
     build:
@@ -142,6 +152,8 @@ services:
         limits:
           cpus: '0.5'
           memory: '512M'
+    networks:
+      - api-obs
 
   trivy:
     image: aquasec/trivy:0.56.2
@@ -189,3 +201,27 @@ services:
         limits:
           cpus: '0.5'
           memory: '512M'
+    networks:
+      - api-obs
+
+# ─── NETWORK ────────────────────────────────────────────────────────────────
+# All services (microservices + infrastructure emulators) share this network
+# for inter-container communication.
+#
+# Services on `api-obs`:
+#   - db (PostgreSQL)
+#   - redis (cache)
+#   - redpanda (message broker)
+#   - ingestor (FastAPI microservice)
+#   - floci (AWS emulator, optional)
+#
+# Host access: Each service exposes ports to 127.0.0.1 or 0.0.0.0 for localhost access.
+#   Port mappings:
+#   - db:5432 → localhost:5432
+#   - redis:6379 → localhost:6379
+#   - redpanda:9092 (Kafka), 8082 (HTTP) → localhost:9092, 8082
+#   - ingestor:8000 → localhost:8000
+#   - floci:4566 → 127.0.0.1:4566 (local only)
+networks:
+  api-obs:
+    driver: bridge
