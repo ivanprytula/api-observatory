@@ -3,6 +3,7 @@ set -euo pipefail
 
 apply_changes="false"
 branches_csv="main,develop"
+repo=""
 
 die() {
 	echo "$*" >&2
@@ -16,12 +17,13 @@ info() {
 usage() {
 	cat <<'EOF'
 Usage:
-	set-branch-protection-gh.sh [--branches main,develop] [--apply]
+	set-branch-protection-gh.sh [--repo owner/name] [--branches main,develop] [--apply]
 
 Examples:
 	set-branch-protection-gh.sh
 	set-branch-protection-gh.sh --apply
 	set-branch-protection-gh.sh --branches main --apply
+	set-branch-protection-gh.sh --repo ivanprytula/api-observatory --apply
 
 Notes:
 	- Default mode is dry-run (prints payloads only).
@@ -33,6 +35,10 @@ EOF
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
+		--repo)
+			repo="$2"
+			shift 2
+			;;
 		--branches)
 			branches_csv="$2"
 			shift 2
@@ -56,7 +62,11 @@ done
 command -v gh >/dev/null 2>&1 || die "gh CLI is required."
 command -v jq >/dev/null 2>&1 || die "jq is required."
 
-repo="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
+if [[ -z "$repo" ]]; then
+	repo="$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)" || {
+		die "Failed to auto-detect default repository. Please run 'gh repo set-default' or pass '--repo owner/name'."
+	}
+fi
 owner="${repo%/*}"
 name="${repo#*/}"
 
@@ -118,11 +128,20 @@ for branch in "${branches[@]}"; do
 	echo "$payload" | jq .
 
 	if [[ "$apply_changes" == "true" ]]; then
-		gh api \
+		if ! api_output=$(gh api \
 			--method PUT \
 			-H "Accept: application/vnd.github+json" \
 			"/repos/${owner}/${name}/branches/${branch}/protection" \
-			--input - <<<"$payload" >/dev/null
+			--input - <<<"$payload" 2>&1); then
+			echo "Failed to apply protection rules to ${branch}." >&2
+			echo "$api_output" >&2
+			if echo "$api_output" | grep -q "403"; then
+				echo "Hint: GitHub restricts branch protection on private repos on the Free tier." >&2
+				echo "You can explicitly target a public repository using the --repo flag." >&2
+				echo "Example: ./scripts/tools/set-branch-protection-gh.sh --repo ivanprytula/api-observatory --apply" >&2
+			fi
+			exit 1
+		fi
 		echo "Applied protection to ${owner}/${name}:${branch}"
 	else
 		echo "Dry-run only. Re-run with --apply to persist."
