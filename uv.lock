@@ -8,6 +8,10 @@ supported-markers = [
     "sys_platform == 'linux'",
 ]
 
+[options]
+exclude-newer = "2026-05-28T14:52:11.395982563Z"
+exclude-newer-span = "P7D"
+
 [manifest]
 members = [
     "api-observatory",
