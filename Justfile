@@ -223,6 +223,8 @@ deploy-audit tag="api-observatory:local":
     just docker-build-image {{tag}}
     just docker-audit-size {{tag}}
     just docker-scan-image {{tag}}
+    @docker image inspect {{tag}} --format 'Digest: {{{{index .RepoDigests 0}}}}' 2>/dev/null || \
+      docker inspect --format 'ID: {{{{.ID}}}}' {{tag}}
 
 # ─── INFRASTRUCTURE & SANDBOX ──────────────────────────────────────────────
 
