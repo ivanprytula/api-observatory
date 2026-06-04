@@ -86,7 +86,7 @@ dev = [
   "pytest-cov>=6.1.0",
   # testcontainers: auto-provision postgres:17-bookworm for local integration tests
   # (Docker must be running; CI uses GHA service container instead)
-  "testcontainers[postgres,redis]>=4.10.0",
+  "testcontainers[postgres,redis]>=4.14.2",
   "testcontainers-floci>=0.1.1",            # Floci integration testing (Docker required)
   "pygments>=2.20.0",
   "httpx>=0.28.1",
