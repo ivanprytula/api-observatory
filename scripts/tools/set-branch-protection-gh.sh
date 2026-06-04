@@ -76,16 +76,23 @@ if [[ ${#branches[@]} -eq 0 ]]; then
 fi
 
 # Keep check names aligned with current .github/workflows/ci.yml job names.
+# Format: "<workflow name> / <job display name>"
+#
+# Requiring only ci-gate is intentional: it is the aggregate gate job that
+# verifies every upstream job (lint, action-ref-validation, unit-tests,
+# python-deps, docker-build, docker-scan-security, codeql, integration-tests)
+# passed. Listing individual jobs here would require updating this script every
+# time the CI DAG changes.
 default_contexts_develop_json='[
-	"CI / Lint (ruff check + format)",
-	"CI / Unit tests (sqlite)",
-	"CI / Integration tests (postgres + redis)"
+	"CI / CI gate (all checks passed)"
 ]'
 
+# main additionally requires the secrets scan (runs on every PR/push).
+# Note: security.yml is schedule-only and never runs on PRs, so it is
+# intentionally excluded from required checks.
 default_contexts_main_json='[
-	"CI / Lint (ruff check + format)",
-	"CI / Unit tests (sqlite)",
-	"Security / Security summary"
+	"CI / CI gate (all checks passed)",
+	"Security Secrets Lite / Secrets Scan (changed lines)"
 ]'
 
 for branch in "${branches[@]}"; do
