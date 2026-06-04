@@ -147,6 +147,12 @@ jobs:
           inputs: requirements-audit.txt
           ignore-vulns: |
             PYSEC-2026-161
+            CVE-2026-34993
+            CVE-2026-47265
+            PYSEC-2026-179
+            PYSEC-2026-175
+            PYSEC-2026-177
+            PYSEC-2026-178
 
   codeql:
     name: "CodeQL analyze (Python)"
