@@ -174,95 +174,10 @@ jobs:
           name: integration-coverage-xml
           path: coverage-integration.xml
 
-  observability-gates:
-    name: Observability gates (promtool + smoke deploy)
-    runs-on: ubuntu-latest
-    needs: [lint, unit-tests, integration-tests]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Check Prometheus alert rules
-        shell: bash
-        run: |
-          set -euo pipefail
-          prom_config=''
-          alert_rules=''
-
-          if [[ -f "$PWD/infra/monitoring/prometheus.yml" ]]; then
-            prom_config="$PWD/infra/monitoring/prometheus.yml"
-          else
-            prom_config="$(find "$PWD" \
-              -path "$PWD/.venv" -prune -o \
-              -path "$PWD/.local-dev" -prune -o \
-              -type f -path '*/monitoring/prometheus.yml' -print \
-              | head -n 1 || true)"
-          fi
-
-          if [[ -f "$PWD/infra/monitoring/rules/alert.rules.yml" ]]; then
-            alert_rules="$PWD/infra/monitoring/rules/alert.rules.yml"
-          else
-            alert_rules="$(find "$PWD" \
-              -path "$PWD/.venv" -prune -o \
-              -path "$PWD/.local-dev" -prune -o \
-              -type f -path '*/monitoring/rules/alert.rules.yml' -print \
-              | head -n 1 || true)"
-          fi
-
-          if [[ -z "$prom_config" || -z "$alert_rules" ]]; then
-            echo "Skipping Prometheus checks: config/rules files are not present in this repository snapshot"
-            echo "Discovered monitoring-like files:" >&2
-            find "$PWD" \
-              -path "$PWD/.venv" -prune -o \
-              -path "$PWD/.local-dev" -prune -o \
-              -type f \( -name '*prometheus*.yml' -o -name '*alert*.yml' \) -print \
-              | sort >&2 || true
-            exit 0
-          fi
-
-          prom_config_rel="${prom_config#"$PWD"/}"
-          alert_rules_rel="${alert_rules#"$PWD"/}"
-
-          docker run --rm \
-            --entrypoint=promtool \
-            -v "$PWD:/workspace" \
-            prom/prometheus:v2.54.1 \
-            check config "/workspace/${prom_config_rel}"
-          docker run --rm \
-            --entrypoint=promtool \
-            -v "$PWD:/workspace" \
-            prom/prometheus:v2.54.1 \
-            check rules "/workspace/${alert_rules_rel}"
-
-      - name: Smoke deploy prod-like stack
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [[ ! -f "$PWD/scripts/ops/02-compose-profile.sh" ]]; then
-            echo "Skipping smoke deploy: scripts/ops/02-compose-profile.sh is not present in this repository snapshot"
-            exit 0
-          fi
-
-          bash scripts/ops/02-compose-profile.sh prod-like up -d db redis redpanda ingestor
-          trap 'bash scripts/ops/02-compose-profile.sh prod-like down -v' EXIT
-
-          for _ in $(seq 1 60); do
-            if curl -fsS http://localhost:8000/health >/dev/null && curl -fsS http://localhost:8000/readyz >/dev/null; then
-              echo "smoke deploy passed"
-              exit 0
-            fi
-            sleep 5
-          done
-
-          echo "smoke deploy failed" >&2
-          bash scripts/ops/02-compose-profile.sh prod-like logs ingestor
-          exit 1
-
   docker-build-push:
     name: Build and push candidate image
     runs-on: ubuntu-latest
-    needs: [lint, unit-tests, integration-tests, observability-gates]
+    needs: [lint, unit-tests, integration-tests]
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6

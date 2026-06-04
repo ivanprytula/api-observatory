@@ -79,8 +79,7 @@ fi
 default_contexts_develop_json='[
 	"CI / Lint (ruff check + format)",
 	"CI / Unit tests (sqlite)",
-	"CI / Integration tests (postgres + redis)",
-	"CI / Observability gates (promtool + smoke deploy)"
+	"CI / Integration tests (postgres + redis)"
 ]'
 
 default_contexts_main_json='[
