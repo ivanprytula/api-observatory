@@ -26,14 +26,17 @@ isProject: false
 # Job-Ready SDLC Focus Plan (Post Phase-2)
 
 ## Goal
+
 Land a backend/cloud-native role quickly by demonstrating end-to-end ownership of one shippable service (`ingestor`) with strong SDLC discipline, then extending that foundation with one additional microservice.
 
 ## Current Baseline (What to keep stable)
+
 - Keep `ingestor` as the primary product surface and reliability anchor in [`/home/ivanp/PersonalProjects/data-pipeline-async/services/ingestor`](/home/ivanp/PersonalProjects/data-pipeline-async/services/ingestor).
 - Use the existing local platform in [`/home/ivanp/PersonalProjects/data-pipeline-async/docker-compose.yml`](/home/ivanp/PersonalProjects/data-pipeline-async/docker-compose.yml) and operational command layer in [`/home/ivanp/PersonalProjects/data-pipeline-async/Justfile`](/home/ivanp/PersonalProjects/data-pipeline-async/Justfile).
 - Treat the Phase-2 Floci sandbox as done and move to real AWS dev loop from [`/home/ivanp/PersonalProjects/data-pipeline-async/.github/prompts/plan-v02Roadmap.prompt.md`](/home/ivanp/PersonalProjects/data-pipeline-async/.github/prompts/plan-v02Roadmap.prompt.md).
 
 ## Priority Strategy (T-shaped / Pi-shaped)
+
 - Deep pillar 1 (Backend core): FastAPI async internals, DB modeling, migrations, test architecture, API correctness.
 - Deep pillar 2 (Platform/Cloud): Terraform + ECS deploys + CI/CD release trust chain.
 - Broad horizontal: observability, resilience patterns, performance/load, security baseline, developer workflows.
@@ -42,11 +45,24 @@ Land a backend/cloud-native role quickly by demonstrating end-to-end ownership o
 ## Minimal Branch and Environment Matrix (Adopt now)
 
 ### Branch to environment mapping
+
 - `feature/*` -> no environment deploy by default; run CI only.
 - `develop` -> dev environment deployment target (Floci loop + AWS dev), QA validation happens here.
 - `main` -> production release line; deploy to prod only from `main` tags/releases.
 
+```text
+feature/* -> PR -> ci.yml (full gates)
+develop   -> push -> ci.yml + cd-dev.yml (auto deploy dev)
+main      -> v* tag -> release.yml (trust gates) -> cd-prod.yml (manual approval)
+
+v0.4 tag -> release.yml builds image@sha256:abc
+         -> cd-dev deploys sha256:abc   (auto)
+         -> cd-prod deploys sha256:abc  (manual approval)
+
+```
+
 ### Minimal triggers and policies
+
 - Pull request to `develop`:
   - Required: lint + unit.
   - Optional/non-blocking: e2e/nightly.
@@ -62,14 +78,19 @@ Land a backend/cloud-native role quickly by demonstrating end-to-end ownership o
   - Promote same tested image digest (no rebuild).
 - Release from `main`:
   - Required: release trust gates (SBOM, signature, provenance).
-  - Deploy prod from immutable digest tagged from `main`.
+  - **`release.yml` has no branch guard** — a `v*` tag on `develop` would also trigger it. Convention: only cut `v*` tags from `main`. A branch assertion step (`github.ref` must start with `refs/heads/main`) will be added to `release.yml` when AWS deploy is live.
+  - `release.yml` enforces a branch guard in the `verify-ci` job: asserts the tagged commit exists on `origin/main` via `git branch -r --contains`. A `v*` tag on `develop` will fail this check and abort before any build or push.
+- `cd-prod.yml` repeats the same assertion as a second guard before the deploy step.
+
 
 ### Why this is minimal but production-relevant
+
 - Mirrors real team flow (integration branch + QA + controlled prod line) without heavy release bureaucracy.
 - Preserves fast iteration in dev while protecting prod stability.
 - Gives clear interview narrative: “tested in dev, promoted by digest, released from main”.
 
 ## GitHub Branch Protection and Workflow Trigger Checklist (Minimal)
+
 - Protect `main`:
   - Require pull request before merge.
   - Require passing checks: lint, unit, release-trust workflow.
@@ -92,6 +113,7 @@ Land a backend/cloud-native role quickly by demonstrating end-to-end ownership o
   - Do not rebuild per environment.
 
 ### Automation-first note (use existing script, not manual UI)
+
 - Use [`/home/ivanp/PersonalProjects/data-pipeline-async/scripts/tools/set-branch-protection-gh.sh`](/home/ivanp/PersonalProjects/data-pipeline-async/scripts/tools/set-branch-protection-gh.sh) as the source of truth for branch protection configuration.
 - Recommended rollout:
   - Dry-run first: `scripts/tools/set-branch-protection-gh.sh`
@@ -102,6 +124,7 @@ Land a backend/cloud-native role quickly by demonstrating end-to-end ownership o
 ## Execution Roadmap (8-10 weeks)
 
 ### Stage 1: Reliability and CI trust first (Week 1-2)
+
 - Stabilize test architecture and fixture boundaries exactly as already identified in [`/home/ivanp/PersonalProjects/data-pipeline-async/.github/prompts/plan-v02Roadmap.prompt.md`](/home/ivanp/PersonalProjects/data-pipeline-async/.github/prompts/plan-v02Roadmap.prompt.md).
 - Make integration lane required on merge-to-`develop` (dev deploy gate), with `main` protected by release/trust gates; keep e2e scheduled/non-blocking.
 - Keep one-command local reproducibility for each CI lane using `just` tasks.
@@ -155,6 +178,7 @@ Land a backend/cloud-native role quickly by demonstrating end-to-end ownership o
 ## Practical Focus Rules (What to spend time on vs skip)
 
 ### Invest heavily
+
 - CI reliability and reproducibility.
 - Cloud deploy + rollback confidence.
 - Observability that helps diagnose real incidents.
@@ -162,11 +186,13 @@ Land a backend/cloud-native role quickly by demonstrating end-to-end ownership o
 - Security basics with strong ROI (secrets handling, authz, dependency/image scanning, least privilege).
 
 ### Keep lightweight for now
+
 - Complex multi-account/multi-region platform design.
 - Heavy GitOps/operator frameworks unless required for your immediate target jobs.
 - Overly abstract internal platforms before 2-3 services actually need them.
 
 ## Weekly Learning Cadence (Theory + practice)
+
 - 60% build/operate in this repo.
 - 30% guided theory tied to current week’s implementation topic.
 - 10% interview packaging (write concise architecture and incident narratives).
@@ -176,6 +202,7 @@ Land a backend/cloud-native role quickly by demonstrating end-to-end ownership o
   - one short “what I learned and why it matters in prod” note.
 
 ## Job-Readiness Evidence Pack (Must-have)
+
 - Architecture narrative for `ingestor` and cloud deployment path.
 - CI/CD pipeline explanation with trust gates and promotion policy.
 - One incident/resilience case study.
@@ -184,13 +211,16 @@ Land a backend/cloud-native role quickly by demonstrating end-to-end ownership o
 - Clean README/docs pointers so interviewer can run and verify quickly.
 
 ## Decision Gate for adding more services
+
 Only add service #2 after all are true:
+
 - `ingestor` CI lanes stable for at least one full cycle.
 - AWS dev deploy loop is repeatable without manual console patching.
 - Observability alerts and runbooks validated by at least one drill.
 - Release trust chain is green and reproducible.
 
 ## Suggested next immediate sequence (this week)
+
 - Run and stabilize reliability/CI tasks first (fixture boundaries + integration gate).
 - Re-run Floci plan/apply/destroy loop once as regression check.
 - Execute first AWS dev `plan` and document expected resources/cost.
@@ -201,11 +231,13 @@ Only add service #2 after all are true:
   - Keep each critical operational topic to one primary page + one checklist page maximum.
 
 ## Horizon View (How this evolves after MVP v0.2)
+
 - Horizon A (now): single `ingestor` service, strict quality gates, reliable dev deploy loop.
 - Horizon B (next): one additional service (`webhook`) with the same branch/deploy/release policy and shared contracts discipline.
 - Horizon C (later): optional stage environment and stricter change controls only when traffic/team complexity justifies the extra process.
 
 ## Documentation Compaction Guardrails (Anti-duplication)
+
 - One topic, one canonical document:
   - SDLC flow.
   - CI gates and branch policy.
@@ -221,6 +253,7 @@ Only add service #2 after all are true:
 ## Concrete Docs Cleanup Map (Keep / Merge / Archive)
 
 ### Keep as canonical (single source)
+
 - Keep [`/home/ivanp/PersonalProjects/data-pipeline-async/docs/README.md`](/home/ivanp/PersonalProjects/data-pipeline-async/docs/README.md) as global docs index.
 - Keep [`/home/ivanp/PersonalProjects/data-pipeline-async/docs/dev/commands.md`](/home/ivanp/PersonalProjects/data-pipeline-async/docs/dev/commands.md) as the only command catalog (no command duplication elsewhere).
 - Keep [`/home/ivanp/PersonalProjects/data-pipeline-async/docs/03-daily-development.md`](/home/ivanp/PersonalProjects/data-pipeline-async/docs/03-daily-development.md) as workflow narrative (link to commands page, do not repeat command blocks).
@@ -231,6 +264,7 @@ Only add service #2 after all are true:
 - Keep [`/home/ivanp/PersonalProjects/data-pipeline-async/docs/adr/README.md`](/home/ivanp/PersonalProjects/data-pipeline-async/docs/adr/README.md) as ADR entrypoint.
 
 ### Merge (deduplicate into canonical targets)
+
 - Merge CI/CD and release policy overlap into one canonical page:
   - Canonical target: [`/home/ivanp/PersonalProjects/data-pipeline-async/docs/ci/workflow-reference.md`](/home/ivanp/PersonalProjects/data-pipeline-async/docs/ci/workflow-reference.md)
   - Merge in key non-duplicate content from:
@@ -256,6 +290,7 @@ Only add service #2 after all are true:
     - [`/home/ivanp/PersonalProjects/data-pipeline-async/docs/setup/local-https-setup.md`](/home/ivanp/PersonalProjects/data-pipeline-async/docs/setup/local-https-setup.md)
 
 ### Archive (or convert to 5-10 line pointer pages)
+
 - Candidate archive/pointer set for strategy-heavy duplicates:
   - [`/home/ivanp/PersonalProjects/data-pipeline-async/docs/design/project-evolution-and-growth-playbook.md`](/home/ivanp/PersonalProjects/data-pipeline-async/docs/design/project-evolution-and-growth-playbook.md)
   - [`/home/ivanp/PersonalProjects/data-pipeline-async/docs/design/be-learning-knowledge-base.md`](/home/ivanp/PersonalProjects/data-pipeline-async/docs/design/be-learning-knowledge-base.md)
@@ -266,6 +301,7 @@ Only add service #2 after all are true:
   - Keep under `docs/personal/` but remove from core engineering reading path in `docs/README.md`.
 
 ### Frictionless execution sequence (docs compaction sprint)
+
 - Pass 1 (inventory): tag each doc as `canonical`, `merge-into:<target>`, or `archive-pointer`.
 - Pass 2 (merge): copy only unique content into canonical targets, avoid rephrasing duplicates.
 - Pass 3 (shrink): reduce merged docs to short pointer pages with 1-paragraph purpose + canonical link.
@@ -275,6 +311,7 @@ Only add service #2 after all are true:
 ## Phase-by-Phase Compact Docs Cleanup Backlog
 
 ### Phase A: CI and release docs compaction
+
 - Scope:
   - `docs/ci/workflow-reference.md`
   - `docs/github-actions-security-hardening.md`
@@ -290,6 +327,7 @@ Only add service #2 after all are true:
   - No duplicated branch-policy or release-gate prose remains.
 
 ### Phase B: deployment runbooks compaction
+
 - Scope:
   - `docs/floci-aws-deployment-workflow.md`
   - `docs/deployment/aws-ecs.md`
@@ -305,6 +343,7 @@ Only add service #2 after all are true:
   - Dev and prod pathways are unambiguous.
 
 ### Phase C: architecture docs compaction
+
 - Scope:
   - `docs/04-architecture-overview.md`
   - `docs/design/architecture.md`
@@ -320,6 +359,7 @@ Only add service #2 after all are true:
   - Interview narrative can be told from 2 pages max (runtime overview + C4 deep-dive).
 
 ### Phase D: setup and daily workflow compaction
+
 - Scope:
   - `docs/01-system-setup.md`
   - `docs/02-first-time-setup.md`
@@ -336,6 +376,7 @@ Only add service #2 after all are true:
   - New contributor can onboard with one reading path and zero command duplication.
 
 ### Phase E: observability and runbooks compaction
+
 - Scope:
   - `docs/observability.md`
   - `docs/design/pillar-4-observability.md`

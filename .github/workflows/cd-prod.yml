@@ -1,0 +1,67 @@
+name: CD Prod
+
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cd-prod
+  cancel-in-progress: false  # never cancel an in-progress prod deploy
+
+jobs:
+  deploy-prod:
+    name: "Deploy to prod (AWS Fargate)"
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    environment: prod  # requires manual approval gate configured in GitHub repo settings
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Assert deployment source is main
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git branch -r --contains "${{ github.event.workflow_run.head_sha }}" | grep -q 'origin/main'; then
+            echo "Prod deploy must originate from main."
+            exit 1
+          fi
+          echo "Commit is on main"
+
+      # TODO: configure AWS credentials (OIDC role assumption, no long-lived keys)
+      # - name: Configure AWS credentials
+      #   uses: aws-actions/configure-aws-credentials@...
+      #   with:
+      #     role-to-assume: ${{ vars.AWS_ROLE_ARN_PROD }}
+      #     aws-region: ${{ vars.AWS_REGION }}
+
+      # TODO: resolve release image digest (pushed by release.yml for this tag)
+      # IMAGE="ghcr.io/${{ github.repository_owner }}/data-zoo-ingestor:${{ github.event.workflow_run.name }}"
+
+      # TODO: update ECS service (Fargate) with release image digest
+      # aws ecs update-service --cluster prod --service ingestor --force-new-deployment
+
+      # TODO: wait for ECS service stability
+      # aws ecs wait services-stable --cluster prod --services ingestor
+
+      # TODO: smoke-test /readyz on prod ALB
+      # curl --fail https://prod.domain/readyz
+
+      - name: Stub — prod deploy not yet wired
+        run: echo "cd-prod stub — extend when AWS Fargate prod environment is provisioned"
+
+      - name: Publish summary
+        if: always()
+        run: |
+          echo "## CD Prod" >> "$GITHUB_STEP_SUMMARY"
+          echo "Triggered by release run: ${{ github.event.workflow_run.html_url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Commit: ${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Status: stub (not yet deployed)" >> "$GITHUB_STEP_SUMMARY"
