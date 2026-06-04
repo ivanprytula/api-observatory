@@ -11,7 +11,7 @@ dependencies = [
   # Rate limiting
   "slowapi>=0.1.9",
   # Database (async)
-  "sqlalchemy[asyncio]>=2.0.40",
+  "sqlalchemy[asyncio]>=2.0.50",
   "asyncpg>=0.30.0",
   # Database (sync, for Alembic migrations in production)
   "psycopg[binary]>=3.2",
