@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - main
+      - develop
   pull_request:
     branches:
       - main
+      - develop
   workflow_dispatch:
 
 concurrency:
@@ -15,6 +17,7 @@ concurrency:
 
 permissions:
   contents: read
+  packages: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -255,17 +258,29 @@ jobs:
           bash scripts/ops/02-compose-profile.sh prod-like logs ingestor
           exit 1
 
-  docker-build:
-    name: Docker build (no push)
+  docker-build-push:
+    name: Build and push candidate image
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
       - name: Build image
         env:
           DOCKER_BUILDKIT: "1"
-        run: docker build -t data-zoo/ingestor:ci -f Dockerfile .
+        run: |
+          TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
+          echo "TREE_SHA=${TREE_SHA}" >> "$GITHUB_ENV"
+          docker build -t ghcr.io/${{ github.repository_owner }}/data-zoo-ingestor:tree-${TREE_SHA} -f Dockerfile .
+          docker tag ghcr.io/${{ github.repository_owner }}/data-zoo-ingestor:tree-${TREE_SHA} data-zoo/ingestor:ci
+
+      - name: Push candidate image
+        run: docker push ghcr.io/${{ github.repository_owner }}/data-zoo-ingestor:tree-${TREE_SHA}
 
       - name: Check image size (MB)
         shell: bash

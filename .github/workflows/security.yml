@@ -117,6 +117,7 @@ jobs:
       - python-deps
     permissions:
       contents: read
+      packages: read
     strategy:
       fail-fast: false
       matrix:
@@ -129,14 +130,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Build Docker image
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Pull or Build Docker image
         env:
           DOCKER_BUILDKIT: "1"
         run: |
-          docker build \
-            -t "${{ matrix.dockerfile.name }}:${{ github.sha }}" \
-            -f "${{ matrix.dockerfile.path }}" \
-            .
+          if [[ "${{ matrix.dockerfile.name }}" == "ingestor" ]]; then
+            TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
+            IMAGE="ghcr.io/${{ github.repository_owner }}/data-zoo-ingestor:tree-${TREE_SHA}"
+            echo "Waiting for CI to build and push $IMAGE..."
+            for i in {1..30}; do
+              if docker pull "$IMAGE" 2>/dev/null; then
+                echo "Image pulled successfully!"
+                docker tag "$IMAGE" "${{ matrix.dockerfile.name }}:${{ github.sha }}"
+                exit 0
+              fi
+              sleep 15
+            done
+            echo "Timed out waiting for image! Falling back to building locally..."
+            docker build -t "${{ matrix.dockerfile.name }}:${{ github.sha }}" -f "${{ matrix.dockerfile.path }}" .
+          else
+            docker build -t "${{ matrix.dockerfile.name }}:${{ github.sha }}" -f "${{ matrix.dockerfile.path }}" .
+          fi
 
       - name: Run Trivy scan
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -158,6 +177,7 @@ jobs:
       - python-deps
     permissions:
       contents: read
+      packages: read
     strategy:
       fail-fast: false
       matrix:
@@ -170,14 +190,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Build Docker image
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Pull or Build Docker image
         env:
           DOCKER_BUILDKIT: "1"
         run: |
-          docker build \
-            -t "${{ matrix.dockerfile.name }}:${{ github.sha }}" \
-            -f "${{ matrix.dockerfile.path }}" \
-            .
+          if [[ "${{ matrix.dockerfile.name }}" == "ingestor" ]]; then
+            TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
+            IMAGE="ghcr.io/${{ github.repository_owner }}/data-zoo-ingestor:tree-${TREE_SHA}"
+            echo "Waiting for CI to build and push $IMAGE..."
+            for i in {1..30}; do
+              if docker pull "$IMAGE" 2>/dev/null; then
+                echo "Image pulled successfully!"
+                docker tag "$IMAGE" "${{ matrix.dockerfile.name }}:${{ github.sha }}"
+                exit 0
+              fi
+              sleep 15
+            done
+            echo "Timed out waiting for image! Falling back to building locally..."
+            docker build -t "${{ matrix.dockerfile.name }}:${{ github.sha }}" -f "${{ matrix.dockerfile.path }}" .
+          else
+            docker build -t "${{ matrix.dockerfile.name }}:${{ github.sha }}" -f "${{ matrix.dockerfile.path }}" .
+          fi
 
       - name: Run Trivy advisory scan
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
