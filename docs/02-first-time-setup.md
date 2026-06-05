@@ -68,11 +68,11 @@ After the first commit, pre-commit hooks will run automatically on every commit.
 
 ## Step 3: Start the Core Stack
 
-Start the core services — database, cache, message broker, and API. The nginx service is optional and provides HTTPS parity with production.
+Start the core services — database, cache, message broker, API, and dashboard. The nginx service is optional and provides HTTPS parity with production.
 
 ```bash
-just up      # db, redis, redpanda, ingestor (HTTP on :8000)
-# For HTTPS parity (requires certs — run Step 6 first):
+just up      # db, redis, redpanda, ingestor, dashboard (HTTP)
+# For HTTPS parity (requires certs — see Step 6):
 just up-https  # includes nginx on :443
 just migrate # apply Alembic migrations (safe to re-run)
 ```
@@ -158,7 +158,7 @@ curl -k https://localhost/api/docs   # -k only needed if first run before cert t
 **Expected output after `just up-https`:**
 
 ```text
-✓ All services running (db, redis, redpanda, ingestor, nginx)
+✓ All services running (db, redis, redpanda, ingestor, dashboard, nginx)
 ✓ HTTPS available at https://localhost + https://localhost/api/*
 ```
 
@@ -166,11 +166,10 @@ After this step, access the application via HTTPS:
 
 | URL | Purpose |
 | --- | --- |
-| `https://localhost/` | Dashboard (when frontend built) |
+| `https://localhost/` | Dashboard (via nginx) |
 | `https://localhost/api/docs` | Swagger UI (interactive API docs) |
 | `https://localhost/api/redoc` | ReDoc (alternative API docs) |
-| `https://localhost/prometheus/` | Prometheus metrics |
-| `https://localhost/jaeger/` | Jaeger tracing |
+| `http://localhost:8501/` | Dashboard (Streamlit, direct — always available) |
 
 ---
 
@@ -244,13 +243,13 @@ PostgreSQL 17          localhost:5432   → Primary persistence (scorecards, obs
 Redis                  localhost:6379   → Scorecard TTL cache, WebSocket pub/sub, rate-limit backend
 Redpanda (Kafka)       localhost:9092   → Drift events, async processing, DLQ
 Ingestor API           localhost:8000   → FastAPI — probes, scorecards, agent enrichment
+Dashboard (Streamlit)  localhost:8501   → Visual UI for scorecards, drift, live stream
 ```
 
-**`just up-https` adds HTTPS parity:**
+**Optional services:**
 
 ```text
-nginx (HTTPS proxy)      localhost:443    → reverse proxy with SSL termination, rate limiting
-                       localhost:80     → HTTP → HTTPS redirect
+Floci (AWS emulator)   localhost:4566   → pre-deploy sandbox only: just sandbox-up
 ```
 
 **Additional services (optional):**
@@ -288,11 +287,7 @@ For canonical command workflows, use **[03 — Daily Development](03-daily-devel
 | --- | --- |
 | `http://localhost:8000/` | API (direct HTTP, always available) |
 | `http://localhost:8000/docs` | Swagger UI (direct HTTP) |
-| `https://localhost/` | Dashboard (requires `just up-https`) |
-| `https://localhost/api/docs` | Swagger UI via nginx (HTTPS) |
-| `https://localhost/api/redoc` | ReDoc via nginx (HTTPS) |
-| `https://localhost/prometheus/` | Prometheus via nginx (HTTPS) |
-| `https://localhost/jaeger/` | Jaeger via nginx (HTTPS) |
+| `http://localhost:8501/` | Dashboard (Streamlit, always available) |
 
 ### Submit a Test Request
 
@@ -301,12 +296,6 @@ For canonical command workflows, use **[03 — Daily Development](03-daily-devel
 curl -X POST http://localhost:8000/api/v1/observations \
   -H "Content-Type: application/json" \
   -d '{"source": "test", "timestamp": "2024-04-22T12:00:00", "data": {}}'
-
-# Via nginx HTTPS (requires `just up-https` + certificates):
-curl -X POST https://localhost/api/v1/observations \
-  -H "Content-Type: application/json" \
-  -d '{"source": "test", "timestamp": "2024-04-22T12:00:00", "data": {}}' \
-  -k  # -k only needed on first run before cert trust propagates
 ```
 
 For additional API usage and request patterns, use Swagger at `http://localhost:8000/docs` (direct) or `https://localhost/api/docs` (HTTPS via nginx).
@@ -341,11 +330,8 @@ docker ps
 # Check for port conflicts
 lsof -i :5432      # PostgreSQL
 lsof -i :6379      # Redis
-lsof -i :443       # nginx
 
-# If ports in use, either:
-# 1. Stop the other service using that port
-# 2. Edit docker-compose.yml to use different ports
+
 ```
 
 ### Migrations Failed
@@ -360,16 +346,6 @@ uv run alembic history --verbose
 # Reapply from scratch
 docker compose exec db psql -U postgres -c "DROP DATABASE data_pipeline;"
 uv run alembic upgrade head
-```
-
-### Certificate Trust Issues
-
-```bash
-# Reinstall certificates (Ubuntu/Debian)
-bash scripts/setup/02-setup-local-https.sh
-
-# Or manually:
-mkcert -install
 ```
 
 ### Python Dependencies Conflict
@@ -387,7 +363,7 @@ uv sync --upgrade
 1. **Configure environment variables**: See **[Environment Setup](setup/environment-setup.md)**
 2. **Understand daily workflows**: See **[03 — Daily Development](03-daily-development.md)**
 3. **Explore the architecture**: See **[04 — Architecture Overview](04-architecture-overview.md)**
-4. **Enable HTTPS for production parity**: `bash scripts/setup/02-setup-local-https.sh` then `just up-https`
+4. **Enable HTTPS (optional)**: `bash scripts/setup/02-setup-local-https.sh` then ``
 5. **Run full test suite**: `bash scripts/daily/03-run-tests.sh all`
 6. **Start the dev server**: `uv run uvicorn ingestor.main:app --reload`
 

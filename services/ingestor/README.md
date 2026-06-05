@@ -27,7 +27,7 @@ curl http://localhost:8000/readyz
 | Service              | Port   | Environment |
 | -------------------- | ------ | ----------- |
 | FastAPI (API)        | `8000` | All         |
-| Streamlit (Dashboard)| `8501` | Docker / `just streamlit-start` |
+| Streamlit (Dashboard)| `8501` | Docker (`just up`) |
 
 ## Key Environment Variables
 

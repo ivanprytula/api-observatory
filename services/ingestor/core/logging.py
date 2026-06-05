@@ -8,18 +8,14 @@ Development:
 - Console + rotating file handler (logs/app.log)
 
 Production:
-- structlog JSONRenderer (machine-readable, one JSON object per line)
-- stdout only (ready for log aggregation systems)
-
-Provides:
-- Global log level control via LOG_LEVEL env var
-- Correlation ID auto-injection from request context
-- OTel trace_id injection for log–trace correlation
-- ``extra={}`` fields forwarded into structured event dict
-- Dependency lib logging control (sqlalchemy, httpx, asyncio, etc.)
+- structlog JSONRenderer (one-line structured JSON per event)
+- Console only (JSON) — no local file writes
 """
 
+from __future__ import annotations
+
 import logging
+import os
 import sys
 from contextvars import ContextVar
 from logging.handlers import RotatingFileHandler
@@ -181,8 +177,7 @@ def setup_logging() -> logging.Logger:
     root_logger.addHandler(console_handler)
 
     if not use_json:
-        # Dev: also write to rotating file
-        log_dir = Path("logs")
+        log_dir = Path(os.environ.get("LOG_DIR", "/tmp/logs"))  # nosec B108
         log_dir.mkdir(exist_ok=True)
         file_handler = RotatingFileHandler(
             log_dir / "app.log",

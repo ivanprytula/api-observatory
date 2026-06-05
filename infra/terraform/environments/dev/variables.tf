@@ -76,7 +76,7 @@ variable "nat_gateway_count" {
 variable "ecr_services" {
   description = "ECR repositories to create in dev. Keep this list minimal for MVP."
   type        = list(string)
-  default     = ["ingestor"]
+  default     = ["ingestor", "dashboard"]
 }
 
 variable "db_master_password" {

@@ -37,7 +37,7 @@ variable "image_tag" {
 
 variable "ecr_services" {
   type    = list(string)
-  default = ["ingestor"]
+  default = ["ingestor", "dashboard"]
 }
 
 variable "enable_messaging" {

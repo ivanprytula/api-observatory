@@ -129,7 +129,9 @@ module "compute" {
   sg_app_id          = module.network.sg_app_id
 
   ecr_repository_url_ingestor = module.ecr.repository_urls["ingestor"]
+  ecr_repository_url_dashboard = module.ecr.repository_urls["dashboard"]
   image_tag                   = var.image_tag
+  ingestor_service_name       = "ingestor"
 
   msk_cluster_arn     = var.enable_messaging ? module.messaging[0].cluster_arn : ""
   acm_certificate_arn = ""

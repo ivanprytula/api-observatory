@@ -45,8 +45,9 @@ services:
   redis:
     image: redis:7-alpine
     container_name: api-obs-redis
+    # No ports exposed — ingestor (FastAPI) connects via Docker internal network at redis://redis:6379
     ports:
-      - '6379:6379'
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
@@ -116,12 +117,10 @@ services:
       REDIS_URL: redis://redis:6379
       LOG_FORMAT: json
       SERVICE_VERSION: ${SERVICE_VERSION:-0.1.0}
-      INGESTOR_URL: http://127.0.0.1:8000  # Self-referencing for Streamlit within same container
     volumes:
       - ./services/ingestor:/app/services/ingestor
     ports:
       - '8000:8000'
-      - '8501:8501'  # Streamlit dashboard
     depends_on:
       db:
         condition: service_healthy
@@ -157,6 +156,32 @@ services:
     networks:
       - api-obs
 
+  dashboard:
+    build:
+      context: .
+      dockerfile: services/dashboard/Dockerfile
+    container_name: api-obs-dashboard
+    environment:
+      INGESTOR_URL: http://ingestor:8000
+    depends_on:
+      ingestor:
+        condition: service_healthy
+    security_opt: [no-new-privileges:true]
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        reservations:
+          cpus: '0.1'
+          memory: '128M'
+        limits:
+          cpus: '0.25'
+          memory: '256M'
+    networks:
+      - api-obs
+
   nginx:
     image: nginx:1.27-alpine
     container_name: api-obs-nginx
@@ -169,6 +194,8 @@ services:
       - ./infra/certs:/etc/nginx/certs:ro
     depends_on:
       ingestor:
+        condition: service_healthy
+      dashboard:
         condition: service_healthy
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://127.0.0.1:80/nginx-status']
@@ -258,6 +285,7 @@ services:
 # Host access: Each service exposes ports to 127.0.0.1 or 0.0.0.0 for localhost access.
 #   Port mappings:
 #   - db:5432 → localhost:5432
+#   - redis: if "no ports exposed" (internal-only, ingestor connects via Docker network at redis://redis:6379)
 #   - redis:6379 → localhost:6379
 #   - redpanda:9092 (Kafka), 8082 (HTTP) → localhost:9092, 8082
 #   - ingestor:8000 → localhost:8000

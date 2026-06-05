@@ -99,6 +99,26 @@ Then validate the workload endpoint:
 curl -f https://<alb-dns>/docs
 ```
 
+## Streamlit Dashboard (Separate Container)
+
+The Streamlit dashboard runs as a dedicated `dashboard` container, not embedded in ingestor. It connects to the ingestor API via `INGESTOR_URL`.
+
+### Local access
+
+- Dashboard is available at `http://localhost:8501` when running via `just up` or `docker compose up -d dashboard`.
+- The `INGESTOR_URL` environment variable (set to `http://ingestor:8000` in compose) tells Streamlit where to reach the API.
+- Both services start independently via `docker compose up -d ingestor dashboard`.
+
+### Cloud access (ALB)
+
+When deployed via the ECS rollout, the dashboard is served at `/dashboard/` through the nginx HTTPS proxy:
+
+```bash
+curl -f https://<alb-dns>/dashboard/
+```
+
+The `/api/*` path continues to route to the ingestor API. The dashboard service gets its own ECS task and target group on port 8501.
+
 ## Verification Gates
 
 Run test gates after deployment/doc changes:

@@ -30,6 +30,11 @@ variable "ecr_repository_url_ingestor" {
   type        = string
 }
 
+variable "ecr_repository_url_dashboard" {
+  description = "ECR URL for the dashboard image (from modules/ecr output)."
+  type        = string
+}
+
 variable "image_tag" {
   description = "Image tag to deploy. Typically the git SHA or 'latest'."
   type        = string
@@ -82,6 +87,31 @@ variable "ingestor_desired_count" {
   description = "Desired number of ingestor tasks (ECS only)."
   type        = number
   default     = 1
+}
+
+# ── Dashboard sizing ────────────────────────────────────────────────────────────
+variable "dashboard_cpu" {
+  description = "Fargate CPU units for dashboard (256 = 0.25 vCPU)."
+  type        = number
+  default     = 256
+}
+
+variable "dashboard_memory" {
+  description = "Fargate memory in MiB for dashboard."
+  type        = number
+  default     = 512
+}
+
+variable "dashboard_desired_count" {
+  description = "Desired number of dashboard tasks (ECS only)."
+  type        = number
+  default     = 1
+}
+
+variable "ingestor_service_name" {
+  description = "ECS service discovery name for ingestor (used by dashboard to reach API)."
+  type        = string
+  default     = "ingestor"
 }
 
 # ── ECS EC2 Backend ────────────────────────────────────────────────────────────

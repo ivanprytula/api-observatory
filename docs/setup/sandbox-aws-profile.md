@@ -42,8 +42,7 @@ region = eu-central-1
 Any stale `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` env vars are unset by the script to
 prevent the named-profile conflict.
 
-`infra/terraform/environments/dev/terraform.floci.tfvars` sets `aws_profile = "sandbox"`, which
-overrides the `aws_profile = "default"` value in `terraform.tfvars` for all local Terraform runs.
+`infra/terraform/environments/dev/terraform.tfvars` should set `aws_profile = "sandbox"` for local runs, overriding the `aws_profile = "default"` fallback.
 
 ## Verify the setup
 
@@ -67,13 +66,13 @@ Expected output (emulator responds with dummy account):
 To switch emulators (e.g. from Floci to LocalStack):
 
 1. Update the container image / service name in `docker-compose.yml`.
-2. Verify the health endpoint and update `floci-start` in the Justfile if it differs.
+2. Verify the health endpoint and update `sandbox-up` in the Justfile if it differs.
 3. No credential or profile changes are needed — `[sandbox]` credentials are the same for all
    AWS-compatible emulators.
 
 ## Related files
 
 - [`scripts/aws-env.sh`](../../scripts/aws-env.sh) — exports sandbox env vars
-- [`infra/terraform/environments/dev/terraform.floci.tfvars`](../../infra/terraform/environments/dev/terraform.floci.tfvars) — Terraform variable overrides for local runs
+- [`infra/terraform/environments/dev/terraform.tfvars`](../../infra/terraform/environments/dev/terraform.tfvars) — Terraform variable overrides for local runs
 - [`infra/terraform/environments/dev/main.tf`](../../infra/terraform/environments/dev/main.tf) — AWS provider definition
-- [`Justfile`](../../Justfile) — `sandbox-up`, `tf-plan-local`, and related recipes
+- [`Justfile`](../../Justfile) — `sandbox-up`, `tf-plan`, and related recipes

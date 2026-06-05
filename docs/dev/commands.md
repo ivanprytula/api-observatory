@@ -22,7 +22,7 @@ responses, traceback captures, and local logs.
 Two modes depending on whether you want the app container running or the app running locally:
 
 ```bash
-# Mode 1: full MVP stack (db, redis, redpanda, ingestor)
+# Mode 1: full MVP stack (db, redis, redpanda, ingestor, dashboard)
 just up
 
 # Mode 1 + HTTPS parity (requires certs — run 02-setup-local-https.sh first):
@@ -56,35 +56,10 @@ curl http://localhost:8000/health
 curl http://localhost:8000/readyz
 curl http://localhost:8000/metrics
 
-# Via nginx (HTTPS, requires up-https):
-curl -k https://localhost/health
-curl -k https://localhost/readyz
-curl -k https://localhost/metrics
 
-# Check nginx status:
-curl http://localhost/nginx-status  # from host network
 
 just api-check   # fails fast if stack is not ready
 ```
-
-### HTTPS (nginx reverse proxy)
-
-```bash
-# Generate trusted local certificates (requires mkcert)
-bash scripts/setup/02-setup-local-https.sh
-
-# Start stack with nginx (HTTPS on :443)
-just up-https
-
-# Stop nginx (keeps core services running)
-just down-https
-
-# Verify HTTPS endpoints:
-curl -v https://localhost/api/docs
-curl -k https://localhost/api/v1/scorecards  # -k only on first run before trust propagates
-```
-
----
 
 ## Database Management
 
@@ -181,15 +156,7 @@ TOKEN=$(curl -sf -X POST http://localhost:8000/api/v1/auth/token \
   -d 'username=admin&password=admin123' | \
   python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-# Via nginx HTTPS (requires up-https):
-TOKEN=$(curl -sf -k -X POST https://localhost/api/v1/auth/token \
-  -H 'Content-Type: application/x-www-form-urlencoded' \
-  -d 'username=admin&password=admin123' | \
-  python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-
-# Use it (HTTP or HTTPS)
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/scorecards
-curl -k -H "Authorization: Bearer $TOKEN" https://localhost/api/v1/scorecards
 ```
 
 ### curl — Core Resources
@@ -197,7 +164,6 @@ curl -k -H "Authorization: Bearer $TOKEN" https://localhost/api/v1/scorecards
 ```bash
 # Sources
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/sources
-curl -k -H "Authorization: Bearer $TOKEN" https://localhost/api/v1/sources
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/sources/1/health
 
 # Scorecards
@@ -207,14 +173,10 @@ curl -k -H "Authorization: Bearer $TOKEN" "https://localhost/api/v1/scorecards?l
 # Drift events
 curl -H "Authorization: Bearer $TOKEN" \
   http://localhost:8000/api/v1/contracts/sources/1/drift-events
-curl -k -H "Authorization: Bearer $TOKEN" \
-  https://localhost/api/v1/contracts/sources/1/drift-events
 
 # Agent enrichment
 curl -X POST -H "Authorization: Bearer $TOKEN" \
   http://localhost:8000/api/v1/agent/enrich/1
-curl -k -X POST -H "Authorization: Bearer $TOKEN" \
-  https://localhost/api/v1/agent/enrich/1
 ```
 
 ### OpenAPI
@@ -224,7 +186,6 @@ curl -k -X POST -H "Authorization: Bearer $TOKEN" \
 open http://localhost:8000/docs
 curl http://localhost:8000/openapi.json
 
-# Via nginx (HTTPS, requires up-https):
 open https://localhost/api/docs
 curl https://localhost/api/openapi.json
 ```
@@ -287,21 +248,8 @@ just docker-build-image                      # tag: api-observatory:local
 just docker-build-image my-tag:v1.2.3
 
 # Size audit
-just docker-audit-size
-
-# Security scan (CRITICAL CVEs, requires Trivy profile)
-just docker-scan-image
-just up-security                             # shorthand for trivy profile run
-
 # Full deploy audit: build → size → scan
 just deploy-audit
-```
-
-### Smoke Deploy
-
-```bash
-# Spins up prod-like compose stack, waits for /health + /readyz, then tears down
-just smoke-deploy
 ```
 
 ---
@@ -321,17 +269,6 @@ docker compose logs ingestor | grep '"cid":"<value>"'
 ---
 
 ## Load Testing
-
-```bash
-# Locust web UI
-uv run locust -f scripts/testing/locustfile.py --host http://localhost:8000
-
-# Locust headless
-uv run locust -f scripts/testing/locustfile.py \
-  --host http://localhost:8000 \
-  --users 100 --spawn-rate 10 --run-time 60s --headless
-```
-
 ---
 
 ## Infrastructure & Sandbox (Floci)
@@ -351,60 +288,37 @@ region = us-east-1
 
 See [docs/setup/sandbox-aws-profile.md](../setup/sandbox-aws-profile.md).
 
-### Floci Lifecycle
+### Sandbox Workflow
 
 ```bash
-just floci-start    # start Floci + create S3 bucket + SQS queue
-just floci-stop     # stop Floci container
-just floci-status   # docker ps filter
-
-just sandbox-up     # alias for floci-start
-just sandbox-down   # alias for floci-stop
-just sandbox-reset  # floci-stop then floci-start
-```
-
-### Sandbox + Ingestor (local uvicorn, live reload)
-
-```bash
-# Terminal 1 — infra only
-just sandbox-with-ingestor-prep
+# Terminal 1 — start Floci + infra
+just sandbox-up
 
 # Terminal 2 — migrate + start uvicorn with Floci env
-just ingestor-start
+just sandbox-dev
 
 # Terminal 1 (after ingestor is up) — seed data
 just sandbox-seed
-
-# Terminal 3 — Streamlit dashboard
-just streamlit-start
 ```
 
 ### Sandbox Tests
 
 ```bash
-just sandbox-test   # Floci connectivity + e2e AWS integration tests
+just sandbox   # Floci + infra + AWS integration tests
 ```
 
-### Terraform (Sandbox / Floci)
+### Terraform
 
 ```bash
-just tf-sandbox-init       # init backend (once per session after sandbox-up)
-just tf-sandbox-plan       # terraform validate + plan
-just tf-sandbox-apply      # apply saved plan
-just tf-sandbox-show       # show current state
-just tf-sandbox-state-list # list managed resources
-just tf-sandbox-destroy    # destroy all sandbox resources
-just tf-sandbox-fresh      # sandbox-reset → init → plan → apply
-```
+just tf-init    # init backend (auto-detects sandbox or dev)
+just tf-plan    # validate + plan
+just tf-apply   # apply (runs tf-plan first)
+just tf-destroy # destroy all resources
+just tf-fresh   # init → plan → apply
 
-### Terraform (Real AWS Dev)
-
-Requires `infra/terraform/environments/dev/backend.aws.hcl` and `terraform.aws.tfvars`.
-
-```bash
-just tf-preflight    # verify CLI + required config files exist
-just tf-plan-dev     # init + validate + plan against real AWS
-just tf-apply-dev    # apply (runs tf-plan-dev first)
+# Real AWS:
+TF_ENV=dev just tf-plan
+TF_ENV=dev just tf-apply
 ```
 
 ---
