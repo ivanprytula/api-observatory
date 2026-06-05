@@ -13,6 +13,10 @@ concurrency:
   group: cd-dev
   cancel-in-progress: true
 
+env:
+  AWS_REGION: eu-central-1
+  ECS_CLUSTER: data-zoo-dev
+
 jobs:
   deploy-dev:
     name: "Deploy to dev (AWS Fargate)"
@@ -25,28 +29,71 @@ jobs:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
-      # TODO: configure AWS credentials (OIDC role assumption, no long-lived keys)
-      # - name: Configure AWS credentials
-      #   uses: aws-actions/configure-aws-credentials@...
-      #   with:
-      #     role-to-assume: ${{ vars.AWS_ROLE_ARN_DEV }}
-      #     aws-region: ${{ vars.AWS_REGION }}
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_DEV }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      # TODO: resolve image digest built by CI for this commit
-      # TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
-      # IMAGE="ghcr.io/${{ github.repository_owner }}/data-zoo-ingestor:tree-${TREE_SHA}"
+      - name: Resolve image digests
+        id: images
+        shell: bash
+        run: |
+          set -euo pipefail
+          TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
+          echo "tree_sha=${TREE_SHA}" >> "$GITHUB_OUTPUT"
+          echo "ingestor=ghcr.io/${{ github.repository_owner }}/data-zoo-ingestor:tree-${TREE_SHA}" >> "$GITHUB_OUTPUT"
+          echo "dashboard=ghcr.io/${{ github.repository_owner }}/data-zoo-dashboard:tree-${TREE_SHA}" >> "$GITHUB_OUTPUT"
 
-      # TODO: update ECS service (Fargate) with new image digest
-      # aws ecs update-service --cluster dev --service ingestor --force-new-deployment
+      - name: Deploy ingestor (ECS Fargate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="${{ steps.images.outputs.ingestor }}"
+          echo "Deploying ingestor: ${IMAGE}"
+          aws ecs update-service \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --service ingestor \
+            --force-new-deployment \
+            --output text
+          aws ecs wait services-stable \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --services ingestor
+          echo "Ingestor stable"
 
-      # TODO: wait for ECS service stability
-      # aws ecs wait services-stable --cluster dev --services ingestor
+      - name: Deploy dashboard (ECS Fargate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="${{ steps.images.outputs.dashboard }}"
+          echo "Deploying dashboard: ${IMAGE}"
+          aws ecs update-service \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --service dashboard \
+            --force-new-deployment \
+            --output text
+          aws ecs wait services-stable \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --services dashboard
+          echo "Dashboard stable"
 
-      # TODO: smoke-test /readyz on dev ALB
-      # curl --fail https://dev.internal/readyz
+      - name: Smoke tests
+        shell: bash
+        env:
+          ALB_DNS: ${{ vars.DEV_ALB_DNS }}
+        run: |
+          set -euo pipefail
+          if [ -z "$ALB_DNS" ]; then
+            echo "DEV_ALB_DNS not set — skipping smoke tests"
+            exit 0
+          fi
+          BASE="https://${ALB_DNS}"
+          echo "Smoke testing ${BASE}"
 
-      - name: Stub — dev deploy not yet wired
-        run: echo "cd-dev stub — extend when AWS Fargate dev environment is provisioned"
+          curl --fail --max-time 30 "${BASE}/health" || \
+            curl --fail --max-time 30 "${BASE}/readyz"
+
+          curl --fail --max-time 30 "${BASE}/dashboard/_stcore/health"
 
       - name: Publish summary
         if: always()
@@ -54,4 +101,6 @@ jobs:
           echo "## CD Dev" >> "$GITHUB_STEP_SUMMARY"
           echo "Triggered by CI run: ${{ github.event.workflow_run.html_url }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Commit: ${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Status: stub (not yet deployed)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Ingestor: ${{ steps.images.outputs.ingestor }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Dashboard: ${{ steps.images.outputs.dashboard }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Status: deployed" >> "$GITHUB_STEP_SUMMARY"

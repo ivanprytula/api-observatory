@@ -182,7 +182,7 @@ jobs:
 
   # DOCKER BUILD & SCAN
   docker-build:
-    name: "Build and push candidate image"
+    name: "Build and push candidate image (ingestor)"
     runs-on: ubuntu-latest
     needs: [lint, unit-tests, python-deps, action-ref-validation, codeql, integration-tests]
     timeout-minutes: 20
@@ -198,7 +198,7 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      - name: Build and push image
+      - name: Build and push ingestor image
         env:
           DOCKER_BUILDKIT: "1"
         run: |
@@ -206,19 +206,46 @@ jobs:
           IMAGE="ghcr.io/${{ github.repository_owner }}/data-zoo-ingestor:tree-${TREE_SHA}"
           docker build -t "${IMAGE}" -f Dockerfile .
           docker push "${IMAGE}"
+          echo "IMAGE_INGESTOR=${IMAGE}" >> "$GITHUB_ENV"
 
       - name: Check image size (MB)
         shell: bash
         run: |
           set -euo pipefail
-          TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
-          IMAGE="ghcr.io/${{ github.repository_owner }}/data-zoo-ingestor:tree-${TREE_SHA}"
+          IMAGE="${{ env.IMAGE_INGESTOR }}"
           docker inspect "${IMAGE}" --format '{{.Size}}' | awk '{mb=$1/1024/1024; printf "Image size: %.0f MB\n", mb}'
+
+  docker-build-dashboard:
+    name: "Build and push candidate image (dashboard)"
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests, python-deps, action-ref-validation, codeql, integration-tests]
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and push dashboard image
+        env:
+          DOCKER_BUILDKIT: "1"
+        run: |
+          TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
+          IMAGE="ghcr.io/${{ github.repository_owner }}/data-zoo-dashboard:tree-${TREE_SHA}"
+          docker build -t "${IMAGE}" -f services/dashboard/Dockerfile services/dashboard
+          docker push "${IMAGE}"
+          echo "IMAGE_DASHBOARD=${IMAGE}" >> "$GITHUB_ENV"
 
   docker-scan-security:
     name: "Scan docker image (Trivy - strict)"
     runs-on: ubuntu-latest
-    needs: [docker-build]
+    needs: [docker-build, docker-build-dashboard]
     permissions:
       contents: read
       packages: read
@@ -231,14 +258,12 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      - name: Pull Docker image
+      - name: Pull and scan ingestor image
         run: |
-          TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
-          IMAGE="ghcr.io/${{ github.repository_owner }}/data-zoo-ingestor:tree-${TREE_SHA}"
-          docker pull "${IMAGE}"
-          docker tag "${IMAGE}" ingestor:scan
+          docker pull "${{ env.IMAGE_INGESTOR }}"
+          docker tag "${{ env.IMAGE_INGESTOR }}" ingestor:scan
 
-      - name: Run Trivy scan (OS + library vulns, HIGH+CRITICAL)
+      - name: Scan ingestor (Trivy strict)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ingestor:scan
@@ -249,10 +274,26 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: "1"
 
+      - name: Pull and scan dashboard image
+        run: |
+          docker pull "${{ env.IMAGE_DASHBOARD }}"
+          docker tag "${{ env.IMAGE_DASHBOARD }}" dashboard:scan
+
+      - name: Scan dashboard (Trivy strict)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: dashboard:scan
+          format: table
+          ignore-unfixed: true
+          scanners: vuln
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+
   docker-scan-advisory:
     name: "Scan docker image (Trivy - advisory)"
     runs-on: ubuntu-latest
-    needs: [docker-build]
+    needs: [docker-build, docker-build-dashboard]
     permissions:
       contents: read
       packages: read
@@ -265,17 +306,31 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      - name: Pull Docker image
+      - name: Pull and scan ingestor image
         run: |
-          TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
-          IMAGE="ghcr.io/${{ github.repository_owner }}/data-zoo-ingestor:tree-${TREE_SHA}"
-          docker pull "${IMAGE}"
-          docker tag "${IMAGE}" ingestor:scan
+          docker pull "${{ env.IMAGE_INGESTOR }}"
+          docker tag "${{ env.IMAGE_INGESTOR }}" ingestor:scan
 
-      - name: Run Trivy scan (advisory - MEDIUM+HIGH+CRITICAL, non-blocking)
+      - name: Scan ingestor (Trivy advisory)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ingestor:scan
+          format: table
+          ignore-unfixed: true
+          scanners: vuln
+          vuln-type: os,library
+          severity: MEDIUM,HIGH,CRITICAL
+          exit-code: "0"
+
+      - name: Pull and scan dashboard image
+        run: |
+          docker pull "${{ env.IMAGE_DASHBOARD }}"
+          docker tag "${{ env.IMAGE_DASHBOARD }}" dashboard:scan
+
+      - name: Scan dashboard (Trivy advisory)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: dashboard:scan
           format: table
           ignore-unfixed: true
           scanners: vuln
@@ -393,6 +448,7 @@ jobs:
       - unit-tests
       - python-deps
       - docker-build
+      - docker-build-dashboard
       - docker-scan-security
       - docker-scan-advisory
       - codeql
@@ -408,7 +464,8 @@ jobs:
           [[ "${{ needs.action-ref-validation.result }}" == "success" ]] || { echo "❌ Action refs"; failed=1; }
           [[ "${{ needs.unit-tests.result }}" == "success" ]] || { echo "❌ Unit tests"; failed=1; }
           [[ "${{ needs.python-deps.result }}" == "success" ]] || { echo "❌ Python deps"; failed=1; }
-          [[ "${{ needs.docker-build.result }}" == "success" ]] || { echo "❌ Docker build"; failed=1; }
+          [[ "${{ needs.docker-build.result }}" == "success" ]] || { echo "❌ Docker build (ingestor)"; failed=1; }
+          [[ "${{ needs.docker-build-dashboard.result }}" == "success" ]] || { echo "❌ Docker build (dashboard)"; failed=1; }
           [[ "${{ needs.docker-scan-security.result }}" == "success" ]] || { echo "❌ Docker scan"; failed=1; }
           [[ "${{ needs.codeql.result }}" == "success" ]] || { echo "❌ CodeQL"; failed=1; }
           [[ "${{ needs.integration-tests.result }}" == "success" ]] || { echo "❌ Integration tests"; failed=1; }
@@ -429,7 +486,8 @@ jobs:
           | Action Refs | ${{ needs.action-ref-validation.result }} |
           | Unit Tests | ${{ needs.unit-tests.result }} |
           | Python Deps | ${{ needs.python-deps.result }} |
-          | Docker Build | ${{ needs.docker-build.result }} |
+          | Docker Build (ingestor) | ${{ needs.docker-build.result }} |
+          | Docker Build (dashboard) | ${{ needs.docker-build-dashboard.result }} |
           | Docker Security | ${{ needs.docker-scan-security.result }} |
           | Docker Advisory | ${{ needs.docker-scan-advisory.result }} |
           | CodeQL | ${{ needs.codeql.result }} |

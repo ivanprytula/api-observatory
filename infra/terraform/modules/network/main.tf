@@ -147,9 +147,17 @@ resource "aws_security_group" "app" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description     = "Inbound from ALB"
+    description     = "Inbound from ALB (ingestor)"
     from_port       = var.app_port
     to_port         = var.app_port
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  ingress {
+    description     = "Inbound from ALB (dashboard)"
+    from_port       = 8501
+    to_port         = 8501
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
