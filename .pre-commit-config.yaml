@@ -24,7 +24,7 @@
       - id: destroyed-symlinks
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.14
+    rev: v0.15.16
     hooks:
       - id: ruff-check
         args: [--fix, --config=pyproject.toml]

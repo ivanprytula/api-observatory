@@ -68,52 +68,18 @@ After the first commit, pre-commit hooks will run automatically on every commit.
 
 ## Step 3: Start the Core Stack
 
-Start the core services — database, cache, message broker, API, and MongoDB:
+Start the core services — database, cache, message broker, and API. The nginx service is optional and provides HTTPS parity with production.
 
 ```bash
-just up          # db, redis, redpanda, ingestor, mongodb
-just migrate     # apply Alembic migrations explicitly (safe to re-run)
+just up      # db, redis, redpanda, ingestor (HTTP on :8000)
+# For HTTPS parity (requires certs — run Step 6 first):
+just up-https  # includes nginx on :443
+just migrate # apply Alembic migrations (safe to re-run)
 ```
 
-**Optional — only if your work touches AWS services (S3, SQS):**
-
-```bash
-just sandbox-up  # starts Floci with S3 and SQS pre-provisioned
-```
-
-Not sure? Skip it for now — `just up` covers 90% of development workflows.
-You can run `just sandbox-up` any time later without restarting the core stack.
-
-Optionally add monitoring and worker profiles:
-
-```bash
-just up-all      # adds vector search, Prometheus, Grafana, workers
-```
-
-Expected output for `just sandbox-up`:
-
-```text
-✅ Floci up and configured
-✅ Sandbox ready. Run: just sandbox-test
-```
-
-Verify AWS services are responding:
-
-```bash
-just test-aws-connectivity
-# ✅ AWS connectivity verified
-```
+`just up` covers all feature development workflows. The Floci AWS simulator is a separate pre-deploy playground — you do not need it for day-to-day coding. See [docs/floci-aws-deployment-workflow.md](floci-aws-deployment-workflow.md) when you are ready to rehearse AWS-integrated flows before a real cloud deployment.
 
 For a description of every service and its port, see [What Just Happened](#what-just-happened) below.
-
-### Note about Floci / Terraform
-
-If you plan to use the Floci (local AWS simulator) workflows, the project uses Terraform for local infra definitions. That requires:
-
-- **Terraform CLI** — the system binary (install from [terraform.io/downloads](https://www.terraform.io/downloads), or via package manager: `apt install terraform`, `brew install terraform`, etc.)
-- **tflocal** — a wrapper helper; installed automatically when you run `uv sync` (it's in `pyproject.toml` under `[dependency-groups] dev`)
-
-The `scripts/setup/03-verify-system-requirements.sh` script checks for both as optional prerequisites. If you do not use Floci, these are not required for the core development loop.
 
 For a complete list of environment variables and guidance on storing secrets (JWT keys, OpenAI key, AWS credentials, etc.) see: [setup/environment-setup.md](../setup/environment-setup.md)
 
@@ -140,7 +106,7 @@ uv run pytest tests/unit/ -q
 >
 > ```bash
 > docker compose stop ingestor
-> uv run uvicorn services/ingestor/main:app --reload
+> uv run uvicorn services.ingestor.main:app --reload
 > ```
 >
 > See [dev/commands.md](dev/commands.md#run-dev-server-no-docker) for details.
@@ -169,7 +135,46 @@ For the full env var matrix (all variables, defaults, CI/CD and deployment conte
 
 ---
 
-## Step 6 (When Ready): CI/CD and Real AWS Access
+## Step 6 (Optional): Enable HTTPS for Local Parity
+
+For maximum local → dev/prod parity, enable HTTPS via nginx. This is optional since HTTP on `:8000` works for development.
+
+```bash
+# Install mkcert (one-time system install)
+# macOS:    brew install mkcert
+# Ubuntu:   sudo apt install mkcert
+
+# Generate trusted local certificates
+bash scripts/setup/02-setup-local-https.sh
+
+# Start stack with nginx (HTTPS on :443)
+just up-https
+
+# Verify HTTPS is working
+curl -v https://localhost/health
+curl -k https://localhost/api/docs   # -k only needed if first run before cert trust propagates
+```
+
+**Expected output after `just up-https`:**
+
+```text
+✓ All services running (db, redis, redpanda, ingestor, nginx)
+✓ HTTPS available at https://localhost + https://localhost/api/*
+```
+
+After this step, access the application via HTTPS:
+
+| URL | Purpose |
+| --- | --- |
+| `https://localhost/` | Dashboard (when frontend built) |
+| `https://localhost/api/docs` | Swagger UI (interactive API docs) |
+| `https://localhost/api/redoc` | ReDoc (alternative API docs) |
+| `https://localhost/prometheus/` | Prometheus metrics |
+| `https://localhost/jaeger/` | Jaeger tracing |
+
+---
+
+## Step 7 (When Ready): CI/CD and Real AWS Access
 
 > Come back here once the project is running locally via Floci (Steps 3–4).
 > This step requires an AWS account, OIDC trust configuration, and GitHub repository secrets.
@@ -232,23 +237,27 @@ scripts/ops/01-gh-actions-config.sh oidc get --repo "$repo"
 
 ### Services Started
 
-**`just up` starts:**
+**`just up` starts (core MVP stack):**
 
 ```text
-PostgreSQL 17          localhost:5432   → Main application database
-Redis                  localhost:6379   → Cache + session store
-Redpanda (Kafka)       localhost:9092   → Event streaming
-Ingestor API           localhost:8000   → REST API (FastAPI)
-MongoDB                localhost:27017  → Document store (for scraper data)
+PostgreSQL 17          localhost:5432   → Primary persistence (scorecards, observations, drift events)
+Redis                  localhost:6379   → Scorecard TTL cache, WebSocket pub/sub, rate-limit backend
+Redpanda (Kafka)       localhost:9092   → Drift events, async processing, DLQ
+Ingestor API           localhost:8000   → FastAPI — probes, scorecards, agent enrichment
+```
+
+**`just up-https` adds HTTPS parity:**
+
+```text
+nginx (HTTPS proxy)      localhost:443    → reverse proxy with SSL termination, rate limiting
+                       localhost:80     → HTTP → HTTPS redirect
 ```
 
 **Additional services (optional):**
 
 ```text
-Jaeger (tracing UI)    localhost:16686  → started by: bash scripts/daily/01-start-dev-services.sh
-nginx (HTTPS proxy)    localhost:443    → started by: just up (requires mkcert certs — see below)
-Floci (AWS)            localhost:4566   → started by: just sandbox-up (optional)
-PostgreSQL (tests)     auto-provisioned → Ephemeral DB via testcontainers
+Floci (AWS emulator)   localhost:4566   → pre-deploy sandbox only: just sandbox-up
+PostgreSQL (tests)     auto-provisioned → ephemeral DB via testcontainers
 ```
 
 ### Database Schema Created
@@ -267,17 +276,6 @@ Python dependencies are installed in `.venv/`:
 - APScheduler, pytest, Prometheus client, OpenTelemetry
 - And many more (see `pyproject.toml`)
 
-### Optional: HTTPS Locally
-
-The core stack (`just up`) serves the API on plain HTTP at `http://localhost:8000`. For HTTPS
-via nginx on port 443, generate trusted local certificates once after bootstrap:
-
-```bash
-bash scripts/setup/02-setup-local-https.sh
-```
-
-This runs `mkcert` and installs the certificate in the system trust store (no browser warnings).
-
 ---
 
 ## Common Next Steps
@@ -286,28 +284,32 @@ For canonical command workflows, use **[03 — Daily Development](03-daily-devel
 
 ### Access the Application
 
-| URL                           | Purpose                           |
-| ----------------------------- | --------------------------------- |
-| `https://localhost/`          | Dashboard (if frontend built)     |
-| `https://localhost/api/docs`  | Swagger UI (interactive API docs) |
-| `https://localhost/api/redoc` | ReDoc (alternative API docs)      |
-| `http://localhost:9090`       | Prometheus metrics                |
-| `http://localhost:16686`      | Jaeger tracing                    |
+| URL | Purpose |
+| --- | --- |
+| `http://localhost:8000/` | API (direct HTTP, always available) |
+| `http://localhost:8000/docs` | Swagger UI (direct HTTP) |
+| `https://localhost/` | Dashboard (requires `just up-https`) |
+| `https://localhost/api/docs` | Swagger UI via nginx (HTTPS) |
+| `https://localhost/api/redoc` | ReDoc via nginx (HTTPS) |
+| `https://localhost/prometheus/` | Prometheus via nginx (HTTPS) |
+| `https://localhost/jaeger/` | Jaeger via nginx (HTTPS) |
 
 ### Submit a Test Request
 
 ```bash
-# Create a observation via API
+# Direct HTTP (always works after `just up`):
+curl -X POST http://localhost:8000/api/v1/observations \
+  -H "Content-Type: application/json" \
+  -d '{"source": "test", "timestamp": "2024-04-22T12:00:00", "data": {}}'
+
+# Via nginx HTTPS (requires `just up-https` + certificates):
 curl -X POST https://localhost/api/v1/observations \
   -H "Content-Type: application/json" \
   -d '{"source": "test", "timestamp": "2024-04-22T12:00:00", "data": {}}' \
-  -k  # -k ignores self-signed certificate warning
-
-# Query observations
-curl -X GET https://localhost/api/v1/observations -k
+  -k  # -k only needed on first run before cert trust propagates
 ```
 
-For additional API usage and request patterns, use Swagger at `https://localhost/api/docs`.
+For additional API usage and request patterns, use Swagger at `http://localhost:8000/docs` (direct) or `https://localhost/api/docs` (HTTPS via nginx).
 For ongoing command workflows, use [03-daily-development.md](03-daily-development.md) and
 [dev/commands.md](dev/commands.md).
 
@@ -385,8 +387,9 @@ uv sync --upgrade
 1. **Configure environment variables**: See **[Environment Setup](setup/environment-setup.md)**
 2. **Understand daily workflows**: See **[03 — Daily Development](03-daily-development.md)**
 3. **Explore the architecture**: See **[04 — Architecture Overview](04-architecture-overview.md)**
-4. **Run full test suite**: `bash scripts/daily/03-run-tests.sh all`
-5. **Start the dev server**: `uv run uvicorn ingestor.main:app --reload`
+4. **Enable HTTPS for production parity**: `bash scripts/setup/02-setup-local-https.sh` then `just up-https`
+5. **Run full test suite**: `bash scripts/daily/03-run-tests.sh all`
+6. **Start the dev server**: `uv run uvicorn ingestor.main:app --reload`
 
 ---
 

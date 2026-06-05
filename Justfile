@@ -8,35 +8,32 @@ doctor:
 api-check:
     @curl -sf http://localhost:8000/readyz > /dev/null && echo "stack ready" || (echo "stack not ready — run: just up" >&2; exit 1)
 
-# ─── CORE STACK ─────────────────────────────────────────────────────────────
+# ─── FEATURE DEVELOPMENT (real infra containers) ────────────────────────────
+# Normal daily workflow: just up → code → just test-unit → just api-test → just down
 
-# Core services (database, message broker, API)
+# Core MVP services (db, redis, redpanda, ingestor)
 up:
-    docker compose up -d db redis redpanda ingestor mongodb
+    docker compose up -d db redis redpanda ingestor
 
-# Full stack with all workers and webhooks
-up-all:
-    docker compose --profile vector --profile monitoring --profile worker --profile webhook up -d
-
-# Vector search stack
-up-vector:
-    docker compose --profile vector up -d
-
-# Monitoring stack (Prometheus, Grafana, Alertmanager)
-up-monitor:
-    docker compose --profile monitoring up -d
-
-# Django catalog portal
-up-portal:
-    docker compose --profile portal up -d portal
+# Security scan stack (Trivy)
+up-security:
+    docker compose --profile security run --rm trivy image api-observatory:local
 
 # View logs for a specific service
 logs svc:
     docker compose logs -f {{svc}}
 
 # Stop all services
-down:
-    docker compose down
+ down:
+     docker compose down
+
+# Start full stack with nginx HTTPS proxy (requires certificates — run 02-setup-local-https.sh first)
+ up-https:
+     docker compose --profile https up -d
+
+# Stop and remove nginx container
+ down-https:
+     docker compose --profile https down nginx
 
 # ─── DATABASE MANAGEMENT ───────────────────────────────────────────────────
 
@@ -75,10 +72,6 @@ restore-postgres file="":
 restore-s3-postgres s3uri:
     bash infra/scripts/restore.sh postgres --from-s3 {{s3uri}}
 
-# Restore MongoDB from an S3 URI
-restore-s3-mongodb s3uri:
-    bash infra/scripts/restore.sh mongodb --from-s3 {{s3uri}}
-
 # ─── INITIALIZATION ────────────────────────────────────────────────────────
 
 # Create the default admin user. After db-reset this is always 201; outside tests 409 is also fine.
@@ -105,18 +98,43 @@ seed-source:
 
 # Seed demo source profiles for probe/scorecard workflows
 seed-demo:
-        curl -s -X POST http://localhost:8000/api/v1/sources \
-            -H "Content-Type: application/json" \
-            -d '{"name":"httpbin","base_url":"https://httpbin.org","health_check_path":"/get","probe_interval_seconds":10,"is_active":true}' > /dev/null
-        curl -s -X POST http://localhost:8000/api/v1/sources \
-            -H "Content-Type: application/json" \
-            -d '{"name":"jsonplaceholder","base_url":"https://jsonplaceholder.typicode.com","health_check_path":"/posts/1","probe_interval_seconds":10,"is_active":true}' > /dev/null
-        curl -s -X POST http://localhost:8000/api/v1/sources \
-            -H "Content-Type: application/json" \
-            -d '{"name":"postman-echo","base_url":"https://postman-echo.com","health_check_path":"/get","probe_interval_seconds":10,"is_active":true}' > /dev/null
-        @echo "seed-demo complete"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TOKEN=$(curl -sf -X POST http://localhost:8000/api/v1/auth/token \
+      -H 'Content-Type: application/x-www-form-urlencoded' \
+      -d 'username=admin&password=admin123' | \
+      python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+    for payload in \
+        '{"name":"httpbin","base_url":"https://httpbin.org","health_check_path":"/get","probe_interval_seconds":10,"is_active":true}' \
+        '{"name":"jsonplaceholder","base_url":"https://jsonplaceholder.typicode.com","health_check_path":"/posts/1","probe_interval_seconds":10,"is_active":true}' \
+        '{"name":"postman-echo","base_url":"https://postman-echo.com","health_check_path":"/get","probe_interval_seconds":10,"is_active":true}'; do
+        curl -sf -X POST http://localhost:8000/api/v1/sources \
+          -H "Authorization: Bearer $TOKEN" \
+          -H 'Content-Type: application/json' \
+          -d "$payload" > /dev/null
+    done
+    echo "seed-demo complete"
 
-# ─── VALIDATION & TESTING ─────────────────────────────────────────────────
+# Seed probe sources: one healthy (httpbin), one failing (unreachable dead URL).
+# Demonstrates success/failure contrast in the Source Health and Drift Events panels.
+seed-probes:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TOKEN=$(curl -sf -X POST http://localhost:8000/api/v1/auth/token \
+      -H 'Content-Type: application/x-www-form-urlencoded' \
+      -d 'username=admin&password=admin123' | \
+      python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+    # Healthy source — should produce reachable=true, low latency
+    curl -sf -X POST http://localhost:8000/api/v1/sources \
+      -H "Authorization: Bearer $TOKEN" \
+      -H 'Content-Type: application/json' \
+      -d '{"name":"probe-ok","base_url":"https://httpbin.org","health_check_path":"/get","probe_interval_seconds":10,"sla_ms":2000,"is_active":true}' > /dev/null
+    # Failing source — unreachable host, produces reachable=false and SLA breach
+    curl -sf -X POST http://localhost:8000/api/v1/sources \
+      -H "Authorization: Bearer $TOKEN" \
+      -H 'Content-Type: application/json' \
+      -d '{"name":"probe-fail","base_url":"https://this-host-does-not-exist.invalid","health_check_path":"/","probe_interval_seconds":10,"sla_ms":100,"is_active":true}' > /dev/null
+    echo "seed-probes complete — wait ~10s for first probe cycle"
 
 # Smoke deploy against the prod-like compose stack.
 smoke-deploy:
@@ -226,7 +244,9 @@ deploy-audit tag="api-observatory:local":
     @docker image inspect {{tag}} --format 'Digest: {{{{index .RepoDigests 0}}}}' 2>/dev/null || \
       docker inspect --format 'ID: {{{{.ID}}}}' {{tag}}
 
-# ─── INFRASTRUCTURE & SANDBOX ──────────────────────────────────────────────
+# ─── PRE-DEPLOY SANDBOX (Floci — validate AWS-integrated flows before real cloud) ───
+# Use these recipes ONLY when rehearsing AWS service calls (S3, SQS) or Terraform plans.
+# Feature development does NOT require the sandbox — use `just up` instead.
 
 # Terraform helper variables
 TF_DIR         := "infra/terraform/environments/dev"
@@ -297,16 +317,19 @@ sandbox-reset: floci-stop floci-start
 
 # ─── End-to-End Sandbox Testing (Floci + Ingestor + Streamlit) ─────────────
 
-# Start ingestor service locally with Floci AWS endpoints
-# Usage: just ingestor-start (run in a separate terminal from sandbox-up)
+# Start ingestor service locally with Floci AWS endpoints (live reload).
+# Run AFTER sandbox-with-ingestor-prep has completed in Terminal 1.
+# Usage: just ingestor-start (Terminal 2)
 ingestor-start:
     #!/usr/bin/env bash
     set -euo pipefail
     source scripts/aws-env.sh
+    until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
+    just migrate
     echo "Starting ingestor with Floci endpoints..."
     echo "AWS_ENDPOINT_URL=$AWS_ENDPOINT_URL"
     echo "AWS_PROFILE=$AWS_PROFILE"
-    uv run uvicorn services/ingestor/main:app --reload --port 8000
+    uv run uvicorn services.ingestor.main:app --reload --port 8000
 
 # Start streamlit dashboard (requires ingestor running on localhost:8000)
 # Usage: just streamlit-start (run in a separate terminal)
@@ -317,52 +340,33 @@ streamlit-start:
     streamlit run streamlit_app.py --server.port=8501
 
 # End-to-end Floci sandbox workflow: Setup for probe → S3 → drift analysis
-# Requires 3 terminals:
-#   Terminal 1: just sandbox-with-ingestor-prep
-#   Terminal 2: just ingestor-start
-#   Terminal 3: just streamlit-start
+# Workflow:
+#   Terminal 1: just sandbox-with-ingestor-prep  ← infrastructure only (this recipe)
+#   Terminal 2: just ingestor-start              ← migrate + local uvicorn with live reload
+#   Terminal 1: just sandbox-seed                ← create-admin + seed-demo (after ingestor is up)
+#   Terminal 3: just streamlit-start             ← Streamlit dashboard
 sandbox-with-ingestor-prep:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "=========================================="
-    echo "Phase 1: Starting Floci AWS emulator..."
-    echo "=========================================="
+    echo "Starting Floci AWS emulator..."
     just sandbox-up
-
+    echo "Starting infrastructure (db, redis, redpanda)..."
+    docker compose up -d db redis redpanda
+    until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
     echo ""
-    echo "=========================================="
-    echo "Phase 1b: Starting core services (db, redis, redpanda, ingestor)..."
-    echo "=========================================="
-    just up
-
+    echo "Infrastructure ready. Next steps:"
+    echo "  Terminal 2:  just ingestor-start"
+    echo "  Then here:   just sandbox-seed"
+    echo "  Terminal 3:  just streamlit-start"
     echo ""
-    echo "=========================================="
-    echo "Phase 2: Initializing database & seeding data..."
-    echo "=========================================="
-    just migrate
+
+# Seed admin user and demo sources. Waits for ingestor readiness then seeds.
+sandbox-seed:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    until curl -sf http://localhost:8000/health > /dev/null 2>&1; do sleep 1; done
     just create-admin
     just seed-demo
-
-    echo ""
-    echo "=========================================="
-    echo "Ready for end-to-end testing!"
-    echo "=========================================="
-    echo ""
-    echo "✅ Services running:"
-    echo "  • Floci AWS emulator (S3, SQS)"
-    echo "  • PostgreSQL database"
-    echo "  • Ingestor API on localhost:8000"
-    echo "  • Redis, Redpanda, MongoDB"
-    echo ""
-    echo "ℹ️  Streamlit dashboard (localhost:8501) not started yet."
-    echo ""
-    echo "To monitor ingestor or start dashboard in separate terminals:"
-    echo "  • View logs:        just logs ingestor"
-    echo "  • Start dashboard:  just streamlit-start (new terminal)"
-    echo ""
-    echo "Then visit: http://localhost:8501"
-    echo "API docs:  http://localhost:8000/docs"
-    echo ""
 
 
 # ─── Terraform: Sandbox (local emulator) ────────────────────────────────────
