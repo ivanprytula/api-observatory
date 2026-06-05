@@ -90,6 +90,10 @@ class JobScheduler:
         self._jobs: dict[str, Job] = {}
         self._session_factory: Callable[[], Any] | None = None
 
+    @property
+    def running(self) -> bool:
+        return self._scheduler.running
+
     def job(
         self,
         name: str,

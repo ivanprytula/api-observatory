@@ -180,7 +180,11 @@ def _validate_production_security_settings() -> None:
 
     weak_jwt_secret = len(settings.jwt_secret) < 32
     jwt_secret_from_env = bool(os.environ.get("JWT_SECRET"))
-    weak_docs_password = settings.docs_password in {"changeme", "admin", "password"}
+    weak_docs_password = bool(settings.docs_password) and settings.docs_password in {
+        "changeme",
+        "admin",
+        "password",
+    }
 
     if weak_jwt_secret or weak_docs_password or not jwt_secret_from_env:
         raise RuntimeError(
