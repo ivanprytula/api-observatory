@@ -181,6 +181,10 @@ cython_debug/
 # Infrastructure / Local tests
 docker-compose.override.yml
 
+# SSL/TLS certificates (generated locally)
+infra/certs/*.pem
+infra/certs/*-key.pem
+
 .ruff_cache/
 
 logs/

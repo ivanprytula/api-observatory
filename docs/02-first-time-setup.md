@@ -130,20 +130,52 @@ For the full env var matrix (all variables, defaults, CI/CD and deployment conte
 
 For maximum local → dev/prod parity, enable HTTPS via nginx. This is optional since HTTP on `:8000` works for development.
 
+### 6a. Install mkcert (one-time system install)
+
 ```bash
-# Install mkcert (one-time system install)
-# macOS:    brew install mkcert
-# Ubuntu:   sudo apt install mkcert
+# macOS
+brew install mkcert
 
-# Generate trusted local certificates
+# Ubuntu / Debian
+sudo apt install mkcert libnss3-tools
+
+# Fedora / RHEL
+sudo dnf install mkcert nss-tools
+```
+
+> **Why `libnss3-tools`?** On Linux, Chrome/Chromium uses the NSS (Network Security Services) database for certificate trust, which is **separate from the system trust store**. The `libnss3-tools` package provides `certutil`, which `mkcert` needs in order to register its local CA with Chromium. Without it, Chrome will reject the certificate with `ERR_CERT_AUTHORITY_INVALID`.
+
+### 6b. Install the local CA and generate certificates
+
+```bash
+# Install mkcert's local CA into system + browser trust stores
+mkcert -install
+
+# Generate certificates for localhost, 127.0.0.1, and *.local
 bash scripts/setup/02-setup-local-https.sh
+```
 
-# Start stack with nginx (HTTPS on :443)
+The script will create two files in `infra/certs/`:
+- `localhost+2.pem` — the public certificate
+- `localhost+2-key.pem` — the private key
+
+These are mounted into the nginx container at `/etc/nginx/certs/`.
+
+### 6c. Start the stack with nginx
+
+```bash
+# Start all services including nginx (HTTPS on :443)
 just up-https
+```
 
-# Verify HTTPS is working
+### 6d. Verify HTTPS is working
+
+```bash
+# curl should show a valid TLS handshake (no -k needed if CA is trusted)
 curl -v https://localhost/health
-curl -k https://localhost/api/docs   # -k only needed if first run before cert trust propagates
+
+# Open API docs in browser
+open https://localhost/api/docs
 ```
 
 **Expected output after `just up-https`:**
@@ -152,6 +184,25 @@ curl -k https://localhost/api/docs   # -k only needed if first run before cert t
 ✓ All services running (db, redis, redpanda, ingestor, dashboard, nginx)
 ✓ HTTPS available at https://localhost + https://localhost/api/*
 ```
+
+### 6e. Certificate troubleshooting
+
+If your browser shows **`ERR_CERT_AUTHORITY_INVALID`** or **`NET::ERR_CERT_AUTHORITY_INVALID`**:
+
+1. **Install NSS tools** (Linux/Chrome only) — run once:
+   ```bash
+   sudo apt install libnss3-tools   # Debian/Ubuntu
+   ```
+2. **Re-install the CA** — this registers it with Chromium's NSS store:
+   ```bash
+   mkcert -install
+   # Expected: ✓ installed in Firefox and/or Chrome/Chromium trust store
+   ```
+3. **Restart Chrome completely** — close all windows and reopen. A full restart is required because Chrome caches the NSS trust store at startup.
+4. **Still broken?** Verify the CA is registered:
+   ```bash
+   certutil -L -d sql:$HOME/.pki/nssdb   # List trusted CAs (look for "mkcert")
+   ```
 
 After this step, access the application via HTTPS:
 
@@ -318,9 +369,31 @@ docker ps
 # Check for port conflicts
 lsof -i :5432      # PostgreSQL
 lsof -i :6379      # Redis
-
-
+lsof -i :443       # nginx HTTPS
+lsof -i :80        # nginx HTTP
 ```
+
+### HTTPS / Certificate Issues
+
+**`ERR_CERT_AUTHORITY_INVALID` in Chrome/Chromium** — see [Step 6e](#6e-certificate-troubleshooting) above.
+
+**`curl: (60) SSL certificate problem`** when running `curl`:
+```bash
+# The system CA trust store may not have mkcert's CA.
+# Re-install the CA:
+mkcert -install
+
+# Check the CA is in the system store:
+mkcert -CAROOT   # prints CA root directory
+ls -la "$(mkcert -CAROOT)"
+```
+
+**Nginx returns "404 Not Found"** on `https://localhost/`:
+- The root location block (`location /`) was commented out in `nginx.conf`. Ensure it is uncommented and proxies to the dashboard upstream (or whichever service should serve the root path).
+- After editing `nginx.conf`, reload nginx:
+  ```bash
+  docker compose exec nginx nginx -s reload
+  ```
 
 ### Migrations Failed
 

@@ -56,3 +56,6 @@ USER appuser
 
 # Port for FastAPI
 EXPOSE 8000
+
+# Run database migrations and start the FastAPI server
+CMD ["sh", "-c", "alembic upgrade head && uvicorn services.ingestor.main:app --host 0.0.0.0 --port 8000 --workers 1"]
