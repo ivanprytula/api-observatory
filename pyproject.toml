@@ -29,7 +29,7 @@ dependencies = [
   "alembic>=1.13",
   # HTTP client (async)
   "httpx>=0.28.1",                            # requests-like API, HTTP/2 support
-  "aiohttp>=3.11.0",
+  "aiohttp>=3.13.0",
   "prometheus-fastapi-instrumentator>=7.1.0",
   # AWS SDK
   "boto3>=1.28.0",

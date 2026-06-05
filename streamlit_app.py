@@ -35,6 +35,8 @@ API_AUTH_REFRESH = f"{INGESTOR_URL}/api/v1/auth/refresh"
 API_SCORECARDS = f"{INGESTOR_URL}/api/v1/scorecards"
 API_SOURCES = f"{INGESTOR_URL}/api/v1/sources"
 API_DRIFT = f"{INGESTOR_URL}/api/v1/contracts/sources/{{source_id}}/drift-events"
+API_PROBE = f"{INGESTOR_URL}/api/v1/sources/{{source_id}}/health"
+API_JOBS_HEALTH = f"{INGESTOR_URL}/health/jobs-metrics"
 API_HEALTH = f"{INGESTOR_URL}/health"
 API_READYZ = f"{INGESTOR_URL}/readyz"
 API_METRICS = f"{INGESTOR_URL}/metrics"
@@ -286,10 +288,99 @@ else:
                 else "🔴",
             }
         )
-    st.dataframe(rows, use_container_width=True)
+    st.dataframe(rows, width="stretch")
 
 # ---------------------------------------------------------------------------
-# Panel 2: Drift Events
+# Panel 2: Probe Scheduler
+# ---------------------------------------------------------------------------
+
+st.header("Probe Scheduler")
+
+if not st.session_state["logged_in"]:
+    st.warning("Log in to run probes.")
+else:
+    sources_for_probe = fetch_sources(token=_token)
+    if not sources_for_probe:
+        st.info("No sources registered yet — run `just seed-probes` first.")
+    else:
+        if "probe_results" not in st.session_state:
+            st.session_state["probe_results"] = {}
+
+        col_all, col_clear = st.columns([1, 5])
+        if col_all.button("▶ Probe all", key="probe_all"):
+            with st.spinner("Probing all sources…"):
+                for _src in sources_for_probe:
+                    try:
+                        with httpx.Client(timeout=10.0) as _c:
+                            _r = _c.get(
+                                API_PROBE.format(source_id=_src["id"]),
+                                headers=_auth_headers(),
+                            )
+                            _r.raise_for_status()
+                            st.session_state["probe_results"][_src["id"]] = _r.json()
+                    except Exception as _exc:  # noqa: BLE001
+                        st.session_state["probe_results"][_src["id"]] = {
+                            "error": str(_exc)
+                        }
+            st.rerun()
+        if col_clear.button("🗑 Clear results", key="probe_clear"):
+            st.session_state["probe_results"] = {}
+            st.rerun()
+
+        for src in sources_for_probe:
+            sid = src["id"]
+            col_name, col_btn, col_result = st.columns([2, 1, 4])
+            col_name.markdown(f"**{src.get('name', sid)}** `#{sid}`")
+            if col_btn.button("▶ Probe", key=f"probe_{sid}"):
+                try:
+                    with httpx.Client(timeout=10.0) as _c:
+                        _r = _c.get(
+                            API_PROBE.format(source_id=sid),
+                            headers=_auth_headers(),
+                        )
+                        _r.raise_for_status()
+                        st.session_state["probe_results"][sid] = _r.json()
+                except Exception as _exc:  # noqa: BLE001
+                    st.session_state["probe_results"][sid] = {"error": str(_exc)}
+                st.rerun()
+            result = st.session_state["probe_results"].get(sid)
+            if result:
+                if "error" in result and result["error"] is not None:
+                    col_result.error(result["error"])
+                else:
+                    ok = result.get("reachable", False)
+                    latency = result.get("latency_ms")
+                    sla = result.get("sla_breach", False)
+                    status_icon = "✅" if ok else "❌"
+                    latency_str = f"{latency:.0f} ms" if latency is not None else "—"
+                    sla_str = " 🔥 SLA breach" if sla else ""
+                    col_result.markdown(
+                        f"{status_icon} reachable={ok} &nbsp; ⏱ {latency_str}{sla_str}"
+                    )
+
+    # Scheduler job status
+    with st.expander("Scheduler job status", expanded=False):
+        try:
+            with httpx.Client(timeout=5.0) as _c:
+                _r = _c.get(API_JOBS_HEALTH)
+                _r.raise_for_status()
+                _jobs = _r.json()
+            running = _jobs.get("scheduler_running", False)
+            st.caption(
+                f"Scheduler running:{'✅' if running else '❌'} | Jobs: {_jobs.get('job_count', 0)}"
+            )
+            for jname, jinfo in _jobs.get("jobs", {}).items():
+                c1, c2, c3 = st.columns(3)
+                c1.markdown(f"`{jname}`")
+                c2.caption(
+                    f"runs: {jinfo.get('total_executions', 0)} errors:{jinfo.get('error_count', 0)}"
+                )
+                c3.caption(f"next: {str(jinfo.get('next_run_time', '—'))[:19]}")
+        except Exception as _exc:  # noqa: BLE001
+            st.warning(f"Could not fetch scheduler status: {_exc}")
+
+# ---------------------------------------------------------------------------
+# Panel 3: Drift Events
 # ---------------------------------------------------------------------------
 
 st.header("Drift Events")

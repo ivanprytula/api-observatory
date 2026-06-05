@@ -8,61 +8,31 @@ Async FastAPI service for API reliability monitoring, contract drift detection, 
 
 ```bash
 cp .env.example .env
-# Set REDIS_ENABLED=true and KAFKA_ENABLED=true for full feature set
-docker compose up -d --build
-curl -s http://localhost:8000/docs
+just up       # db, redis, redpanda, ingestor
+just migrate
 ```
+
+API docs: <http://localhost:8000/docs>
+
+Full setup sequence: [docs/02-first-time-setup.md](docs/02-first-time-setup.md)
+All commands: [docs/dev/commands.md](docs/dev/commands.md)
 
 ## Stack
 
-| Service | Port | Why it's here |
-|---------|-----:|---------------|
-| ingestor | 8000 | FastAPI — API probes, scorecards, drift detection, agent enrichment |
+| Service | Port | Role |
+|---------|-----:|------|
+| ingestor | 8000 | FastAPI — probes, scorecards, drift detection, agent enrichment |
 | db | 5432 | PostgreSQL 17 — primary persistence, PERCENTILE_CONT scorecards, RLS |
 | redis | 6379 | Cache (scorecard TTL), pub/sub (WebSocket fan-out), rate-limit backend |
 | redpanda | 9092/8082 | Kafka-compatible broker — drift events, async processing, DLQ |
 
-> See [docs/04-architecture-overview.md](docs/04-architecture-overview.md) for the full Mermaid flow diagram
-> and per-service justification.
-
-## Enable Redis and Redpanda
-
-Both are **opt-in** so unit tests run without infrastructure:
-
-```bash
-# In .env (or export before docker compose up):
-REDIS_ENABLED=true
-REDIS_URL=redis://redis:6379/0
-
-KAFKA_ENABLED=true
-KAFKA_BROKER_URL=redpanda:29092   # inside Docker network
-# KAFKA_BROKER_URL=localhost:9092 # from host machine
-```
-
-The `docker-compose.yml` sets these automatically for the ingestor container.
-
-## Streamlit Dashboard
-
-```bash
-uv run streamlit run streamlit_app.py
-# → http://localhost:8501
-# Panels: Source Health, Drift Events, Live Stream (WebSocket), Agent Enrichment, Service Health
-```
-
-## Test the API
-
-```bash
-docker compose up -d
-just api-test
-# runs: cd bruno && bru run . -r --env local
-```
+See [docs/04-architecture-overview.md](docs/04-architecture-overview.md) for the full flow diagram.
 
 ## Read Next
 
-- [docs/04-architecture-overview.md](docs/04-architecture-overview.md) — Visual flow diagram, service justifications
-- [docs/deployment/aws-ecs.md](docs/deployment/aws-ecs.md) — ECS deployment sequence for Phase 11
-- [docs/deployment/cost-teardown.md](docs/deployment/cost-teardown.md) — Cost guardrails and teardown checklist
+- [docs/README.md](docs/README.md) — Full docs index and track navigation
+- [docs/user/overview.md](docs/user/overview.md) — User-facing guide (purpose, functionality)
+- [docs/dev/commands.md](docs/dev/commands.md) — All CLI commands
+- [docs/04-architecture-overview.md](docs/04-architecture-overview.md) — Visual flow diagram
 - [docs/tech-map.md](docs/tech-map.md) — Interview topic → exact file:function map
-- [docs/learning-paths.md](docs/learning-paths.md) — Four learning tracks (backend, distributed, devops, agent)
-- [docs/dev/bruno-collections.md](docs/dev/bruno-collections.md) — API testing with Bruno CLI
-- [docs/README.md](docs/README.md) — Full docs index
+- [docs/deployment/aws-ecs.md](docs/deployment/aws-ecs.md) — ECS deployment sequence
