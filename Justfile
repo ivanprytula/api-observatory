@@ -253,7 +253,6 @@ restore-s3-postgres s3uri:
 #   just tf-apply             # same
 #   TF_ENV=dev just tf-plan   # force dev environment
 
-TF_ENV ?= "sandbox"
 
 tf-init:
     #!/usr/bin/env bash

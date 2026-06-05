@@ -49,13 +49,10 @@ ENV PATH="/app/.venv/bin:$PATH" \
 # Copy source code and migration files
 COPY --chown=appuser:appgroup libs/ ./libs/
 COPY --chown=appuser:appgroup services/ingestor/ ./services/ingestor/
-COPY --chown=appuser:appgroup streamlit_app.py ./streamlit_app.py
+COPY --chown=appuser:appgroup alembic.ini ./
+COPY --chown=appuser:appgroup alembic/ ./alembic/
 
 USER appuser
 
-# Ports for FastAPI and Streamlit dashboard
-EXPOSE 8000 8501
-
-# Entrypoint starts both uvicorn (FastAPI) and streamlit
-COPY --chown=appuser:appgroup services/ingestor/scripts/entrypoint.sh /entrypoint.sh
-ENTRYPOINT ["/bin/bash", "/entrypoint.sh"]
+# Port for FastAPI
+EXPOSE 8000

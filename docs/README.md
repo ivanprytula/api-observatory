@@ -72,19 +72,23 @@ Other docs should reference these pages instead of re-copying long command block
 
 ## Execution-First Onboarding
 
-Use executable automation before manual copy-paste:
+Use `just` recipes for all daily work:
 
 ```bash
 # 1) Verify host requirements and create local dump folders
 just doctor
 
-# 2) Bootstrap full local environment
-bash scripts/setup/01-bootstrap-dev-environment.sh
+# 2) Start services and open API docs
+just up
+just migrate
 
-# 3) Run daily commands through curated workflows
-bash scripts/daily/01-start-dev-services.sh
-bash scripts/daily/03-run-tests.sh all
-bash scripts/daily/04-quality-checks.sh
+# 3) Run tests (pick one)
+just test-unit          # fast, no DB required
+just test-integration   # requires PostgreSQL
+just test-e2e           # full stack via Bruno
+
+# 4) Signal development harness
+just dev                # docker infra + live uvicorn
 ```
 
 ## Local Artifact Convention

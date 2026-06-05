@@ -145,7 +145,7 @@ if [[ "${FAILED}" -eq 0 ]]; then
     echo ""
     echo "Next steps:"
     echo "  1. cp .env.example .env"
-    echo "  2. bash scripts/daily/01-start-dev-services.sh"
+    echo "  2. just up"
     echo "  3. uv run pytest tests/ -v"
     echo "  4. bash infra/scripts/backup.sh"
     exit 0

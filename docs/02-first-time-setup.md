@@ -19,36 +19,27 @@ cd api-observatory
 
 ## Step 2: Run Automated Setup
 
-The entire setup is automated in a single bash script:
+Use `just` recipes instead of a monolithic bootstrap script:
 
 ```bash
-just doctor  # read-only checks — safe to re-run at any time, even before uv sync
-bash scripts/setup/01-bootstrap-dev-environment.sh
+just doctor                  # read-only checks — safe to re-run at any time
+cp .env.example .env        # create local configuration
+uv sync                     # sync Python dependencies
+just up                     # start Docker services (db, redis, redpanda, ingestor, dashboard)
+just migrate                # apply database migrations
 ```
-
-This script will:
-
-- ✅ Install `uv` if missing
-- ✅ Copy `.env.example` to `.env` (use defaults or customize)
-- ✅ Sync Python dependencies (`uv sync`)
-- ✅ Start PostgreSQL and Redis
-- ✅ Wait for services to be healthy
-- ✅ Apply database migrations (`alembic upgrade head`)
 
 **Expected output:**
 
 ```sh
-✓ uv already installed (v...)
-✓ .env created with defaults
-✓ Dependencies synced
 ✓ Services healthy
 ✓ Database schema initialized
-✓ Development environment ready!
+```
 
 Next steps:
-1. Open API docs in browser: http://localhost:8000/docs
-2. Open API docs via nginx (if certs configured): https://localhost/api/docs
-```
+
+1. Open API docs: <http://localhost:8000/docs>
+2. Open API docs via nginx (if certs configured): <https://localhost/api/docs>
 
 **Pre-commit setup** (run once after clone to prevent commit errors):
 
@@ -164,12 +155,12 @@ curl -k https://localhost/api/docs   # -k only needed if first run before cert t
 
 After this step, access the application via HTTPS:
 
-| URL | Purpose |
-| --- | --- |
-| `https://localhost/` | Dashboard (via nginx) |
-| `https://localhost/api/docs` | Swagger UI (interactive API docs) |
-| `https://localhost/api/redoc` | ReDoc (alternative API docs) |
-| `http://localhost:8501/` | Dashboard (Streamlit, direct — always available) |
+| URL                           | Purpose                                          |
+| ----------------------------- | ------------------------------------------------ |
+| `https://localhost/`          | Dashboard (via nginx)                            |
+| `https://localhost/api/docs`  | Swagger UI (interactive API docs)                |
+| `https://localhost/api/redoc` | ReDoc (alternative API docs)                     |
+| `http://localhost:8501/`      | Dashboard (Streamlit, direct — always available) |
 
 ---
 
@@ -180,54 +171,51 @@ After this step, access the application via HTTPS:
 > For the full progression path — local Floci → AWS staging → production — see
 > [Floci + AWS Deployment Workflow](floci-aws-deployment-workflow.md).
 
-Use `scripts/ops/01-gh-actions-config.sh` to set repository/environment variables, secrets, and OIDC subject template from the command line.
-
-Prerequisites:
-
-- `gh auth login` has been completed
-- You have admin/maintainer access to the repository
-- `gh` and `jq` are installed
-
-Common bootstrap commands:
+Use `gh` directly — it natively supports vars, secrets, and environment-scoped configuration:
 
 ```bash
 repo="ivanprytula/api-observatory"
 
-# Repository-wide defaults
-scripts/ops/01-gh-actions-config.sh vars set AWS_REGION eu-central-1 --repo "$repo"
-scripts/ops/01-gh-actions-config.sh vars set COSIGN_CERTIFICATE_IDENTITY \
-  "https://github.com/${repo}/.github/workflows/docker-build-reusable.yml@refs/heads/main" \
+# Repository-wide variables
+gh variable set AWS_REGION --body "eu-central-1" --repo "$repo"
+gh variable set COSIGN_CERTIFICATE_IDENTITY \
+  --body "https://github.com/${repo}/.github/workflows/docker-build-reusable.yml@refs/heads/main" \
   --repo "$repo"
 
-# Environment-scoped values
-scripts/ops/01-gh-actions-config.sh vars set ECS_CLUSTER_NAME data-zoo-dev --env dev --repo "$repo"   # existing AWS ECS cluster name
-scripts/ops/01-gh-actions-config.sh vars set ECS_CLUSTER_NAME data-zoo-prod --env prod --repo "$repo" # existing AWS ECS cluster name
+# Environment-scoped variables
+gh variable set ECS_CLUSTER_NAME --env dev --body "data-zoo-dev" --repo "$repo"
+gh variable set ECS_CLUSTER_NAME --env prod --body "data-zoo-prod" --repo "$repo"
 
-# Per-service ECS deploy targets (repeat for each environment you use)
-scripts/ops/01-gh-actions-config.sh vars set ECS_SERVICE_NAME ingestor --env dev --repo "$repo"
-scripts/ops/01-gh-actions-config.sh vars set ECS_TASK_DEFINITION_FAMILY ingestor --env dev --repo "$repo"
-scripts/ops/01-gh-actions-config.sh vars set ECS_SERVICE_NAME_AI_GATEWAY inference --env dev --repo "$repo"
-scripts/ops/01-gh-actions-config.sh vars set ECS_TASK_DEFINITION_FAMILY_AI_GATEWAY inference --env dev --repo "$repo"
-scripts/ops/01-gh-actions-config.sh vars set ECS_SERVICE_NAME_QUERY_API analytics --env dev --repo "$repo"
-scripts/ops/01-gh-actions-config.sh vars set ECS_TASK_DEFINITION_FAMILY_QUERY_API analytics --env dev --repo "$repo"
-scripts/ops/01-gh-actions-config.sh vars set ECS_SERVICE_NAME_PROCESSOR processor --env dev --repo "$repo"
-scripts/ops/01-gh-actions-config.sh vars set ECS_TASK_DEFINITION_FAMILY_PROCESSOR processor --env dev --repo "$repo"
-scripts/ops/01-gh-actions-config.sh vars set ECS_SERVICE_NAME_DASHBOARD dashboard --env dev --repo "$repo"
-scripts/ops/01-gh-actions-config.sh vars set ECS_TASK_DEFINITION_FAMILY_DASHBOARD dashboard --env dev --repo "$repo"
+# Per-service ECS targets
+gh variable set ECS_SERVICE_NAME --env dev --body "ingestor" --repo "$repo"
+gh variable set ECS_TASK_DEFINITION_FAMILY --env dev --body "ingestor" --repo "$repo"
+gh variable set ECS_SERVICE_NAME_AI_GATEWAY --env dev --body "inference" --repo "$repo"
+gh variable set ECS_TASK_DEFINITION_FAMILY_AI_GATEWAY --env dev --body "inference" --repo "$repo"
+gh variable set ECS_SERVICE_NAME_QUERY_API --env dev --body "analytics" --repo "$repo"
+gh variable set ECS_TASK_DEFINITION_FAMILY_QUERY_API --env dev --body "analytics" --repo "$repo"
+gh variable set ECS_SERVICE_NAME_PROCESSOR --env dev --body "processor" --repo "$repo"
+gh variable set ECS_TASK_DEFINITION_FAMILY_PROCESSOR --env dev --body "processor" --repo "$repo"
+gh variable set ECS_SERVICE_NAME_DASHBOARD --env dev --body "dashboard" --repo "$repo"
+gh variable set ECS_TASK_DEFINITION_FAMILY_DASHBOARD --env dev --body "dashboard" --repo "$repo"
 
-# Example secret
-scripts/ops/01-gh-actions-config.sh secrets set AWS_ACCOUNT_ID "123456789012" --repo "$repo"
+# Secrets (value read from matching local env var)
+gh secret set AWS_ACCOUNT_ID --body "123456789012" --repo "$repo"
 
-# Optional OIDC customization for subject template
-scripts/ops/01-gh-actions-config.sh oidc set --claims repo,context,job_workflow_ref --repo "$repo"
+# OIDC customization
+gh api --method PUT \
+  -H "Accept: application/vnd.github+json" \
+  "/repos/${repo}/actions/oidc/customization/sub" \
+  -f use_default=false \
+  -f "include_claim_keys[]=repo" \
+  -f "include_claim_keys[]=context"
 ```
 
 Quick verification:
 
 ```bash
-scripts/ops/01-gh-actions-config.sh vars list --repo "$repo"
-scripts/ops/01-gh-actions-config.sh vars list --env dev --repo "$repo"
-scripts/ops/01-gh-actions-config.sh oidc get --repo "$repo"
+gh variable list --repo "$repo"
+gh variable list --env dev --repo "$repo"
+gh api "/repos/${repo}/actions/oidc/customization/sub" --jq '.include_claim_keys'
 ```
 
 ---
@@ -283,11 +271,11 @@ For canonical command workflows, use **[03 — Daily Development](03-daily-devel
 
 ### Access the Application
 
-| URL | Purpose |
-| --- | --- |
-| `http://localhost:8000/` | API (direct HTTP, always available) |
-| `http://localhost:8000/docs` | Swagger UI (direct HTTP) |
-| `http://localhost:8501/` | Dashboard (Streamlit, always available) |
+| URL                          | Purpose                                 |
+| ---------------------------- | --------------------------------------- |
+| `http://localhost:8000/`     | API (direct HTTP, always available)     |
+| `http://localhost:8000/docs` | Swagger UI (direct HTTP)                |
+| `http://localhost:8501/`     | Dashboard (Streamlit, always available) |
 
 ### Submit a Test Request
 
@@ -364,8 +352,8 @@ uv sync --upgrade
 2. **Understand daily workflows**: See **[03 — Daily Development](03-daily-development.md)**
 3. **Explore the architecture**: See **[04 — Architecture Overview](04-architecture-overview.md)**
 4. **Enable HTTPS (optional)**: `bash scripts/setup/02-setup-local-https.sh` then ``
-5. **Run full test suite**: `bash scripts/daily/03-run-tests.sh all`
-6. **Start the dev server**: `uv run uvicorn ingestor.main:app --reload`
+5. **Run tests**: `just test-unit` (fast) or `just test-integration` (requires PostgreSQL)
+6. **Start the dev server**: `just dev`
 
 ---
 

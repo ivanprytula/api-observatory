@@ -90,9 +90,10 @@ The Streamlit dashboard is now bundled inside the `ingestor` container — it st
 Open `http://localhost:8501` to access the dashboard.
 
 > **Note:** For local development without Docker, run the dashboard separately:
-> ```bash
-> uv run streamlit run streamlit_app.py
-> ```
+
+ ```bash
+ uv run streamlit run streamlit_app.py
+ ```
 
 ### Monitor Your First API
 

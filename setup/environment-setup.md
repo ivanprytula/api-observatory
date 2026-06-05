@@ -208,7 +208,7 @@ The project currently uses JWT and a simple token-based flow. If you integrate K
 cp .env.example .env
 # Edit .env: set DATABASE_URL, JWT_SECRET, OPENAI_API_KEY if using agent
 bash scripts/setup/03-verify-system-requirements.sh
-bash scripts/setup/01-bootstrap-dev-environment.sh
+just up
 
 # Run tests (no secrets needed for unit tests)
 uv run pytest tests/unit/ -q
