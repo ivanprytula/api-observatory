@@ -24,16 +24,24 @@ logs svc:
     docker compose logs -f {{svc}}
 
 # Stop all services
- down:
-     docker compose down
+down:
+    docker compose down
 
 # Start full stack with nginx HTTPS proxy (requires certificates — run 02-setup-local-https.sh first)
- up-https:
-     docker compose --profile https up -d
+up-https:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Check if ports 80/443 are in use by another process
+    if curl -sf http://localhost:80 >/dev/null 2>&1 || curl -sf https://localhost >/dev/null 2>&1; then
+        echo "ERROR: Ports 80 or 443 already in use (Apache/nginx or other service)." >&2
+        echo "Stop conflicting services or run: just down" >&2
+        exit 1
+    fi
+    docker compose --profile https up -d
 
 # Stop and remove nginx container
- down-https:
-     docker compose --profile https down nginx
+down-https:
+    docker compose --profile https down nginx
 
 # ─── DATABASE MANAGEMENT ───────────────────────────────────────────────────
 
