@@ -83,7 +83,7 @@ from services.ingestor.routers import (
 try:
     from services.ingestor.routers import mongo_analytics
 except ModuleNotFoundError:
-    mongo_analytics = None
+    mongo_analytics = None  # ty:ignore[invalid-assignment]
 from services.ingestor.security.audit import emit_security_audit_event
 from services.ingestor.services_lifecycle import (
     cleanup_external_services,
@@ -676,7 +676,7 @@ async def readyz(db: DbDep) -> dict[str, object]:
 
     try:
         if _redis is not None:
-            await _redis.ping()  # type: ignore[attr-defined]
+            await _redis.ping()  # ty: ignore[invalid-await]
             checks["redis"] = "ok"
         else:
             checks["redis"] = "not_configured"

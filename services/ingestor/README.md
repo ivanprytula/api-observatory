@@ -22,12 +22,12 @@ docker compose up ingestor db redis
 curl http://localhost:8000/readyz
 ```
 
-## Port
+## Ports
 
-| Environment    | Port   |
-| -------------- | ------ |
-| Docker Compose | `8000` |
-| Local dev      | `8000` |
+| Service              | Port   | Environment |
+| -------------------- | ------ | ----------- |
+| FastAPI (API)        | `8000` | All         |
+| Streamlit (Dashboard)| `8501` | Docker / `just streamlit-start` |
 
 ## Key Environment Variables
 

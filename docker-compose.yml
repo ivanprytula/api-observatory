@@ -116,10 +116,12 @@ services:
       REDIS_URL: redis://redis:6379
       LOG_FORMAT: json
       SERVICE_VERSION: ${SERVICE_VERSION:-0.1.0}
+      INGESTOR_URL: http://127.0.0.1:8000  # Self-referencing for Streamlit within same container
     volumes:
       - ./services/ingestor:/app/services/ingestor
     ports:
       - '8000:8000'
+      - '8501:8501'  # Streamlit dashboard
     depends_on:
       db:
         condition: service_healthy
@@ -259,6 +261,7 @@ services:
 #   - redis:6379 → localhost:6379
 #   - redpanda:9092 (Kafka), 8082 (HTTP) → localhost:9092, 8082
 #   - ingestor:8000 → localhost:8000
+#   - ingestor:8501 → localhost:8501 (Streamlit dashboard)
 #   - nginx:80, 443 → localhost:80, 443 (HTTPS via nginx)
 #   - floci:4566 → 127.0.0.1:4566 (local only)
 networks:

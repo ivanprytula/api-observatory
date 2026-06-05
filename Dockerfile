@@ -40,17 +40,22 @@ RUN groupadd --gid 1001 appgroup && \
 
 # Copy Python environment from builder (avoid extra layer from recursive chown)
 COPY --from=builder --chown=appuser:appgroup /app/.venv /app/.venv
+# HOME set to /tmp for Streamlit config/cache (read_only rootfs compatible)
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app" \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    HOME="/tmp"
 
 # Copy source code and migration files
 COPY --chown=appuser:appgroup libs/ ./libs/
 COPY --chown=appuser:appgroup services/ingestor/ ./services/ingestor/
+COPY --chown=appuser:appgroup streamlit_app.py ./streamlit_app.py
 
 USER appuser
 
-# Port for FastAPI
-EXPOSE 8000
+# Ports for FastAPI and Streamlit dashboard
+EXPOSE 8000 8501
 
-CMD ["uvicorn", "services.ingestor.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# Entrypoint starts both uvicorn (FastAPI) and streamlit
+COPY --chown=appuser:appgroup services/ingestor/scripts/entrypoint.sh /entrypoint.sh
+ENTRYPOINT ["/bin/bash", "/entrypoint.sh"]
