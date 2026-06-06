@@ -59,7 +59,7 @@ info "Building ingestor: ${INGESTOR_IMAGE}"
 docker build -t "${INGESTOR_IMAGE}" -f Dockerfile .
 
 info "Building dashboard: ${DASHBOARD_IMAGE}"
-docker build -t "${DASHBOARD_IMAGE}" -f services/dashboard/Dockerfile services/dashboard
+docker build -t "${DASHBOARD_IMAGE}" -f services/dashboard/Dockerfile .
 
 # ── Deploy to ECS ──────────────────────────────────────────────────────
 # ECS_MOCK=true in docker-compose.yml means tasks go straight to RUNNING.
