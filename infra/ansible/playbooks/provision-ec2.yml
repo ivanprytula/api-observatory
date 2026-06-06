@@ -1,0 +1,29 @@
+---
+# Bootstrap a fresh EC2 instance for local Docker-based development or ECS container instance.
+# This mirrors what cloud-init / Terraform user-data would do, but as a repeatable playbook.
+#
+# Usage:
+#   ansible-playbook playbooks/provision-ec2.yml -i inventory/aws_ec2.yml \
+#     --limit tag_Environment_dev --ask-become-pass --ask-vault-pass
+#
+# Prerequisites:
+#   - pip install 'ansible[aws]'  (or use requirements.yml)
+#   - aws-vault login personal      (or export AWS credentials)
+#   - EC2 instance with Ubuntu 22.04+ and SSH access
+
+- name: 'Provision EC2 host for api-observatory'
+  hosts: all
+  gather_facts: true
+  become: true
+
+  pre_tasks:
+    - name: 'Verify minimum Ansible version'
+      ansible.builtin.assert:
+        fail_msg: 'Ansible 2.15+ is required.'
+        that:
+          - 'ansible_version.full is version("2.15", ">=")'
+
+  roles:
+    - role: 'common'
+    - role: 'docker'
+    - role: 'monitoring'

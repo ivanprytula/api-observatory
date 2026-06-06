@@ -1,0 +1,38 @@
+---
+- name: 'Set ecs_agent default config path'
+  ansible.builtin.set_fact:
+    ecs_agent_config_path: '/etc/ecs/ecs.config'
+
+- name: 'Install ecs-agent prerequisites'
+  ansible.builtin.package:
+    name:
+      - 'iptables'
+      - 'ipset'
+    state: present
+  become: true
+
+- name: 'Install ecs-agent Docker image'
+  community.docker.docker_container:
+    name: 'ecs-agent'
+    image: 'amazon/amazon-ecs-agent:v1.84.2'
+    state: started
+    restart_policy: unless-stopped
+    env:
+      ECS_CLUSTER: '{{ ecs_cluster_name | default("data-zoo-dev") }}'
+      ECS_LOGLEVEL: 'info'
+      AWS_DEFAULT_REGION: '{{ aws_region | default("eu-central-1") }}'
+    volumes:
+      - '/var/run/docker.sock:/var/run/docker.sock'
+      - '/var/lib/ecs/data:/data'
+      - '{{ ecs_agent_config_path }}:/etc/ecs/ecs.config:ro'
+    tmpfs:
+      - '/run:exec'
+    network_mode: 'host'
+    pid_mode: 'host'
+  become: true
+  ignore_errors: true
+
+- name: 'Log: ecs-agent container is optional on non-ECS hosts'
+  ansible.builtin.debug:
+    msg: 'ecs-agent container skipped or failed — this is expected when the host is not an ECS container instance.'
+  when: False

@@ -1,0 +1,25 @@
+---
+# Full environment bootstrap: runs all four roles in dependency order.
+#
+# Usage:
+#   ansible-playbook playbooks/bootstrap.yml -i inventory/hosts.yml \
+#     --ask-vault-pass --limit dev
+#
+# For the first run on a remote host add: --ask-become-pass
+
+- name: 'Bootstrap api-observatory environment'
+  hosts: all
+  gather_facts: true
+
+  pre_tasks:
+    - name: 'Verify minimum Ansible version'
+      ansible.builtin.assert:
+        fail_msg: 'Ansible 2.15+ is required.'
+        that:
+          - 'ansible_version.full is version("2.15", ">=")'
+
+  roles:
+    - role: 'common'
+    - role: 'docker'
+    - role: 'secrets'
+    - role: 'app'

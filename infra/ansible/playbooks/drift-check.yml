@@ -1,0 +1,106 @@
+---
+# Config drift check: asserts host state matches expected configuration.
+# All tasks use check mode (--check) or read-only operations; nothing is changed.
+#
+# Usage (local):
+#   ansible-playbook playbooks/drift-check.yml -i inventory/hosts.yml \
+#     --ask-vault-pass --limit dev
+#
+# Usage (remote):
+#   ansible-playbook playbooks/drift-check.yml -i inventory/hosts.yml \
+#     --ask-vault-pass --limit staging
+
+- name: 'Config drift check — api-observatory'
+  hosts: all
+  gather_facts: true
+
+  tasks:
+    - name: 'Verify required packages are installed'
+      ansible.builtin.package_facts:
+        manager: 'auto'
+
+    - name: 'Assert Docker is installed'
+      ansible.builtin.assert:
+        fail_msg: 'docker-ce is not installed on this host.'
+        quiet: true
+        that:
+          - '"docker-ce" in ansible_facts.packages'
+
+    - name: 'Assert Docker service is running'
+      ansible.builtin.service_facts:
+
+    - name: 'Assert docker.service is active'
+      ansible.builtin.assert:
+        fail_msg: 'docker.service is not running.'
+        quiet: true
+        that:
+          - 'ansible_facts.services["docker.service"].state == "running"'
+
+    - name: 'Assert application directory exists'
+      ansible.builtin.stat:
+        path: '{{ app_dir }}'
+      register: _app_dir_stat
+
+    - name: 'Assert app_dir is present and owned correctly'
+      ansible.builtin.assert:
+        fail_msg: '{{ app_dir }} is missing or has wrong ownership.'
+        quiet: true
+        that:
+          - '_app_dir_stat.stat.exists'
+          - '_app_dir_stat.stat.pw_name == app_user'
+
+    - name: 'Assert .env file exists'
+      ansible.builtin.stat:
+        path: '{{ app_dir }}/.env'
+      register: _env_stat
+
+    - name: 'Assert .env is present and not world-readable'
+      ansible.builtin.assert:
+        fail_msg: '.env is missing or is world-readable (expected mode 0640).'
+        quiet: true
+        that:
+          - '_env_stat.stat.exists'
+          - 'not _env_stat.stat.woth'
+
+    - name: 'Assert .env contains no CHANGEME placeholders'
+      ansible.builtin.command:
+        argv:
+          - 'grep'
+          - '-c'
+          - 'CHANGEME'
+          - '{{ app_dir }}/.env'
+      become: true
+      changed_when: false
+      failed_when: '_drift_changeme.rc == 0'
+      register: _drift_changeme
+
+    - name: 'Check sysctl vm.overcommit_memory is set'
+      ansible.builtin.command:
+        argv:
+          - 'sysctl'
+          - '-n'
+          - 'vm.overcommit_memory'
+      changed_when: false
+      register: _sysctl_overcommit
+
+    - name: 'Assert vm.overcommit_memory equals 1'
+      ansible.builtin.assert:
+        fail_msg: 'vm.overcommit_memory is {{ _sysctl_overcommit.stdout }} (expected 1). Run provision.yml to fix.'
+        quiet: true
+        that:
+          - '_sysctl_overcommit.stdout | int == 1'
+
+    - name: 'Verify running containers match Compose project'
+      community.docker.docker_compose_v2:
+        project_src: '{{ app_dir }}'
+        files:
+          - '{{ docker_compose_file }}'
+        state: present
+      become: true
+      become_user: '{{ app_user }}'
+      check_mode: true
+      register: _compose_drift
+
+    - name: 'Report Compose drift status'
+      ansible.builtin.debug:
+        msg: '{{ "Compose state is in sync." if not _compose_drift.changed else "DRIFT DETECTED: Compose state differs from definition." }}'

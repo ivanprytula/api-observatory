@@ -1,0 +1,52 @@
+---
+- name: 'Create Docker apt keyring directory'
+  ansible.builtin.file:
+    mode: '0755'
+    path: '/etc/apt/keyrings'
+    state: directory
+  become: true
+
+- name: 'Download Docker GPG key'
+  ansible.builtin.get_url:
+    dest: '/etc/apt/keyrings/docker.asc'
+    mode: '0644'
+    url: '{{ docker_apt_key_url }}'
+  become: true
+  register: _docker_gpg
+
+- name: 'Dearmor Docker GPG key'
+  ansible.builtin.shell:
+    cmd: 'gpg --dearmor < /etc/apt/keyrings/docker.asc > /etc/apt/keyrings/docker.gpg'
+    creates: '/etc/apt/keyrings/docker.gpg'
+  become: true
+  when: _docker_gpg.changed  # noqa: no-handler
+
+- name: 'Add Docker apt repository'
+  ansible.builtin.apt_repository:
+    repo: '{{ docker_apt_repo }}'
+    state: present
+  become: true
+
+- name: 'Install Docker Engine packages'
+  ansible.builtin.apt:
+    name: '{{ docker_packages }}'
+    state: present
+    update_cache: true
+  become: true
+  notify: 'Start Docker service'
+
+- name: 'Add users to docker group'
+  ansible.builtin.user:
+    append: true
+    groups:
+      - 'docker'
+    name: '{{ item }}'
+  become: true
+  loop: '{{ docker_users }}'
+
+- name: 'Ensure Docker service is enabled and running'
+  ansible.builtin.service:
+    enabled: true
+    name: 'docker'
+    state: started
+  become: true

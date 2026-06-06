@@ -1,0 +1,81 @@
+---
+- name: 'Create application directory'
+  ansible.builtin.file:
+    group: '{{ app_group }}'
+    mode: '0750'
+    owner: '{{ app_user }}'
+    path: '{{ app_dir }}'
+    state: directory
+  become: true
+
+- name: 'Clone or update application repository'
+  ansible.builtin.git:
+    dest: '{{ app_dir }}'
+    force: false
+    repo: '{{ app_repo_url }}'
+    version: '{{ app_version }}'
+  become: true
+  become_user: '{{ app_user }}'
+  notify: 'Restart application'
+
+- name: 'Render .env from template'
+  ansible.builtin.template:
+    dest: '{{ app_dir }}/.env'
+    group: '{{ app_group }}'
+    mode: '0640'
+    owner: '{{ app_user }}'
+    src: 'env.j2'
+  become: true
+  notify: 'Restart application'
+
+- name: 'Install uv package manager'
+  ansible.builtin.shell:
+    cmd: 'curl -LsSf {{ uv_install_url }} | sh'
+    creates: '/home/{{ app_user }}/.local/bin/uv'
+  become: true
+  become_user: '{{ app_user }}'
+
+- name: 'Sync Python dependencies'
+  ansible.builtin.command:
+    argv:
+      - '/home/{{ app_user }}/.local/bin/uv'
+      - 'sync'
+      - '--frozen'
+    chdir: '{{ app_dir }}'
+  become: true
+  become_user: '{{ app_user }}'
+  changed_when: false
+
+- name: 'Pull Docker Compose images'
+  community.docker.docker_compose_v2_pull:
+    project_src: '{{ app_dir }}'
+    files:
+      - '{{ docker_compose_file }}'
+  become: true
+  become_user: '{{ app_user }}'
+  timeout: '{{ app_compose_pull_timeout }}'
+
+- name: 'Run Alembic database migrations'
+  ansible.builtin.command:
+    argv:
+      - '/home/{{ app_user }}/.local/bin/uv'
+      - 'run'
+      - 'alembic'
+      - 'upgrade'
+      - 'head'
+    chdir: '{{ app_dir }}'
+  become: true
+  become_user: '{{ app_user }}'
+  changed_when: true
+  environment:
+    DATABASE_URL: "{{ compose_env.database_url }}"
+  timeout: '{{ app_migrate_timeout }}'
+
+- name: 'Start application with Docker Compose'
+  community.docker.docker_compose_v2:
+    project_src: '{{ app_dir }}'
+    files:
+      - '{{ docker_compose_file }}'
+    state: present
+  become: true
+  become_user: '{{ app_user }}'

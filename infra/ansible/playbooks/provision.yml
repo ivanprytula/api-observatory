@@ -1,0 +1,15 @@
+---
+# VM provisioning: installs OS-level dependencies and Docker.
+# Run this once against a freshly imaged VM before bootstrap.yml.
+#
+# Usage:
+#   ansible-playbook playbooks/provision.yml -i inventory/hosts.yml \
+#     --limit staging --ask-become-pass
+
+- name: 'Provision VM for api-observatory'
+  hosts: all
+  gather_facts: true
+
+  roles:
+    - role: 'common'
+    - role: 'docker'
