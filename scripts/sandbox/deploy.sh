@@ -1,15 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Deploy ingestor + dashboard to local Floci/ECS sandbox.
+# Deploy ingestor + dashboard to Floci sandbox (real containers).
 #
 # Prerequisites:
-#   - Floci running:  docker compose --profile aws up -d floci
-#   - Terraform applied: just tf-apply
+#   - Floci running with ECR registry sidecar:
+#       docker compose --profile aws up -d floci
+#       docker run -d --name floci-ecr-registry \
+#         --network data-pipeline-async_api-obs -p 5100:5000 registry:2
+#   - Terraform applied with ECR enabled: just tf-apply
+#   - Docker daemon available (Floci mounts /var/run/docker.sock)
 #
-# Sandbox mode skips ECR and data-plane modules (Floci mock + rootless limits).
-# ECS_MOCK=true makes tasks go straight to RUNNING — no real containers.
-# This script validates the Terraform→Floci IaC pipeline, not runtime behavior.
+# Flow:
+#   1. Read ECR repository URIs from Terraform output
+#   2. Authenticate docker against Floci ECR (aws ecr get-login-password)
+#   3. Build images, tag with ECR URI, push to Floci registry
+#   4. Re-register task definitions with fresh image digests
+#   5. Trigger ECS update-service --force-new-deployment
+#   6. Wait for stability + report state
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -22,13 +30,9 @@ NC='\033[0m'
 
 AWS_REGION="${AWS_REGION:-eu-central-1}"
 ECR_ENDPOINT="${ECR_ENDPOINT:-localhost:4566}"
+TF_DIR="infra/terraform/environments/sandbox"
 IMAGE_TAG="${IMAGE_TAG:-develop}"
 CLUSTER="${CLUSTER:-data-zoo-sandbox}"
-
-# Hardcoded Floci ECR loopback URIs (ECR module disabled in sandbox tfvars).
-# With ECS_MOCK=true these are metadata only — no actual pull happens.
-INGESTOR_IMAGE="000000000000.dkr.ecr.eu-central-1.localhost:5100/data-zoo/ingestor:${IMAGE_TAG}"
-DASHBOARD_IMAGE="000000000000.dkr.ecr.eu-central-1.localhost:5100/data-zoo/dashboard:${IMAGE_TAG}"
 
 info() { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
@@ -43,26 +47,110 @@ AWS_ARGS=(--endpoint-url "http://${ECR_ENDPOINT}" --region "${AWS_REGION}")
 info "Preflight checks"
 require_cmd docker
 require_cmd aws
+require_cmd terraform
+require_cmd jq
 
 if ! docker ps --filter "name=api-obs-floci" --filter "status=running" --format '{{.Names}}' | grep -q .; then
   fail "Floci is not running. Start it with: docker compose --profile aws up -d floci"
+fi
+
+if ! docker ps --filter "name=floci-ecr-registry" --filter "status=running" --format '{{.Names}}' | grep -q .; then
+  fail "ECR registry sidecar not running. Start it with:
+    docker run -d --name floci-ecr-registry \\
+      --network data-pipeline-async_api-obs -p 5100:5000 registry:2"
 fi
 
 if ! aws ecs list-clusters "${AWS_ARGS[@]}" 2>/dev/null | grep -q "${CLUSTER}"; then
   fail "ECS cluster '${CLUSTER}' not found. Apply Terraform first: just tf-apply"
 fi
 
-# ── Build and tag images ───────────────────────────────────────────────
+# ── Resolve ECR URIs from Terraform output ─────────────────────────────
+# Floci ECR returns loopback URIs like:
+#   000000000000.dkr.ecr.eu-central-1.localhost:5100/data-zoo/ingestor
 
-info "Building ingestor: ${INGESTOR_IMAGE}"
-docker build -t "${INGESTOR_IMAGE}" -f Dockerfile .
+info "Reading ECR repository URIs from Terraform output"
+ECR_URLS=$(cd "${TF_DIR}" && terraform output -json ecr_repository_urls 2>/dev/null) || \
+  fail "Failed to read ecr_repository_urls from Terraform output. Run: just tf-apply"
 
-info "Building dashboard: ${DASHBOARD_IMAGE}"
-docker build -t "${DASHBOARD_IMAGE}" -f services/dashboard/Dockerfile .
+INGESTOR_URI=$(echo "$ECR_URLS" | jq -r '.ingestor')
+DASHBOARD_URI=$(echo "$ECR_URLS" | jq -r '.dashboard')
+
+if [ -z "$INGESTOR_URI" ] || [ "$INGESTOR_URI" = "null" ]; then
+  fail "ingestor ECR URL not found in Terraform output"
+fi
+if [ -z "$DASHBOARD_URI" ] || [ "$DASHBOARD_URI" = "null" ]; then
+  fail "dashboard ECR URL not found in Terraform output"
+fi
+
+# Replace :latest with IMAGE_TAG
+INGESTOR_TAGGED="${INGESTOR_URI/:latest/:${IMAGE_TAG}}"
+DASHBOARD_TAGGED="${DASHBOARD_URI/:latest/:${IMAGE_TAG}}"
+
+# Registry host for docker login: strip repo path from URI
+REGISTRY_HOST=$(echo "$INGESTOR_URI" | sed 's|/[^/]*$||')
+
+info "Ingestor ECR: ${INGESTOR_TAGGED}"
+info "Dashboard ECR: ${DASHBOARD_TAGGED}"
+info "Registry: ${REGISTRY_HOST}"
+
+# ── Authenticate docker against Floci ECR ──────────────────────────────
+
+info "Authenticating docker against Floci ECR"
+ECR_PASSWORD=$(aws ecr get-login-password "${AWS_ARGS[@]}") || \
+  fail "Failed to get ECR login password"
+echo "${ECR_PASSWORD}" | docker login --username AWS --password-stdin "${REGISTRY_HOST}" || \
+  fail "docker login to ${REGISTRY_HOST} failed"
+
+# ── Build and push images ───────────────────────────────────────────────
+
+info "Building ingestor"
+docker build -t "${INGESTOR_TAGGED}" -f Dockerfile .
+
+info "Pushing ingestor to ${INGESTOR_TAGGED}"
+docker push "${INGESTOR_TAGGED}" || fail "Failed to push ingestor image"
+
+info "Building dashboard"
+docker build -t "${DASHBOARD_TAGGED}" -f services/dashboard/Dockerfile .
+
+info "Pushing dashboard to ${DASHBOARD_TAGGED}"
+docker push "${DASHBOARD_TAGGED}" || fail "Failed to push dashboard image"
+
+# ── Re-register task definitions with fresh images ─────────────────────
+# Terraform static task-defs reference a fixed image URI without digest.
+# Re-register copies the task def but swaps in the freshly-pushed image,
+# so ECS pulls the exact image we just built.
+
+info "Re-registering ingestor task definition"
+INGESTOR_TDEF=$(aws ecs describe-task-definition \
+  --cluster "${CLUSTER}" \
+  --task-definition data-zoo-sandbox-ingestor \
+  "${AWS_ARGS[@]}" \
+  --query 'taskDefinition' 2>/dev/null) || INGESTOR_TDEF=""
+
+if [ -n "$INGESTOR_TDEF" ] && [ "$INGESTOR_TDEF" != "null" ]; then
+  INGESTOR_TDEF=$(echo "$INGESTOR_TDEF" | jq --arg IMG "${INGESTOR_TAGGED}" \
+    '.containerDefinitions[0].image = $IMG | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
+  aws ecs register-task-definition \
+    --cli-input-json "$INGESTOR_TDEF" \
+    "${AWS_ARGS[@]}" || warn "Failed to re-register ingestor task def"
+fi
+
+info "Re-registering dashboard task definition"
+DASHBOARD_TDEF=$(aws ecs describe-task-definition \
+  --cluster "${CLUSTER}" \
+  --task-definition data-zoo-sandbox-dashboard \
+  "${AWS_ARGS[@]}" \
+  --query 'taskDefinition' 2>/dev/null) || DASHBOARD_TDEF=""
+
+if [ -n "$DASHBOARD_TDEF" ] && [ "$DASHBOARD_TDEF" != "null" ]; then
+  DASHBOARD_TDEF=$(echo "$DASHBOARD_TDEF" | jq --arg IMG "${DASHBOARD_TAGGED}" \
+    '.containerDefinitions[0].image = $IMG | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
+  aws ecs register-task-definition \
+    --cli-input-json "$DASHBOARD_TDEF" \
+    "${AWS_ARGS[@]}" || warn "Failed to re-register dashboard task def"
+fi
 
 # ── Deploy to ECS ──────────────────────────────────────────────────────
-# ECS_MOCK=true means tasks go straight to RUNNING without pulling.
-# --force-new-deployment triggers a new task set revision.
 
 info "Triggering ingestor deployment"
 aws ecs update-service \
@@ -71,6 +159,12 @@ aws ecs update-service \
   --force-new-deployment \
   "${AWS_ARGS[@]}" || warn "update-service ingestor failed"
 
+info "Waiting for ingestor stability"
+aws ecs wait services-stable \
+  --cluster "${CLUSTER}" \
+  --services ingestor \
+  "${AWS_ARGS[@]}" || warn "ingestor did not stabilize"
+
 info "Triggering dashboard deployment"
 aws ecs update-service \
   --cluster "${CLUSTER}" \
@@ -78,9 +172,13 @@ aws ecs update-service \
   --force-new-deployment \
   "${AWS_ARGS[@]}" || warn "update-service dashboard failed"
 
+info "Waiting for dashboard stability"
+aws ecs wait services-stable \
+  --cluster "${CLUSTER}" \
+  --services dashboard \
+  "${AWS_ARGS[@]}" || warn "dashboard did not stabilize"
+
 # ── Report Floci state ────────────────────────────────────────────────
-# ecs wait hangs in mock mode (returns null fields), so skip it.
-# Report what Floci has instead of trying to smoke-test non-existent backends.
 
 info "Floci resource state"
 
@@ -108,16 +206,12 @@ echo ""
 info "Sandbox deploy complete"
 echo ""
 echo "What this validates:"
-echo "  - Terraform compiles against Floci AWS API"
-echo "  - ECS task definitions registered (ingestor + dashboard)"
-echo "  - ALB + target groups + listener rules created"
-echo "  - Image tags recorded in task definitions"
+echo "  - Terraform creates ECR repos, RDS, ElastiCache, ALB, ECS cluster"
+echo "  - Images built, pushed to Floci ECR, task defs re-registered"
+echo "  - ECS services deployed with new task definitions"
 echo ""
-echo "Limits of mock mode:"
-echo "  - No real containers run behind ALB (ECS_MOCK=true)"
-echo "  - ALB DNS (.elb.localhost) only resolves inside Docker"
-echo "  - Use 'just up' for real runtime testing with compose services"
+echo "Access via ALB (task containers reachable inside Docker network):"
+echo "  ALB DNS: ${ALB_DNS:-pending}"
 echo ""
 echo "Next:"
 echo "  just tf-destroy   # clean up sandbox state"
-echo "  just up           # real dev environment with compose"
