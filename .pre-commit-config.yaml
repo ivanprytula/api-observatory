@@ -25,11 +25,28 @@ repos:
             tests/.*|
             requirements-audit\.txt|
             \.gitignore|
-            \.pre-commit-config\.yaml
+            \.pre-commit-config\.yaml|
+            Justfile|
+            docker-compose\.yml|
+            docs/dev/commands\.md|
+            docs/dev/bruno-collections\.md|
+            docs/dev/streamlit-dashboard\.md|
+            docs/user/dashboard\.md|
+            docs/user/overview\.md|
+            docs/learning-paths\.md|
+            setup/environment-setup\.md|
+            bruno/websocket/.*\.bru
           )$
       - id: fix-byte-order-marker
       - id: name-tests-test
         args: [--pytest-test-first]
+        exclude: >-
+          (?x)^(
+            tests/__init__\.py|
+            tests/fixtures_shared\.py|
+            tests/unit/__init__\.py|
+            tests/integration/__init__\.py
+          )$
       - id: requirements-txt-fixer
         files: ^requirements-audit\.txt$
   - repo: https://github.com/astral-sh/ruff-pre-commit

@@ -21,7 +21,7 @@ Lets reviewers see live data without needing to interact with the REST API direc
 ### Start the dashboard
 
 ```bash
-uv run streamlit run streamlit_app.py
+uv run streamlit run services/dashboard/streamlit_app.py
 ```
 
 The dashboard opens at `http://localhost:8501`.
@@ -29,7 +29,7 @@ The dashboard opens at `http://localhost:8501`.
 ### With a bearer token (if `API_V1_BEARER_TOKEN` is set on the server)
 
 ```bash
-BEARER_TOKEN=mysecret uv run streamlit run streamlit_app.py
+BEARER_TOKEN=mysecret uv run streamlit run services/dashboard/streamlit_app.py
 ```
 
 Or create `.streamlit/secrets.toml`:
@@ -41,7 +41,7 @@ BEARER_TOKEN = "mysecret"
 ### Point to a remote ingestor
 
 ```bash
-INGESTOR_URL=https://api.example.com uv run streamlit run streamlit_app.py
+INGESTOR_URL=https://api.example.com uv run streamlit run services/dashboard/streamlit_app.py
 ```
 
 ## Environment variables
@@ -70,7 +70,7 @@ Click **Disconnect** to stop the stream.  Click **Clear** to reset the message l
 ## Architecture
 
 ```text
-streamlit_app.py
+services/dashboard/streamlit_app.py
 │
 ├── httpx (sync) ─── GET /api/v1/scorecards     ─── ingestor
 │                ─── GET /api/v1/sources

@@ -646,6 +646,12 @@ async def postgresql_async_session(
     The migrated schema is managed by the session-scoped apply_migrations
     fixture, so this fixture only clears test data before/after each test.
     """
+    if os.environ.get("ALLOW_EXPLAIN_ANALYZE", "").lower() != "true":
+        pytest.skip(
+            "EXPLAIN ANALYZE tests are opt-in only. "
+            "Set ALLOW_EXPLAIN_ANALYZE=true to run against a local PostgreSQL instance. "
+            "Never run against remote/staging/prod RDS."
+        )
     if not _is_postgres():
         pytest.skip(
             "PostgreSQL not available for EXPLAIN ANALYZE tests. "

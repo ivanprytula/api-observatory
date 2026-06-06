@@ -8,11 +8,15 @@ Four panels:
 
 Configuration (environment variables or .streamlit/secrets.toml):
   INGESTOR_URL   Base URL of the ingestor service (default: http://localhost:8000)
+
+Interview polish:
+  Ingestion Throughput, System Freshness, Queue & Retry Health, SLO Watch.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import queue
@@ -222,6 +226,41 @@ def _auth_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"} if token else {}
 
 
+@st.cache_data(ttl=15, show_spinner=False)
+def fetch_prometheus_metrics() -> str:
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            r = client.get(API_METRICS)
+            r.raise_for_status()
+            return r.text
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def parse_prometheus_counter(metrics_text: str, metric_name: str) -> float:
+    total = 0.0
+    prefix = f"{metric_name}_total"
+    for line in metrics_text.splitlines():
+        if line.startswith(prefix) and not line.startswith(f"{prefix}_"):
+            parts = line.split()
+            if len(parts) >= 2:
+                with contextlib.suppress(ValueError):
+                    total += float(parts[-1])
+    return total
+
+
+def parse_metric_value(metrics_text: str, metric_name: str) -> float | None:
+    for line in metrics_text.splitlines():
+        if line.startswith(f"{metric_name} "):
+            parts = line.split()
+            if len(parts) >= 2:
+                try:
+                    return float(parts[-1])
+                except ValueError:
+                    return None
+    return None
+
+
 with st.sidebar:
     st.header("Authentication")
     if not st.session_state["logged_in"]:
@@ -289,6 +328,22 @@ else:
             }
         )
     st.dataframe(rows, width="stretch")
+
+# ---------------------------------------------------------------------------
+# Panel 1b: Ingestion Throughput
+# ---------------------------------------------------------------------------
+
+st.header("⚡ Ingestion Throughput")
+
+_metrics_text = fetch_prometheus_metrics()
+observe_total = parse_prometheus_counter(_metrics_text, "observations_received_total")
+event_lag = parse_metric_value(_metrics_text, "ingestion_queue_lag") or 0
+_backfill_total = parse_prometheus_counter(_metrics_text, "backfill_batches_total")
+
+tcol1, tcol2, tcol3 = st.columns(3)
+tcol1.metric("Observations received (total)", f"{observe_total:,.0f}")
+tcol2.metric("Queue lag", f"{event_lag:,.0f}")
+tcol3.metric("Backfill batches (total)", f"{_backfill_total:,.0f}")
 
 # ---------------------------------------------------------------------------
 # Panel 2: Probe Scheduler
@@ -378,6 +433,58 @@ else:
                 c3.caption(f"next: {str(jinfo.get('next_run_time', '—'))[:19]}")
         except Exception as _exc:  # noqa: BLE001
             st.warning(f"Could not fetch scheduler status: {_exc}")
+
+# ---------------------------------------------------------------------------
+# Panel 2b: System Freshness (heatmap-style source age)
+# ---------------------------------------------------------------------------
+
+st.header("🕒 System Freshness")
+
+_token = st.session_state.get("access_token", "")
+_freshness_sources = fetch_sources(token=_token)
+if not _freshness_sources or "_error" in (
+    _freshness_sources[0] if _freshness_sources else {}
+):
+    st.info("Log in and seed sources to view freshness heatmap.")
+else:
+    _fresh_rows = []
+    now_ts = datetime.now(UTC).timestamp()
+    for _src in _freshness_sources:
+        _probes_results = (
+            _src.get("probe_results", {}) if isinstance(_src, dict) else {}
+        )
+        _last_probe_str = None
+        if isinstance(_src, dict):
+            _last_probe_str = _src.get("last_probe_at") or _src.get("updated_at")
+        _drift_minutes = None
+        if _last_probe_str:
+            try:
+                _ts_raw = _last_probe_str.replace("Z", "+00:00")
+                _last_ts = datetime.fromisoformat(_ts_raw).timestamp()
+                _drift_minutes = (now_ts - _last_ts) / 60.0
+            except Exception:  # noqa: BLE001
+                _drift_minutes = None
+        if _drift_minutes is None:
+            _age_badge, _age_color = "⚪ unknown", "off"
+        elif _drift_minutes <= 5:
+            _age_badge, _age_color = "🟢 fresh", "normal"
+        elif _drift_minutes <= 30:
+            _age_badge, _age_color = "🟡 aging", "normal"
+        else:
+            _age_badge, _age_color = "🔴 stale", "inverse"
+        _fresh_rows.append(
+            {
+                "Source": _src.get(
+                    "name", _src.get("id", "—") if isinstance(_src, dict) else "—"
+                ),
+                "Last probe": (_last_probe_str or "—")[:19].replace("T", " "),
+                "Drift (min)": f"{_drift_minutes:.1f}"
+                if _drift_minutes is not None
+                else "—",
+                "Status": _age_badge,
+            }
+        )
+    st.dataframe(_fresh_rows, width="stretch")
 
 # ---------------------------------------------------------------------------
 # Panel 3: Drift Events
@@ -730,6 +837,7 @@ with agent_tab_stream:
     else:
         st.info("Press **Stream** to run and receive SSE events node-by-node.")
 
+
 # ---------------------------------------------------------------------------
 # Panel 5: Service Health
 # ---------------------------------------------------------------------------
@@ -764,14 +872,21 @@ for col, (label, info) in zip(probe_cols, health_data.items(), strict=False):
         if checks:
             col.json(checks, expanded=False)
 
-st.caption(
-    f"Prometheus metrics are scraped from [`{API_METRICS}`]({API_METRICS}) — "
-    "open in a browser to view the raw exposition format."
-)
+st.header("📦 Queue & Retry Health")
 
-# ---------------------------------------------------------------------------
-# Footer
-# ---------------------------------------------------------------------------
+_dlq_depth = parse_metric_value(_metrics_text, "dead_letter_queue_depth") or 0
+_retries_total = parse_prometheus_counter(_metrics_text, "retry_total")
+_failed_total = parse_prometheus_counter(_metrics_text, "jobs_failed_total")
+
+q1, q2, q3 = st.columns(3)
+q1.metric("Dead-letter queue depth", f"{_dlq_depth:,.0f}")
+q2.metric("Retries (total)", f"{_retries_total:,.0f}")
+q3.metric("Failed jobs (total)", f"{_failed_total:,.0f}")
+
+if _dlq_depth > 0:
+    st.warning(f"DLQ has {_dlq_depth:,.0f} messages — review with the ops runbook.")
+else:
+    st.success("Dead-letter queue is empty.")
 
 st.divider()
 last = (

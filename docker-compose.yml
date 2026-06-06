@@ -158,8 +158,8 @@ services:
 
   dashboard:
     build:
-      context: .
-      dockerfile: services/dashboard/Dockerfile
+      context: services/dashboard
+      dockerfile: Dockerfile
     container_name: api-obs-dashboard
     environment:
       INGESTOR_URL: http://ingestor:8000

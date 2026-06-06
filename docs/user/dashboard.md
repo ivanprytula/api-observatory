@@ -90,7 +90,7 @@ Stream analysis progress node-by-node via Server-Sent Events.
 Point to a remote deployment:
 
 ```bash
-INGESTOR_URL=https://api.your-domain.com uv run streamlit run streamlit_app.py
+INGESTOR_URL=https://api.your-domain.com uv run streamlit run services/dashboard/streamlit_app.py
 ```
 
 ## Troubleshooting

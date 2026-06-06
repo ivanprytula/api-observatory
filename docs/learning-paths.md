@@ -35,7 +35,7 @@ Three tracks covering the full MVP stack (Commits 1-12). Start with architecture
 3. Observability: Prometheus metrics in [services/ingestor/metrics.py](../services/ingestor/metrics.py), OTEL in [main.py lifespan](../services/ingestor/main.py), `/health` and `/readyz` probes.
 4. IaC: Terraform modules in [infra/terraform/](../infra/terraform/).
 5. Deployment walkthrough: [docs/floci-aws-deployment-workflow.md](floci-aws-deployment-workflow.md).
-6. Dashboard: `uv run streamlit run streamlit_app.py` — real-time scorecards, drift events, agent panel.
+6. Dashboard: `uv run streamlit run services/dashboard/streamlit_app.py` — real-time scorecards, drift events, agent panel.
 
 ---
 

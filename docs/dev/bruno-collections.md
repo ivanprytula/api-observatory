@@ -98,7 +98,7 @@ wscat -c "ws://localhost:8000/ws/records/stream"
 Or open the Streamlit dashboard for a browser-based live tail:
 
 ```bash
-uv run streamlit run streamlit_app.py
+uv run streamlit run services/dashboard/streamlit_app.py
 ```
 
 ## CI integration (post-MVP)

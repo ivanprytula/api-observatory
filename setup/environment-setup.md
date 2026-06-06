@@ -162,7 +162,7 @@ Adjust based on expected load and PostgreSQL max_connections:
 
 ## Service URLs (for dashboard & frontend)
 
-- **`INGESTOR_URL`** — Ingestor API base URL. Default: `http://localhost:8000`. (Source: [streamlit_app.py](../../streamlit_app.py))
+- **`INGESTOR_URL`** — Ingestor API base URL. Default: `http://localhost:8000`. (Source: [streamlit_app.py](../../services/dashboard/streamlit_app.py))
 
 ## Keycloak / OIDC (optional)
 

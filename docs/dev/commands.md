@@ -74,6 +74,10 @@ just db-reset
 ### Connect to PostgreSQL
 
 ```bash
+# Safe wrapper — blocks accidental prod/RDS connections
+just psql-safe
+
+# Direct (local only)
 docker compose exec db psql -U postgres -d api_observatory
 psql "postgresql://postgres:postgres@localhost:5432/api_observatory"
 ```
@@ -81,10 +85,12 @@ psql "postgresql://postgres:postgres@localhost:5432/api_observatory"
 ### Useful psql Commands
 
 ```sql
-\dt
 \d observations
 SELECT pid, usename, state FROM pg_stat_activity;
-EXPLAIN ANALYZE SELECT * FROM observations WHERE source_id = 1 LIMIT 10;
+
+-- EXPLAIN ANALYZE is opt-in: set ALLOW_EXPLAIN_ANALYZE=true in test env only.
+-- Never run EXPLAIN ANALYZE against remote/staging/prod RDS — it causes full table scans.
+-- For local curiosity: EXPLAIN (FORMAT JSON) SELECT ... WHERE source_id = 1 LIMIT 10;
 ```
 
 ### Redis
@@ -320,6 +326,62 @@ just tf-fresh   # init → plan → apply
 TF_ENV=dev just tf-plan
 TF_ENV=dev just tf-apply
 ```
+
+---
+
+## Stack Awareness
+
+Use `just stack-info` to print the active backend stack from env vars and Docker state.
+Call it from `just up`, `just dev`, or `just sandbox-dev` to get an immediate banner:
+
+```bash
+=== STACK SUMMARY ===
+  Cloud backend   : Local-Docker | Floci (…)| AWS (profile=…)
+  Terraform env   : sandbox | dev
+  Postgres        : Local-Compose-Postgres | External (host=…)
+  Redis           : redis://redis:6379 | unset
+  KAFKA_BROKER_URL: redpanda:29092 | unset
+  MinIO endpoint  : localhost:9000 | unset
+  INGESTOR_URL    : http://localhost:8000
+======================
+```
+
+### Environment variable matrix (quick reference)
+
+| Variable | local-docker | sandbox | dev | prod |
+|---|---|---|---|---|
+| `ENVIRONMENT` | `development` | `development` | `development` | `production` |
+| `DATABASE_URL` | Compose-injected | Compose-injected | AWS RDS DSN | AWS RDS DSN |
+| `REDIS_URL` | `redis://redis:6379` | `redis://redis:6379` | ElastiCache endpoint | ElastiCache endpoint |
+| `KAFKA_BROKER_URL` | `redpanda:29092` | `redpanda:29092` | MSK bootstrap | MSK bootstrap |
+| `LOG_FORMAT` | `json` | `json` | `json` | `json` |
+| `AWS_PROFILE` | unset | `sandbox` | named dev profile | prod profile |
+| `AWS_ENDPOINT_URL` | unset | `http://localhost:4566` | unset | unset |
+
+### Data movement recipes
+
+```bash
+# Dump local Compose DB → timestamped .sql
+just pg-dump
+
+# Restore into local Compose DB (drops schema first)
+just pg-restore .local-dev/dumps/api-observatory-20260101-120000.sql
+
+# Pull a gzipped dump from S3 and restore into local Compose DB
+just pg-restore-from-s3 s3://data-pipeline-local/dumps/prod-snapshot.sql.gz
+
+# Mirror S3 bucket to local dir (Floci or real AWS)
+just s3-dump-local bucket=data-pipeline-local dest=.local-dev/dumps/s3-20260101
+
+# Upload local dir to S3
+just s3-restore-to-remote bucket=data-pipeline-local src=.local-dev/dumps/s3-20260101
+```
+
+### Safety guards
+
+- `just psql-safe` (default target `db`) blocks connections to `*.rds.amazonaws.com` or `*.amazonaws.com` hostnames.
+- `EXPLAIN ANALYZE` integration tests skip by default; opt in with `ALLOW_EXPLAIN_ANALYZE=true` only against local Postgres.
+- Never run `EXPLAIN ANALYZE` against remote RDS — it executes queries synchronously on the production compute.
 
 ---
 

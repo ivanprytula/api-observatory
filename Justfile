@@ -10,7 +10,8 @@ api-check:
 
 # Start MVP services (db, redis, redpanda, ingestor, dashboard)
 up:
-    docker compose up -d db redis redpanda ingestor dashboard
+    @just stack-info
+    docker compose up -d db redis redpanda ingestor
 
 down:
     docker compose down
@@ -37,6 +38,7 @@ ops:
 
 # Fresh DB state — idempotent, starts full infra, waits for readyz
 db-reset:
+    @just stack-info
     docker compose rm -sfv ingestor db || true
     docker compose up -d db redis redpanda ingestor dashboard
     @bash -c 'until curl -sf http://localhost:8000/readyz > /dev/null 2>&1; do sleep 1; done && echo "stack ready"'
@@ -44,10 +46,127 @@ db-reset:
 migrate:
     uv run alembic upgrade head
 
+# ─── STACK AWARENESS ──────────────────────────────────────────────────────────
+
+# Print the active stack configuration based on environment variables and Docker state.
+stack-info:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TF="${TF_ENV:-sandbox}"
+    if [ -n "${AWS_PROFILE:-}" ] && [ "$AWS_PROFILE" != "sandbox" ]; then
+        CLOUD="AWS (profile=${AWS_PROFILE})"
+    elif [ -n "${AWS_ENDPOINT_URL:-}" ]; then
+        CLOUD="Floci (${AWS_ENDPOINT_URL})"
+    else
+        CLOUD="Local-Docker"
+    fi
+    if docker compose ps db >/dev/null 2>&1 && docker compose exec -T db pg_isready -U postgres >/dev/null 2>&1; then
+        DB="Local-Compose-Postgres"
+    elif [ -n "${DATABASE_URL:-}" ]; then
+        DB="External (host=$(echo "$DATABASE_URL" | sed -E 's|.*@([^/:]+).*|\1|'))"
+    else
+        DB="unknown"
+    fi
+    if [ -n "${REDIS_URL:-}" ]; then
+        REDIS="$(echo "$REDIS_URL" | sed -E 's|.*://([^/]+).*|\1|')"
+    else
+        REDIS="unset"
+    fi
+    echo "=== STACK SUMMARY ==="
+    echo "  Cloud backend   : ${CLOUD}"
+    echo "  Terraform env   : ${TF}"
+    echo "  Postgres        : ${DB}"
+    echo "  Redis           : ${REDIS}"
+    echo "  Kafka broker    : ${KAFKA_BROKER_URL:-unset}"
+    echo "  MinIO endpoint  : ${MINIO_ENDPOINT:-unset}"
+    echo "  INGESTOR_URL    : ${INGESTOR_URL:-http://localhost:8000}"
+    echo "======================"
+
+# ─── DATABASE MANAGEMENT ──────────────────────────────────────────────────────
+
+# Safe psql wrapper: blocks accidental connections to AWS RDS hostnames.
+# Default target is the local Compose "db" service.
+psql-safe db-host="db":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TARGET="${db-host}"
+    if [[ "$TARGET" =~ \.(rds|amazonaws\.com)$ ]]; then
+        echo "BLOCKED: psql-safe refuses to open an interactive shell against an AWS hostname." >&2
+        echo "  Target: $TARGET" >&2
+        echo "  If you really need this, use: psql \"\$DATABASE_URL\" directly." >&2
+        exit 1
+    fi
+    if [ "$TARGET" = "db" ]; then
+        docker compose exec db psql -U postgres -d api_observatory
+    else
+        psql "postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@${TARGET}:5432/api_observatory"
+    fi
+
+# Deprecated: use psql-safe instead to avoid accidental prod shell access.
 db-shell:
+    @echo "WARNING: db-shell opens an interactive shell without safety checks." >&2
+    @echo "  Use 'just psql-safe' instead — it blocks accidental prod shells." >&2
     docker compose exec db psql -U postgres -d api_observatory
 
-create-admin:
+# Dump the local Compose DB to a timestamped SQL file (default: .local-dev/dumps/).
+pg-dump file=".local-dev/dumps/api-observatory-$(date +%Y%m%d-%H%M%S).sql":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "$(dirname "{{file}}")"
+    docker compose exec -T db pg_dump -U postgres api_observatory > "{{file}}"
+    echo "Dumped to {{file}} ($(wc -c < "{{file}}") bytes)"
+
+# Restore a SQL dump into the local Compose DB (wipes public schema first).
+pg-restore file="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "{{file}}" ] || [ ! -f "{{file}}" ]; then
+        echo "Usage: just pg-restore <dump.sql>" >&2
+        exit 1
+    fi
+    docker compose exec -T db psql -U postgres -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" api_observatory
+    docker compose exec -T db psql -U postgres -d api_observatory < "{{file}}"
+    echo "Restored from {{file}}"
+
+# Restore a gzipped SQL dump from S3 into the local Compose DB.
+pg-restore-from-s3 s3-uri="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "{{s3-uri}}" ]; then
+        echo "Usage: just pg-restore-from-s3 s3://bucket/path/dump.sql.gz" >&2
+        exit 1
+    fi
+    TMP="/tmp/api-obs-restore-$$.sql.gz"
+    aws s3 cp "{{s3-uri}}" "$TMP"
+    gunzip -c "$TMP" | docker compose exec -T db psql -U postgres -d api_observatory
+    rm -f "$TMP"
+    echo "Restored from {{s3-uri}}"
+
+# Mirror an S3 bucket (local or remote) to a local directory for offline browsing.
+s3-dump-local bucket="data-pipeline-local" dest=".local-dev/dumps/s3-$(date +%Y%m%d-%H%M%S)":
+    #!/usr/bin/env/bash
+    set -euo pipefail
+    mkdir -p "{{dest}}"
+    if [ -n "${AWS_ENDPOINT_URL:-}" ]; then
+        aws --endpoint-url "$AWS_ENDPOINT_URL" s3 cp "s3://{{bucket}}" "{{dest}}" --recursive
+    else
+        aws s3 cp "s3://{{bucket}}" "{{dest}}" --recursive
+    fi
+    echo "S3 mirrored to {{dest}} ($(find {{dest}} -type f | wc -l) files)"
+
+# Upload a local directory to an S3 bucket (local or remote).
+s3-restore-to-remote bucket="data-pipeline-local" src=".local-dev/dumps/s3-YYYYMMDD-HHMMSS":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -d "{{src}}" ]; then
+        echo "Source directory {{src}} does not exist" >&2
+        exit 1
+    fi
+    if [ -n "${AWS_ENDPOINT_URL:-}" ]; then
+        aws --endpoint-url "$AWS_ENDPOINT_URL" s3 cp "{{src}}" "s3://{{bucket}}/" --recursive
+    else
+        aws s3 cp "{{src}}" "s3://{{bucket}}/" --recursive
+    fi
     curl -sf -o /dev/null -w "%{http_code}" -X POST http://localhost:8000/api/v1/auth/register \
       -H "Content-Type: application/json" \
       -d '{"username":"admin","email":"admin@example.com","password":"admin123","role":"admin"}' | \
@@ -60,6 +179,7 @@ create-admin:
 dev:
     #!/usr/bin/env bash
     set -euo pipefail
+    @just stack-info
     docker compose up -d db redis redpanda
     until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
     just migrate
@@ -128,6 +248,7 @@ sandbox:
 sandbox-up:
     #!/usr/bin/env bash
     set -euo pipefail
+    @just stack-info
     docker compose up -d floci
     for i in $(seq 1 30); do
         if curl -sf http://localhost:4566/_floci/health > /dev/null 2>&1; then
@@ -159,6 +280,7 @@ sandbox-deploy:
 sandbox-dev:
     #!/usr/bin/env bash
     set -euo pipefail
+    @just stack-info
     source scripts/aws-env.sh
     until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
     just migrate
