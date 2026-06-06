@@ -63,8 +63,9 @@ Use these as the single source of truth for each domain:
 | Canonical command source | [dev/commands.md](dev/commands.md) | Exact runnable commands and scripts |
 | Workflow intent and sequence | [03-daily-development.md](03-daily-development.md) | Workflow sequence and cadence, without command duplication |
 | Cloud runtime strategy | [cloud-deployment.md](cloud-deployment.md) | Platform choice, governance, architecture-level deployment policy |
-| Floci local sandbox flow | [floci-aws-deployment-workflow.md](floci-aws-deployment-workflow.md) | Local AWS emulation progression and sandbox validation |
-| ECS deployment runbook | [deployment/aws-ecs.md](deployment/aws-ecs.md) | Real AWS deployment execution and verification |
+| Deploy runbook (sandbox + dev) | [deployment/deploy-runbook.md](deployment/deploy-runbook.md) | Pre-flight, deploy steps, smoke-test matrix, rollback, failure modes |
+| Floci local sandbox specifics | [floci-aws-deployment-workflow.md](floci-aws-deployment-workflow.md) | Floci container management, local AWS emulation setup |
+| Real AWS ECS specifics | [deployment/aws-ecs.md](deployment/aws-ecs.md) | Terraform modules, real AWS resource configuration |
 | Cost teardown checklist | [deployment/cost-teardown.md](deployment/cost-teardown.md) | Explicit shutdown and cost-control operations |
 | Decision records | [adr/README.md](adr/README.md) | Architecture decisions and trade-off history |
 

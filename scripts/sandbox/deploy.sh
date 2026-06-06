@@ -178,14 +178,23 @@ aws ecs wait services-stable \
   --services dashboard \
   "${AWS_ARGS[@]}" || warn "dashboard did not stabilize"
 
-# ── Report Floci state ────────────────────────────────────────────────
+# ── Post-deploy smoke test ───────────────────────────────────────────
 
-info "Floci resource state"
-
+info "Running post-deploy smoke test"
 ALB_DNS=$(aws elbv2 describe-load-balancers \
   "${AWS_ARGS[@]}" \
   --query 'LoadBalancers[0].DNSName' \
   --output text 2>/dev/null || true)
+
+BASE_URL="http://${ALB_DNS:-localhost:8000}"
+if [ -n "$ALB_DNS" ] && [ "$ALB_DNS" != "<not found>" ]; then
+  BASE_URL="http://${ALB_DNS}"
+fi
+bash scripts/smoke-test.sh "$BASE_URL" 60 || warn "Smoke test failed — check endpoints above"
+
+# ── Report Floci state ────────────────────────────────────────────────
+
+info "Floci resource state"
 
 SERVICES=$(aws ecs describe-services \
   --cluster "${CLUSTER}" \

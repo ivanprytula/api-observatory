@@ -78,22 +78,19 @@ jobs:
           echo "Dashboard stable"
 
       - name: Smoke tests
-        shell: bash
         env:
           ALB_DNS: ${{ vars.DEV_ALB_DNS }}
         run: |
           set -euo pipefail
-          if [ -z "$ALB_DNS" ]; then
-            echo "DEV_ALB_DNS not set — skipping smoke tests"
-            exit 0
+          if [ -n "$ALB_DNS" ]; then
+            INGESTOR_URL="https://${ALB_DNS}"
+            DASHBOARD_URL="https://${ALB_DNS}"
+          else
+            echo "DEV_ALB_DNS not set — using localhost for smoke tests"
+            INGESTOR_URL="http://localhost:8000"
+            DASHBOARD_URL="http://localhost:8501"
           fi
-          BASE="https://${ALB_DNS}"
-          echo "Smoke testing ${BASE}"
-
-          curl --fail --max-time 30 "${BASE}/health" || \
-            curl --fail --max-time 30 "${BASE}/readyz"
-
-          curl --fail --max-time 30 "${BASE}/dashboard/_stcore/health"
+          bash scripts/smoke-test.sh "$INGESTOR_URL" "$DASHBOARD_URL"
 
       - name: Publish summary
         if: always()

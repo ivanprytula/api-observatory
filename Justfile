@@ -137,6 +137,7 @@ sandbox-reset:
 # Build + push images to Floci ECR, then trigger ECS deployment for both services.
 # sandbox-deploy: with ECS_MOCK=true tasks go straight to RUNNING
 sandbox-deploy:
+    #!/usr/bin/env bash
     source scripts/aws-env.sh
     bash scripts/sandbox/deploy.sh
 
@@ -147,6 +148,9 @@ sandbox-dev:
     until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
     just migrate
     uv run uvicorn services.ingestor.main:app --reload --port 8000
+
+smoke-test base-url="http://localhost:8000" dashboard-url="http://localhost:8501":
+    bash scripts/smoke-test.sh {{base-url}} {{dashboard-url}}
 
 # ─── SEEDS & INIT ─────────────────────────────────────────────────────────────
 
