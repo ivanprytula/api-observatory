@@ -1,10 +1,12 @@
-# Sandbox tfvars example — works with Floci, LocalStack, or any S3-compatible emulator.
-# Copy to terraform.tfvars (gitignored) and adjust emulator_endpoint if needed.
+# Sandbox tfvars — works with Floci (real containers via mounted Docker socket).
+# Copy to terraform.tfvars (gitignored) and adjust if needed.
 #
-# Sandbox mode: infrastructure-only (VPC, ALB, ECS tasks in mock mode).
-# Compose provides db/redis/redpanda on fixed ports — skip those Terraform modules
-# to avoid port conflicts. ECR/registry sidecar can't start in rootless Docker,
-# so image URIs are hardcoded below and ECS_MOCK=true skips container pulls.
+# Prerequisites:
+#   docker compose --profile aws up -d floci
+#   docker run -d --name floci-ecr-registry \
+#     --network data-pipeline-async_api-obs -p 5100:5000 registry:2
+#   just tf-apply
+#   just sandbox-deploy
 
 aws_region         = "eu-central-1"
 aws_profile        = "sandbox"
@@ -13,13 +15,12 @@ emulator_endpoint  = "http://localhost:4566"
 vpc_cidr           = "10.0.0.0/16"
 availability_zones = ["eu-central-1a", "eu-central-1b"]
 image_tag          = "develop"
-ecr_services       = []
+ecr_services       = ["ingestor", "dashboard"]
 
-# All disabled — compose provides these on host ports
 enable_messaging = false
 enable_iam       = false
-enable_database  = false
-enable_cache     = false
+enable_database  = true
+enable_cache     = true
 
 db_master_password   = "local-dev-db-password"
 db_subnet_group_name = null
