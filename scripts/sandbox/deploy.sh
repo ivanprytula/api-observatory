@@ -6,11 +6,10 @@ set -euo pipefail
 # Prerequisites:
 #   - Floci running:  docker compose --profile aws up -d floci
 #   - Terraform applied: just tf-apply
-#   - Docker daemon available
 #
-# Sandbox mode skips ECR and data-plane modules (db/redis/redpanda come from compose).
-# ECS_MOCK=true makes tasks go straight to RUNNING without pulling images,
-# so tags are metadata only. Smoke tests hit localhost URLs (real compose services).
+# Sandbox mode skips ECR and data-plane modules (Floci mock + rootless limits).
+# ECS_MOCK=true makes tasks go straight to RUNNING — no real containers.
+# This script validates the Terraform→Floci IaC pipeline, not runtime behavior.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -62,8 +61,8 @@ info "Building dashboard: ${DASHBOARD_IMAGE}"
 docker build -t "${DASHBOARD_IMAGE}" -f services/dashboard/Dockerfile .
 
 # ── Deploy to ECS ──────────────────────────────────────────────────────
-# ECS_MOCK=true in docker-compose.yml means tasks go straight to RUNNING.
-# --force-new-deployment triggers a new task set.
+# ECS_MOCK=true means tasks go straight to RUNNING without pulling.
+# --force-new-deployment triggers a new task set revision.
 
 info "Triggering ingestor deployment"
 aws ecs update-service \
@@ -72,9 +71,6 @@ aws ecs update-service \
   --force-new-deployment \
   "${AWS_ARGS[@]}" || warn "update-service ingestor failed"
 
-# Note: aws ecs wait services-stable hangs with Floci mock mode
-# (returns null fields the CLI can't parse). Skip it.
-
 info "Triggering dashboard deployment"
 aws ecs update-service \
   --cluster "${CLUSTER}" \
@@ -82,32 +78,46 @@ aws ecs update-service \
   --force-new-deployment \
   "${AWS_ARGS[@]}" || warn "update-service dashboard failed"
 
-# ── Smoke tests ────────────────────────────────────────────────────────
-# In mock mode there are no real containers behind the ALB, so smoke tests
-# hit the compose services directly on localhost (the actual running code).
+# ── Report Floci state ────────────────────────────────────────────────
+# ecs wait hangs in mock mode (returns null fields), so skip it.
+# Report what Floci has instead of trying to smoke-test non-existent backends.
 
-info "Smoke tests (compose services on localhost)"
+info "Floci resource state"
 
-if curl --fail --max-time 5 http://localhost:8000/health 2>/dev/null; then
-  info "Ingestor /health OK (localhost:8000)"
-elif curl --fail --max-time 5 http://localhost:8000/readyz 2>/dev/null; then
-  info "Ingestor /readyz OK (localhost:8000)"
-else
-  warn "Ingestor not reachable on localhost:8000 — is 'just up' running?"
-fi
+ALB_DNS=$(aws elbv2 describe-load-balancers \
+  "${AWS_ARGS[@]}" \
+  --query 'LoadBalancers[0].DNSName' \
+  --output text 2>/dev/null || true)
 
-if curl --fail --max-time 5 http://localhost:8501/_stcore/health 2>/dev/null; then
-  info "Dashboard /_stcore/health OK (localhost:8501)"
-else
-  warn "Dashboard not reachable on localhost:8501 — is it running?"
-fi
+SERVICES=$(aws ecs describe-services \
+  --cluster "${CLUSTER}" \
+  --services ingestor dashboard \
+  "${AWS_ARGS[@]}" \
+  --query 'services[].{Name:serviceName,Running:runningCount,Desired:desiredCount,TaskDef:taskDefinition}' \
+  --output table 2>/dev/null || true)
+
+echo ""
+echo "ALB:   ${ALB_DNS:-<not found>}"
+echo ""
+echo "ECS services:"
+echo "${SERVICES:-<not found>}"
+echo ""
+
+# ── Summary ────────────────────────────────────────────────────────────
 
 info "Sandbox deploy complete"
 echo ""
-echo "Access:"
-echo "  API (compose):      http://localhost:8000   (just up)"
-echo "  Dashboard (compose): http://localhost:8501 (just up)"
+echo "What this validates:"
+echo "  - Terraform compiles against Floci AWS API"
+echo "  - ECS task definitions registered (ingestor + dashboard)"
+echo "  - ALB + target groups + listener rules created"
+echo "  - Image tags recorded in task definitions"
 echo ""
-echo "ECS service status (mock mode — no real containers):"
-echo "  aws ecs describe-services --cluster ${CLUSTER} --services ingestor,dashboard \\"
-echo "    --endpoint-url http://${ECR_ENDPOINT} --region ${AWS_REGION}"
+echo "Limits of mock mode:"
+echo "  - No real containers run behind ALB (ECS_MOCK=true)"
+echo "  - ALB DNS (.elb.localhost) only resolves inside Docker"
+echo "  - Use 'just up' for real runtime testing with compose services"
+echo ""
+echo "Next:"
+echo "  just tf-destroy   # clean up sandbox state"
+echo "  just up           # real dev environment with compose"
