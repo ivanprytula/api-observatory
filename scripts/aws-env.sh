@@ -6,6 +6,7 @@
 export AWS_PROFILE=sandbox
 export AWS_ENDPOINT_URL=http://localhost:4566
 export AWS_DEFAULT_REGION=eu-central-1
-# Unset any stale credential env vars — a named profile and access key env vars conflict.
-unset AWS_ACCESS_KEY_ID
-unset AWS_SECRET_ACCESS_KEY
+# Emulators don't validate credentials — use test/test so the AWS CLI works
+# without a credentials file or profile (avoids "Unable to locate credentials").
+export AWS_ACCESS_KEY_ID=test
+export AWS_SECRET_ACCESS_KEY=test
