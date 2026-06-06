@@ -10,7 +10,7 @@ set -euo pipefail
 #
 # Sandbox mode skips ECR and data-plane modules (db/redis/redpanda come from compose).
 # ECS_MOCK=true makes tasks go straight to RUNNING without pulling images,
-# so image tags are just metadata — no docker push needed.
+# so tags are metadata only. Smoke tests hit localhost URLs (real compose services).
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -63,7 +63,7 @@ docker build -t "${DASHBOARD_IMAGE}" -f services/dashboard/Dockerfile .
 
 # ── Deploy to ECS ──────────────────────────────────────────────────────
 # ECS_MOCK=true in docker-compose.yml means tasks go straight to RUNNING.
-# --force-new-deployment triggers a new task set without needing a fresh image pull.
+# --force-new-deployment triggers a new task set.
 
 info "Triggering ingestor deployment"
 aws ecs update-service \
@@ -72,11 +72,8 @@ aws ecs update-service \
   --force-new-deployment \
   "${AWS_ARGS[@]}" || warn "update-service ingestor failed"
 
-info "Waiting for ingestor stability"
-aws ecs wait services-stable \
-  --cluster "${CLUSTER}" \
-  --services ingestor \
-  "${AWS_ARGS[@]}" || warn "ingestor did not stabilize"
+# Note: aws ecs wait services-stable hangs with Floci mock mode
+# (returns null fields the CLI can't parse). Skip it.
 
 info "Triggering dashboard deployment"
 aws ecs update-service \
@@ -85,45 +82,32 @@ aws ecs update-service \
   --force-new-deployment \
   "${AWS_ARGS[@]}" || warn "update-service dashboard failed"
 
-info "Waiting for dashboard stability"
-aws ecs wait services-stable \
-  --cluster "${CLUSTER}" \
-  --services dashboard \
-  "${AWS_ARGS[@]}" || warn "dashboard did not stabilize"
-
 # ── Smoke tests ────────────────────────────────────────────────────────
+# In mock mode there are no real containers behind the ALB, so smoke tests
+# hit the compose services directly on localhost (the actual running code).
 
-ALB_DNS=$(aws elbv2 describe-load-balancers \
-  "${AWS_ARGS[@]}" \
-  --query 'LoadBalancers[0].DNSName' \
-  --output text 2>/dev/null || true)
+info "Smoke tests (compose services on localhost)"
 
-if [ -n "${ALB_DNS}" ] && [ "${ALB_DNS}" != "None" ]; then
-  info "Smoke testing ALB: ${ALB_DNS}"
-
-  if curl --fail --max-time 15 "http://${ALB_DNS}/health" 2>/dev/null; then
-    info "Ingestor /health OK"
-  elif curl --fail --max-time 15 "http://${ALB_DNS}/readyz" 2>/dev/null; then
-    info "Ingestor /readyz OK"
-  else
-    warn "Ingestor smoke check failed — tasks may still be starting"
-  fi
-
-  if curl --fail --max-time 15 "http://${ALB_DNS}/dashboard/_stcore/health" 2>/dev/null; then
-    info "Dashboard /dashboard/_stcore/health OK"
-  else
-    warn "Dashboard smoke check failed — tasks may still be starting"
-  fi
+if curl --fail --max-time 5 http://localhost:8000/health 2>/dev/null; then
+  info "Ingestor /health OK (localhost:8000)"
+elif curl --fail --max-time 5 http://localhost:8000/readyz 2>/dev/null; then
+  info "Ingestor /readyz OK (localhost:8000)"
 else
-  warn "ALB DNS not found — skipping smoke tests"
+  warn "Ingestor not reachable on localhost:8000 — is 'just up' running?"
+fi
+
+if curl --fail --max-time 5 http://localhost:8501/_stcore/health 2>/dev/null; then
+  info "Dashboard /_stcore/health OK (localhost:8501)"
+else
+  warn "Dashboard not reachable on localhost:8501 — is it running?"
 fi
 
 info "Sandbox deploy complete"
 echo ""
 echo "Access:"
-echo "  API (local):       http://localhost:8000"
-echo "  Dashboard (local): http://localhost:8501"
-if [ -n "${ALB_DNS}" ] && [ "${ALB_DNS}" != "None" ]; then
-  echo "  API (via ALB):     http://${ALB_DNS}"
-  echo "  Dashboard (ALB):   http://${ALB_DNS}/dashboard"
-fi
+echo "  API (compose):      http://localhost:8000   (just up)"
+echo "  Dashboard (compose): http://localhost:8501 (just up)"
+echo ""
+echo "ECS service status (mock mode — no real containers):"
+echo "  aws ecs describe-services --cluster ${CLUSTER} --services ingestor,dashboard \\"
+echo "    --endpoint-url http://${ECR_ENDPOINT} --region ${AWS_REGION}"
