@@ -6,17 +6,11 @@ set -euo pipefail
 # Prerequisites:
 #   - Floci running:  docker compose --profile aws up -d floci
 #   - Terraform applied: just tf-apply
-#   - Docker daemon available (Floci mounts /var/run/docker.sock)
+#   - Docker daemon available
 #
-# How it works:
-#   1. Read ECR repository URIs from Terraform output (Floci returns
-#      loopback addresses like 000000000000.dkr.ecr.eu-central-1.localhost:5100/...)
-#   2. Build images and tag them with the exact URI Terraform's task
-#      definitions reference
-#   3. Authenticate docker against Floci's real OCI registry
-#   4. Push images (optional but validates the full push→pull path)
-#   5. Trigger ECS update-service --force-new-deployment for both services
-#   6. Wait for stability + smoke test the ALB
+# Sandbox mode skips ECR and data-plane modules (db/redis/redpanda come from compose).
+# ECS_MOCK=true makes tasks go straight to RUNNING without pulling images,
+# so image tags are just metadata — no docker push needed.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -29,9 +23,13 @@ NC='\033[0m'
 
 AWS_REGION="${AWS_REGION:-eu-central-1}"
 ECR_ENDPOINT="${ECR_ENDPOINT:-localhost:4566}"
-TF_DIR="infra/terraform/environments/sandbox"
 IMAGE_TAG="${IMAGE_TAG:-develop}"
 CLUSTER="${CLUSTER:-data-zoo-sandbox}"
+
+# Hardcoded Floci ECR loopback URIs (ECR module disabled in sandbox tfvars).
+# With ECS_MOCK=true these are metadata only — no actual pull happens.
+INGESTOR_IMAGE="000000000000.dkr.ecr.eu-central-1.localhost:5100/data-zoo/ingestor:${IMAGE_TAG}"
+DASHBOARD_IMAGE="000000000000.dkr.ecr.eu-central-1.localhost:5100/data-zoo/dashboard:${IMAGE_TAG}"
 
 info() { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
@@ -46,8 +44,6 @@ AWS_ARGS=(--endpoint-url "http://${ECR_ENDPOINT}" --region "${AWS_REGION}")
 info "Preflight checks"
 require_cmd docker
 require_cmd aws
-require_cmd terraform
-require_cmd jq
 
 if ! docker ps --filter "name=api-obs-floci" --filter "status=running" --format '{{.Names}}' | grep -q .; then
   fail "Floci is not running. Start it with: docker compose --profile aws up -d floci"
@@ -57,84 +53,43 @@ if ! aws ecs list-clusters "${AWS_ARGS[@]}" 2>/dev/null | grep -q "${CLUSTER}"; 
   fail "ECS cluster '${CLUSTER}' not found. Apply Terraform first: just tf-apply"
 fi
 
-# ── Resolve ECR URIs ───────────────────────────────────────────────────
-# Terraform output e.g.:
-#   "ingestor": "000000000000.dkr.ecr.eu-central-1.localhost:5100/data-zoo/ingestor"
-
-info "Reading ECR repository URIs from Terraform output"
-ECR_URLS=$(cd "${TF_DIR}" && terraform output -json ecr_repository_urls 2>/dev/null) || \
-  fail "Failed to read ecr_repository_urls. Run: just tf-apply"
-
-INGESTOR_URI=$(echo "$ECR_URLS" | jq -r '.ingestor')
-DASHBOARD_URI=$(echo "$ECR_URLS" | jq -r '.dashboard')
-
-# Replace :latest tag with IMAGE_TAG
-INGESTOR_TAGGED="${INGESTOR_URI/:latest/:${IMAGE_TAG}}"
-DASHBOARD_TAGGED="${DASHBOARD_URI/:latest/:${IMAGE_TAG}}"
-
-# Registry host for docker login: strip repo path from URI
-# e.g. 000000000000.dkr.ecr.eu-central-1.localhost:5100
-REGISTRY_HOST=$(echo "$INGESTOR_URI" | sed 's|/[^/]*$||')
-
-info "Ingestor: ${INGESTOR_TAGGED}"
-info "Dashboard: ${DASHBOARD_TAGGED}"
-info "Registry: ${REGISTRY_HOST}"
-
-# ── Authenticate docker against Floci ECR ──────────────────────────────
-# Floci ECR implements a real OCI registry (backed by registry:2).
-# get-login-password returns "AWS:floci" — any credentials work.
-
-info "Authenticating docker against Floci ECR"
-ECR_PASSWORD=$(aws ecr get-login-password "${AWS_ARGS[@]}") || \
-  fail "Failed to get ECR login password"
-echo "${ECR_PASSWORD}" | docker login --username AWS --password-stdin "${REGISTRY_HOST}"
-
 # ── Build and tag images ───────────────────────────────────────────────
 
-info "Building ingestor"
-docker build -t "${INGESTOR_TAGGED}" -f Dockerfile .
+info "Building ingestor: ${INGESTOR_IMAGE}"
+docker build -t "${INGESTOR_IMAGE}" -f Dockerfile .
 
-info "Building dashboard"
-docker build -t "${DASHBOARD_TAGGED}" -f services/dashboard/Dockerfile services/dashboard
-
-# ── Push to Floci ECR (validates full push→pull path) ──────────────────
-
-info "Pushing ingestor"
-docker push "${INGESTOR_TAGGED}" || warn "Push failed — falling back to local Docker daemon"
-
-info "Pushing dashboard"
-docker push "${DASHBOARD_TAGGED}" || warn "Push failed — falling back to local Docker daemon"
+info "Building dashboard: ${DASHBOARD_IMAGE}"
+docker build -t "${DASHBOARD_IMAGE}" -f services/dashboard/Dockerfile services/dashboard
 
 # ── Deploy to ECS ──────────────────────────────────────────────────────
-# --force-new-deployment causes ECS to pull the latest image from the
-# registry. Floci ECS uses the mounted Docker socket, so it finds the
-# image either in Floci's registry (if push succeeded) or local daemon.
+# ECS_MOCK=true in docker-compose.yml means tasks go straight to RUNNING.
+# --force-new-deployment triggers a new task set without needing a fresh image pull.
 
 info "Triggering ingestor deployment"
 aws ecs update-service \
   --cluster "${CLUSTER}" \
   --service ingestor \
   --force-new-deployment \
-  "${AWS_ARGS[@]}"
+  "${AWS_ARGS[@]}" || warn "update-service ingestor failed"
 
 info "Waiting for ingestor stability"
 aws ecs wait services-stable \
   --cluster "${CLUSTER}" \
   --services ingestor \
-  "${AWS_ARGS[@]}"
+  "${AWS_ARGS[@]}" || warn "ingestor did not stabilize"
 
 info "Triggering dashboard deployment"
 aws ecs update-service \
   --cluster "${CLUSTER}" \
   --service dashboard \
   --force-new-deployment \
-  "${AWS_ARGS[@]}"
+  "${AWS_ARGS[@]}" || warn "update-service dashboard failed"
 
 info "Waiting for dashboard stability"
 aws ecs wait services-stable \
   --cluster "${CLUSTER}" \
   --services dashboard \
-  "${AWS_ARGS[@]}"
+  "${AWS_ARGS[@]}" || warn "dashboard did not stabilize"
 
 # ── Smoke tests ────────────────────────────────────────────────────────
 

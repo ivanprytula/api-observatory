@@ -61,11 +61,8 @@ module "network" {
   app_port           = 8000
 }
 
-module "ecr" {
-  source   = "../../modules/ecr"
-  project  = "data-zoo"
-  services = var.ecr_services
-}
+# ECR module skipped in sandbox — Floci's registry sidecar can't start in rootless Docker.
+# Image URIs are hardcoded below; ECS_MOCK=true skips actual image pulls anyway.
 
 module "iam" {
   count  = var.enable_iam ? 1 : 0
@@ -76,45 +73,8 @@ module "iam" {
   github_repository = var.github_repository
 }
 
-module "database" {
-  count  = var.enable_database ? 1 : 0
-  source = "../../modules/database"
-
-  project            = "data-zoo"
-  environment        = "sandbox"
-  private_subnet_ids = module.network.private_subnet_ids
-  sg_db_id           = module.network.sg_db_id
-  instance_class     = "db.t3.micro"
-  multi_az           = false
-  backup_retention_days        = 0
-  create_subnet_group          = false
-  db_subnet_group_name         = var.db_subnet_group_name
-  manage_master_user_password  = false
-  master_password              = var.db_master_password
-}
-
-module "cache" {
-  count  = var.enable_cache ? 1 : 0
-  source = "../../modules/cache"
-
-  project            = "data-zoo"
-  environment        = "sandbox"
-  private_subnet_ids = module.network.private_subnet_ids
-  sg_cache_id        = module.network.sg_cache_id
-  node_type          = "cache.t3.micro"
-  num_cache_clusters = 1
-  auth_token         = var.redis_auth_token
-}
-
-module "messaging" {
-  count  = var.enable_messaging ? 1 : 0
-  source = "../../modules/messaging"
-
-  project            = "data-zoo"
-  environment        = "sandbox"
-  private_subnet_ids = module.network.private_subnet_ids
-  sg_msk_id          = module.network.sg_msk_id
-}
+# Database/cache/messaging disabled — compose provides db/redis/redpanda on host ports.
+# Skipping avoids port conflicts (5432, 6379, 9092) with local services.
 
 module "compute" {
   source = "../../modules/compute"
@@ -128,12 +88,14 @@ module "compute" {
   sg_alb_id          = module.network.sg_alb_id
   sg_app_id          = module.network.sg_app_id
 
-  ecr_repository_url_ingestor = module.ecr.repository_urls["ingestor"]
-  ecr_repository_url_dashboard = module.ecr.repository_urls["dashboard"]
+  # Hardcoded Floci ECR loopback URIs (ECR module skipped above).
+  # ECS_MOCK=true skips pulls; these satisfy Terraform task-def validation.
+  ecr_repository_url_ingestor  = "000000000000.dkr.ecr.eu-central-1.localhost:5100/data-zoo/ingestor"
+  ecr_repository_url_dashboard = "000000000000.dkr.ecr.eu-central-1.localhost:5100/data-zoo/dashboard"
   image_tag                   = var.image_tag
   ingestor_service_name       = "ingestor"
 
-  msk_cluster_arn     = var.enable_messaging ? module.messaging[0].cluster_arn : ""
+  msk_cluster_arn     = ""
   acm_certificate_arn = ""
   log_retention_days  = 1
 
