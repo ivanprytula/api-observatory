@@ -54,7 +54,7 @@ check_python_version() {
     if command -v python3 &>/dev/null; then
         local version
         version=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)
-        if (( $(echo "$version >= 3.14" | bc -l) )); then
+        if awk 'BEGIN{exit !($version >= 3.14)}'; then
             echo -e "${GREEN}✓${NC} python3 (${version})"
             return 0
         else
