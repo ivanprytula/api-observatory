@@ -135,10 +135,9 @@ sandbox-reset:
     just sandbox-up
 
 # Build + push images to Floci ECR, then trigger ECS deployment for both services.
-# Requires: Floci running, Terraform applied (just tf-apply), Docker daemon available.
-# Images are tagged to match Terraform task-definitions and Floci ECS finds them
-# in the local Docker daemon via the mounted /var/run/docker.sock.
+# sandbox-deploy: with ECS_MOCK=true tasks go straight to RUNNING
 sandbox-deploy:
+    source scripts/aws-env.sh
     bash scripts/sandbox/deploy.sh
 
 sandbox-dev:
