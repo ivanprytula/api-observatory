@@ -279,8 +279,6 @@ tf-init:
         fi
         terraform init -reconfigure -upgrade -backend-config=backend.hcl
     fi
-        terraform init -reconfigure -upgrade -backend-config=backend.hcl
-    fi
 
 tf-validate:
     #!/usr/bin/env bash
