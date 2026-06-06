@@ -97,6 +97,10 @@ dev = [
   "ruff>=0.15.10",
   # Load testing
   "locust>=2.32.0",
+  # k6 is a standalone CLI, install via:
+  #   - Linux: sudo apt install k6
+  #   - macOS: brew install grafana/k6/k6
+  #   - or: https://k6.io/docs/getting-started/installation/
   # Type checker
   "ty>=0.0.32",
 

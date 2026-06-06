@@ -84,19 +84,34 @@ api-test:
     just seed-source
     cd bruno && bru run auth ops sources contracts scorecards websocket -r --env local
 
-# Load test (k6). Requires k6 installed locally.
-# Example: just test-load --duration 30s --vus 10
+# Load test (k6). Requires k6 installed locally. Realistic CRUD scenario.
+# Usage:
+#   just test-load                    # defaults: 5 VUs, 90s ramp
+#   just test-load BASE_URL=http://localhost:8000 VUS=20 DURATION=60s
 test-load:
     #!/usr/bin/env bash
     set -euo pipefail
-    k6 run --duration "${1:-30s}" --vus "${2:-10}" scripts/load/api-smoke.js
+    BASE_URL="${BASE_URL:-http://localhost:8000}"
+    VUS="${VUS:-5}"
+    DURATION="${DURATION:-90s}"
+    echo "Running k6 — BASE_URL=${BASE_URL}, VUS=${VUS}, DURATION=${DURATION}"
+    k6 run \
+      --vus "${VUS}" \
+      --duration "${DURATION}" \
+      --env "BASE_URL=${BASE_URL}" \
+      --env "BEARER_TOKEN=${BEARER_TOKEN:-}" \
+      scripts/load/k6-observations-load.js
 
-# Chaos test (toxiproxy). Requires toxiproxy running on localhost:8474.
+# Chaos test (Docker kill + restart scenarios). Requires local Compose stack.
+# Usage: just test-chaos
+# Note: tests are skipped unless --run-chaos is passed.
 test-chaos:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "Ensure toxiproxy is running: docker run -p 8474:8474 -p 8475:8475 toxiproxy:latest"
-    uv run pytest tests/e2e/test_chaos.py -v --no-cov
+    echo "Chaos tests mutate running containers. Ensure stack is healthy first:"
+    echo "  just db-reset"
+    echo ""
+    uv run pytest tests/e2e/test_chaos.py -v --no-cov --run-chaos
 
 # ─── CLOUD-EMULATION (Floci + Docker infra + local uvicorn) ───────────────────
 
