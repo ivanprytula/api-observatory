@@ -140,4 +140,7 @@ module "compute" {
   ingestor_cpu           = 256
   ingestor_memory        = 512
   ingestor_desired_count = 1
+  dashboard_cpu          = 256
+  dashboard_memory       = 512
+  dashboard_desired_count = 1
 }

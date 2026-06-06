@@ -163,6 +163,8 @@ services:
     container_name: api-obs-dashboard
     environment:
       INGESTOR_URL: http://ingestor:8000
+    ports:
+      - '8501:8501'
     depends_on:
       ingestor:
         condition: service_healthy
@@ -245,6 +247,7 @@ services:
       FLOCI_DEFAULT_REGION: ${AWS_REGION:-us-east-1}
       FLOCI_DEFAULT_ACCOUNT_ID: ${AWS_ACCOUNT_ID:-000000000000}
       FLOCI_DEFAULT_AVAILABILITY_ZONE: ${AWS_AVAILABILITY_ZONE:-us-east-1a}
+      FLOCI_SERVICES_ECS_DOCKER_NETWORK: api-obs
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:rw
       - ./.local-dev/tmp/floci-data:/tmp/floci

@@ -22,11 +22,12 @@ cp infra/terraform/environments/sandbox/terraform.tfvars.example \
 ## Commands
 
 ```bash
-just sandbox-up          # start emulator
-just tf-sandbox-init     # init backend (creates S3 bucket if absent)
-just tf-sandbox-plan     # plan
-just tf-sandbox-apply    # apply saved plan
-just tf-sandbox-destroy  # destroy all sandbox resources
+just sandbox-up            # start Floci emulator
+just tf-init               # init Terraform backend in sandbox
+just tf-plan               # plan
+just tf-apply              # apply saved plan
+just sandbox-deploy        # build + push images, deploy to Floci ECS
+just tf-destroy            # destroy all sandbox resources
 ```
 
 ## Changing emulator

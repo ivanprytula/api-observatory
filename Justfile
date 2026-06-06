@@ -134,7 +134,13 @@ sandbox-reset:
     docker compose down floci
     just sandbox-up
 
-# Local uvicorn with Floci env (run after sandbox-up, or source scripts/aws-env.sh manually)
+# Build + push images to Floci ECR, then trigger ECS deployment for both services.
+# Requires: Floci running, Terraform applied (just tf-apply), Docker daemon available.
+# Images are tagged to match Terraform task-definitions and Floci ECS finds them
+# in the local Docker daemon via the mounted /var/run/docker.sock.
+sandbox-deploy:
+    bash scripts/sandbox/deploy.sh
+
 sandbox-dev:
     #!/usr/bin/env bash
     set -euo pipefail
