@@ -378,3 +378,39 @@ deploy-dev:
     echo "TODO: wire ECS service update here when cluster is provisioned"
     echo "  aws ecs update-service --cluster dev --service ingestor --force-new-deployment"
     echo "  aws ecs wait services-stable --cluster dev --services ingestor"
+
+# ─── ANSIBLE (infrastructure automation) ───────────────────────────────────────
+
+# Install required Ansible Galaxy collections
+ansible-requirements:
+    cd infra/ansible && ansible-galaxy collection install -r requirements.yml
+
+# Full bootstrap: common + docker + secrets + app (local dev)
+ansible-bootstrap:
+    cd infra/ansible && ansible-playbook playbooks/bootstrap.yml -i inventory/hosts.yml \
+      --ask-vault-pass --limit dev
+
+# Provision a fresh EC2 instance (Docker + monitoring)
+ansible-provision-ec2:
+    cd infra/ansible && ansible-playbook playbooks/provision-ec2.yml -i inventory/aws_ec2.yml \
+      --limit dev --ask-become-pass --ask-vault-pass
+
+# Configure sandbox/ECS host (Docker + ecs-agent + monitoring)
+ansible-sandbox-host:
+    cd infra/ansible && ansible-playbook playbooks/sandbox-host.yml -i inventory/hosts.yml \
+      --limit dev --ask-become-pass
+
+# Base OS + Docker only (no app deploy)
+ansible-local-dev:
+    cd infra/ansible && ansible-playbook playbooks/local-dev.yml -i inventory/hosts.yml \
+      --limit dev --ask-become-pass
+
+# Configure ECS container instance (EC2 launch type)
+ansible-ecs-host:
+    cd infra/ansible && ansible-playbook playbooks/ecs-host.yml -i inventory/aws_ec2.yml \
+      --limit dev --ask-become-pass --ask-vault-pass
+
+# Drift check (read-only, safe to run repeatedly)
+ansible-drift:
+    cd infra/ansible && ansible-playbook playbooks/drift-check.yml -i inventory/hosts.yml \
+      --ask-vault-pass --limit dev
