@@ -14,7 +14,7 @@ from services.ingestor.api_schemas.observations import (
     ObservationRequest,
     UpdateObservationRequest,
 )
-from services.ingestor.core.tenant import get_tenant_id
+from services.ingestor.core.tenant import get_tenant_id, get_user_role
 from services.ingestor.models import (
     Observation,
     ProcessedEvent,
@@ -153,6 +153,32 @@ async def create_observations_batch_naive(
     return list(observations)
 
 
+def _apply_tenant_filter(query) -> tuple:
+    """Apply tenant isolation filter with admin bypass.
+
+    - Admin role: no tenant filter (bypass, sees all)
+    - Specific tenant_id: filter to that tenant + global records (tenant_id IS NULL)
+    - No tenant context: global records only (tenant_id IS NULL)
+
+    Returns (query, filter_applied_bool) so callers can detect if filtering was active.
+    """
+    tenant_id = get_tenant_id()
+    user_role = get_user_role()
+
+    if user_role == "admin":
+        # Admin bypass — no tenant filtering
+        return query, False
+
+    if tenant_id is not None:
+        # Non-admin with tenant context: own tenant + global (NULL) records
+        return query.where(
+            (Observation.tenant_id == tenant_id) | (Observation.tenant_id.is_(None))
+        ), True
+
+    # No tenant context: global records only
+    return query.where(Observation.tenant_id.is_(None)), True
+
+
 async def get_observations(
     session: AsyncSession,
     skip: int = 0,
@@ -174,6 +200,11 @@ async def get_observations(
     if source:
         count_q = count_q.where(Observation.source == source)
         data_q = data_q.where(Observation.source == source)
+
+    # Apply tenant isolation (admin bypass, tenant scope, or global-only)
+    count_q, _ = _apply_tenant_filter(count_q)
+    data_q, _ = _apply_tenant_filter(data_q)
+
     total = (await session.execute(count_q)).scalar_one()
     observations = list((await session.execute(data_q)).scalars().all())
     return observations, total
@@ -256,6 +287,9 @@ async def get_observations_cursor_paginated(
         .order_by(Observation.timestamp, Observation.id)  # Stable sort order
     )
 
+    # Apply tenant isolation filter
+    query, _ = _apply_tenant_filter(query)
+
     # Apply cursor filter: we want observations *after* the last one we returned
     if cursor_data:
         # Fetch observations with (timestamp > last_timestamp) or
@@ -316,6 +350,9 @@ async def get_observations_by_date_range(
     )
     if source:
         query = query.where(Observation.source == source)
+
+    # Apply tenant isolation filter
+    query, _ = _apply_tenant_filter(query)
 
     result = await session.execute(query)
     return list(result.scalars().all())
@@ -441,6 +478,8 @@ async def get_observations_with_tag_counts_naive(
         .order_by(Observation.id.desc())
         .limit(limit)
     )
+    # Apply tenant isolation filter
+    query, _ = _apply_tenant_filter(query)
     result = await session.execute(query)
     observations = list(result.scalars().all())
 
@@ -493,6 +532,8 @@ async def get_observations_with_tag_counts(
         .order_by(Observation.id.desc())
         .limit(limit)
     )
+    # Apply tenant isolation filter
+    query, _ = _apply_tenant_filter(query)
 
     result = await session.execute(query)
     rows = result.all()

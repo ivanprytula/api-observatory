@@ -76,10 +76,10 @@ test-integration:
 test-e2e:
     uv run pytest -m e2e -q
 
-# E2E smoke: db-reset → migrate → admin → seed → Bruno
+# E2E smoke: db-reset → admin → seed → Bruno
+# Note: db-reset starts the ingestor container, which auto-runs migrations via its CMD.
 api-test:
     just db-reset
-    just migrate
     just create-admin
     just seed-source
     cd bruno && bru run auth ops sources contracts scorecards websocket -r --env local
