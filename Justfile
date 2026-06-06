@@ -266,17 +266,19 @@ tf-init:
     ENV="${TF_ENV:-sandbox}"
     if [ "$ENV" = "dev" ]; then
         DIR="infra/terraform/environments/dev"
-        source scripts/aws-env-dev.sh 2>/dev/null || true
-        unset AWS_PROFILE
+        source scripts/aws-env.sh 2>/dev/null || true
+        cd "$DIR"
         terraform init -reconfigure -upgrade -backend-config=backend.aws.hcl
     else
         DIR="infra/terraform/environments/sandbox"
         source scripts/aws-env.sh
-        unset AWS_PROFILE
-        BACKEND_BUCKET=$(grep -E '^\s*bucket\s*=' "$DIR/backend.hcl" | head -n1 | sed -E 's/^\s*bucket\s*=\s*"([^\"]+)".*/\1/')
+        cd "$DIR"
+        BACKEND_BUCKET=$(grep -E '^\s*bucket\s*=' backend.hcl | head -n1 | sed -E 's/^\s*bucket\s*=\s*"([^\"]+)".*/\1/')
         if [ -n "$BACKEND_BUCKET" ]; then
             aws s3 ls "s3://$BACKEND_BUCKET" >/dev/null 2>&1 || aws s3 mb "s3://$BACKEND_BUCKET"
         fi
+        terraform init -reconfigure -upgrade -backend-config=backend.hcl
+    fi
         terraform init -reconfigure -upgrade -backend-config=backend.hcl
     fi
 
