@@ -6,24 +6,65 @@ doctor:
 api-check:
     @curl -sf http://localhost:8000/readyz > /dev/null && echo "stack ready" || (echo "stack not ready — run: just up" >&2; exit 1)
 
-# ─── DAILY DEV (Docker Compose) ───────────────────────────────────────────────
+# ─── DEFAULT DAILY DEV ─────────────────────────────────────────────────────────
+#
+# Primary loop: Compose microservices + on-demand Floci snippets.
+# Use this for implementing features, debugging, load testing.
+# Floci is only started when you explicitly need S3/SQS/ECS-shaped APIs.
+#
+# Alternative loops:
+#   just floci-*           → Full Floci sandbox (training playground)
+#   TF_ENV=dev just deploy → Promote to real AWS dev cloud
 
-# Start MVP services (db, redis, redpanda, ingestor, dashboard)
+# Start Compose data-plane (db, redis, redpanda, ingestor).
 up:
     @just stack-info
     docker compose up -d db redis redpanda ingestor
 
+# Stop everything.
 down:
     docker compose down
 
-# HTTPS proxy via nginx (requires mkcert certs — run `bash scripts/setup/02-setup-local-https.sh` first)
+# Start Compose + Floci (on demand).
+# Floci service must be uncommented in docker-compose.yml.
+up-floci:
+    docker compose up -d floci
+
+# Stop Floci only (Compose data-plane keeps running).
+down-floci:
+    docker compose down floci
+
+# Start uvicorn with live reload against Compose data-plane.
+# This is your default terminal tab.
+dev:
+    @just stack-info
+    docker compose up -d db redis redpanda
+    until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
+    just migrate
+    uv run uvicorn services.ingestor.main:app --reload --port 8000
+
+# Full containerized stack (db + redis + redpanda + ingestor + dashboard).
+# Use when validating container entrypoints / health checks.
+dev-dashboard:
+    @just stack-info
+    docker compose up -d db redis redpanda ingestor dashboard
+    @bash -c 'until curl -sf http://localhost:8000/readyz > /dev/null 2>&1; do sleep 1; done && echo "stack ready"'
+
+# Reset DB and ingestor containers (keep Floci state intact if running).
+db-reset:
+    @just stack-info
+    docker compose rm -sfv ingestor db || true
+    docker compose up -d db redis redpanda ingestor
+    @bash -c 'until curl -sf http://localhost:8000/readyz > /dev/null 2>&1; do sleep 1; done && echo "stack ready"'
+
+# HTTPS proxy via nginx (run setup script first).
 up-https:
     docker compose --profile https up -d
 
 down-https:
     docker compose --profile https down nginx
 
-# Single recipe for logs, shell, or restart — pick one mode
+# Logs / shell / restart for any Compose service.
 ops:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -35,13 +76,6 @@ ops:
         restart) docker compose restart "$SVC" ;;
         *) echo "Usage: just ops <logs|shell|restart> [service]"; exit 1 ;;
     esac
-
-# Fresh DB state — idempotent, starts full infra, waits for readyz
-db-reset:
-    @just stack-info
-    docker compose rm -sfv ingestor db || true
-    docker compose up -d db redis redpanda ingestor dashboard
-    @bash -c 'until curl -sf http://localhost:8000/readyz > /dev/null 2>&1; do sleep 1; done && echo "stack ready"'
 
 migrate:
     uv run alembic upgrade head
@@ -144,7 +178,7 @@ pg-restore-from-s3 s3-uri="":
 
 # Mirror an S3 bucket (local or remote) to a local directory for offline browsing.
 s3-dump-local bucket="data-pipeline-local" dest=".local-dev/dumps/s3-$(date +%Y%m%d-%H%M%S)":
-    #!/usr/bin/env/bash
+    #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{dest}}"
     if [ -n "${AWS_ENDPOINT_URL:-}" ]; then
@@ -167,25 +201,8 @@ s3-restore-to-remote bucket="data-pipeline-local" src=".local-dev/dumps/s3-YYYYM
     else
         aws s3 cp "{{src}}" "s3://{{bucket}}/" --recursive
     fi
-    curl -sf -o /dev/null -w "%{http_code}" -X POST http://localhost:8000/api/v1/auth/register \
-      -H "Content-Type: application/json" \
-      -d '{"username":"admin","email":"admin@example.com","password":"admin123","role":"admin"}' | \
-      grep -qE "^(201|409)" && echo "admin user ready" || (echo "create-admin failed" >&2; exit 1)
 
-# ─── FEATURE DEV (local uvicorn + Docker infra) ───────────────────────────────
-
-# Start Docker infra, then uvicorn with live reload.
-# For sandbox AWS mode: source scripts/aws-env.sh first, or set AWS_ENDPOINT_URL etc.
-dev:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    @just stack-info
-    docker compose up -d db redis redpanda
-    until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
-    just migrate
-    uv run uvicorn services.ingestor.main:app --reload --port 8000
-
-# ─── TESTING ──────────────────────────────────────────────────────────────────
+# ─── TESTING ───────────────────────────────────────────────────────────────────
 
 test-unit:
     uv run pytest -m unit -q
@@ -197,7 +214,6 @@ test-e2e:
     uv run pytest -m e2e -q
 
 # E2E smoke: db-reset → admin → seed → Bruno
-# Note: db-reset starts the ingestor container, which auto-runs migrations via its CMD.
 api-test:
     just db-reset
     just create-admin
@@ -206,7 +222,7 @@ api-test:
 
 # Load test (k6). Requires k6 installed locally. Realistic CRUD scenario.
 # Usage:
-#   just test-load                    # defaults: 5 VUs, 90s ramp
+#   just test-load                    # defaults: 5 VUS, 90s ramp
 #   just test-load BASE_URL=http://localhost:8000 VUS=20 DURATION=60s
 test-load:
     #!/usr/bin/env bash
@@ -223,8 +239,6 @@ test-load:
       scripts/load/k6-observations-load.js
 
 # Chaos test (Docker kill + restart scenarios). Requires local Compose stack.
-# Usage: just test-chaos
-# Note: tests are skipped unless --run-chaos is passed.
 test-chaos:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -233,58 +247,82 @@ test-chaos:
     echo ""
     uv run pytest tests/e2e/test_chaos.py -v --no-cov --run-chaos
 
-# ─── CLOUD-EMULATION (Floci + Docker infra + local uvicorn) ───────────────────
+# ─── FLOCI SANDBOX (full AWS-shaped training playground) ─────────────────────
+#
+# Flow:
+#   1. just floci-up        → start Floci + Compose infra + seed
+#   2. just floci-dev       → uvicorn with Floci env (S3, SQS, ECS-shaped)
+#   3. TF_ENV=sandbox just tf-fresh   → terraform init/plan/apply against Floci
+#   4. just floci-deploy    → build + push to Floci ECR + ECS deploy
+#   5. just floci-reset     → wipe Floci state, start clean
+#   6. just cleanup         → full destroy (tf destroy + down)
+#
+# Tip: keep Floci running and just restart `just dev` when tweaking app code.
 
-# Start Floci + infra, then run AWS sandbox tests
-sandbox:
+# Start Floci + Compose data-plane + seed admin + demo.
+floci-up:
     #!/usr/bin/env bash
     set -euo pipefail
+    @just stack-info
+    docker compose up -d floci
+    for i in $(seq 1 60); do
+        if curl -sf http://localhost:4566/_floci/health > /dev/null 2>&1; then
+            source scripts/aws-env.sh
+            aws s3 mb s3://data-pipeline-local >/dev/null 2>&1 || true
+            aws sqs create-queue --queue-name pipeline-events >/dev/null 2>&1 || true
+            break
+        fi
+        sleep 1
+    done
+    docker compose up -d db redis redpanda
+    until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
+    just _sandbox-seed
+
+# Stop Floci only (Compose data-plane keeps running).
+floci-down:
+    docker compose down floci
+
+# Wipe Floci state (buckets, queues, task history) and restart clean.
+floci-reset:
+    docker compose down floci
+    just floci-up
+
+# Full destroy: terraform destroy + stop Floci + stop Compose.
+cleanup:
+    TF_ENV=sandbox just tf-destroy || true
+    docker compose down
+
+# Start uvicorn with Floci-shaped env (S3 + SQS + ECS APIs).
+# This is the Floci equivalent of `just dev` — use it when you need to test
+# AWS config paths (IAM auth, S3 path discovery, etc.).
+floci-dev:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    @just stack-info
+    source scripts/aws-env.sh
+    docker compose up -d db redis redpanda
+    until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
+    just migrate
+    uv run uvicorn services.ingestor.main:app --reload --port 8000
+
+# Run Floci-specific E2E tests (AWS emulator required).
+floci-test:
     just _sandbox-infra
     just _sandbox-seed
     source scripts/aws-env.sh
     uv run pytest tests/e2e/test_floci_integration.py -v -m aws --no-cov
 
-# Start Floci emulator + Docker infra (interactive dev)
-sandbox-up:
+# Terraform workflow for Floci sandbox (alias for TF_ENV=sandbox).
+tf-fresh-sandbox:
+    TF_ENV=sandbox just tf-fresh
+
+# Build + push to Floci ECR + ECS deploy.
+# With ECS_MOCK=true (default in sandbox) tasks go straight to RUNNING.
+floci-deploy:
     #!/usr/bin/env bash
     set -euo pipefail
-    @just stack-info
-    docker compose up -d floci
-    for i in $(seq 1 30); do
-        if curl -sf http://localhost:4566/_floci/health > /dev/null 2>&1; then
-            source scripts/aws-env.sh
-            aws s3 mb s3://data-pipeline-local >/dev/null 2>&1 || true
-            aws sqs create-queue --queue-name pipeline-events >/dev/null 2>&1 || true
-            exit 0
-        fi
-        sleep 1
-    done
-    echo "Floci failed to start within 30s" >&2
-    docker compose down floci
-    exit 1
-
-sandbox-down:
-    docker compose down floci
-
-sandbox-reset:
-    docker compose down floci
-    just sandbox-up
-
-# Build + push images to Floci ECR, then trigger ECS deployment for both services.
-# sandbox-deploy: with ECS_MOCK=true tasks go straight to RUNNING
-sandbox-deploy:
-    #!/usr/bin/env bash
     source scripts/aws-env.sh
     bash scripts/sandbox/deploy.sh
-
-sandbox-dev:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    @just stack-info
-    source scripts/aws-env.sh
-    until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
-    just migrate
-    uv run uvicorn services.ingestor.main:app --reload --port 8000
 
 smoke-test base-url="http://localhost:8000" dashboard-url="http://localhost:8501":
     bash scripts/smoke-test.sh {{base-url}} {{dashboard-url}}
@@ -322,14 +360,6 @@ seed-probes:
       .local-dev/payloads/source-probe-fail.json
     echo "seed-probes complete — wait ~10s for first probe cycle"
 
-# Private: start Floci + Docker infra for sandbox workflows
-_sandbox-infra:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    just sandbox-up
-    docker compose up -d db redis redpanda
-    until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
-
 # Private: wait for API, then seed admin + demo sources
 _sandbox-seed:
     #!/usr/bin/env bash
@@ -338,10 +368,92 @@ _sandbox-seed:
     just create-admin
     just seed-demo
 
+# Private: start Floci + Docker infra for sandbox workflows
+_sandbox-infra:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just sandbox-up
+    docker compose up -d db redis redpanda
+    until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
+
+# ─── BACKWARD-COMPATIBLE SANDBOX ALIASES ──────────────────────────────────────
+# Old names map to the new floci-* recipes.
+# These are real recipes, not Just aliases, because Just does not support aliases.
+
+sandbox:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just _sandbox-infra
+    just _sandbox-seed
+    source scripts/aws-env.sh
+    uv run pytest tests/e2e/test_floci_integration.py -v -m aws --no-cov
+
+sandbox-up:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    docker compose up -d floci
+    for i in $(seq 1 60); do
+        if curl -sf http://localhost:4566/_floci/health > /dev/null 2>&1; then
+            source scripts/aws-env.sh
+            aws s3 mb s3://data-pipeline-local >/dev/null 2>&1 || true
+            aws sqs create-queue --queue-name pipeline-events >/dev/null 2>&1 || true
+            exit 0
+        fi
+        sleep 1
+    done
+    echo "Floci failed to start within 60s" >&2
+    docker compose down floci
+    exit 1
+
+sandbox-down:
+    docker compose down floci
+
+sandbox-reset:
+    docker compose down floci
+    just sandbox-up
+
+sandbox-deploy:
+    #!/usr/bin/env bash
+    source scripts/aws-env.sh
+    bash scripts/sandbox/deploy.sh
+
+sandbox-dev:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    @just stack-info
+    source scripts/aws-env.sh
+    until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
+    just migrate
+    uv run uvicorn services.ingestor.main:app --reload --port 8000
+
 # ─── DOCKER & RELEASE ─────────────────────────────────────────────────────────
 
+# Buildability guards (fail fast with a clear message if Dockerfile is missing).
+_check-ingestor-dockerfile:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f Dockerfile ]; then
+        echo "Missing ingestor Dockerfile at ./Dockerfile" >&2
+        echo "Create it or run from the repo root." >&2
+        exit 1
+    fi
+
+_check-dashboard-dockerfile:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f services/dashboard/Dockerfile ]; then
+        echo "Missing dashboard Dockerfile at services/dashboard/Dockerfile" >&2
+        echo "Run the dashboard move or restore from git history." >&2
+        exit 1
+    fi
+
 docker-build-image tag="api-observatory:local":
+    @just _check-ingestor-dockerfile
     docker build -t {{tag}} .
+
+docker-build-dashboard tag="api-observatory-dashboard:local":
+    @just _check-dashboard-dockerfile
+    docker build -t {{tag}} -f services/dashboard/Dockerfile services/dashboard
 
 # One-shot audit: build → size check → CRITICAL CVE scan
 deploy-audit tag="api-observatory:local":
