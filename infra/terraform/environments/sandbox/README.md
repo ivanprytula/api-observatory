@@ -22,13 +22,24 @@ cp infra/terraform/environments/sandbox/terraform.tfvars.example \
 ## Commands
 
 ```bash
-just sandbox-up            # start Floci emulator
+just sandbox-up            # start Floci emulator (real Docker containers)
 just tf-init               # init Terraform backend in sandbox
-just tf-plan               # plan
-just tf-apply              # apply saved plan
-just sandbox-deploy        # build + push images, deploy to Floci ECS
+just tf-plan               # plan IaC against Floci
+just tf-apply              # apply VPC/ALB/ECS/RDS/ElastiCache/ECR
+just sandbox-deploy        # build + push images to Floci ECR, deploy to ECS
 just tf-destroy            # destroy all sandbox resources
 ```
+
+## What Floci creates
+
+Floci runs real containers for data-plane services (not mocks):
+- **ECR**: OCI registry on `localhost:5100-5199` — real `docker push`/`pull`
+- **RDS**: Postgres on proxy ports `7001-7099`
+- **ElastiCache**: Redis on proxy ports `6379-6399`
+- **ECS**: Real Fargate tasks via mounted Docker socket
+
+Port conflicts with your host `docker-compose.yml` services are avoided because
+Floci uses private proxy port ranges, not host bindings.
 
 ## Changing emulator
 

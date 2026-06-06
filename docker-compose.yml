@@ -248,7 +248,6 @@ services:
       FLOCI_DEFAULT_ACCOUNT_ID: ${AWS_ACCOUNT_ID:-000000000000}
       FLOCI_DEFAULT_AVAILABILITY_ZONE: ${AWS_AVAILABILITY_ZONE:-us-east-1a}
       FLOCI_SERVICES_ECS_DOCKER_NETWORK: api-obs
-      FLOCI_SERVICES_ECS_MOCK: "true"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:rw
       - ./.local-dev/tmp/floci-data:/tmp/floci
