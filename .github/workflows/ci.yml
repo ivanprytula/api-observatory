@@ -189,6 +189,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      image_ingestor: ${{ steps.build-ingestor.outputs.image }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -199,6 +201,7 @@ jobs:
         run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Build and push ingestor image
+        id: build-ingestor
         env:
           DOCKER_BUILDKIT: "1"
         run: |
@@ -206,13 +209,13 @@ jobs:
           IMAGE="ghcr.io/${{ github.repository_owner }}/data-zoo-ingestor:tree-${TREE_SHA}"
           docker build -t "${IMAGE}" -f Dockerfile .
           docker push "${IMAGE}"
-          echo "IMAGE_INGESTOR=${IMAGE}" >> "$GITHUB_ENV"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
 
       - name: Check image size (MB)
         shell: bash
         run: |
           set -euo pipefail
-          IMAGE="${{ env.IMAGE_INGESTOR }}"
+          IMAGE="${{ steps.build-ingestor.outputs.image }}"
           docker inspect "${IMAGE}" --format '{{.Size}}' | awk '{mb=$1/1024/1024; printf "Image size: %.0f MB\n", mb}'
 
   docker-build-dashboard:
@@ -223,6 +226,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      image_dashboard: ${{ steps.build-dashboard.outputs.image }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -233,6 +238,7 @@ jobs:
         run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Build and push dashboard image
+        id: build-dashboard
         env:
           DOCKER_BUILDKIT: "1"
         run: |
@@ -240,7 +246,7 @@ jobs:
           IMAGE="ghcr.io/${{ github.repository_owner }}/data-zoo-dashboard:tree-${TREE_SHA}"
           docker build -t "${IMAGE}" -f services/dashboard/Dockerfile services/dashboard
           docker push "${IMAGE}"
-          echo "IMAGE_DASHBOARD=${IMAGE}" >> "$GITHUB_ENV"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
 
   docker-scan-security:
     name: "Scan docker image (Trivy - strict)"
@@ -260,8 +266,8 @@ jobs:
 
       - name: Pull and scan ingestor image
         run: |
-          docker pull "${{ env.IMAGE_INGESTOR }}"
-          docker tag "${{ env.IMAGE_INGESTOR }}" ingestor:scan
+          docker pull "${{ needs.docker-build.outputs.image_ingestor }}"
+          docker tag "${{ needs.docker-build.outputs.image_ingestor }}" ingestor:scan
 
       - name: Scan ingestor (Trivy strict)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -276,8 +282,8 @@ jobs:
 
       - name: Pull and scan dashboard image
         run: |
-          docker pull "${{ env.IMAGE_DASHBOARD }}"
-          docker tag "${{ env.IMAGE_DASHBOARD }}" dashboard:scan
+          docker pull "${{ needs.docker-build-dashboard.outputs.image_dashboard }}"
+          docker tag "${{ needs.docker-build-dashboard.outputs.image_dashboard }}" dashboard:scan
 
       - name: Scan dashboard (Trivy strict)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -308,8 +314,8 @@ jobs:
 
       - name: Pull and scan ingestor image
         run: |
-          docker pull "${{ env.IMAGE_INGESTOR }}"
-          docker tag "${{ env.IMAGE_INGESTOR }}" ingestor:scan
+          docker pull "${{ needs.docker-build.outputs.image_ingestor }}"
+          docker tag "${{ needs.docker-build.outputs.image_ingestor }}" ingestor:scan
 
       - name: Scan ingestor (Trivy advisory)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -324,8 +330,8 @@ jobs:
 
       - name: Pull and scan dashboard image
         run: |
-          docker pull "${{ env.IMAGE_DASHBOARD }}"
-          docker tag "${{ env.IMAGE_DASHBOARD }}" dashboard:scan
+          docker pull "${{ needs.docker-build-dashboard.outputs.image_dashboard }}"
+          docker tag "${{ needs.docker-build-dashboard.outputs.image_dashboard }}" dashboard:scan
 
       - name: Scan dashboard (Trivy advisory)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
