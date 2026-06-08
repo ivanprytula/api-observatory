@@ -104,6 +104,10 @@ check_command_warning "nsenter" "util-linux" || true
 check_command_warning "tc" "iproute2" || true
 
 echo ""
+echo "Documentation / Diagramming:"
+check_command_warning "dot" "graphviz (install: apt install graphviz / brew install graphviz) - rendering engine for Terravision architecture diagrams" || true
+
+echo ""
 echo "Optional Diagnostics:"
 check_command_warning "jq" "jq" || true
 check_command_warning "htop" "htop" || true
@@ -134,6 +138,10 @@ fi
 
 if command -v pg_dump &>/dev/null; then
     echo "PostgreSQL:      $(pg_dump --version)"
+fi
+
+if command -v dot &>/dev/null; then
+    echo "Graphviz:        $(dot -V 2>&1 | head -n1)"
 fi
 
 echo ""

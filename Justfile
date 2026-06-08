@@ -6,6 +6,11 @@ doctor:
 api-check:
     @curl -sf http://localhost:8000/readyz > /dev/null && echo "stack ready" || (echo "stack not ready — run: just up" >&2; exit 1)
 
+# Quick health check: verify API and Floci are both running.
+floci-health:
+    @curl -sf http://localhost:8000/health > /dev/null && echo "API: healthy" || echo "API: not responding"
+    @curl -sf http://localhost:4566/_floci/health > /dev/null && echo "Floci: healthy" || echo "Floci: not responding"
+
 # ─── DEFAULT DAILY DEV ─────────────────────────────────────────────────────────
 #
 # Primary loop: Compose microservices + on-demand Floci snippets.
@@ -19,7 +24,7 @@ api-check:
 # Start Compose data-plane (db, redis, redpanda, ingestor).
 up:
     @just stack-info
-    docker compose up -d db redis redpanda ingestor
+    docker compose up -d db redis redpanda ingestor dashboard
 
 # Stop everything.
 down:
@@ -38,7 +43,7 @@ down-floci:
 # This is your default terminal tab.
 dev:
     @just stack-info
-    docker compose up -d db redis redpanda
+    docker compose up -d db redis redpanda ingestor dashboard
     until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
     just migrate
     uv run uvicorn services.ingestor.main:app --reload --port 8000
@@ -54,7 +59,7 @@ dev-dashboard:
 db-reset:
     @just stack-info
     docker compose rm -sfv ingestor db || true
-    docker compose up -d db redis redpanda ingestor
+    docker compose up -d db redis redpanda ingestor dashboard
     @bash -c 'until curl -sf http://localhost:8000/readyz > /dev/null 2>&1; do sleep 1; done && echo "stack ready"'
 
 # HTTPS proxy via nginx (run setup script first).
@@ -176,16 +181,16 @@ pg-restore-from-s3 s3-uri="":
     rm -f "$TMP"
     echo "Restored from {{s3-uri}}"
 
+# Inject --endpoint-url when an AWS emulator is configured (Floci/localstack).
+_aws-flags:
+    @if [ -n "${AWS_ENDPOINT_URL:-}" ]; then echo --endpoint-url "$AWS_ENDPOINT_URL"; fi
+
 # Mirror an S3 bucket (local or remote) to a local directory for offline browsing.
 s3-dump-local bucket="data-pipeline-local" dest=".local-dev/dumps/s3-$(date +%Y%m%d-%H%M%S)":
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{dest}}"
-    if [ -n "${AWS_ENDPOINT_URL:-}" ]; then
-        aws --endpoint-url "$AWS_ENDPOINT_URL" s3 cp "s3://{{bucket}}" "{{dest}}" --recursive
-    else
-        aws s3 cp "s3://{{bucket}}" "{{dest}}" --recursive
-    fi
+    aws $(just _aws-flags) s3 cp "s3://{{bucket}}" "{{dest}}" --recursive
     echo "S3 mirrored to {{dest}} ($(find {{dest}} -type f | wc -l) files)"
 
 # Upload a local directory to an S3 bucket (local or remote).
@@ -196,11 +201,7 @@ s3-restore-to-remote bucket="data-pipeline-local" src=".local-dev/dumps/s3-YYYYM
         echo "Source directory {{src}} does not exist" >&2
         exit 1
     fi
-    if [ -n "${AWS_ENDPOINT_URL:-}" ]; then
-        aws --endpoint-url "$AWS_ENDPOINT_URL" s3 cp "{{src}}" "s3://{{bucket}}/" --recursive
-    else
-        aws s3 cp "{{src}}" "s3://{{bucket}}/" --recursive
-    fi
+    aws $(just _aws-flags) s3 cp "{{src}}" "s3://{{bucket}}/" --recursive
 
 # ─── TESTING ───────────────────────────────────────────────────────────────────
 
@@ -263,7 +264,7 @@ test-chaos:
 floci-up:
     #!/usr/bin/env bash
     set -euo pipefail
-    @just stack-info
+    just stack-info
     docker compose up -d floci
     for i in $(seq 1 60); do
         if curl -sf http://localhost:4566/_floci/health > /dev/null 2>&1; then
@@ -274,13 +275,20 @@ floci-up:
         fi
         sleep 1
     done
-    docker compose up -d db redis redpanda
+    docker compose up -d db redis redpanda ingestor dashboard
     until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
+    just migrate
     just _sandbox-seed
 
 # Stop Floci only (Compose data-plane keeps running).
 floci-down:
     docker compose down floci
+
+# Restart Floci services only (preserves DB state, no re-seeding).
+# Use for workflow #2: when you have registered users/data and want to refresh
+# the AWS management-plane services without clearing volumes.
+floci-restart:
+    docker compose up -d floci
 
 # Wipe Floci state (buckets, queues, task history) and restart clean.
 floci-reset:
@@ -300,7 +308,7 @@ floci-dev:
     set -euo pipefail
     @just stack-info
     source scripts/aws-env.sh
-    docker compose up -d db redis redpanda
+    docker compose up -d db redis redpanda ingestor dashboard
     until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
     just migrate
     uv run uvicorn services.ingestor.main:app --reload --port 8000
@@ -311,10 +319,6 @@ floci-test:
     just _sandbox-seed
     source scripts/aws-env.sh
     uv run pytest tests/e2e/test_floci_integration.py -v -m aws --no-cov
-
-# Terraform workflow for Floci sandbox (alias for TF_ENV=sandbox).
-tf-fresh-sandbox:
-    TF_ENV=sandbox just tf-fresh
 
 # Build + push to Floci ECR + ECS deploy.
 # With ECS_MOCK=true (default in sandbox) tasks go straight to RUNNING.
@@ -331,10 +335,30 @@ smoke-test base-url="http://localhost:8000" dashboard-url="http://localhost:8501
 
 _get_token:
     #!/usr/bin/env bash
-    curl -sf -X POST http://localhost:8000/api/v1/auth/token \
-      -H 'Content-Type: application/x-www-form-urlencoded' \
-      -d 'username=admin&password=admin123' | \
-      python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])"
+    set -euo pipefail
+    # Allow up to 3 attempts to avoid hammering the rate limiter during startup
+    for attempt in 1 2 3; do
+        set +e
+        HTTP_CODE=$(curl -s -o /tmp/get_token_body.$$ -w "%{http_code}" \
+            -X POST http://localhost:8000/api/v1/auth/token \
+            -H 'Content-Type: application/x-www-form-urlencoded' \
+            -d 'username=admin&password=admin123')
+        CURL_EXIT=$?
+        BODY=$(cat /tmp/get_token_body.$$ 2>/dev/null || true)
+        rm -f /tmp/get_token_body.$$
+        set -e
+        if [ "$CURL_EXIT" -eq 0 ] && [ "$HTTP_CODE" = "200" ] && [ -n "$BODY" ]; then
+            TOKEN=$(printf '%s' "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('access_token',''))" 2>/dev/null || true)
+            if [ -n "$TOKEN" ]; then
+                printf '%s\n' "$TOKEN"
+                exit 0
+            fi
+        fi
+        # Back off between retries to stay under rate limits (10 req/min)
+        sleep $((attempt * 2))
+    done
+    echo "ERROR: failed to obtain auth token after 3 attempts (last HTTP=${HTTP_CODE:-?} body=${BODY:-}${BODY:+...})" >&2
+    exit 1
 
 seed-source:
     #!/usr/bin/env bash
@@ -368,63 +392,39 @@ _sandbox-seed:
     just create-admin
     just seed-demo
 
+create-admin:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Registration is idempotent (409 if exists). Do it unconditionally to avoid
+    # a pre-check that would waste a rate-limited token request.
+    curl -sf -X POST http://localhost:8000/api/v1/auth/register \
+      -H 'Content-Type: application/json' \
+      -d '{"username":"admin","password":"admin123","email":"admin@example.com","role":"admin"}' \
+      >/dev/null 2>&1 || true
+    # Verify we can actually log in (single token request with backoff)
+    if just _get_token >/dev/null 2>&1; then
+        echo "admin user registered and verified"
+    else
+        echo "WARNING: admin registration completed but token verification failed" >&2
+    fi
+
 # Private: start Floci + Docker infra for sandbox workflows
 _sandbox-infra:
     #!/usr/bin/env bash
     set -euo pipefail
     just sandbox-up
-    docker compose up -d db redis redpanda
+    docker compose up -d db redis redpanda ingestor dashboard
     until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
 
 # ─── BACKWARD-COMPATIBLE SANDBOX ALIASES ──────────────────────────────────────
-# Old names map to the new floci-* recipes.
-# These are real recipes, not Just aliases, because Just does not support aliases.
+# Old sandbox-* names delegate to floci-*. Remove when no longer referenced.
 
-sandbox:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    just _sandbox-infra
-    just _sandbox-seed
-    source scripts/aws-env.sh
-    uv run pytest tests/e2e/test_floci_integration.py -v -m aws --no-cov
-
-sandbox-up:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    docker compose up -d floci
-    for i in $(seq 1 60); do
-        if curl -sf http://localhost:4566/_floci/health > /dev/null 2>&1; then
-            source scripts/aws-env.sh
-            aws s3 mb s3://data-pipeline-local >/dev/null 2>&1 || true
-            aws sqs create-queue --queue-name pipeline-events >/dev/null 2>&1 || true
-            exit 0
-        fi
-        sleep 1
-    done
-    echo "Floci failed to start within 60s" >&2
-    docker compose down floci
-    exit 1
-
-sandbox-down:
-    docker compose down floci
-
-sandbox-reset:
-    docker compose down floci
-    just sandbox-up
-
-sandbox-deploy:
-    #!/usr/bin/env bash
-    source scripts/aws-env.sh
-    bash scripts/sandbox/deploy.sh
-
-sandbox-dev:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    @just stack-info
-    source scripts/aws-env.sh
-    until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
-    just migrate
-    uv run uvicorn services.ingestor.main:app --reload --port 8000
+sandbox:        floci-test
+sandbox-up:     floci-up
+sandbox-down:   floci-down
+sandbox-reset:  floci-reset
+sandbox-deploy: floci-deploy
+sandbox-dev:    floci-dev
 
 # ─── DOCKER & RELEASE ─────────────────────────────────────────────────────────
 
@@ -504,103 +504,248 @@ restore-s3-postgres s3uri:
     bash infra/scripts/restore.sh postgres --from-s3 {{s3uri}}
 
 # ─── TERRAFORM (unified — sandbox or dev via TF_ENV) ──────────────────────────
-
+#
 # Usage:
-#   just tf-init              # auto-detects env from TF_ENV or cwd
-#   just tf-plan              # same
-#   just tf-apply             # same
-#   TF_ENV=dev just tf-plan   # force dev environment
+#   just tf init                   # auto-detects env from TF_ENV or cwd
+#   just tf plan                   # same
+#   just tf apply                  # same
+#   TF_ENV=dev just tf plan        # force dev environment
+#   just tf fresh                  # init → plan → apply (sandbox by default)
 
-
-tf-init:
+tf cmd:
     #!/usr/bin/env bash
     set -euo pipefail
     ENV="${TF_ENV:-sandbox}"
+    CMD="{{cmd}}"
     if [ "$ENV" = "dev" ]; then
         DIR="infra/terraform/environments/dev"
         source scripts/aws-env.sh 2>/dev/null || true
-        cd "$DIR"
-        terraform init -reconfigure -upgrade -backend-config=backend.aws.hcl
     else
         DIR="infra/terraform/environments/sandbox"
         source scripts/aws-env.sh
-        cd "$DIR"
-        BACKEND_BUCKET=$(grep -E '^\s*bucket\s*=' backend.hcl | head -n1 | sed -E 's/^\s*bucket\s*=\s*"([^\"]+)".*/\1/')
-        if [ -n "$BACKEND_BUCKET" ]; then
-            aws s3 ls "s3://$BACKEND_BUCKET" >/dev/null 2>&1 || aws s3 mb "s3://$BACKEND_BUCKET"
-        fi
-        terraform init -reconfigure -upgrade -backend-config=backend.hcl
     fi
+    cd "$DIR"
+
+    case "$CMD" in
+        init)
+            if [ "$ENV" = "dev" ]; then
+                terraform init -reconfigure -upgrade -backend-config=backend.aws.hcl
+            else
+                BACKEND_BUCKET=$(grep -E '^\s*bucket\s*=' backend.hcl | head -n1 | sed -E 's/^\s*bucket\s*=\s*"([^\"]+)".*/\1/')
+                if [ -n "$BACKEND_BUCKET" ]; then
+                    aws s3 ls "s3://$BACKEND_BUCKET" >/dev/null 2>&1 || aws s3 mb "s3://$BACKEND_BUCKET"
+                fi
+                terraform init -reconfigure -upgrade -backend-config=backend.hcl
+            fi
+            ;;
+        validate)
+            terraform validate
+            ;;
+        plan)
+            export TF_IN_AUTOMATION=1
+            if [ "$ENV" = "dev" ]; then
+                terraform plan \
+                    -input=false \
+                    -lock-timeout=30m \
+                    -var-file=terraform.tfvars \
+                    -var-file=terraform.aws.tfvars \
+                    -out=tfplan.aws
+            else
+                terraform plan \
+                    -input=false \
+                    -var-file=terraform.tfvars \
+                    -out=tfplan
+            fi
+            ;;
+        apply)
+            if [ "$ENV" = "dev" ]; then
+                terraform apply -lock-timeout=30m tfplan.aws
+            else
+                terraform apply tfplan
+            fi
+            ;;
+        show)
+            terraform show
+            ;;
+        destroy)
+            if [ "$ENV" = "dev" ]; then
+                terraform destroy \
+                    -auto-approve \
+                    -lock-timeout=30m \
+                    -var-file=terraform.tfvars \
+                    -var-file=terraform.aws.tfvars
+            else
+                terraform destroy \
+                    -auto-approve \
+                    -lock=false \
+                    -var-file=terraform.tfvars
+            fi
+            ;;
+        fresh)
+            just tf init
+            just tf plan
+            just tf apply
+            ;;
+        *)
+            echo "Usage: just tf <init|validate|plan|apply|show|destroy|fresh>"; exit 1
+            ;;
+    esac
+
+# Backward-compatible aliases
+tf-init:
+    just tf init
 
 tf-validate:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    ENV="${TF_ENV:-sandbox}"
-    if [ "$ENV" = "dev" ]; then
-        cd infra/terraform/environments/dev
-    else
-        source scripts/aws-env.sh
-        cd infra/terraform/environments/sandbox
-    fi
-    terraform validate
+    just tf validate
 
 tf-plan:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    ENV="${TF_ENV:-sandbox}"
-    export TF_IN_AUTOMATION=1
-    just tf-validate
-    if [ "$ENV" = "dev" ]; then
-        cd infra/terraform/environments/dev
-        terraform plan -input=false -lock-timeout=30m -var-file=terraform.tfvars -var-file=terraform.aws.tfvars -out=tfplan.aws
-    else
-        source scripts/aws-env.sh
-        cd infra/terraform/environments/sandbox
-        terraform plan -input=false -var-file=terraform.tfvars -out=tfplan
-    fi
+    just tf plan
 
 tf-apply:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    ENV="${TF_ENV:-sandbox}"
-    if [ "$ENV" = "dev" ]; then
-        cd infra/terraform/environments/dev
-        terraform apply -lock-timeout=30m tfplan.aws
-    else
-        source scripts/aws-env.sh
-        cd infra/terraform/environments/sandbox
-        terraform apply tfplan
-    fi
+    just tf apply
 
 tf-show:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    ENV="${TF_ENV:-sandbox}"
-    if [ "$ENV" = "dev" ]; then
-        cd infra/terraform/environments/dev && terraform show
-    else
-        source scripts/aws-env.sh
-        cd infra/terraform/environments/sandbox && terraform show
-    fi
+    just tf show
 
 tf-destroy:
+    just tf destroy
+
+tf-fresh:
+    just tf fresh
+
+# ─── TERRAVISION (architecture diagrams from IaC) ──────────────────────────────
+#
+# Generate professional cloud architecture diagrams from Terraform code.
+# Install: `uv sync --group dev` (terravision is in the dev dependency group)
+# Docs: https://patrickchugh.github.io/terravision
+#
+# Usage:
+#   just tf-diagram               # PNG by default
+#   just tf-diagram svg           # SVG output
+#   just tf-diagram png           # PNG output
+#   just tf-diagram html          # Interactive HTML output
+
+tf-diagram format="png":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    FORMAT="${format:-png}"
+    ENV="${TF_ENV:-sandbox}"
+    if [ "$ENV" = "dev" ]; then
+        DIR="infra/terraform/environments/dev"
+    else
+        DIR="infra/terraform/environments/sandbox"
+    fi
+    mkdir -p .local-dev/diagrams
+    OUTFILE=".local-dev/diagrams/data-zoo-${ENV}"
+    # Try pre-generated plan files first (avoids HCL parsing issues with complex for loops)
+    PLANFILE=".local-dev/tfplan-${ENV}.json"
+    GRAPHFILE=".local-dev/graph-${ENV}.dot"
+    USE_PLAN=false
+    if [ -f "$PLANFILE" ] && [ -f "$GRAPHFILE" ]; then
+        USE_PLAN=true
+    fi
+    # Direct HCL parsing (may fail on complex for loops with ternary operators)
+    # Note: terravision visualise automatically appends .html to outfile
+    if [ "$USE_PLAN" = "true" ]; then
+        if [ "$FORMAT" = "html" ] || [ "$FORMAT" = "interactive" ]; then
+            uv run terravision visualise --planfile "$PLANFILE" --graphfile "$GRAPHFILE" --source "$DIR" --outfile "$OUTFILE"
+            echo "Interactive HTML diagram written to ${OUTFILE}.html"
+        else
+            uv run terravision draw --planfile "$PLANFILE" --graphfile "$GRAPHFILE" --source "$DIR" --format "$FORMAT" --outfile "$OUTFILE"
+            echo "Diagram written to ${OUTFILE}.${FORMAT}"
+        fi
+    else
+        # Direct HCL parsing (may hit parsing errors on complex for loops)
+        if [ "$FORMAT" = "html" ] || [ "$FORMAT" = "interactive" ]; then
+            set +e
+            uv run terravision visualise --source "$DIR" --outfile "$OUTFILE"
+            EXIT_CODE=$?
+            set -e
+            if [ $EXIT_CODE -ne 0 ]; then
+                echo "HCL parsing may fail on complex for loops. Try: just tf-diagram-prepare && just tf-diagram html" >&2
+                exit $EXIT_CODE
+            fi
+            echo "Interactive HTML diagram written to ${OUTFILE}.html"
+        else
+            set +e
+            uv run terravision draw --source "$DIR" --format "$FORMAT" --outfile "$OUTFILE"
+            EXIT_CODE=$?
+            set -e
+            if [ $EXIT_CODE -ne 0 ]; then
+                echo "HCL parsing may fail on complex for loops. Try: just tf-diagram-prepare && just tf-diagram ${FORMAT}" >&2
+                exit $EXIT_CODE
+            fi
+            echo "Diagram written to ${OUTFILE}.${FORMAT}"
+        fi
+    fi
+
+# Generate pre-plan files for terravision (avoids HCL parsing issues with complex for loops).
+# Usage: TF_ENV=sandbox just tf plan && TF_ENV=sandbox just tf-diagram-prepare
+# Note: terraform show -json works on plan files without backend access.
+tf-diagram-prepare:
     #!/usr/bin/env bash
     set -euo pipefail
     ENV="${TF_ENV:-sandbox}"
-    if [ "$ENV" = "dev" ]; then
-        cd infra/terraform/environments/dev
-        terraform destroy -auto-approve -lock-timeout=30m -var-file=terraform.tfvars -var-file=terraform.aws.tfvars
+    PLANDIR="infra/terraform/environments/${ENV}"
+    # Check if plan binary exists from standard tf plan output location
+    if [ -f "/tmp/tfplan.bin" ]; then
+        PLAN_SRC="/tmp/tfplan.bin"
+    elif [ -f "${PLANDIR}/tfplan" ]; then
+        PLAN_SRC="${PLANDIR}/tfplan"
     else
-        source scripts/aws-env.sh
-        cd infra/terraform/environments/sandbox
-        terraform destroy -auto-approve -lock=false -var-file=terraform.tfvars
+        echo "No plan binary found. Run 'just tf plan' first to generate a plan." >&2
+        exit 1
     fi
+    mkdir -p .local-dev
+    echo "Extracting plan JSON from $PLAN_SRC..."
+    cd "$PLANDIR"
+    # terraform show -json reads plan binary directly - no backend needed
+    terraform show -json "$PLAN_SRC" > "${OLDPWD}/.local-dev/tfplan-${ENV}.json"
 
-# One-click: init → plan → apply (sandbox by default)
-tf-fresh:
-    just tf-init
-    just tf-plan
-    just tf-apply
+    # terraform graph may need backend - check if we can run it
+    echo "Generating graph..."
+    if ! terraform graph > "${OLDPWD}/.local-dev/graph-${ENV}.dot" 2>/dev/null; then
+        echo "Note: terraform graph failed (backend may not be initialized)." >&2
+        echo "To fix: run 'just tf init' first." >&2
+        echo 'digraph G {}' > "${OLDPWD}/.local-dev/graph-${ENV}.dot"
+    fi
+    echo "Plan files generated for terravision in .local-dev/"
+
+# Prepare terravision files from existing plan JSON (no backend needed).
+# Usage: just tf-diagram-prepare-from-json
+tf-diagram-prepare-from-json:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ENV="${TF_ENV:-sandbox}"
+    PLANDIR="infra/terraform/environments/${ENV}"
+    PLANFILE=".local-dev/tfplan-${ENV}.json"
+    if [ ! -f "$PLANFILE" ]; then
+        echo "Plan file not found: $PLANFILE" >&2
+        echo "Create it with: cd $PLANDIR && terraform show -json tfplan > ../$PLANFILE" >&2
+        exit 1
+    fi
+    # Validate JSON content
+    if [ ! -s "$PLANFILE" ]; then
+        echo "Plan file is empty: $PLANFILE" >&2
+        exit 1
+    fi
+    if ! uv run python3 -c "import json; json.load(open('$PLANFILE'))" 2>/dev/null; then
+        echo "Plan file is not valid JSON: $PLANFILE" >&2
+        echo "Regenerate it with: cd $PLANDIR && terraform show -json tfplan > ../$PLANFILE" >&2
+        exit 1
+    fi
+    mkdir -p .local-dev/diagrams
+    echo "Plan file ready: $PLANFILE"
+    echo "Now run: just tf-diagram html"
+
+tf-diagram-svg:
+    just tf-diagram svg
+
+tf-diagram-png:
+    just tf-diagram png
+
+tf-diagram-html:
+    just tf-diagram html
 
 # ─── AWS DEPLOY (dev → ECS/Fargate) ──────────────────────────────────────────
 

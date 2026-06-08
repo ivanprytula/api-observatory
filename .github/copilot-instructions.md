@@ -1,6 +1,8 @@
-# Project Guidelines — data-pipeline-async
+# Project Guidelines — api-observatory
 
 Async FastAPI + SQLAlchemy 2.0 services for ingesting, processing, and querying pipeline data.
+
+> **Global rules** (privacy, read scope, OWASP, SSRF, secrets scanning, anti-overengineering, chat session reminders) live in `~/.agents/AGENTS.md`. This file holds only the project-specific overrides and conventions.
 
 ## Priority
 
@@ -178,20 +180,20 @@ Any URL supplied by a user that will be used in a server-side HTTP request must 
 
 ### Session Summary Template (copy/paste into new chat)
 
-- **Session title:** 
-- **Date:** 
-- **Message count:** 
+- **Session title:**
+- **Date:**
+- **Message count:**
 - **Topics covered:**
-   - 
+   -
 - **Key decisions:**
-   - 
+   -
 - **Files changed / paths:**
-   - 
+   -
 - **Commands / snippets to run:**
-   - 
+   -
 - **Outstanding questions / next steps:**
-   - 
+   -
 - **Brief context / notes:**
-   - 
+   -
 
 (End of summary)

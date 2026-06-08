@@ -103,7 +103,8 @@ dev = [
   #   - or: https://k6.io/docs/getting-started/installation/
   # Type checker
   "ty>=0.0.32",
-
+  # Architecture diagrams from IaC
+  "terravision>=0.41.0",
 ]
 
 [tool.pytest.ini_options]
