@@ -42,7 +42,7 @@ just tf-init                         # one-time per terminal session
 
 ## Sandbox deploy (Floci)
 
-Target: local Floci emulator (real containers, loopback ECR at `localhost:5100-5199`).
+Target: local Floci emulator (real containers, loopback ECR at `127.0.0.1:5100-5199`).
 
 ### Steps
 
@@ -164,10 +164,10 @@ gracefully skipped if the dashboard path is not reachable.
 
 ```bash
 # Local Docker Compose
-bash scripts/smoke-test.sh http://localhost:8000 http://localhost:8501
+bash scripts/smoke-test.sh http://127.0.0.1:8000 http://127.0.0.1:8501
 
 # Floci sandbox (after deploy, substitute actual ALB DNS)
-bash scripts/smoke-test.sh http://localhost:8000 120
+bash scripts/smoke-test.sh http://127.0.0.1:8000 120
 
 # AWS dev (from any machine with network access to the ALB)
 bash scripts/smoke-test.sh https://my-alb.eu-central-1.elb.amazonaws.com
@@ -247,7 +247,7 @@ Rollback = redeploy the last released tag.
 - Floci requires **rootful Docker** (sibling container creation). Rootless Docker cannot create the ECS backend containers.
 - Floci uses **private proxy port ranges** for RDS/ElastiCache (7001-7099, 6379-6399) — no host port conflicts.
 - The ECR registry sidecar (`registry:2` container) must be on the **same Docker network** (`api-obs`) as Floci.
-- State is stored in Floci S3 at `http://localhost:4566`. If state is corrupted, delete the bucket key and re-init.
+- State is stored in Floci S3 at `http://127.0.0.1:4566`. If state is corrupted, delete the bucket key and re-init.
 
 ---
 

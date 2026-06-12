@@ -17,6 +17,27 @@ just doctor
 `just doctor` verifies host requirements and prepares `.local-dev/` folders for raw dumps, verbose
 responses, traceback captures, and local logs.
 
+### Local URL Switchers
+
+Use `LOCAL_API_SCHEME` to choose whether local API clients hit the direct ingestor port or the edge proxy:
+
+| Mode | Command prefix | API base | API docs | Dashboard |
+|---|---|---|---|---|
+| Direct HTTP | none/default | `http://127.0.0.1:8000` | `http://127.0.0.1:8000/docs` | `http://127.0.0.1:8501` |
+| Edge HTTPS | `LOCAL_API_SCHEME=https` | `https://127.0.0.1/api` | `https://127.0.0.1/api/docs` | `https://127.0.0.1/` |
+
+Shared helper:
+
+```bash
+source scripts/daily/local-url.sh
+
+curl_local -sf "$(local_api_url /health)"
+local_open_url /api/docs
+BRUNO_BASE_URL="$(bash scripts/daily/local-url.sh bruno-base-url)"
+```
+
+Full matrix and override variables: [docs/setup/local-url-matrix.md](../setup/local-url-matrix.md).
+
 ### Start Services
 
 Two modes depending on whether you want the app container running or the app running locally:
@@ -25,8 +46,8 @@ Two modes depending on whether you want the app container running or the app run
 # Mode 1: full MVP stack (db, cache, broker, ingestor, dashboard)
 just up
 
-# Mode 1 + HTTPS parity (requires certs — run 02-setup-local-https.sh first):
-just up-https   # includes edge on :443
+# Mode 1 + HTTPS parity (requires certs — run scripts/setup/02-setup-local-https.sh first):
+just up-https   # includes edge on :443; LOCAL_API_SCHEME=https for API clients
 
 # Mode 2: infra only — use when running uvicorn directly outside Docker
 docker compose up -d db cache broker
@@ -44,21 +65,24 @@ just down-https
 
 ```bash
 uv sync
-uv run uvicorn services/ingestor/main:app --reload
-uv run uvicorn services/ingestor/main:app --reload --port 8001
+uv run uvicorn services.ingestor.main:app --reload
+uv run uvicorn services.ingestor.main:app --reload --port 8001
 ```
 
 ### Health Check
 
 ```bash
-# Direct (HTTP):
-curl http://localhost:8000/health
-curl http://localhost:8000/readyz
-curl http://localhost:8000/metrics
+# Uses LOCAL_API_SCHEME and local edge path defaults:
+just api-check
 
+# Manual equivalent:
+source scripts/daily/local-url.sh
+curl_local -sf "$(local_api_url /health)"
+curl_local -sf "$(local_api_url /readyz)"
+curl_local -sf "$(local_api_url /metrics)"
 
-
-just api-check   # fails fast if stack is not ready
+# HTTPS parity:
+LOCAL_API_SCHEME=https just api-check
 ```
 
 ## Database Management
@@ -79,7 +103,7 @@ just psql-safe
 
 # Direct (local only)
 docker compose exec db psql -U postgres -d api_observatory
-psql "postgresql://postgres:postgres@localhost:5432/api_observatory"
+psql "postgresql://postgres:postgres@127.0.0.1:5432/api_observatory"
 ```
 
 ### Useful psql Commands
@@ -149,51 +173,53 @@ just seed-probes
 # Full E2E cycle: db-reset → create-admin → seed-source → Bruno collections
 just api-test
 
-# Run Bruno manually
-cd bruno && bru run . -r --env local
+# Run Bruno manually with the active local base URL
+BRUNO_BASE_URL="$(bash scripts/daily/local-url.sh bruno-base-url)"
+cd bruno && bru run . -r --env local --env-var "baseUrl=${BRUNO_BASE_URL}"
+
+# HTTPS parity:
+LOCAL_API_SCHEME=https just api-test
 ```
 
 ### curl — Auth
 
 ```bash
-# Direct HTTP:
-TOKEN=$(curl -sf -X POST http://localhost:8000/api/v1/auth/token \
+source scripts/daily/local-url.sh
+TOKEN=$(curl_local -sf -X POST "$(local_api_url /api/v1/auth/token)" \
   -H 'Content-Type: application/x-www-form-urlencoded' \
   -d 'username=admin&password=admin123' | \
   python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/scorecards
+curl_local -H "Authorization: Bearer $TOKEN" "$(local_api_url /api/v1/scorecards)"
 ```
 
 ### curl — Core Resources
 
 ```bash
+source scripts/daily/local-url.sh
+
 # Sources
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/sources
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/sources/1/health
+curl_local -H "Authorization: Bearer $TOKEN" "$(local_api_url /api/v1/sources)"
+curl_local -H "Authorization: Bearer $TOKEN" "$(local_api_url /api/v1/sources/1/health)"
 
 # Scorecards
-curl -H "Authorization: Bearer $TOKEN" "http://localhost:8000/api/v1/scorecards?limit=20"
-curl -k -H "Authorization: Bearer $TOKEN" "https://localhost/api/v1/scorecards?limit=20"
+curl_local -H "Authorization: Bearer $TOKEN" "$(local_api_url '/api/v1/scorecards?limit=20')"
 
 # Drift events
-curl -H "Authorization: Bearer $TOKEN" \
-  http://localhost:8000/api/v1/contracts/sources/1/drift-events
+curl_local -H "Authorization: Bearer $TOKEN" \
+  "$(local_api_url /api/v1/contracts/sources/1/drift-events)"
 
 # Agent enrichment
-curl -X POST -H "Authorization: Bearer $TOKEN" \
-  http://localhost:8000/api/v1/agent/enrich/1
+curl_local -X POST -H "Authorization: Bearer $TOKEN" \
+  "$(local_api_url /api/v1/agent/enrich/1)"
 ```
 
 ### OpenAPI
 
 ```bash
-# Direct (HTTP):
-open http://localhost:8000/docs
-curl http://localhost:8000/openapi.json
-
-open https://localhost/api/docs
-curl https://localhost/api/openapi.json
+source scripts/daily/local-url.sh
+local_open_url /api/docs
+curl_local "$(local_api_url /openapi.json)"
 ```
 
 ---
@@ -263,8 +289,8 @@ just deploy-audit
 ## Observability
 
 ```bash
-# Raw Prometheus metrics
-curl http://localhost:8000/metrics
+source scripts/daily/local-url.sh
+curl_local "$(local_api_url /metrics)"
 
 # Logs
 docker compose logs ingestor -f
@@ -275,6 +301,7 @@ docker compose logs ingestor | grep '"cid":"<value>"'
 ---
 
 ## Load Testing
+
 ---
 
 ## Infrastructure & Sandbox (Floci)
@@ -341,8 +368,8 @@ Call it from `just up`, `just dev`, or `just sandbox-dev` to get an immediate ba
   Postgres        : Local-Compose-Postgres | External (host=…)
   Cache           : redis://cache:6379 | unset
   BROKER_URL: broker:29092 | unset
-  MinIO endpoint  : localhost:9000 | unset
-  INGESTOR_URL    : http://localhost:8000
+  MinIO endpoint  : 127.0.0.1:9000 | unset
+  INGESTOR_URL    : $(bash scripts/daily/local-url.sh api-base-url)
 ======================
 ```
 
@@ -356,7 +383,7 @@ Call it from `just up`, `just dev`, or `just sandbox-dev` to get an immediate ba
 | `BROKER_URL` | `broker:29092` | `broker:29092` | MSK bootstrap | MSK bootstrap |
 | `LOG_FORMAT` | `json` | `json` | `json` | `json` |
 | `AWS_PROFILE` | unset | `sandbox` | named dev profile | prod profile |
-| `AWS_ENDPOINT_URL` | unset | `http://localhost:4566` | unset | unset |
+| `AWS_ENDPOINT_URL` | unset | `http://127.0.0.1:4566` | unset | unset |
 
 ### Data movement recipes
 

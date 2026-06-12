@@ -10,7 +10,7 @@
  *   k6 run --vus 20 --duration 60s scripts/testing/load_test_pagination.js
  *
  * Environment overrides:
- *   BASE_URL   - default: http://localhost:8000
+ *   BASE_URL   - default: http://127.0.0.1:8000
  *   VUS        - virtual users per scenario (default: 10)
  *   DURATION   - test duration (default: 30s)
  *   LIMIT      - page size (default: 50)
@@ -37,7 +37,7 @@ const cursorErrors = new Rate("cursor_error_rate");
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
-const BASE_URL = __ENV.BASE_URL || "http://localhost:8000";
+const BASE_URL = __ENV.BASE_URL || "http://127.0.0.1:8000";
 const LIMIT = parseInt(__ENV.LIMIT || "50");
 const VUS = parseInt(__ENV.VUS || "10");
 const DURATION = __ENV.DURATION || "30s";

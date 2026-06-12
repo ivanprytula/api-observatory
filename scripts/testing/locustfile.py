@@ -14,18 +14,18 @@ Usage:
     # Headless (terminal stats only)
     uv run locust -f scripts/testing/locustfile.py \\
         --headless -u 20 -r 5 --run-time 60s \\
-        --host http://localhost:8000
+        --host http://127.0.0.1:8000
 
-    # Web UI at http://localhost:8089 (interactive control)
-    uv run locust -f scripts/testing/locustfile.py --host http://localhost:8000
+    # Web UI at http://127.0.0.1:8089 (interactive control)
+    uv run locust -f scripts/testing/locustfile.py --host http://127.0.0.1:8000
 
     # Run only one strategy
     uv run locust -f scripts/testing/locustfile.py --headless -u 20 -r 5 \\
-        --run-time 60s --host http://localhost:8000 OffsetPaginationUser
+        --run-time 60s --host http://127.0.0.1:8000 OffsetPaginationUser
 
     # Compare strategies side-by-side — each with 10 users, 60s run
     uv run locust -f scripts/testing/locustfile.py --headless \\
-        -u 20 -r 5 --run-time 60s --host http://localhost:8000
+        -u 20 -r 5 --run-time 60s --host http://127.0.0.1:8000
 
 Prerequisites:
     uv add --dev locust

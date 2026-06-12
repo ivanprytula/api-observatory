@@ -15,7 +15,7 @@ Lets reviewers see live data without needing to interact with the REST API direc
 
 ### Prerequisites
 
-- Ingestor running on `localhost:8000` (`docker compose up -d`)
+- Ingestor running through the active local URL mode (`just up` or `LOCAL_API_SCHEME=https just up-https`)
 - Dependencies installed: `uv sync`
 
 ### Start the dashboard
@@ -24,7 +24,7 @@ Lets reviewers see live data without needing to interact with the REST API direc
 uv run streamlit run services/dashboard/streamlit_app.py
 ```
 
-The dashboard opens at `http://localhost:8501`.
+The dashboard opens at `http://127.0.0.1:8501` for direct Streamlit, or through the active local URL helper when using the edge proxy.
 
 ### With a bearer token (if `API_V1_BEARER_TOKEN` is set on the server)
 
@@ -48,7 +48,7 @@ INGESTOR_URL=https://api.example.com uv run streamlit run services/dashboard/str
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `INGESTOR_URL` | `http://localhost:8000` | Base URL of the ingestor service |
+| `INGESTOR_URL` | `$(bash scripts/daily/local-url.sh api-base-url)` | Base URL of the ingestor service |
 | `BEARER_TOKEN` | *(empty)* | Bearer token for the WebSocket `?token=` param |
 
 ## Live Stream panel

@@ -30,7 +30,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 AWS_REGION="${AWS_REGION:-eu-central-1}"
-ECR_ENDPOINT="${ECR_ENDPOINT:-localhost:4566}"
+ECR_ENDPOINT="${ECR_ENDPOINT:-127.0.0.1:4566}"
 TF_DIR="infra/terraform/environments/sandbox"
 IMAGE_TAG="${IMAGE_TAG:-develop}"
 CLUSTER="${CLUSTER:-data-zoo-sandbox}"
@@ -187,7 +187,7 @@ ALB_DNS=$(aws elbv2 describe-load-balancers \
   --query 'LoadBalancers[0].DNSName' \
   --output text 2>/dev/null || true)
 
-BASE_URL="http://${ALB_DNS:-localhost:8000}"
+BASE_URL="http://${ALB_DNS:-127.0.0.1:8000}"
 if [ -n "$ALB_DNS" ] && [ "$ALB_DNS" != "<not found>" ]; then
   BASE_URL="http://${ALB_DNS}"
 fi

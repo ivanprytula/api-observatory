@@ -4,11 +4,13 @@
 # Commands:
 #   seed [N]            Insert N records via the batch API (default: 10 000)
 #   k6 [flags]          Run k6 comparison test (offset vs cursor)
-#   locust [--web]      Run locust headless or with web UI (http://localhost:8089)
-#   help                Show this message
+#   locust [--web]      Run locust headless or with web UI
 #
 # Environment variables:
-#   BASE_URL      App base URL            (default: http://localhost:8000)
+#   BASE_URL      Public app base URL     (default: scripts/daily/local-url.sh)
+#   LOCAL_API_SCHEME http or https       (default: http)
+#   LOCAL_TLS_VERIFY false to pass -k    (default: true)
+
 #   VUS           k6 virtual users        (default: 10)
 #   DURATION      k6 test duration        (default: 30s)
 #   LIMIT         Page size               (default: 50)
@@ -26,8 +28,15 @@
 
 set -euo pipefail
 
-BASE_URL="${BASE_URL:-http://localhost:8000}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck source=scripts/daily/local-url.sh
+source "${PROJECT_ROOT}/scripts/daily/local-url.sh"
+
+BASE_URL="${BASE_URL:-$(local_api_public_base_url)}"
+if [[ "${LOCAL_API_SCHEME}" == "https" && "${BASE_URL}" == "$(local_api_base_url)" ]]; then
+  BASE_URL="$(local_api_public_base_url)"
+fi
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -38,7 +47,7 @@ _error() { echo "[error] $*" >&2; exit 1; }
 
 _check_app() {
     _info "Checking app health at ${BASE_URL}/health ..."
-    if ! curl -fs "${BASE_URL}/health" > /dev/null 2>&1; then
+    if ! curl_local -fs "${BASE_URL}/health" > /dev/null 2>&1; then
         _error "App not reachable at ${BASE_URL}. Start it with: docker compose up app"
     fi
     _info "App is reachable."
@@ -89,7 +98,7 @@ cmd_locust() {
     _check_app
 
     if [[ "${1:-}" == "--web" ]]; then
-        _info "Starting locust web UI → http://localhost:8089"
+        _info "Starting locust web UI → http://127.0.0.1:8089"
         _info "Press Ctrl-C to stop."
         uv run locust \
             -f "${SCRIPT_DIR}/locustfile.py" \

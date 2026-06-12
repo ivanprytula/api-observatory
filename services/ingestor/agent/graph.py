@@ -1,6 +1,5 @@
 import logging
 
-from langgraph.checkpoint.cache.aio import AsyncCacheSaver
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
@@ -43,9 +42,18 @@ def build_graph() -> StateGraph:
     return g  # ty: ignore[invalid-return-type]
 
 
-def get_checkpointer() -> AsyncCacheSaver:
-    # AsyncCacheSaver v0.4.x accepts a Cache URL string as first positional argument
-    return AsyncCacheSaver(settings.cache_url)
+def get_checkpointer() -> MemorySaver | object:
+    # Lazy import to avoid crash when langgraph version doesn't have cache module
+    try:
+        from langgraph.checkpoint.redis.aio import AsyncRedisSaver
+
+        return AsyncRedisSaver(settings.cache_url)  # ty: ignore[no-any-return]
+    except ImportError as e:
+        logger.warning(
+            "cache_checkpointer_unavailable",
+            extra={"error": str(e), "fallback": "memory"},
+        )
+        return MemorySaver()
 
 
 _graph = build_graph()

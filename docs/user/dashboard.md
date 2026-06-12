@@ -4,7 +4,7 @@ The Streamlit dashboard provides a visual interface for monitoring API health, d
 
 ## Access
 
-Open `http://localhost:8501` after starting the services with `just up`.
+Open `http://127.0.0.1:8501` after starting the services with `just up`.
 
 Login credentials:
 
@@ -82,7 +82,7 @@ Stream analysis progress node-by-node via Server-Sent Events.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `INGESTOR_URL` | `http://localhost:8000` | Base URL of the API service |
+| `INGESTOR_URL` | `http://127.0.0.1:8000` | Base URL of the API service |
 | `BEARER_TOKEN` | — | JWT for WebSocket authentication |
 
 ### Remote Ingestor

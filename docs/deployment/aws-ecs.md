@@ -105,7 +105,7 @@ The Streamlit dashboard runs as a dedicated `dashboard` container, not embedded 
 
 ### Local access
 
-- Dashboard is available at `http://localhost:8501` when running via `just up` or `docker compose up -d dashboard`.
+- Dashboard is available at `http://127.0.0.1:8501` when running via `just up` or `docker compose up -d dashboard`.
 - The `INGESTOR_URL` environment variable (set to `http://ingestor:8000` in compose) tells Streamlit where to reach the API.
 - Both services start independently via `docker compose up -d ingestor dashboard`.
 

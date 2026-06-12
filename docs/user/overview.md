@@ -87,7 +87,7 @@ just seed-demo
 
 The Streamlit dashboard is now bundled inside the `ingestor` container — it starts automatically alongside the API.
 
-Open `http://localhost:8501` to access the dashboard.
+Open `http://127.0.0.1:8501` to access the dashboard.
 
 > **Note:** For local development without Docker, run the dashboard separately:
 

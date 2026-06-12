@@ -6,7 +6,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck source=scripts/daily/local-url.sh
+source "${PROJECT_ROOT}/scripts/daily/local-url.sh"
 cd "$PROJECT_ROOT"
+
+BASE_URL="${BASE_URL:-$(local_api_base_url)}"
 
 echo "==> Cache Layer Verification"
 echo ""
@@ -59,7 +63,7 @@ if ! kill -0 $APP_PID 2>/dev/null; then
 fi
 
 echo "  Creating test record..."
-RECORD=$(curl -s -X POST http://localhost:8000/api/v1/records \
+RECORD=$(curl_local -s -X POST "${BASE_URL}/api/v1/records" \
   -H "Content-Type: application/json" \
   -d '{
     "source": "test.example.com",
@@ -77,11 +81,11 @@ fi
 echo "  Record ID: $RECORD_ID"
 
 echo "  First GET (cache miss)..."
-curl -s http://localhost:8000/api/v1/records/$RECORD_ID >/dev/null
+curl_local -s "${BASE_URL}/api/v1/records/${RECORD_ID}" >/dev/null
 echo "  ✓ Retrieved from DB, stored in cache"
 
 echo "  Second GET (cache hit)..."
-curl -s http://localhost:8000/api/v1/records/$RECORD_ID >/dev/null
+curl_local -s "${BASE_URL}/api/v1/records/${RECORD_ID}" >/dev/null
 echo "  ✓ Retrieved from cache"
 
 echo "  Verifying Cache key..."
@@ -100,7 +104,7 @@ docker compose stop cache
 sleep 2
 echo "  Cache service stopped. Making request without cache..."
 
-RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:8000/api/v1/records/$RECORD_ID)
+RESPONSE=$(curl_local -s -w "\n%{http_code}" "${BASE_URL}/api/v1/records/${RECORD_ID}")
 HTTP_CODE=$(echo "$RESPONSE" | tail -1)
 
 if [ "$HTTP_CODE" = "200" ]; then
@@ -117,7 +121,7 @@ docker compose start cache
 sleep 2
 echo "  Cache service restarted. Creating new record..."
 
-RECORD2=$(curl -s -X POST http://localhost:8000/api/v1/records \
+RECORD2=$(curl_local -s -X POST "${BASE_URL}/api/v1/records" \
   -H "Content-Type: application/json" \
   -d '{
     "source": "test2.example.com",
@@ -130,7 +134,7 @@ RECORD_ID2=$(echo "$RECORD2" | grep -o '"id":[0-9]*' | head -1 | grep -o '[0-9]*
 echo "  Record ID: $RECORD_ID2"
 
 echo "  Populating cache..."
-curl -s http://localhost:8000/api/v1/records/$RECORD_ID2 >/dev/null
+curl_local -s "${BASE_URL}/api/v1/records/${RECORD_ID2}" >/dev/null
 
 REDIS_KEY2=$(docker compose exec -T cache redis-cli GET "dp:record:$RECORD_ID2" | head -1)
 if [ -n "$REDIS_KEY2" ]; then
@@ -142,7 +146,7 @@ else
 fi
 
 echo "  Deleting record..."
-curl -s -X DELETE http://localhost:8000/api/v1/records/$RECORD_ID2
+curl_local -s -X DELETE "${BASE_URL}/api/v1/records/${RECORD_ID2}"
 
 sleep 1
 REDIS_KEY2_AFTER=$(docker compose exec -T cache redis-cli GET "dp:record:$RECORD_ID2" 2>/dev/null || true)

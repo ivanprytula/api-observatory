@@ -102,7 +102,8 @@ Response shape: `{ "items": [...scorecards], "total": N }`
 ### 1. Register a source (if not done yet)
 
 ```bash
-curl -s -X POST http://localhost:8000/api/v1/sources \
+source scripts/daily/local-url.sh
+curl_local -s -X POST "$(local_api_url /api/v1/sources)" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "httpbin",
@@ -119,7 +120,7 @@ SOURCE_ID=1
 
 # Simulate 5 successful probes
 for i in 1 2 3 4 5; do
-  curl -s -X POST http://localhost:8000/api/v1/scorecards/samples \
+  curl_local -s -X POST "$(local_api_url /api/v1/scorecards/samples)" \
     -H "Content-Type: application/json" \
     -d "{
       \"source_id\": $SOURCE_ID,
@@ -131,7 +132,7 @@ for i in 1 2 3 4 5; do
 done
 
 # Simulate 1 failure
-curl -s -X POST http://localhost:8000/api/v1/scorecards/samples \
+curl_local -s -X POST "$(local_api_url /api/v1/scorecards/samples)" \
   -H "Content-Type: application/json" \
   -d "{
     \"source_id\": $SOURCE_ID,
@@ -146,7 +147,7 @@ curl -s -X POST http://localhost:8000/api/v1/scorecards/samples \
 ### 3. Read the scorecard
 
 ```bash
-curl -s "http://localhost:8000/api/v1/scorecards/$SOURCE_ID?days=1" \
+curl_local -s "$(local_api_url "/api/v1/scorecards/$SOURCE_ID?days=1")" \
   | jq '{uptime_pct, p95_latency_ms, error_budget_burn_rate}'
 ```
 

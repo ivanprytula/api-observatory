@@ -25,6 +25,25 @@ Highest to lowest:
 
 Policy: local `.env` must never override CI or deployment values.
 
+## Local URL Mode
+
+Local API clients and browser docs should use the shared URL helper instead of hardcoded `127.0.0.1:8000` values:
+
+```bash
+source scripts/daily/local-url.sh
+curl_local -sf "$(local_api_url /health)"
+local_open_url /api/docs
+```
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `LOCAL_API_SCHEME` | `http` | Choose direct HTTP or edge HTTPS for local API clients. |
+| `LOCAL_API_BASE_URL` | computed | Override ingestor API base URL. |
+| `LOCAL_DASHBOARD_URL` | computed | Override dashboard URL for smoke tests and docs. |
+| `LOCAL_TLS_VERIFY` | `true` | Set to `false` to pass `-k` for local HTTPS curl calls. |
+
+See [docs/setup/local-url-matrix.md](local-url-matrix.md) for the full local URL matrix.
+
 ## Required Local Variables
 
 - `DATABASE_URL`
