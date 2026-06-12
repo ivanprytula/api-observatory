@@ -152,6 +152,99 @@ floci-dev:
     just migrate
     uv run uvicorn services.ingestor.main:app --reload --port 8000
 
+# Validate Floci sandbox health before promoting to real AWS.
+# Checks: Floci container running, _floci/health reachable, S3 + SQS seeded, API /health OK.
+# Run independently before deploy-dev: just floci-validate
+floci-validate:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Floci sandbox validation ==="
+
+    # 1. Floci container must be running
+    if ! docker ps --filter 'name=api-obs-floci' --filter 'status=running' --format '{{{{.Names}}}}' | grep -q .; then
+        echo "FAIL: Floci container is not running." >&2
+        echo "  Start it with: just floci-up" >&2
+        exit 1
+    fi
+    echo "  [ok] Floci container running"
+
+    # 2. Floci health endpoint
+    if ! curl -sf http://127.0.0.1:4566/_floci/health > /dev/null 2>&1; then
+        echo "FAIL: Floci health endpoint not responding at http://127.0.0.1:4566/_floci/health" >&2
+        echo "  Check Floci logs: docker compose logs floci" >&2
+        exit 1
+    fi
+    echo "  [ok] Floci health endpoint OK"
+
+    # 3. S3 bucket reachable (AWS_ENDPOINT_URL set by scripts/aws-env.sh)
+    source scripts/aws-env.sh
+    if ! aws s3 ls s3://api-observatory-local > /dev/null 2>&1; then
+        echo "FAIL: Floci S3 bucket 'api-observatory-local' not found." >&2
+        echo "  Seed it with: just floci-up" >&2
+        exit 1
+    fi
+    echo "  [ok] Floci S3 bucket reachable"
+
+    # 4. SQS queue reachable
+    if ! aws sqs get-queue-url --queue-name pipeline-events > /dev/null 2>&1; then
+        echo "FAIL: Floci SQS queue 'pipeline-events' not found." >&2
+        echo "  Seed it with: just floci-up" >&2
+        exit 1
+    fi
+    echo "  [ok] Floci SQS queue reachable"
+
+    # 5. Application API health (soft-warn only — stack may not be running)
+    source scripts/daily/local-url.sh
+    if curl_local -sf "$(local_api_url /health)" > /dev/null 2>&1; then
+        echo "  [ok] Application API /health OK"
+    else
+        echo "  [warn] Application API not responding — Compose stack may not be running."
+    fi
+
+    echo "=== Floci sandbox validated ==="
+
+# Confirm real AWS credentials and required dev config files are in place.
+# Run independently before deploy-dev: just dev-preflight
+dev-preflight:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== AWS dev preflight ==="
+
+    # 1. Must NOT be pointing at an emulator
+    if [ -n "${AWS_ENDPOINT_URL:-}" ]; then
+        echo "FAIL: AWS_ENDPOINT_URL is set to '${AWS_ENDPOINT_URL}'." >&2
+        echo "  Unset it before deploying to real AWS: unset AWS_ENDPOINT_URL" >&2
+        exit 1
+    fi
+    echo "  [ok] AWS_ENDPOINT_URL not set (real AWS mode)"
+
+    # 2. AWS identity must resolve (real credentials present)
+    if ! aws sts get-caller-identity > /dev/null 2>&1; then
+        echo "FAIL: Cannot resolve AWS identity. Check your credentials/profile." >&2
+        echo "  Hint: set AWS_PROFILE or run 'aws configure'" >&2
+        exit 1
+    fi
+    IDENTITY=$(aws sts get-caller-identity --query 'Arn' --output text 2>/dev/null)
+    echo "  [ok] AWS identity: ${IDENTITY}"
+
+    # 3. backend.aws.hcl must exist (contains real S3 state bucket)
+    if [ ! -f infra/terraform/environments/dev/backend.aws.hcl ]; then
+        echo "FAIL: infra/terraform/environments/dev/backend.aws.hcl not found." >&2
+        echo "  Copy from example: cp infra/terraform/environments/dev/backend.aws.hcl.example infra/terraform/environments/dev/backend.aws.hcl" >&2
+        exit 1
+    fi
+    echo "  [ok] backend.aws.hcl present"
+
+    # 4. terraform.aws.tfvars must exist (dev-specific variable overrides)
+    if [ ! -f infra/terraform/environments/dev/terraform.aws.tfvars ]; then
+        echo "FAIL: infra/terraform/environments/dev/terraform.aws.tfvars not found." >&2
+        echo "  Copy from example: cp infra/terraform/environments/dev/terraform.aws.tfvars.example infra/terraform/environments/dev/terraform.aws.tfvars" >&2
+        exit 1
+    fi
+    echo "  [ok] terraform.aws.tfvars present"
+
+    echo "=== AWS dev preflight passed ==="
+
 # Run Floci-specific E2E tests (AWS emulator required).
 floci-test:
     just _sandbox-infra
@@ -168,15 +261,75 @@ floci-deploy:
 
 # 2d) AWS Deploy (dev → ECS/Fargate)
 # ─────────────────────────────────────
+# Recommended manual loop before calling deploy-dev:
+#   just floci-validate              # confirm Floci sandbox is healthy
+#   just dev-preflight               # confirm real AWS creds + config files
+#   just deploy-audit                # build image + CVE scan
+#   TF_ENV=dev just tf-init          # init backend (first time or after provider change)
+#   TF_ENV=dev just tf-validate      # check HCL syntax
+#   TF_ENV=dev just tf-plan          # review the changeset
+#   TF_ENV=dev just tf-diagram       # optional: visualise new architecture
+#   # tweak tfvars / modules as needed, re-plan until satisfied
+#   just deploy-dev                  # apply + ECS update
 
-# Terraform apply on dev, then ECS service restart.
+# Apply the reviewed tfplan.aws, then trigger ECS rolling update + smoke test.
+# Assumes TF_ENV=dev just tf-plan has already been run and tfplan.aws is current.
+# Usage:
+#   just deploy-dev                          # cluster=data-zoo-dev, region from AWS config
+#   IMAGE_TAG=sha-abc1234 just deploy-dev    # report a specific image tag in summary
+#   AWS_PROFILE=my-profile just deploy-dev   # explicit AWS profile
 deploy-dev:
     #!/usr/bin/env bash
     set -euo pipefail
+    IMAGE_TAG="${IMAGE_TAG:-latest}"
+    CLUSTER="${ECS_CLUSTER:-data-zoo-dev}"
+
+    # Apply the plan you already reviewed
     TF_ENV=dev just tf-apply
-    echo "TODO: wire ECS service update here when cluster is provisioned"
-    echo "  aws ecs update-service --cluster dev --service ingestor --force-new-deployment"
-    echo "  aws ecs wait services-stable --cluster dev --services ingestor"
+
+    # ECS rolling update + stability wait
+    echo "--- ECS deploy: forcing new deployment ---"
+    aws ecs update-service \
+        --cluster "${CLUSTER}" \
+        --service ingestor \
+        --force-new-deployment \
+        --output text --query 'service.serviceName'
+    echo "Waiting for ingestor to stabilize..."
+    aws ecs wait services-stable \
+        --cluster "${CLUSTER}" \
+        --services ingestor
+    echo "  [ok] ingestor stable"
+
+    aws ecs update-service \
+        --cluster "${CLUSTER}" \
+        --service dashboard \
+        --force-new-deployment \
+        --output text --query 'service.serviceName'
+    echo "Waiting for dashboard to stabilize..."
+    aws ecs wait services-stable \
+        --cluster "${CLUSTER}" \
+        --services dashboard
+    echo "  [ok] dashboard stable"
+
+    # Post-deploy smoke test via ALB (skipped with a warning if ALB not yet provisioned)
+    ALB_DNS=$(aws elbv2 describe-load-balancers \
+        --query 'LoadBalancers[?contains(LoadBalancerName, `data-zoo-dev`)].DNSName | [0]' \
+        --output text 2>/dev/null || true)
+    if [ -n "${ALB_DNS:-}" ] && [ "${ALB_DNS}" != "None" ]; then
+        echo "--- Smoke test via ALB: http://${ALB_DNS} ---"
+        bash scripts/smoke-test.sh "http://${ALB_DNS}" 60 || \
+            echo "WARNING: smoke test failed — inspect ALB and ECS tasks above" >&2
+    else
+        echo "WARNING: ALB DNS not found — skipping smoke test. Check ALB provisioning." >&2
+    fi
+
+    echo ""
+    echo "=== deploy-dev complete ==="
+    echo "  Cluster : ${CLUSTER}"
+    echo "  Image   : api-observatory:${IMAGE_TAG}"
+    echo "  ALB     : ${ALB_DNS:-<not found>}"
+    echo ""
+    echo "Rollback: TF_ENV=dev just tf-destroy   # tears down dev infra"
 
 # ─── STACK AWARENESS ──────────────────────────────────────────────────────────
 
@@ -213,7 +366,7 @@ stack-info:
     echo "  Cache           : ${CACHE}"
     echo "  Event broker    : ${BROKER_URL:-unset}"
     echo "  MinIO endpoint  : ${MINIO_ENDPOINT:-unset}"
-    echo "  INGESTOR_URL    : $(local_api_base_url)"
+    echo "  INGESTOR_URL    : $(_local_api_base_url)"
     echo "======================"
 
 # ─── BACKWARD-COMPATIBLE SANDBOX ALIASES ──────────────────────────────────────
@@ -250,7 +403,6 @@ tf cmd:
     CMD="{{cmd}}"
     if [ "$ENV" = "dev" ]; then
         DIR="infra/terraform/environments/dev"
-        source scripts/aws-env.sh 2>/dev/null || true
     else
         DIR="infra/terraform/environments/sandbox"
         source scripts/aws-env.sh
@@ -339,6 +491,19 @@ tf-show:
     just tf show
 
 tf-destroy:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ENV="${TF_ENV:-sandbox}"
+    if [ "$ENV" = "dev" ]; then
+        EXPECTED="yes-i-really-want-to-destroy-dev"
+    else
+        EXPECTED="yes-i-really-want-to-destroy-sandbox"
+    fi
+    read -r -p "DANGER: Type '${EXPECTED}' to destroy ${ENV} infra: " CONFIRM
+    if [ "$CONFIRM" != "$EXPECTED" ]; then
+        echo "Aborted."
+        exit 1
+    fi
     just tf destroy
 
 tf-fresh:
@@ -698,7 +863,7 @@ api-test:
 test-load:
     #!/usr/bin/env bash
     set -euo pipefail
-    BASE_URL="${BASE_URL:-$(just _local_api_public_base_url)}"
+    BASE_URL="${BASE_URL:-$(just __local_api_public_base_url)}"
     VUS="${VUS:-5}"
     DURATION="${DURATION:-90s}"
     echo "Running k6 — BASE_URL=${BASE_URL}, VUS=${VUS}, DURATION=${DURATION}"
@@ -819,5 +984,5 @@ create-admin:
         echo "WARNING: admin registration completed but token verification failed" >&2
     fi
 
-smoke-test base-url="{{_local_api_base_url}}" dashboard-url="{{_local_dashboard_url}}":
+smoke-test base-url="{{_local_api_base_url}}" dashboard-url="{{__local_dashboard_url}}":
     bash scripts/smoke-test.sh {{base-url}} {{dashboard-url}}
