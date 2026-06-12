@@ -47,14 +47,14 @@ flowchart TB
     end
 
     Postgres[("PostgreSQL\nsource profiles, observations, drift, scorecards")]
-    Redis[("Redis\ncache, sessions, pub/sub, rate-limit state")]
+    Cache[("Cache\ncache, sessions, pub/sub, rate-limit state")]
     Redpanda[("Redpanda\nKafka-compatible event bus")]
     Trivy["Trivy scans\nsecurity checks"]
 
     Client --> Ingestor
     Streamlit --> Ingestor
     Ingestor --> Postgres
-    Ingestor --> Redis
+    Ingestor --> Cache
     Ingestor --> Redpanda
     Trivy -. image scan .-> Ingestor
 
@@ -92,7 +92,7 @@ flowchart TB
     Security --> Repos
 
     Repos --> DB[("PostgreSQL")]
-    Router --> Cache[("Redis cache/pubsub")]
+    Router --> Cache[("Cache cache/pubsub")]
     Jobs --> Bus[("Redpanda topics")]
     Router --> Obs
     Jobs --> Obs

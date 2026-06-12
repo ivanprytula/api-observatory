@@ -26,7 +26,7 @@ common_ulimits:
 
 # /etc/sysctl.d/99-app.conf entries
 common_sysctl:
-  # Required for Redis: allow kernel to overcommit memory
+  # Required for Cache: allow kernel to overcommit memory
   - name: 'vm.overcommit_memory'
     value: '1'
   # Increase TCP backlog for high-connection services

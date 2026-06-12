@@ -8,7 +8,7 @@ when a breaking change is detected.
 Contract drift detects when the payload schema of an API source changes between
 ingestion runs.  Each ingest call submits a **contract snapshot**; the service
 diffs the new schema against the previous one, assigns a compatibility score, and
-emits a `drift.detected` event over Redis pub/sub if any field changed.
+emits a `drift.detected` event over Cache pub/sub if any field changed.
 
 ## Concepts
 
@@ -117,7 +117,7 @@ Returns a list of `DriftEvent` objects ordered by `detected_at` descending.
 ## WebSocket integration
 
 Whenever a `DriftEvent` is created, the service publishes a `drift.detected`
-message on the Redis channel `ingestor:events`.  Any connected WebSocket client
+message on the Cache channel `ingestor:events`.  Any connected WebSocket client
 receives it in real time.  See [websocket.md](websocket.md) for how to connect.
 
 Sample message:
@@ -136,7 +136,7 @@ Sample message:
 
 ### Pub/sub is fail-open
 
-If Redis is not connected, `publish_drift_event` logs a debug message and returns
+If Cache is not connected, `publish_drift_event` logs a debug message and returns
 without raising.  The snapshot and drift event are still persisted; only the
 real-time notification is skipped.
 

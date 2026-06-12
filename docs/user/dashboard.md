@@ -100,4 +100,4 @@ INGESTOR_URL=https://api.your-domain.com uv run streamlit run services/dashboard
 | "No scorecards yet" | Add sources and wait for first probe cycle |
 | "Could not reach ingestor" | Verify `just up` completed, check Docker logs |
 | "Log in to view data" | Use credentials from `.env` file |
-| WebSocket won't connect | Ensure `REDIS_ENABLED=true` on the server |
+| WebSocket won't connect | Ensure `CACHE_ENABLED=true` on the server |

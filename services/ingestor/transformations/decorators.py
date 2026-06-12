@@ -93,7 +93,7 @@ class DeduplicatorTransformer(ObservationTransformer):
     First time seeing a observation: passes to next transformer.
     Duplicate: returns None (rejects).
 
-    In production, the hash set would be in Redis for distributed dedup.
+    In production, the hash set would be in Cache for distributed dedup.
     For now, using in-memory set (per-request or per-sync scope).
     """
 
@@ -105,7 +105,7 @@ class DeduplicatorTransformer(ObservationTransformer):
         """
         self.next_transformer = next_transformer
         # In-memory hash set (per deduplicator instance)
-        # In production: Redis SADD / SISMEMBER for distributed dedup
+        # In production: Cache SADD / SISMEMBER for distributed dedup
         self._seen_hashes: set[str] = set()
 
     async def transform(self, observation: dict) -> dict | None:

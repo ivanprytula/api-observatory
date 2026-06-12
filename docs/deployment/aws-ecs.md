@@ -17,8 +17,8 @@ Use these docs as source of truth:
 ## Prerequisites
 
 - Docker and Docker Compose
-- Terraform + `tflocal` (install with `uv tool install terraform-local`)
-- `awslocal` (install with `uv tool install awscli-local`)
+- Terraform (install via standard package manager)
+- AWS CLI (install with standard installer)
 - No local Trivy install required (scan runs via Docker Compose service)
 
 Run host checks first:
@@ -69,7 +69,7 @@ just sandbox-down
 - `TF_VAR_aws_region=us-east-1`
 - `TF_VAR_aws_profile=default`
 - `TF_VAR_availability_zones=["us-east-1a","us-east-1b"]`
-- `TF_VAR_redis_auth_token=local-dev-redis-token`
+- `TF_VAR_cache_auth_token=local-dev-cache-token`
 - `TF_VAR_enable_messaging=false`
 
 Override any value inline if needed:
@@ -111,7 +111,7 @@ The Streamlit dashboard runs as a dedicated `dashboard` container, not embedded 
 
 ### Cloud access (ALB)
 
-When deployed via the ECS rollout, the dashboard is served at `/dashboard/` through the nginx HTTPS proxy:
+When deployed via the ECS rollout, the dashboard is served at `/dashboard/` through the edge HTTPS proxy:
 
 ```bash
 curl -f https://<alb-dns>/dashboard/

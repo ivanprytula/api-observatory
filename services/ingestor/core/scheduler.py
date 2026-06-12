@@ -14,7 +14,7 @@ Architecture:
 
 For distributed scaling (Phase 2+):
 - Replace APScheduler with Celery/arq (same Job interface, different backend)
-- Move job state to Redis/broker instead of in-memory
+- Move job state to Cache/broker instead of in-memory
 - Add worker pool configuration, result backend, task tracing
 
 Example usage:

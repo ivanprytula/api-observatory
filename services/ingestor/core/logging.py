@@ -1,4 +1,4 @@
-"""Environment-aware structured logging setup — runs once at app startup.
+"""Environment-aware structured logging setup — runs once at app initialization.
 
 Uses structlog with a stdlib bridge (ProcessorFormatter) so all existing
 ``logging.getLogger(__name__)`` call sites remain unchanged.
@@ -56,7 +56,7 @@ def set_cid(cid: str) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Stdlib LogObservation attributes excluded from "extra" field forwarding
+# Stdlib LogRecord attributes excluded from "extra" field forwarding
 # ─────────────────────────────────────────────────────────────────────────────
 _STDLIB_ATTRS: frozenset[str] = frozenset(
     {
@@ -94,16 +94,16 @@ _STDLIB_ATTRS: frozenset[str] = frozenset(
 def _extract_extra(
     _logger: Any, _method: str, event_dict: structlog.types.EventDict
 ) -> structlog.types.EventDict:
-    """Forward ``extra={}`` fields from stdlib LogObservation into event_dict.
+    """Forward ``extra={}`` fields from stdlib LogRecord into event_dict.
 
     When stdlib code calls ``logger.info("msg", extra={"key": "val"})``,
-    the extra keys are attributes on the LogObservation.  This processor copies
+    the extra keys are attributes on the LogRecord.  This processor copies
     them into the structlog event_dict so renderers can include them.
     """
-    observation: logging.LogObservation | None = event_dict.get("_observation")  # type: ignore[assignment]
-    if observation is None:
+    record: logging.LogRecord | None = event_dict.get("_record")  # type: ignore[assignment]
+    if record is None:
         return event_dict
-    for key, value in observation.__dict__.items():
+    for key, value in record.__dict__.items():
         if key not in _STDLIB_ATTRS and not key.startswith("_"):
             event_dict.setdefault(key, value)
     return event_dict
@@ -122,6 +122,48 @@ def _inject_context(
     return event_dict
 
 
+# Module-level reference for uvicorn config (set during setup_logging)
+_formatter: ProcessorFormatter | None = None
+
+
+def get_formatter() -> ProcessorFormatter | None:
+    """Return the formatter instance for use by uvicorn config."""
+    return _formatter
+
+
+def make_uvicorn_log_config(formatter: ProcessorFormatter) -> dict:
+    """Create a log config dict for uvicorn to use structlog processors.
+
+    This ensures uvicorn's startup/shutdown messages and access logs follow
+    the same structured format as the rest of the application.
+    """
+    return {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {"default": {"()": lambda: formatter}},
+        "handlers": {
+            "default": {
+                "formatter": "default",
+                "class": "logging.StreamHandler",
+                "stream": "ext://sys.stdout",
+            }
+        },
+        "loggers": {
+            "uvicorn": {"handlers": ["default"], "level": "INFO", "propagate": False},
+            "uvicorn.error": {
+                "handlers": ["default"],
+                "level": "INFO",
+                "propagate": False,
+            },
+            "uvicorn.access": {
+                "handlers": ["default"],
+                "level": "INFO",
+                "propagate": False,
+            },
+        },
+    }
+
+
 def setup_logging() -> logging.Logger:
     """Configure structlog and wire it to stdlib logging.
 
@@ -138,6 +180,8 @@ def setup_logging() -> logging.Logger:
     Returns:
         The root ``logging.Logger`` (already configured).
     """
+    global _formatter
+
     configured = str(settings.log_level or "INFO").upper()
     root_level = getattr(logging, configured, logging.INFO)
 
@@ -160,11 +204,12 @@ def setup_logging() -> logging.Logger:
         else structlog.dev.ConsoleRenderer()
     )
 
-    # ProcessorFormatter bridges stdlib LogObservations through structlog processors.
-    formatter = ProcessorFormatter(
+    # ProcessorFormatter bridges stdlib LogRecords through structlog processors.
+    _formatter = ProcessorFormatter(
         processors=[ProcessorFormatter.remove_processors_meta, renderer],
         foreign_pre_chain=shared_processors,
     )
+    formatter = _formatter
 
     # ── stdlib root logger ──────────────────────────────────────────────────
     root_logger = logging.getLogger()

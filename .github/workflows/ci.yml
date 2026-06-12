@@ -346,7 +346,7 @@ jobs:
 
   # INTEGRATION TESTS (run after security gates)
   integration-tests:
-    name: "Integration tests (postgres + redis)"
+    name: "Integration tests (postgres + cache)"
     runs-on: ubuntu-latest
     needs: [lint, unit-tests, action-ref-validation]
     timeout-minutes: 15
@@ -364,7 +364,7 @@ jobs:
           --health-retries 10
         ports:
           - 5432:5432
-      redis:
+      cache:
         image: redis:7-alpine
         options: >-
           --health-cmd "redis-cli ping"
@@ -375,8 +375,8 @@ jobs:
           - 6379:6379
     env:
       DATABASE_URL_TEST: postgresql+asyncpg://postgres:postgres@localhost:5432/data_zoo_test
-      REDIS_ENABLED: "true"
-      REDIS_URL: redis://localhost:6379/0
+      CACHE_ENABLED: "true"
+      CACHE_URL: redis://localhost:6379/0
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -412,12 +412,12 @@ jobs:
           docker exec "${{ job.services.postgres.id }}" pg_isready -U postgres
 
           for _ in {1..30}; do
-            if docker exec "${{ job.services.redis.id }}" redis-cli ping | grep -q PONG; then
+            if docker exec "${{ job.services.cache.id }}" redis-cli ping | grep -q PONG; then
               break
             fi
             sleep 2
           done
-          docker exec "${{ job.services.redis.id }}" redis-cli ping
+          docker exec "${{ job.services.cache.id }}" redis-cli ping
 
       - name: Capture dependency diagnostics
         if: failure()
@@ -427,7 +427,7 @@ jobs:
           mkdir -p ci-diagnostics
           docker ps -a > ci-diagnostics/docker-ps.txt
           docker logs "${{ job.services.postgres.id }}" > ci-diagnostics/postgres.log 2>&1 || true
-          docker logs "${{ job.services.redis.id }}" > ci-diagnostics/redis.log 2>&1 || true
+          docker logs "${{ job.services.cache.id }}" > ci-diagnostics/cache.log 2>&1 || true
 
       - name: Upload dependency diagnostics
         if: failure()

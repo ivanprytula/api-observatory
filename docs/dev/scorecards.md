@@ -218,7 +218,7 @@ env -u DATABASE_URL_TEST uv run pytest \
   periodic `DELETE WHERE sampled_at < NOW() - INTERVAL '90 days'` job when the
   table exceeds tens of millions of rows.
 
-- **Caching**: No Redis caching is added by default. Add
+- **Caching**: No Cache caching is added by default. Add
   `SETEX scorecard:{source_id}:{days} 30 <json>` only after measuring p95 query
   time exceeds 50ms under load (see `GET /metrics`).
 

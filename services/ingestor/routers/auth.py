@@ -89,7 +89,7 @@ async def login(
 ) -> TokenResponse:
     """Authenticate and return a JWT access token.
 
-    Also creates a Redis-backed session and sets a session cookie.
+    Also creates a Cache-backed session and sets a session cookie.
 
     Args:
         request: Raw FastAPI request (required by slowapi).
@@ -120,13 +120,13 @@ async def login(
         custom_claims={"role": user.role, "tenant_id": user.tenant_id},
     )
 
-    # Issue refresh token (Redis-backed, revocable)
+    # Issue refresh token (Cache-backed, revocable)
     refresh_token = await create_refresh_token(
         sub=user.username,
         custom_claims={"role": user.role, "tenant_id": user.tenant_id},
     )
 
-    # Also create a Redis session with tenant_id
+    # Also create a Cache session with tenant_id
     await create_session(
         user.username, {"role": user.role, "tenant_id": user.tenant_id}
     )

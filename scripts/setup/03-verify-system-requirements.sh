@@ -87,8 +87,6 @@ echo ""
 echo "Floci / Terraform (optional)"
 # Terraform CLI — required when using the local Floci Terraform stacks
 check_command_warning "terraform" "terraform (install: https://www.terraform.io/downloads) - required for Floci/infra/terraform" || true
-# tflocal — helper wrapper commonly installed via `uv tool install terraform-local`
-check_command_warning "tflocal" "tflocal (install: uv tool install terraform-local) - wrapper for local Terraform/Floci workflows" || true
 
 echo ""
 echo "Database Backup/Restore:"

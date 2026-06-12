@@ -7,7 +7,7 @@ Interview topics mapped to concrete implementation points.
 | Async Python | [services/ingestor/fetch.py](services/ingestor/fetch.py), [services/ingestor/database.py](services/ingestor/database.py) |
 | SQLAlchemy 2.0 async | [services/ingestor/models.py](services/ingestor/models.py), [services/ingestor/repositories](services/ingestor/repositories) |
 | APScheduler jobs | [services/ingestor/jobs.py](services/ingestor/jobs.py), [services/ingestor/jobs_registry.py](services/ingestor/jobs_registry.py) |
-| Redis cache + pub/sub | [services/ingestor/cache.py](services/ingestor/cache.py), [services/ingestor/rate_limiting.py](services/ingestor/rate_limiting.py), [services/ingestor/routers/ws.py](services/ingestor/routers/ws.py) |
+| Cache cache + pub/sub | [services/ingestor/cache.py](services/ingestor/cache.py), [services/ingestor/rate_limiting.py](services/ingestor/rate_limiting.py), [services/ingestor/routers/ws.py](services/ingestor/routers/ws.py) |
 | Circuit breaker | [libs/platform/circuit_breaker.py](libs/platform/circuit_breaker.py) |
 | Multi-tenancy/RLS path | [services/ingestor/security](services/ingestor/security), [alembic/versions](alembic/versions) |
 | Observability | [services/ingestor/metrics.py](services/ingestor/metrics.py), [services/ingestor/main.py](services/ingestor/main.py) |

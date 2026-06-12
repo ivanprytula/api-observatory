@@ -13,11 +13,9 @@ import httpx
 
 from services.dashboard.core.auth import AuthManager
 from services.dashboard.core.config import config
-from services.ingestor.api_schemas.contract_drift import DriftEventResponse
-from services.ingestor.api_schemas.scorecards import (
+from services.dashboard.core.models import (
+    DriftEventResponse,
     ScorecardListResponse,
-)
-from services.ingestor.api_schemas.source_registry import (
     SourceHealthResponse,
     SourceProfileResponse,
 )

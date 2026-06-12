@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     )
 
     trusted_hosts: str = Field(
-        default="localhost,127.0.0.1,[::1],test",
+        default="localhost,127.0.0.1,[::1],test,ingestor,ingestor:8000",
         description=(
             "Comma-separated allowed Host header values for TrustedHostMiddleware. "
             "Use '*' only in controlled development environments."
@@ -155,32 +155,32 @@ class Settings(BaseSettings):
         ),
     )
 
-    # ============ Redis Caching ============
-    redis_url: str = Field(
+    # ============ Cache Backend ============
+    cache_url: str = Field(
         default="redis://localhost:6379/0",
-        description="Redis connection URL for caching layer",
+        description="Cache backend connection URL",
     )
 
-    redis_enabled: bool = Field(
+    cache_enabled: bool = Field(
         default=False,
-        description="Enable Redis caching. Disabled by default (tests use fakeredis)",
+        description="Enable cache backend. Disabled by default (tests use fakeredis)",
     )
 
-    # ============ Kafka / Redpanda ============
-    kafka_broker_url: str = Field(
+    # ============ Event Broker / Redpanda ============
+    broker_url: str = Field(
         default="localhost:9092",
-        description="Kafka bootstrap servers (comma-separated). Override with KAFKA_BROKER_URL.",
+        description="Broker bootstrap servers (comma-separated). Override with BROKER_URL.",
     )
 
-    kafka_enabled: bool = Field(
+    broker_enabled: bool = Field(
         default=False,
-        description="Enable Kafka event publishing. Disabled by default (safe for tests w/o broker).",  # noqa: E501
+        description="Enable broker event publishing. Disabled by default (safe for tests w/o broker).",  # noqa: E501
     )
 
-    kafka_strangler_adapter_enabled: bool = Field(
+    broker_strangler_adapter_enabled: bool = Field(
         default=False,
         description=(
-            "Enable strangler adapter path for Kafka publishing. "
+            "Enable strangler adapter path for broker publishing. "
             "When False, the legacy direct producer path is used."
         ),
     )

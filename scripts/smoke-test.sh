@@ -94,7 +94,7 @@ check "GET /api/v1/observations" "$BASE_URL/api/v1/observations?limit=5"
 # Dashboard checks (non-blocking — dashboard may be behind a path proxy)
 DASH_HEALTH="$DASHBOARD_URL/_stcore/health"
 if [ "$DASHBOARD_URL" != "http://localhost:8501" ]; then
-  # Try nginx-proxied path first, then direct
+  # Try edge-proxied path first, then direct
   DASH_HEALTH="$BASE_URL/dashboard/_stcore/health"
   check "GET /dashboard/_stcore/health" "$DASH_HEALTH" || \
     check "GET dashboard health" "$DASHBOARD_URL/_stcore/health"

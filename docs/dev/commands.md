@@ -22,21 +22,21 @@ responses, traceback captures, and local logs.
 Two modes depending on whether you want the app container running or the app running locally:
 
 ```bash
-# Mode 1: full MVP stack (db, redis, redpanda, ingestor, dashboard)
+# Mode 1: full MVP stack (db, cache, broker, ingestor, dashboard)
 just up
 
 # Mode 1 + HTTPS parity (requires certs — run 02-setup-local-https.sh first):
-just up-https   # includes nginx on :443
+just up-https   # includes edge on :443
 
 # Mode 2: infra only — use when running uvicorn directly outside Docker
-docker compose up -d db redis redpanda
+docker compose up -d db cache broker
 # then in a second terminal:
 uv run uvicorn services/ingestor/main:app --reload
 
 # Stop all:
 just down
 
-# Stop nginx specifically (keeps core services running):
+# Stop edge specifically (keeps core services running):
 just down-https
 ```
 
@@ -93,13 +93,13 @@ SELECT pid, usename, state FROM pg_stat_activity;
 -- For local curiosity: EXPLAIN (FORMAT JSON) SELECT ... WHERE source_id = 1 LIMIT 10;
 ```
 
-### Redis
+### Cache
 
 ```bash
-docker compose exec redis redis-cli
-docker compose exec redis redis-cli KEYS "*"
-docker compose exec redis redis-cli FLUSHALL   # dev only
-docker compose exec redis redis-cli MONITOR
+docker compose exec cache redis-cli
+docker compose exec cache redis-cli KEYS "*"
+docker compose exec cache redis-cli FLUSHALL   # dev only
+docker compose exec cache redis-cli MONITOR
 ```
 
 ---
@@ -205,7 +205,7 @@ curl https://localhost/api/openapi.json
 just test-unit
 uv run pytest -m unit -q
 
-# Integration (Postgres + Redis via testcontainers)
+# Integration (Postgres + Cache via testcontainers)
 just test-integration
 uv run pytest -m integration -q
 
@@ -339,8 +339,8 @@ Call it from `just up`, `just dev`, or `just sandbox-dev` to get an immediate ba
   Cloud backend   : Local-Docker | Floci (…)| AWS (profile=…)
   Terraform env   : sandbox | dev
   Postgres        : Local-Compose-Postgres | External (host=…)
-  Redis           : redis://redis:6379 | unset
-  KAFKA_BROKER_URL: redpanda:29092 | unset
+  Cache           : redis://cache:6379 | unset
+  BROKER_URL: broker:29092 | unset
   MinIO endpoint  : localhost:9000 | unset
   INGESTOR_URL    : http://localhost:8000
 ======================
@@ -352,8 +352,8 @@ Call it from `just up`, `just dev`, or `just sandbox-dev` to get an immediate ba
 |---|---|---|---|---|
 | `ENVIRONMENT` | `development` | `development` | `development` | `production` |
 | `DATABASE_URL` | Compose-injected | Compose-injected | AWS RDS DSN | AWS RDS DSN |
-| `REDIS_URL` | `redis://redis:6379` | `redis://redis:6379` | ElastiCache endpoint | ElastiCache endpoint |
-| `KAFKA_BROKER_URL` | `redpanda:29092` | `redpanda:29092` | MSK bootstrap | MSK bootstrap |
+| `CACHE_URL` | `redis://cache:6379` | `redis://cache:6379` | ElastiCache endpoint | ElastiCache endpoint |
+| `BROKER_URL` | `broker:29092` | `broker:29092` | MSK bootstrap | MSK bootstrap |
 | `LOG_FORMAT` | `json` | `json` | `json` | `json` |
 | `AWS_PROFILE` | unset | `sandbox` | named dev profile | prod profile |
 | `AWS_ENDPOINT_URL` | unset | `http://localhost:4566` | unset | unset |

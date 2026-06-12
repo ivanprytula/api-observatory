@@ -128,23 +128,23 @@ chaos_db_blackout() {
 # ─── Scenario 4: Kafka Outage ─────────────────────────────────────────────────
 # Stop Redpanda, validate DLQ and circuit breaker behavior.
 chaos_kafka_outage() {
-    log "KAFKA OUTAGE: Stopping Redpanda for ${CHAOS_DURATION}s"
-    docker stop data-pipeline-redpanda
+    log "KAFKA OUTAGE: Stopping broker for ${CHAOS_DURATION}s"
+    docker stop data-pipeline-broker
 
     log "Kafka is down. Events should fail gracefully (circuit breaker / DLQ)."
     log "Waiting ${CHAOS_DURATION}s..."
     sleep "${CHAOS_DURATION}"
 
-    log "Restarting Redpanda..."
-    docker start "${CONTAINER_PREFIX}-redpanda"
+    log "Restarting broker..."
+    docker start "${CONTAINER_PREFIX}-broker"
 
     local elapsed=0
-    while ! docker exec "${CONTAINER_PREFIX}-redpanda" rpk cluster health 2>/dev/null | grep -q "true"; do
+    while ! docker exec "${CONTAINER_PREFIX}-broker" rpk cluster health 2>/dev/null | grep -q "true"; do
         sleep 3
         elapsed=$((elapsed + 3))
-        [[ "${elapsed}" -ge 90 ]] && { warn "Redpanda didn't recover in 90s"; return 1; }
+        [[ "${elapsed}" -ge 90 ]] && { warn "Broker didn't recover in 90s"; return 1; }
     done
-    log "✓ Redpanda recovered in ${elapsed}s"
+    log "✓ Broker recovered in ${elapsed}s"
 }
 
 # ─── Scenario 5: Memory Pressure ──────────────────────────────────────────────

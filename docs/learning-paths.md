@@ -18,9 +18,9 @@ Three tracks covering the full MVP stack (Commits 1-12). Start with architecture
 
 ## Distributed Systems Track
 
-1. **Event broker**: Redpanda (Kafka-compatible) at `redpanda:29092`. See `KAFKA_BROKER_URL` in `.env.example`.
+1. **Event broker**: Redpanda (Kafka-compatible) at `broker:29092`. See `BROKER_URL` in `.env.example`.
    - Why Redpanda vs Kafka? [docs/design/architecture.md](design/architecture.md) (ADR 001).
-2. **Real-time push**: Redis pub/sub in [services/ingestor/pubsub.py](../services/ingestor/pubsub.py) → WebSocket fan-out in [routers/ws.py](../services/ingestor/routers/ws.py).
+2. **Real-time push**: Cache pub/sub in [services/ingestor/pubsub.py](../services/ingestor/pubsub.py) → WebSocket fan-out in [routers/ws.py](../services/ingestor/routers/ws.py).
 3. **Background scheduling**: APScheduler in [services/ingestor/jobs.py](../services/ingestor/jobs.py) and [jobs_registry.py](../services/ingestor/jobs_registry.py).
 4. **Resilience**: circuit breaker in [libs/platform/circuit_breaker.py](../libs/platform/circuit_breaker.py), rate limiting in [services/ingestor/rate_limiting.py](../services/ingestor/rate_limiting.py).
 5. **Contract drift + scoring**: [routers/contract_drift.py](../services/ingestor/routers/contract_drift.py) and [routers/scorecards.py](../services/ingestor/routers/scorecards.py).
@@ -30,7 +30,7 @@ Three tracks covering the full MVP stack (Commits 1-12). Start with architecture
 
 ## DevOps and Cloud Track
 
-1. Local orchestration: [docker-compose.yml](../docker-compose.yml) — 4 services (db, redis, redpanda, ingestor).
+1. Local orchestration: [docker-compose.yml](../docker-compose.yml) — 4 services (db, cache, broker, ingestor).
 2. Image hardening: [Dockerfile](../Dockerfile) (multi-stage) and [infra/database/Dockerfile](../infra/database/Dockerfile).
 3. Observability: Prometheus metrics in [services/ingestor/metrics.py](../services/ingestor/metrics.py), OTEL in [main.py lifespan](../services/ingestor/main.py), `/health` and `/readyz` probes.
 4. IaC: Terraform modules in [infra/terraform/](../infra/terraform/).

@@ -74,7 +74,7 @@ if _env_file.exists():
 # This ensures the app loads with testing configuration.
 os.environ["ENVIRONMENT"] = "testing"
 # Keep rate limiting storage in-memory for deterministic tests.
-os.environ["REDIS_ENABLED"] = "false"
+os.environ["CACHE_ENABLED"] = "false"
 os.environ.setdefault("SERVICE_VERSION", "test-service")
 os.environ.setdefault("CONTRACTS_VERSION", "test-contracts")
 os.environ.setdefault("DOCS_USERNAME", "")
@@ -91,9 +91,9 @@ from tests.shared.payloads import OBSERVATION_API  # noqa: E402
 # Explicit shared fixture export surface for tree-level conftest re-exports.
 __all__ = [
     "observation_timestamp",
-    "fake_redis",
-    "redis_container",
-    "real_redis",
+    "fake_cache",
+    "cache_container",
+    "real_cache",
     "client_with_cache",
     "_auto_provision_postgres",
     "apply_migrations",
@@ -243,10 +243,10 @@ def observation_timestamp() -> datetime.datetime:
 
 
 # ---------------------------------------------------------------------------
-# Redis fixtures (for cache testing)
+# Cache fixtures (for cache testing)
 # ---------------------------------------------------------------------------
 @pytest_asyncio.fixture()
-async def fake_redis():
+async def fake_cache():
     """In-memory Redis instance for testing (uses fakeredis).
 
     No network calls; operates as a pure Python object.
@@ -254,19 +254,19 @@ async def fake_redis():
     """
     import fakeredis
 
-    redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
-    yield redis
-    await redis.flushall()  # Clean up after test
-    await redis.aclose()
+    cache = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    yield cache
+    await cache.flushall()  # Clean up after test
+    await cache.aclose()
 
 
 @pytest.fixture(scope="session")
-def redis_container():
+def cache_container():
     """Session-scoped real Redis container via testcontainers.
 
     Starts once per test session when Docker is available.  Integration tests
     that need actual Redis pub/sub semantics (blocking reads, channels, etc.)
-    should use ``real_redis`` instead of ``fake_redis``.
+    should use ``real_cache`` instead of ``fake_cache``.
 
     Falls back to None when Docker is not present so callers can skip.
     """
@@ -281,20 +281,20 @@ def redis_container():
 
 
 @pytest_asyncio.fixture()
-async def real_redis(redis_container):
+async def real_cache(cache_container):
     """Async Redis client backed by a real Redis container.
 
     Use for integration tests that rely on Redis pub/sub, keyspace notifications,
     or Lua scripts — semantics that fakeredis does not fully emulate.
     Skips the test automatically if Docker is unavailable.
     """
-    if redis_container is None:
-        pytest.skip("Docker not available — skipping real-Redis integration test")
+    if cache_container is None:
+        pytest.skip("Docker not available — skipping real-cache integration test")
 
     from redis.asyncio import Redis
 
-    host = redis_container.get_container_host_ip()
-    port = int(redis_container.get_exposed_port(6379))
+    host = cache_container.get_container_host_ip()
+    port = int(cache_container.get_exposed_port(6379))
     client = Redis(host=host, port=port, decode_responses=True)
     yield client
     await client.flushall()
@@ -303,7 +303,7 @@ async def real_redis(redis_container):
 
 @pytest_asyncio.fixture()
 async def client_with_cache(
-    db: AsyncSession, fake_redis
+    db: AsyncSession, fake_cache
 ) -> AsyncGenerator[AsyncClient]:
     """Async HTTPX client with DB + Redis cache dependencies overridden.
 
@@ -329,11 +329,11 @@ async def client_with_cache(
 
     app.dependency_overrides[verify_jwt_token] = _mock_jwt
 
-    # Inject fake redis into cache module and auth module
-    cache._client = fake_redis
+    # Inject fake cache into cache module and auth module
+    cache._client = fake_cache
     from services.ingestor import auth
 
-    auth._session_client = fake_redis
+    auth._session_client = fake_cache
 
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -451,7 +451,7 @@ async def db(apply_migrations: None) -> AsyncGenerator[AsyncSession]:
 
 
 @pytest_asyncio.fixture()
-async def client(db: AsyncSession, fake_redis) -> AsyncGenerator[AsyncClient]:
+async def client(db: AsyncSession, fake_cache) -> AsyncGenerator[AsyncClient]:
     """Async HTTPX client with DB dependency overridden.
 
     For PostgreSQL (and general robustness), provide a fresh `AsyncSession`
@@ -498,7 +498,7 @@ async def client(db: AsyncSession, fake_redis) -> AsyncGenerator[AsyncClient]:
 
     from services.ingestor import auth
 
-    auth._session_client = fake_redis
+    auth._session_client = fake_cache
 
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"

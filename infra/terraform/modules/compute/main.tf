@@ -237,8 +237,8 @@ resource "aws_ecs_task_definition" "ingestor_fargate" {
         valueFrom = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project}/${var.environment}/database-url"
       },
       {
-        name      = "REDIS_URL"
-        valueFrom = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project}/${var.environment}/redis-url"
+        name      = "CACHE_URL"
+        valueFrom = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project}/${var.environment}/cache-url"
       },
     ]
 

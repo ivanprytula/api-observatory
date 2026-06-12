@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Verify Redis cache layer functionality — test hits, misses, fail-open behavior, metrics.
+# Verify Cache cache layer functionality — test hits, misses, fail-open behavior, metrics.
 # Uses docker compose for full integration test.
 
 set -euo pipefail
@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$PROJECT_ROOT"
 
-echo "==> Redis Cache Layer Verification"
+echo "==> Cache Layer Verification"
 echo ""
 
 echo "Step 0: Installing dependencies"
@@ -16,15 +16,15 @@ uv sync --quiet
 echo "✓ Dependencies installed"
 echo ""
 
-echo "Step 1: Starting docker compose (db + redis)"
-docker compose up -d db redis
+echo "Step 1: Starting docker compose (db + cache)"
+docker compose up -d db cache
 echo "Waiting for services to be healthy..."
 docker compose ps
 
 max_attempts=30
 for i in $(seq 1 $max_attempts); do
   if docker compose exec -T db pg_isready -U postgres >/dev/null 2>&1 && \
-     docker compose exec -T redis redis-cli ping >/dev/null 2>&1; then
+     docker compose exec -T cache redis-cli ping >/dev/null 2>&1; then
     echo "✓ Services healthy"
     break
   fi
@@ -84,38 +84,38 @@ echo "  Second GET (cache hit)..."
 curl -s http://localhost:8000/api/v1/records/$RECORD_ID >/dev/null
 echo "  ✓ Retrieved from cache"
 
-echo "  Verifying Redis key..."
-REDIS_KEY=$(docker compose exec -T redis redis-cli GET "dp:record:$RECORD_ID" | head -1)
+echo "  Verifying Cache key..."
+REDIS_KEY=$(docker compose exec -T cache redis-cli GET "dp:record:$RECORD_ID" | head -1)
 if [ -n "$REDIS_KEY" ]; then
-  echo "✓ Cache key found in Redis: dp:record:$RECORD_ID"
+  echo "✓ Cache key found in cache service: dp:record:$RECORD_ID"
 else
-  echo "✗ Cache key not found in Redis" >&2
+  echo "✗ Cache key not found in Cache" >&2
   kill $APP_PID 2>/dev/null || true
   exit 1
 fi
 echo ""
 
-echo "Step 4: Testing fail-open – stop Redis, verify API still works"
-docker compose stop redis
+echo "Step 4: Testing fail-open – stop Cache, verify API still works"
+docker compose stop cache
 sleep 2
-echo "  Redis stopped. Making request without cache..."
+echo "  Cache service stopped. Making request without cache..."
 
 RESPONSE=$(curl -s -w "\n%{http_code}" http://localhost:8000/api/v1/records/$RECORD_ID)
 HTTP_CODE=$(echo "$RESPONSE" | tail -1)
 
 if [ "$HTTP_CODE" = "200" ]; then
-  echo "✓ API returned 200 even with Redis down (fail-open works)"
+  echo "✓ API returned 200 even with Cache down (fail-open works)"
 else
-  echo "✗ API failed with HTTP $HTTP_CODE when Redis was down" >&2
+  echo "✗ API failed with HTTP $HTTP_CODE when Cache was down" >&2
   kill $APP_PID 2>/dev/null || true
   exit 1
 fi
 echo ""
 
 echo "Step 5: Testing cache invalidation on DELETE"
-docker compose start redis
+docker compose start cache
 sleep 2
-echo "  Redis restarted. Creating new record..."
+echo "  Cache service restarted. Creating new record..."
 
 RECORD2=$(curl -s -X POST http://localhost:8000/api/v1/records \
   -H "Content-Type: application/json" \
@@ -132,7 +132,7 @@ echo "  Record ID: $RECORD_ID2"
 echo "  Populating cache..."
 curl -s http://localhost:8000/api/v1/records/$RECORD_ID2 >/dev/null
 
-REDIS_KEY2=$(docker compose exec -T redis redis-cli GET "dp:record:$RECORD_ID2" | head -1)
+REDIS_KEY2=$(docker compose exec -T cache redis-cli GET "dp:record:$RECORD_ID2" | head -1)
 if [ -n "$REDIS_KEY2" ]; then
   echo "  ✓ Record in cache"
 else
@@ -145,7 +145,7 @@ echo "  Deleting record..."
 curl -s -X DELETE http://localhost:8000/api/v1/records/$RECORD_ID2
 
 sleep 1
-REDIS_KEY2_AFTER=$(docker compose exec -T redis redis-cli GET "dp:record:$RECORD_ID2" 2>/dev/null || true)
+REDIS_KEY2_AFTER=$(docker compose exec -T cache redis-cli GET "dp:record:$RECORD_ID2" 2>/dev/null || true)
 if [ -z "$REDIS_KEY2_AFTER" ]; then
   echo "✓ Cache invalidated after DELETE"
 else
@@ -156,13 +156,13 @@ fi
 echo ""
 
 kill $APP_PID 2>/dev/null || true
-docker compose stop db redis >/dev/null 2>&1 || true
+docker compose stop db cache >/dev/null 2>&1 || true
 
 echo "==> All cache verification tests passed!"
 echo ""
 echo "Summary:"
 echo "  ✓ Cache integration tests (7/7 passed)"
 echo "  ✓ Cache miss → DB fetch → cache store"
-echo "  ✓ Cache hit from Redis"
-echo "  ✓ Fail-open: API works with Redis down"
+echo "  ✓ Cache hit from Cache"
+echo "  ✓ Fail-open: API works with Cache down"
 echo "  ✓ Cache invalidation on DELETE"

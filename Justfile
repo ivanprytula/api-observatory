@@ -21,10 +21,10 @@ floci-health:
 #   just floci-*           → Full Floci sandbox (training playground)
 #   TF_ENV=dev just deploy → Promote to real AWS dev cloud
 
-# Start Compose data-plane (db, redis, redpanda, ingestor).
+# Start Compose data-plane (db, cache, broker, ingestor, dashboard).
 up:
     @just stack-info
-    docker compose up -d db redis redpanda ingestor dashboard
+    docker compose up -d --build db cache broker ingestor dashboard
 
 # Stop everything.
 down:
@@ -43,31 +43,33 @@ down-floci:
 # This is your default terminal tab.
 dev:
     @just stack-info
-    docker compose up -d db redis redpanda ingestor dashboard
+    docker compose up -d --build db cache broker dashboard
+    docker compose stop ingestor >/dev/null 2>&1 || true
+    docker compose rm -f ingestor >/dev/null 2>&1 || true
     until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
     just migrate
     uv run uvicorn services.ingestor.main:app --reload --port 8000
 
-# Full containerized stack (db + redis + redpanda + ingestor + dashboard).
+# Full containerized stack (db + cache + broker + ingestor + dashboard).
 # Use when validating container entrypoints / health checks.
 dev-dashboard:
     @just stack-info
-    docker compose up -d db redis redpanda ingestor dashboard
+    docker compose up -d --build db cache broker ingestor dashboard
     @bash -c 'until curl -sf http://localhost:8000/readyz > /dev/null 2>&1; do sleep 1; done && echo "stack ready"'
 
 # Reset DB and ingestor containers (keep Floci state intact if running).
 db-reset:
     @just stack-info
     docker compose rm -sfv ingestor db || true
-    docker compose up -d db redis redpanda ingestor dashboard
+    docker compose up -d --build db cache broker ingestor dashboard
     @bash -c 'until curl -sf http://localhost:8000/readyz > /dev/null 2>&1; do sleep 1; done && echo "stack ready"'
 
-# HTTPS proxy via nginx (run setup script first).
+# HTTPS proxy via edge (run setup script first).
 up-https:
     docker compose --profile https up -d
 
 down-https:
-    docker compose --profile https down nginx
+    docker compose --profile https down edge
 
 # Logs / shell / restart for any Compose service.
 ops:
@@ -106,17 +108,17 @@ stack-info:
     else
         DB="unknown"
     fi
-    if [ -n "${REDIS_URL:-}" ]; then
-        REDIS="$(echo "$REDIS_URL" | sed -E 's|.*://([^/]+).*|\1|')"
+    if [ -n "${CACHE_URL:-}" ]; then
+        CACHE="$(echo "$CACHE_URL" | sed -E 's|.*://([^/]+).*|\1|')"
     else
-        REDIS="unset"
+        CACHE="unset"
     fi
     echo "=== STACK SUMMARY ==="
     echo "  Cloud backend   : ${CLOUD}"
     echo "  Terraform env   : ${TF}"
     echo "  Postgres        : ${DB}"
-    echo "  Redis           : ${REDIS}"
-    echo "  Kafka broker    : ${KAFKA_BROKER_URL:-unset}"
+    echo "  Cache           : ${CACHE}"
+    echo "  Event broker    : ${BROKER_URL:-unset}"
     echo "  MinIO endpoint  : ${MINIO_ENDPOINT:-unset}"
     echo "  INGESTOR_URL    : ${INGESTOR_URL:-http://localhost:8000}"
     echo "======================"
@@ -275,7 +277,7 @@ floci-up:
         fi
         sleep 1
     done
-    docker compose up -d db redis redpanda ingestor dashboard
+    docker compose up -d --build db cache broker ingestor dashboard
     until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
     just migrate
     just _sandbox-seed
@@ -308,7 +310,9 @@ floci-dev:
     set -euo pipefail
     @just stack-info
     source scripts/aws-env.sh
-    docker compose up -d db redis redpanda ingestor dashboard
+    docker compose up -d db cache broker dashboard
+    docker compose stop ingestor >/dev/null 2>&1 || true
+    docker compose rm -f ingestor >/dev/null 2>&1 || true
     until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
     just migrate
     uv run uvicorn services.ingestor.main:app --reload --port 8000
@@ -413,7 +417,7 @@ _sandbox-infra:
     #!/usr/bin/env bash
     set -euo pipefail
     just sandbox-up
-    docker compose up -d db redis redpanda ingestor dashboard
+    docker compose up -d db cache broker ingestor dashboard
     until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
 
 # ─── BACKWARD-COMPATIBLE SANDBOX ALIASES ──────────────────────────────────────
@@ -453,7 +457,7 @@ docker-build-image tag="api-observatory:local":
 
 docker-build-dashboard tag="api-observatory-dashboard:local":
     @just _check-dashboard-dockerfile
-    docker build -t {{tag}} -f services/dashboard/Dockerfile services/dashboard
+    docker build -t {{tag}} -f services/dashboard/Dockerfile .
 
 # One-shot audit: build → size check → CRITICAL CVE scan
 deploy-audit tag="api-observatory:local":

@@ -8,7 +8,7 @@ Async FastAPI service for API reliability monitoring, contract drift detection, 
 
 ```bash
 cp .env.example .env
-just up       # db, redis, redpanda, ingestor
+just up       # db, cache, broker, ingestor
 just migrate
 ```
 
@@ -23,8 +23,8 @@ All commands: [docs/dev/commands.md](docs/dev/commands.md)
 |---------|-----:|------|
 | ingestor | 8000 | FastAPI — probes, scorecards, drift detection, agent enrichment |
 | db | 5432 | PostgreSQL 17 — primary persistence, PERCENTILE_CONT scorecards, RLS |
-| redis | 6379 | Cache (scorecard TTL), pub/sub (WebSocket fan-out), rate-limit backend |
-| redpanda | 9092/8082 | Kafka-compatible broker — drift events, async processing, DLQ |
+| cache | 6379 | Cache (scorecard TTL), pub/sub (WebSocket fan-out), rate-limit backend |
+| broker | 9092/8082 | Kafka-compatible broker — drift events, async processing, DLQ |
 
 See [docs/04-architecture-overview.md](docs/04-architecture-overview.md) for the full flow diagram.
 

@@ -63,7 +63,7 @@ Message types:
 - `drift.detected` — a contract drift event was persisted
 - `job.progress` — background job progress update
 - `ping` — server keepalive (every 30 s)
-- `info` — stream unavailable (Redis not enabled on the server)
+- `info` — stream unavailable (Cache not enabled on the server)
 
 Click **Disconnect** to stop the stream.  Click **Clear** to reset the message list.
 
@@ -76,11 +76,11 @@ services/dashboard/streamlit_app.py
 │                ─── GET /api/v1/sources
 │                ─── GET /api/v1/contracts/sources/{id}/drift-events
 │
-└── websockets ────── WS /ws/observations/stream     ─── ingestor (Redis pub/sub)
+└── websockets ────── WS /ws/observations/stream     ─── ingestor (Cache pub/sub)
      (daemon thread)
 ```
 
-The dashboard never connects to PostgreSQL or Redis directly.
+The dashboard never connects to PostgreSQL or Cache directly.
 All data comes through the ingestor HTTP/WebSocket API.
 
 ## Notes on the WebSocket approach

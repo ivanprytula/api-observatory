@@ -15,7 +15,7 @@ All of these must be green before merge to `develop` or `main`:
 | Docker build | `ci.yml / docker-build` | yes |
 | Docker scan HIGH+CRITICAL (Trivy) | `ci.yml / docker-scan-security` | yes |
 | CodeQL SAST | `ci.yml / codeql` | yes |
-| Integration tests (Postgres + Redis) | `ci.yml / integration-tests` | yes |
+| Integration tests (Postgres + Cache) | `ci.yml / integration-tests` | yes |
 | Secrets scan on changed lines | `security-secrets-lite.yml` | yes |
 | Docker scan MEDIUM advisory (Trivy) | `ci.yml / docker-scan-advisory` | **no** (reported only) |
 

@@ -25,7 +25,7 @@ Use `just` recipes instead of a monolithic bootstrap script:
 just doctor                  # read-only checks — safe to re-run at any time
 cp .env.example .env        # create local configuration
 uv sync                     # sync Python dependencies
-just up                     # start Docker services (db, redis, redpanda, ingestor, dashboard)
+just up                     # start Docker services (db, cache, broker, ingestor, dashboard)
 just migrate                # apply database migrations
 ```
 
@@ -39,7 +39,7 @@ just migrate                # apply database migrations
 Next steps:
 
 1. Open API docs: <http://localhost:8000/docs>
-2. Open API docs via nginx (if certs configured): <https://localhost/api/docs>
+2. Open API docs via edge (if certs configured): <https://localhost/api/docs>
 
 **Pre-commit setup** (run once after clone to prevent commit errors):
 
@@ -59,12 +59,12 @@ After the first commit, pre-commit hooks will run automatically on every commit.
 
 ## Step 3: Start the Core Stack
 
-Start the core services — database, cache, message broker, API, and dashboard. The nginx service is optional and provides HTTPS parity with production.
+Start the core services — database, cache, message broker, API, and dashboard. The edge service is optional and provides HTTPS parity with production.
 
 ```bash
-just up      # db, redis, redpanda, ingestor, dashboard (HTTP)
+just up      # db, cache, broker, ingestor, dashboard (HTTP)
 # For HTTPS parity (requires certs — see Step 6):
-just up-https  # includes nginx on :443
+just up-https  # includes edge on :443
 just migrate # apply Alembic migrations (safe to re-run)
 ```
 
@@ -86,7 +86,7 @@ docker compose ps
 curl http://localhost:8000/health
 # Should return: {"status":"healthy"}
 
-# Also available via nginx (after just up with certs): https://localhost/api/docs
+# Also available via edge (after just up with certs): https://localhost/api/docs
 
 # Run quick test
 uv run pytest tests/unit/ -q
@@ -115,7 +115,7 @@ cat .env
 # Edit if needed (most defaults are fine for local dev)
 nano .env
 
-# Restart Docker Compose services after changing non-app config (e.g. Redis URL, DB port)
+# Restart Docker Compose services after changing non-app config (e.g. Cache URL, DB port)
 docker compose restart
 # Note: if you changed DATABASE_URL and are running uvicorn directly (not in Docker),
 # stop uvicorn (Ctrl+C) and restart it — docker compose restart does not affect it.
@@ -128,7 +128,7 @@ For the full env var matrix (all variables, defaults, CI/CD and deployment conte
 
 ## Step 6 (Optional): Enable HTTPS for Local Parity
 
-For maximum local → dev/prod parity, enable HTTPS via nginx. This is optional since HTTP on `:8000` works for development.
+For maximum local → dev/prod parity, enable HTTPS via edge. This is optional since HTTP on `:8000` works for development.
 
 ### 6a. Install mkcert (one-time system install)
 
@@ -159,12 +159,12 @@ The script will create two files in `infra/certs/`:
 - `localhost+2.pem` — the public certificate
 - `localhost+2-key.pem` — the private key
 
-These are mounted into the nginx container at `/etc/nginx/certs/`.
+These are mounted into the edge container at `/etc/nginx/certs/`.
 
-### 6c. Start the stack with nginx
+### 6c. Start the stack with edge
 
 ```bash
-# Start all services including nginx (HTTPS on :443)
+# Start all services including edge (HTTPS on :443)
 just up-https
 ```
 
@@ -181,7 +181,7 @@ open https://localhost/api/docs
 **Expected output after `just up-https`:**
 
 ```text
-✓ All services running (db, redis, redpanda, ingestor, dashboard, nginx)
+✓ All services running (db, cache, broker, ingestor, dashboard, edge)
 ✓ HTTPS available at https://localhost + https://localhost/api/*
 ```
 
@@ -208,7 +208,7 @@ After this step, access the application via HTTPS:
 
 | URL                           | Purpose                                          |
 | ----------------------------- | ------------------------------------------------ |
-| `https://localhost/`          | Dashboard (via nginx)                            |
+| `https://localhost/`          | Dashboard (via edge)                            |
 | `https://localhost/api/docs`  | Swagger UI (interactive API docs)                |
 | `https://localhost/api/redoc` | ReDoc (alternative API docs)                     |
 | `http://localhost:8501/`      | Dashboard (Streamlit, direct — always available) |
@@ -279,7 +279,7 @@ gh api "/repos/${repo}/actions/oidc/customization/sub" --jq '.include_claim_keys
 
 ```text
 PostgreSQL 17          localhost:5432   → Primary persistence (scorecards, observations, drift events)
-Redis                  localhost:6379   → Scorecard TTL cache, WebSocket pub/sub, rate-limit backend
+Cache                  localhost:6379   → Scorecard TTL cache, WebSocket pub/sub, rate-limit backend
 Redpanda (Kafka)       localhost:9092   → Drift events, async processing, DLQ
 Ingestor API           localhost:8000   → FastAPI — probes, scorecards, agent enrichment
 Dashboard (Streamlit)  localhost:8501   → Visual UI for scorecards, drift, live stream
@@ -337,7 +337,7 @@ curl -X POST http://localhost:8000/api/v1/observations \
   -d '{"source": "test", "timestamp": "2024-04-22T12:00:00", "data": {}}'
 ```
 
-For additional API usage and request patterns, use Swagger at `http://localhost:8000/docs` (direct) or `https://localhost/api/docs` (HTTPS via nginx).
+For additional API usage and request patterns, use Swagger at `http://localhost:8000/docs` (direct) or `https://localhost/api/docs` (HTTPS via edge).
 For ongoing command workflows, use [03-daily-development.md](03-daily-development.md) and
 [dev/commands.md](dev/commands.md).
 
@@ -368,9 +368,9 @@ docker ps
 
 # Check for port conflicts
 lsof -i :5432      # PostgreSQL
-lsof -i :6379      # Redis
-lsof -i :443       # nginx HTTPS
-lsof -i :80        # nginx HTTP
+lsof -i :6379      # Cache
+lsof -i :443       # edge HTTPS
+lsof -i :80        # edge HTTP
 ```
 
 ### HTTPS / Certificate Issues
@@ -389,10 +389,10 @@ ls -la "$(mkcert -CAROOT)"
 ```
 
 **Nginx returns "404 Not Found"** on `https://localhost/`:
-- The root location block (`location /`) was commented out in `nginx.conf`. Ensure it is uncommented and proxies to the dashboard upstream (or whichever service should serve the root path).
-- After editing `nginx.conf`, reload nginx:
+- The root location block (`location /`) was commented out in `infra/nginx/nginx.conf`. Ensure it is uncommented and proxies to the dashboard upstream (or whichever service should serve the root path).
+- After editing `infra/nginx/nginx.conf`, reload edge:
   ```bash
-  docker compose exec nginx nginx -s reload
+  docker compose exec edge nginx -s reload
   ```
 
 ### Migrations Failed

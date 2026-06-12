@@ -241,8 +241,8 @@ async def list_observations(
 async def get_observation(observation_id: int, db: DbDep) -> ObservationResponse:
     """Retrieve a single observation by ID.
 
-    Check cache first (Redis); on miss, fetch from DB and cache for 1 hour.
-    Redis connection errors are transparent (fail-open).
+    Check cache first (Cache); on miss, fetch from DB and cache for 1 hour.
+    Cache connection errors are transparent (fail-open).
     """
     # Try cache first
     cached_observation = await cache.get_observation(observation_id)
@@ -411,7 +411,7 @@ async def get_observation_secured(
     1. POST /api/v1/observations/auth/login?user_id=testuser
     2. GET /api/v1/observations/1/secure (with cookie from step 1)
 
-    Production: Use JWT or centralized session store (Redis).
+    Production: Use JWT or centralized session store (Cache).
     """
     logger.info(
         "get_observation_secured",

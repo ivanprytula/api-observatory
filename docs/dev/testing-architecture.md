@@ -4,7 +4,7 @@ Last reviewed: 2025-07 | Owner: ingestor team
 
 ## Test tree layout
 
-```
+```text
 tests/
   unit/            # top-level unit tests        → marker: unit
   integration/     # top-level integration tests → marker: integration
@@ -23,7 +23,7 @@ services/ingestor/tests/
 | Marker | What belongs here | DB needed | Docker needed |
 |---|---|---|---|
 | `unit` | Pure logic, no I/O, no DB, mocks only | no | no |
-| `integration` | ASGI client, DB, Redis, Kafka | yes (Postgres + Redis) | optional (testcontainers auto-provisions) |
+| `integration` | ASGI client, DB, Cache, Kafka | yes (Postgres + Cache) | optional (testcontainers auto-provisions) |
 | `e2e` | Full stack, Bruno API suite, Floci/AWS | yes | yes |
 | `aws` | LocalStack / Floci AWS emulation | yes | yes |
 
@@ -31,7 +31,7 @@ Markers are applied at the directory level via `conftest.py` (`pytestmark = pyte
 
 ## Fixture ownership model
 
-1. Shared fixtures (DB session, HTTP client, Redis, migrations) live only in [`tests/fixtures_shared.py`](../../tests/fixtures_shared.py).
+1. Shared fixtures (DB session, HTTP client, Cache, migrations) live only in [`tests/fixtures_shared.py`](../../tests/fixtures_shared.py).
 2. `tests/conftest.py` and `services/ingestor/tests/conftest.py` re-export `fixtures_shared.__all__` — no logic of their own.
 3. Tree-local fixtures (if any) stay in the owning tree's `conftest.py`.
 4. Never import fixtures across trees in either direction.
@@ -40,7 +40,7 @@ Markers are applied at the directory level via `conftest.py` (`pytestmark = pyte
 
 - Unit tests: `sqlite+aiosqlite:///:memory:` (no external dep).
 - Integration tests local: testcontainers auto-provisions `pgvector/pgvector:pg17` when Docker is available and `DATABASE_URL_TEST` is not set.
-- Integration tests CI: `DATABASE_URL_TEST` injected by GitHub Actions service container (Postgres + Redis).
+- Integration tests CI: `DATABASE_URL_TEST` injected by GitHub Actions service container (Postgres + Cache).
 - The `DATABASE_URL_TEST` in `.env` is intentionally ignored by the fixture bootstrap to prevent suppressing testcontainers auto-provisioning.
 
 ## Local repro commands

@@ -13,7 +13,7 @@ from services.ingestor.constants import CACHE_LOCK_PREFIX
 @pytest.fixture(autouse=True)
 async def fake_redis():
     """Inject FakeRedis as the cache client for every test."""
-    client = fakeredis.aioredis.FakeRedis()
+    client = fakeredis.aioredis.FakeRedis(decode_responses=True)
     cache_module._client = client
     yield client
     await client.aclose()

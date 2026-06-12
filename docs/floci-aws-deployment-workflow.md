@@ -34,7 +34,7 @@ just sandbox-down
 
 Manage Floci infrastructure via Terraform for testing AWS-integrated resource provisioning.
 
-**Prerequisite:** One-time workstation setup to add AWS sandbox profile.  
+**Prerequisite:** One-time workstation setup to add AWS sandbox profile.
 See [docs/setup/sandbox-aws-profile.md](setup/sandbox-aws-profile.md) for instructions.
 
 ### Daily Workflow (Recommended)
@@ -110,7 +110,7 @@ just sandbox-down
 ## Expected Outcomes
 
 - Floci container is healthy.
-- AWS wrapper commands respond (`awslocal` and `tflocal`).
+- AWS CLI commands work against LocalStack endpoint.
 - Sandbox tests pass for configured services.
 
 ## Tooling Notes

@@ -207,7 +207,7 @@ async def lifespan(app: FastAPI):
 
     Encapsulates startup and shutdown logic:
     1. Initialize distributed tracing (OTel) first
-    2. Initialize external services (Redis, Kafka, MongoDB) — fail-open
+    2. Initialize external services (Cache, Broker, MongoDB) — fail-open
     3. Initialize and start job scheduler
     4. Yield to run application
     5. Shutdown in reverse order: scheduler, external services, HTTP clients, DB
@@ -234,16 +234,16 @@ async def lifespan(app: FastAPI):
     logger.info("startup", extra={"event": "application_started"})
     _validate_production_security_settings()
 
-    # Initialize session store (always-on, not gated by redis_enabled)
+    # Initialize session store (always-on, not gated by cache_enabled)
     try:
-        await connect_session_store(settings.redis_url)
+        await connect_session_store(settings.cache_url)
     except Exception as e:
         logger.warning("session_store_startup_failed", extra={"error": str(e)})
 
     # Wire optional platform-level security audit sink from the service layer.
     set_security_audit_emitter(emit_security_audit_event)
 
-    # Initialize external services (Redis, Kafka, MongoDB)
+    # Initialize external services (Cache, Broker, MongoDB)
     await initialize_external_services()
 
     # Initialize job scheduler and register all jobs
@@ -344,7 +344,7 @@ async def lifespan(app: FastAPI):
     # Clear platform-level hook during shutdown/reload.
     set_security_audit_emitter(None)
 
-    # Cleanup external services (Redis, Kafka, MongoDB)
+    # Cleanup external services (Cache, Broker, MongoDB)
     await cleanup_external_services()
 
     # Cleanup HTTP clients
@@ -657,12 +657,12 @@ async def health(request: Request) -> dict[str, object]:
 
 @app.get("/readyz", tags=["ops"])
 async def readyz(db: DbDep) -> dict[str, object]:
-    """Readiness probe — DB and Redis reachable, pod can serve traffic.
+    """Readiness probe — DB and Cache reachable, pod can serve traffic.
 
     Used by Kubernetes to decide whether to route traffic to this pod.
-    Returns 503 if DB or Redis is unreachable.
+    Returns 503 if DB or Cache is unreachable.
     """
-    from services.ingestor.auth import _session_client as _redis
+    from services.ingestor.auth import _session_client as _cache
 
     checks: dict[str, str] = {}
     failed: list[str] = []
@@ -675,14 +675,14 @@ async def readyz(db: DbDep) -> dict[str, object]:
         failed.append(f"db: {e}")
 
     try:
-        if _redis is not None:
-            await _redis.ping()  # ty: ignore[invalid-await]
-            checks["redis"] = "ok"
+        if _cache is not None:
+            await _cache.ping()  # ty: ignore[invalid-await]
+            checks["cache"] = "ok"
         else:
-            checks["redis"] = "not_configured"
+            checks["cache"] = "not_configured"
     except Exception as e:
-        checks["redis"] = "unreachable"
-        failed.append(f"redis: {e}")
+        checks["cache"] = "unreachable"
+        failed.append(f"cache: {e}")
 
     svc_version = os.getenv("SERVICE_VERSION") or settings.app_version
     payload = get_version_payload()
@@ -704,4 +704,13 @@ async def readyz(db: DbDep) -> dict[str, object]:
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("ingestor.main:app", host="0.0.0.0", port=8000, reload=True)  # nosec B104
+    from services.ingestor.core.logging import get_formatter, make_uvicorn_log_config
+
+    log_config = make_uvicorn_log_config(get_formatter()) if get_formatter() else None
+    uvicorn.run(
+        "services.ingestor.main:app",
+        host=os.getenv("UVICORN_HOST", "127.0.0.1"),
+        port=8000,
+        reload=True,
+        log_config=log_config,
+    )

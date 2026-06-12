@@ -7,7 +7,7 @@ set -o errtrace
 readonly SCRIPT_NAME="$(basename "$0")"
 readonly PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 readonly COMPOSE_FILE="${PROJECT_ROOT}/docker-compose.yml"
-readonly NGINX_CONF="${PROJECT_ROOT}/infra/nginx/nginx.conf"
+readonly EDGE_CONF="${PROJECT_ROOT}/infra/nginx/nginx.conf"
 
 info() {
   echo "[INFO] $*"
@@ -42,7 +42,7 @@ main() {
   require_command sort
 
   [[ -f "${COMPOSE_FILE}" ]] || fail "Missing compose file: ${COMPOSE_FILE}"
-  [[ -f "${NGINX_CONF}" ]] || fail "Missing nginx config: ${NGINX_CONF}"
+  [[ -f "${EDGE_CONF}" ]] || fail "Missing edge config: ${EDGE_CONF}"
 
   info "Validating compose model"
   docker compose -f "${PROJECT_ROOT}/docker-compose.yml" config >/tmp/compose.out
@@ -64,17 +64,17 @@ main() {
 
   [[ -n "${services}" ]] || fail "No services found in docker-compose.yml"
 
-  info "Collecting nginx upstream hosts"
+  info "Collecting edge upstream hosts"
   local upstream_hosts
   upstream_hosts="$(
-    awk '{sub(/#.*/, ""); print}' "${NGINX_CONF}" \
+    awk '{sub(/#.*/, ""); print}' "${EDGE_CONF}" \
       | grep -Eo 'server[[:space:]]+[A-Za-z0-9._-]+:[0-9]+' \
       | awk '{print $2}' \
       | cut -d: -f1 \
       | sort -u
   )"
 
-  [[ -n "${upstream_hosts}" ]] || fail "No upstream hosts found in nginx config"
+  [[ -n "${upstream_hosts}" ]] || fail "No upstream hosts found in edge config"
 
   while IFS= read -r host; do
     [[ -n "${host}" ]] || continue

@@ -10,7 +10,7 @@
 #   - Docker is installed and running
 #   - ECS agent container is configured (if ecs_agent_enabled=true)
 #   - node_exporter is running for host metrics
-#   - sysctl tuned for Redis/Redpanda compatibility
+#   - sysctl tuned for Cache/Redpanda compatibility
 
 - name: 'Configure sandbox/ECS host'
   hosts: all

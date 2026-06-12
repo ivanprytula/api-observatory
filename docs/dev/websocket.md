@@ -90,7 +90,7 @@ Sent by the server every 30 seconds as a keepalive.
 
 ### `info`
 
-Sent when the stream is unavailable (Redis not enabled).
+Sent when the stream is unavailable (Cache not enabled).
 
 ```json
 { "type": "info", "message": "stream unavailable" }
@@ -145,10 +145,10 @@ async def listen() -> None:
 asyncio.run(listen())
 ```
 
-## Redis dependency
+## Cache dependency
 
-The WebSocket stream requires Redis to be enabled (`REDIS_ENABLED=true` and a
-valid `REDIS_URL`).  When Redis is unavailable the server sends a single `info`
+The WebSocket stream requires Cache to be enabled (`CACHE_ENABLED=true` and a
+valid `CACHE_URL`).  When Cache is unavailable the server sends a single `info`
 message and closes the connection.  All other endpoints remain unaffected.
 
 ## Internal architecture
@@ -157,21 +157,21 @@ message and closes the connection.  All other endpoints remain unaffected.
 POST /api/v1/...          ─→  repository layer
                                 │
                                 ├─ persist to PostgreSQL
-                                └─ pubsub.publish_*()  ─→  Redis channel: ingestor:events
+                                └─ pubsub.publish_*()  ─→  Cache channel: ingestor:events
                                                                  │
 WS /ws/observations/stream   ←─  subscribe_events()  ←──────────────┘
 ```
 
-`subscribe_events()` opens a dedicated Redis connection per WebSocket session
+`subscribe_events()` opens a dedicated Cache connection per WebSocket session
 and yields decoded dicts.  Two concurrent asyncio tasks run per session:
 
-- `_reader` — reads from Redis and forwards messages to the WebSocket
+- `_reader` — reads from Cache and forwards messages to the WebSocket
 - `_pinger` — sends a keepalive `ping` every 30 seconds
 
 Both tasks are cancelled when the client disconnects.
 
 ### Pub/sub fail-open
 
-`publish_event()` and all `publish_*` wrappers are fail-open: if the Redis
+`publish_event()` and all `publish_*` wrappers are fail-open: if the Cache
 client is not connected (or errors mid-publish) the event is dropped silently
 with a debug log.  The write path is never blocked.
