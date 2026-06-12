@@ -368,13 +368,13 @@ just pg-dump
 just pg-restore .local-dev/dumps/api-observatory-20260101-120000.sql
 
 # Pull a gzipped dump from S3 and restore into local Compose DB
-just pg-restore-from-s3 s3://data-pipeline-local/dumps/prod-snapshot.sql.gz
+just pg-restore-from-s3 s3://api-observatory-local/dumps/prod-snapshot.sql.gz
 
 # Mirror S3 bucket to local dir (Floci or real AWS)
-just s3-dump-local bucket=data-pipeline-local dest=.local-dev/dumps/s3-20260101
+just s3-dump-local bucket=api-observatory-local dest=.local-dev/dumps/s3-20260101
 
 # Upload local dir to S3
-just s3-restore-to-remote bucket=data-pipeline-local src=.local-dev/dumps/s3-20260101
+just s3-restore-to-remote bucket=api-observatory-local src=.local-dev/dumps/s3-20260101
 ```
 
 ### Safety guards

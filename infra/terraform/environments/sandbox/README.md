@@ -8,9 +8,10 @@ real containers: ECR registry, RDS Postgres, ElastiCache Redis, ECS Fargate task
 - Docker running rootfull (not rootless) — sibling container creation required
 - Floci running: `docker compose --profile aws up -d floci`
 - ECR registry sidecar (pre-create once):
+
   ```bash
   docker run -d --name floci-ecr-registry \
-    --network data-pipeline-async_api-obs -p 5100:5000 registry:2
+    --network api-observatory_api-obs -p 5100:5000 registry:2
   ```
 
 ## File map

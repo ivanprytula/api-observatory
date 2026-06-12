@@ -188,7 +188,7 @@ _aws-flags:
     @if [ -n "${AWS_ENDPOINT_URL:-}" ]; then echo --endpoint-url "$AWS_ENDPOINT_URL"; fi
 
 # Mirror an S3 bucket (local or remote) to a local directory for offline browsing.
-s3-dump-local bucket="data-pipeline-local" dest=".local-dev/dumps/s3-$(date +%Y%m%d-%H%M%S)":
+s3-dump-local bucket="api-observatory-local" dest=".local-dev/dumps/s3-$(date +%Y%m%d-%H%M%S)":
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{dest}}"
@@ -196,7 +196,7 @@ s3-dump-local bucket="data-pipeline-local" dest=".local-dev/dumps/s3-$(date +%Y%
     echo "S3 mirrored to {{dest}} ($(find {{dest}} -type f | wc -l) files)"
 
 # Upload a local directory to an S3 bucket (local or remote).
-s3-restore-to-remote bucket="data-pipeline-local" src=".local-dev/dumps/s3-YYYYMMDD-HHMMSS":
+s3-restore-to-remote bucket="api-observatory-local" src=".local-dev/dumps/s3-YYYYMMDD-HHMMSS":
     #!/usr/bin/env bash
     set -euo pipefail
     if [ ! -d "{{src}}" ]; then
@@ -271,7 +271,7 @@ floci-up:
     for i in $(seq 1 60); do
         if curl -sf http://localhost:4566/_floci/health > /dev/null 2>&1; then
             source scripts/aws-env.sh
-            aws s3 mb s3://data-pipeline-local >/dev/null 2>&1 || true
+            aws s3 mb s3://api-observatory-local >/dev/null 2>&1 || true
             aws sqs create-queue --queue-name pipeline-events >/dev/null 2>&1 || true
             break
         fi

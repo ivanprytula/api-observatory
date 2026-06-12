@@ -2,12 +2,13 @@
 set -euo pipefail
 
 # Deploy ingestor + dashboard to Floci sandbox (real containers).
+# The project was previously named data-pipeline-async.
 #
-# Prerequisites:
+# prerequisites
 #   - Floci running with ECR registry sidecar:
 #       docker compose --profile aws up -d floci
 #       docker run -d --name floci-ecr-registry \
-#         --network data-pipeline-async_api-obs -p 5100:5000 registry:2
+#         --network api-observatory_api-obs -p 5100:5000 registry:2
 #   - Terraform applied with ECR enabled: just tf-apply
 #   - Docker daemon available (Floci mounts /var/run/docker.sock)
 #
@@ -57,7 +58,7 @@ fi
 if ! docker ps --filter "name=floci-ecr-registry" --filter "status=running" --format '{{.Names}}' | grep -q .; then
   fail "ECR registry sidecar not running. Start it with:
     docker run -d --name floci-ecr-registry \\
-      --network data-pipeline-async_api-obs -p 5100:5000 registry:2"
+      --network api-observatory_api-obs -p 5100:5000 registry:2"
 fi
 
 if ! aws ecs list-clusters "${AWS_ARGS[@]}" 2>/dev/null | grep -q "${CLUSTER}"; then
