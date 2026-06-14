@@ -1,4 +1,4 @@
-name: Dependabot age guard
+name: Dependabot Age Guard
 
 on:
   pull_request:
@@ -6,6 +6,10 @@ on:
     branches:
       - main
       - develop
+  schedule:
+    # Weekly check on Mondays at 09:00 UTC
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,11 +18,15 @@ permissions:
 
 jobs:
   check-dependabot-pr:
-    name: Check Dependabot PR age on PyPI
+    name: "Check Dependabot PR age on PyPI"
     runs-on: ubuntu-latest
+    # Skip for non-Dependabot PRs; scheduled and manual runs always proceed
+    if: github.actor == 'dependabot[bot]' || github.event_name != 'pull_request'
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Install requirements
         run: python3 -m pip install --upgrade pip && python3 -m pip install requests
@@ -29,3 +37,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 scripts/ci/dependabot_age_gate.py
+        continue-on-error: true # advisory mode: findings are reported but do not block the PR
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          echo "## Dependabot Age Guard" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f age-gate-report.txt ]; then
+            cat age-gate-report.txt >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Age gate check completed. Review job logs for details." >> "$GITHUB_STEP_SUMMARY"
+          fi

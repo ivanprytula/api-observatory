@@ -23,8 +23,8 @@ This page is the shutdown checklist for avoiding cloud and local sandbox spend a
 Use this order after sandbox validation:
 
 ```bash
-just tf-destroy-local
-just sandbox-down
+TF_ENV=sandbox just tf destroy
+just floci-down
 docker compose down -v
 ```
 

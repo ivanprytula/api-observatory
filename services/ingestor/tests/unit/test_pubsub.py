@@ -1,4 +1,4 @@
-"""Unit tests for pubsub.py — no Redis required.
+"""Unit tests for pubsub.py — no Cache required.
 
 Tests cover envelope structure, fail-open behavior, and the new
 ``publish_drift_event`` wrapper using monkeypatch to capture publish calls.
@@ -44,7 +44,7 @@ def capture_publish(
 
 @pytest.fixture()
 def fake_client(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
-    """Inject a mock Redis client so publish_event runs its publish path."""
+    """Inject a mock Cache client so publish_event runs its publish path."""
     mock = AsyncMock()
     mock.publish = AsyncMock()
     monkeypatch.setattr(pubsub_module, "_pubsub_client", mock)
@@ -64,7 +64,7 @@ async def test_publish_event_no_ops_when_client_is_none(
     await publish_event("any.event", {"x": 1})
 
 
-async def test_publish_event_calls_redis_publish(fake_client: AsyncMock) -> None:
+async def test_publish_event_calls_cache_publish(fake_client: AsyncMock) -> None:
     await publish_event("test.event", {"key": "value"})
     fake_client.publish.assert_called_once()
     channel, raw = fake_client.publish.call_args.args
@@ -78,12 +78,12 @@ async def test_publish_event_calls_redis_publish(fake_client: AsyncMock) -> None
     assert "ts" in envelope
 
 
-async def test_publish_event_fail_open_on_redis_error(
+async def test_publish_event_fail_open_on_cache_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """publish_event() swallows Redis errors so the write path is not blocked."""
+    """publish_event() swallows Cache errors so the write path is not blocked."""
     mock = AsyncMock()
-    mock.publish = AsyncMock(side_effect=ConnectionError("redis down"))
+    mock.publish = AsyncMock(side_effect=ConnectionError("cache down"))
     monkeypatch.setattr(pubsub_module, "_pubsub_client", mock)
     # Must not raise
     await publish_event("observation.created", {"observation_id": 1, "source": "s"})

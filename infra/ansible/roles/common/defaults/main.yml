@@ -1,0 +1,34 @@
+---
+# Sensible defaults. Override in group_vars or host_vars as needed.
+common_packages:
+  - 'ca-certificates'
+  - 'curl'
+  - 'git'
+  - 'gnupg'
+  - 'htop'
+  - 'jq'
+  - 'lsb-release'
+  - 'net-tools'
+  - 'python3-pip'
+  - 'python3-venv'
+  - 'unzip'
+
+# /etc/security/limits.d/99-app.conf entries
+common_ulimits:
+  - domain: '*'
+    type: 'soft'
+    item: 'nofile'
+    value: 65536
+  - domain: '*'
+    type: 'hard'
+    item: 'nofile'
+    value: 65536
+
+# /etc/sysctl.d/99-app.conf entries
+common_sysctl:
+  # Required for Cache: allow kernel to overcommit memory
+  - name: 'vm.overcommit_memory'
+    value: '1'
+  # Increase TCP backlog for high-connection services
+  - name: 'net.core.somaxconn'
+    value: '1024'

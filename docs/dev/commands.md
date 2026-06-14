@@ -2,8 +2,14 @@
 
 Track: B — Engineering Execution
 
-All CLI commands for daily development, testing, migrations, and infrastructure.
-Use Ctrl+F to jump to any section.
+Single command reference for daily development, testing, migrations, and infrastructure.
+
+The `Justfile` is the source of truth for recipe names, arguments, and behavior.
+Run `just --list --unsorted` from the repo root for the live recipe list.
+
+Prefer canonical recipe names in new docs. Compatibility aliases such as
+`sandbox-up` still exist, but Floci workflows should document `floci-*` names.
+Workflow docs should link here instead of duplicating this catalog.
 
 ---
 
@@ -17,127 +23,113 @@ just doctor
 `just doctor` verifies host requirements and prepares `.local-dev/` folders for raw dumps, verbose
 responses, traceback captures, and local logs.
 
-### Start All Services
+### Local URL Switchers
+
+Use `LOCAL_API_SCHEME` to choose whether local API clients hit the direct ingestor port or the edge proxy:
+
+| Mode | Command prefix | API base | API docs | Dashboard |
+|---|---|---|---|---|
+| Direct HTTP | none/default | `http://127.0.0.1:8000` | `http://127.0.0.1:8000/docs` | `http://127.0.0.1:8501` |
+| Edge HTTPS | `LOCAL_API_SCHEME=https` | `https://127.0.0.1/api` | `https://127.0.0.1/api/docs` | `https://127.0.0.1/` |
+
+Shared helper:
+
+```bash
+source scripts/daily/local-url.sh
+
+curl_local -sf "$(local_api_url /health)"
+local_open_url /api/docs
+BRUNO_BASE_URL="$(bash scripts/daily/local-url.sh bruno-base-url)"
+```
+
+Full matrix and override variables: [docs/setup/local-url-matrix.md](../setup/local-url-matrix.md).
+
+### Start Services
 
 Two modes depending on whether you want the app container running or the app running locally:
 
 ```bash
-# Mode 1: full app stack (app container + all infra) — matches README Quick Start
-just up          # db, redis, redpanda, ingestor, mongodb
-just sandbox-up  # + Floci local AWS (S3, SQS)
+# Mode 1: full MVP stack (db, cache, broker, ingestor, dashboard)
+just up
+
+# Mode 1 + HTTPS parity (requires certs — run scripts/setup/02-setup-local-https.sh first):
+just up-https   # includes edge on :443; LOCAL_API_SCHEME=https for API clients
 
 # Mode 2: infra only — use when running uvicorn directly outside Docker
-bash scripts/daily/01-start-dev-services.sh  # db, redis, redpanda, mongodb, jaeger
+docker compose up -d db cache broker
 # then in a second terminal:
 uv run uvicorn services/ingestor/main:app --reload
 
 # Stop all:
 just down
+
+# Stop edge specifically (keeps core services running):
+just down-https
 ```
 
 ### Run Dev Server (no Docker)
 
 ```bash
-# Install deps
 uv sync
-
-# Start Uvicorn with auto-reload (requires Postgres running via Mode 2 above)
-uv run uvicorn services/ingestor/main:app --reload
-
-# With custom port
-uv run uvicorn services/ingestor/main:app --reload --port 8001
+uv run uvicorn services.ingestor.main:app --reload
+uv run uvicorn services.ingestor.main:app --reload --port 8001
 ```
 
 ### Health Check
 
 ```bash
-curl http://localhost:8000/health
-curl http://localhost:8000/metrics
+# Uses LOCAL_API_SCHEME and local edge path defaults:
+just api-check
+
+# Manual equivalent:
+source scripts/daily/local-url.sh
+curl_local -sf "$(local_api_url /health)"
+curl_local -sf "$(local_api_url /readyz)"
+curl_local -sf "$(local_api_url /metrics)"
+
+# HTTPS parity:
+LOCAL_API_SCHEME=https just api-check
 ```
 
-### Gateway Smoke Tests (API Gateway 5.4)
-
-Run these checks after `docker compose up -d` to validate the local Nginx gateway pathing and
-basic route health.
+## Database Management
 
 ```bash
-# One-command automated smoke test
-./scripts/testing/04-gateway-smoke.sh
+# Apply all pending migrations
+just migrate
 
-# Optional custom gateway URL (if not localhost)
-./scripts/testing/04-gateway-smoke.sh https://my-gateway.local
+# Full DB wipe → restart → migrate → wait for readiness
+just db-reset
 ```
 
-Equivalent manual checks:
+### Connect to PostgreSQL
 
 ```bash
-# 1) Ensure compose model is valid before runtime checks
-docker compose config >/tmp/compose.out && echo "compose-config-ok"
+# Safe wrapper — blocks accidental prod/RDS connections
+just psql-safe
 
-# 2) Gateway entrypoint responds over HTTPS (self-signed cert in local dev)
-curl -k -I https://localhost/
-
-# 3) Ingestor docs are reachable via gateway API prefix
-curl -k -I https://localhost/api/docs
-
-# 4) Analytics service health route is reachable through gateway routing
-curl -k https://localhost/analytics/health
-
-# 5) Request-ID is returned by gateway for API requests
-curl -k -sSI https://localhost/api/docs | grep -i "x-request-id"
+# Direct (local only)
+docker compose exec db psql -U postgres -d api_observatory
+psql "postgresql://postgres:postgres@127.0.0.1:5432/api_observatory"
 ```
 
-Expected outcomes:
+### Useful psql Commands
 
-- `compose-config-ok` is printed.
-- HTTPS checks return `200` or `30x` (route-dependent).
-- `/analytics/health` returns a healthy JSON/text response from the analytics service.
-- `x-request-id` header is present for `/api/*` responses.
+```sql
+\d observations
+SELECT pid, usename, state FROM pg_stat_activity;
 
-### Service Discovery Checks (Orchestrator DNS)
-
-Validate that gateway upstream targets use orchestrator DNS/service names (not localhost or
-container IP assumptions):
-
-```bash
-# One-command service discovery validation
-./scripts/testing/05-service-discovery-dns.sh
+-- EXPLAIN ANALYZE is opt-in: set ALLOW_EXPLAIN_ANALYZE=true in test env only.
+-- Never run EXPLAIN ANALYZE against remote/staging/prod RDS — it causes full table scans.
+-- For local curiosity: EXPLAIN (FORMAT JSON) SELECT ... WHERE source_id = 1 LIMIT 10;
 ```
 
-What this verifies:
-
-- `docker-compose.yml` is valid.
-- Every Nginx upstream host maps to a Compose service name.
-- No upstream host uses loopback (`localhost`, `127.x.x.x`).
-
-### Architecture Principles Guard (Step 6)
-
-Run a single-command architecture guard to verify bounded contexts, idempotency markers,
-resilience primitives, SLO alert rules, and contract versioning artifacts:
+### Cache
 
 ```bash
-./scripts/testing/06-architecture-principles-guard.sh
-```
-
-What this verifies:
-
-- Service boundaries are enforced (`scripts/ci/check_service_boundaries.py`).
-- `processed_events` idempotency key and index markers are present in models.
-- Outbox/Inbox baseline artifacts are present (models, migration markers, repository helper, integration test).
-- Retry and circuit-breaker primitives are present under `libs/platform`.
-- SLO alert rules include latency and critical error-rate alerts.
-- Contracts version/changelog artifacts exist, with optional diff-gate when `origin/main` is available.
-
-Run focused Outbox/Inbox schema checks (6.2 hardening):
-
-```bash
-uv run pytest tests/integration/schema/test_schema_integrity.py -k "OutboxInboxSchema" -m postgresonly -q -o addopts=''
-```
-
-Run focused bulkhead/retry-budget checks (6.4 hardening):
-
-```bash
-uv run pytest services/ingestor/tests/unit/core/test_bulkhead_retry_budget.py -q -o addopts=''
+docker compose exec cache redis-cli
+docker compose exec cache redis-cli KEYS "*"
+docker compose exec cache redis-cli FLUSHALL   # dev only
+docker compose exec cache redis-cli MONITOR
 ```
 
 ---
@@ -145,413 +137,170 @@ uv run pytest services/ingestor/tests/unit/core/test_bulkhead_retry_budget.py -q
 ## Migrations (Alembic)
 
 ```bash
-# Show current revision applied to the DB
 uv run alembic current
-
-# Show full migration history
 uv run alembic history --verbose
-
-# Apply all pending migrations (upgrade to head)
 uv run alembic upgrade head
-
-# Apply one step forward
 uv run alembic upgrade +1
-
-# Rollback one step
 uv run alembic downgrade -1
-
-# Rollback to specific revision
 uv run alembic downgrade <revision-id>
-
-# Autogenerate migration from model diffs
-uv run alembic revision --autogenerate -m "add_source_column_to_observations"
-
-# Create blank migration (for manual edits)
+uv run alembic revision --autogenerate -m "add_column_to_sources"
 uv run alembic revision -m "create_indexes_on_observations"
-
-# Show the SQL without applying (dry run)
-uv run alembic upgrade head --sql
+uv run alembic upgrade head --sql   # dry-run
 ```
 
 > **Gotcha:** Python 3.14 + Alembic requires `sqlalchemy[asyncio]` in deps.
-> See [docs/dev/gotchas.md — Alembic Migrations on Python 3.14 + SQLAlchemy Async](gotchas.md#gotcha-alembic-migrations-on-python-314--sqlalchemy-async) for details.
+> See [docs/dev/gotchas.md](gotchas.md) for details.
+
+---
+
+## Seeding
+
+```bash
+# Create default admin user (201 on first run, 409 if already exists — both OK)
+just create-admin
+
+# Seed one demo source (required by contracts tests — creates source_id=1)
+just seed-source
+
+# Seed three demo sources for probe/scorecard/drift workflows
+just seed-demo
+
+# Seed one healthy + one failing source for probe contrast demo
+just seed-probes
+```
+
+---
+
+## API Testing
+
+### Bruno (end-to-end)
+
+```bash
+# Full E2E cycle: db-reset → create-admin → seed-source → Bruno collections
+just api-test
+
+# Run Bruno manually with the active local base URL
+BRUNO_BASE_URL="$(bash scripts/daily/local-url.sh bruno-base-url)"
+cd bruno && bru run . -r --env local --env-var "baseUrl=${BRUNO_BASE_URL}"
+
+# HTTPS parity:
+LOCAL_API_SCHEME=https just api-test
+```
+
+### curl — Auth
+
+```bash
+source scripts/daily/local-url.sh
+TOKEN=$(curl_local -sf -X POST "$(local_api_url /api/v1/auth/token)" \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'username=admin&password=admin123' | \
+  python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+curl_local -H "Authorization: Bearer $TOKEN" "$(local_api_url /api/v1/scorecards)"
+```
+
+### curl — Core Resources
+
+```bash
+source scripts/daily/local-url.sh
+
+# Sources
+curl_local -H "Authorization: Bearer $TOKEN" "$(local_api_url /api/v1/sources)"
+curl_local -H "Authorization: Bearer $TOKEN" "$(local_api_url /api/v1/sources/1/health)"
+
+# Scorecards
+curl_local -H "Authorization: Bearer $TOKEN" "$(local_api_url '/api/v1/scorecards?limit=20')"
+
+# Drift events
+curl_local -H "Authorization: Bearer $TOKEN" \
+  "$(local_api_url /api/v1/contracts/sources/1/drift-events)"
+
+# Agent enrichment
+curl_local -X POST -H "Authorization: Bearer $TOKEN" \
+  "$(local_api_url /api/v1/agent/enrich/1)"
+```
+
+### OpenAPI
+
+```bash
+source scripts/daily/local-url.sh
+local_open_url /api/docs
+curl_local "$(local_api_url /openapi.json)"
+```
 
 ---
 
 ## Tests
 
-### Run All Tests
-
 ```bash
-# Full test suite (no Postgres required — uses aiosqlite)
-uv run pytest tests/ -v
+# Unit only (no DB, no Docker)
+just test-unit
+uv run pytest -m unit -q
 
-# Quiet output
-uv run pytest tests/
+# Integration (Postgres + Cache via testcontainers)
+just test-integration
+uv run pytest -m integration -q
+
+# E2E (full stack required)
+just test-e2e
+uv run pytest -m e2e -q
 
 # Stop on first failure
-uv run pytest tests/ -x
+uv run pytest -x
 
-# Show local variables on failure
-uv run pytest tests/ -v --tb=long
+# Specific file or test
+uv run pytest tests/test_observations.py::test_create_observation -xvs
 ```
 
-### Run by Layer
+### Coverage
 
 ```bash
-# Unit tests only
-uv run pytest tests/unit/ -v
-
-# Integration tests only
-uv run pytest tests/integration/ -v
-
-# A specific test file
-uv run pytest tests/test_observations.py -v
-
-# A specific test by keyword (name match)
-uv run pytest tests/ -k "test_create" -v
-
-# A specific test by exact node ID
-uv run pytest tests/test_observations.py::test_create_observation -v
-```
-
-### Run with Real PostgreSQL
-
-Quick method (using script):
-
-```bash
-# Starts container, runs tests, cleans up automatically
-./scripts/testing/01-test-with-postgres.sh tests/integration/observations/test_concurrency.py -v
-```
-
-#### Manual Method
-
-```bash
-# Ensure fixture can auto-provision test DB
-unset DATABASE_URL_TEST
-
-# Run tests
-uv run pytest tests/ -v
-
-# Run specific test file
-uv run pytest tests/integration/observations/test_query_analysis.py -v
-
-# Run specific test
-uv run pytest tests/integration/observations/test_query_analysis.py::TestQueryAnalysis::test_date_range_query_uses_index -xvs
-```
-
-#### Settings
-
-- DATABASE_URL_TEST unset (recommended): pytest fixtures start an ephemeral Postgres via testcontainers
-- Optional override: set DATABASE_URL_TEST to an existing PostgreSQL URL
-
-#### Notes
-
-- Default: SQLite in-memory tests only -> 192 passed, 10 skipped (PostgreSQL tests)
-- With Docker available for testcontainers -> 202 passed (all tests including EXPLAIN ANALYZE)
-- Fixtures use NullPool to avoid cross-loop connection issues
-
----
-
-## Coverage
-
-```bash
-# Run with coverage report in terminal
-uv run pytest tests/ --cov=services/ingestor
-
-# Coverage with per-file breakdown
 uv run pytest tests/ --cov=services/ingestor --cov-report=term-missing
-
-# Generate HTML report (opens in browser)
 uv run pytest tests/ --cov=services/ingestor --cov-report=html
-xdg-open htmlcov/index.html  # Ubuntu/Debian
-
-# Fail if below threshold
 uv run pytest tests/ --cov=services/ingestor --cov-fail-under=80
-
-# Coverage for a specific module
-uv run pytest tests/ --cov=services/ingestor.crud --cov-report=term-missing
 ```
 
 ---
 
 ## Code Quality
 
-### Ruff (Linting + Formatting)
-
 ```bash
-# Check for lint errors
 uv run ruff check .
-
-# Check + auto-fix
 uv run ruff check . --fix
-
-# Format code
 uv run ruff format .
+uv run ruff format . --check   # CI mode
 
-# Check formatting without changing (CI mode)
-uv run ruff format . --check
-
-# Lint + format in one command
-uv run ruff check . && uv run ruff format .
-```
-
-### Pre-commit
-
-```bash
-# Install hooks (one-time, per repo)
-pre-commit install
-
-# Run all hooks against all files (initial setup / full check)
+# Pre-commit
+pre-commit install              # one-time
 pre-commit run --all-files
-
-# Run all hooks against staged files only
-pre-commit run
-
-# Run a specific hook
 pre-commit run ruff --all-files
-pre-commit run end-of-file-fixer --all-files
-
-# Skip hooks for a specific commit (use sparingly)
-git commit -m "wip" --no-verify
-
-# Update hook versions
-pre-commit autoupdate
-
-# Uninstall hooks
-pre-commit uninstall
-```
-
-> See `docs/pre-commit-setup.md` for hook configuration details.
-> Dependabot branch-target troubleshooting checklist: `docs/dev/dependabot-verification-checklist.md`.
-
----
-
-## API Testing (curl)
-
-### Authentication
-
-#### HTTP Basic Auth (Docs Endpoints)
-
-```bash
-# Access protected docs (prompts for username/password)
-curl -u admin:admin http://localhost:8000/docs
-
-# Set credentials in .env
-# DOCS_USERNAME=admin
-# DOCS_PASSWORD=changeme
-```
-
-#### Bearer Token (v1 API, Stateless)
-
-```bash
-# Static token from .env: API_V1_BEARER_TOKEN=dev-secret-bearer-token
-curl -X POST http://localhost:8000/api/v1/observations/batch/protected \
-  -H "Authorization: Bearer dev-secret-bearer-token" \
-  -H "Content-Type: application/json" \
-  -d '[{"source": "curl", "value": 42.0, "metadata": {}}]'
-```
-
-#### Session-Based Auth (v1 API, Stateful)
-
-```bash
-# 1. Login (creates session, returns Set-Cookie header)
-curl -v -X POST "http://localhost:8000/api/v1/observations/auth/login?user_id=alice"
-
-# 2. Extract session_id from Set-Cookie header (curl stores automatically with -b)
-curl -b "session_id=<EXTRACTED_SESSION_ID>" \
-  -X GET "http://localhost:8000/api/v1/observations/1/secure"
-```
-
-### Observations CRUD
-
-```bash
-# List all observations (paginated)
-curl -H "X-API-Key: $API_KEY" \
-  "http://localhost:8000/api/v1/observations?skip=0&limit=10"
-
-# Get single observation
-curl -H "X-API-Key: $API_KEY" \
-  http://localhost:8000/api/v1/observations/1
-
-# Create an observation
-curl -X POST http://localhost:8000/api/v1/observations \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: $API_KEY" \
-  -d '{"source": "test", "value": 42.0, "metadata": {}}'
-
-# Batch create
-curl -X POST http://localhost:8000/api/v1/observations/batch \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: $API_KEY" \
-  -d '[{"source":"a","value":1.0},{"source":"b","value":2.0}]'
-
-# Update an observation
-curl -X PATCH http://localhost:8000/api/v1/observations/1 \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: $API_KEY" \
-  -d '{"value": 99.0}'
-
-# Delete an observation
-curl -X DELETE http://localhost:8000/api/v1/observations/1 \
-  -H "X-API-Key: $API_KEY"
-
-# Bulk delete
-curl -X DELETE http://localhost:8000/api/v1/observations \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: $API_KEY" \
-  -d '{"ids": [1, 2, 3]}'
-```
-
-### Filter & Search
-
-```bash
-# Filter by source
-curl -H "X-API-Key: $API_KEY" \
-  "http://localhost:8000/api/v1/observations?source=test"
-
-# Filter by value range
-curl -H "X-API-Key: $API_KEY" \
-  "http://localhost:8000/api/v1/observations?min_value=10&max_value=100"
-
-# Aggregate stats
-curl -H "X-API-Key: $API_KEY" \
-  http://localhost:8000/api/v1/observations/stats
-```
-
-### OpenAPI Docs
-
-```bash
-# Interactive Swagger UI
-open http://localhost:8000/docs
-
-# Raw OpenAPI JSON
-curl http://localhost:8000/openapi.json
 ```
 
 ---
 
-## Docker Compose Profiles
-
-### Development (`docker-compose.dev.yml`)
+## Docker & Release
 
 ```bash
-# Dev stack: hot-reload, source mount
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+# Build image
+just docker-build-image                      # tag: api-observatory:local
+just docker-build-image my-tag:v1.2.3
 
-# Shell into ingestor container
-docker compose -f docker-compose.yml -f docker-compose.dev.yml exec ingestor bash
-
-# View ingestor logs
-docker compose -f docker-compose.yml -f docker-compose.dev.yml logs ingestor -f
-```
-
-### Production-like (`docker-compose.prod-like.yml`)
-
-```bash
-# Prod-like: built image, no source mount
-docker compose -f docker-compose.yml -f docker-compose.prod-like.yml up --build
-
-# Check health endpoint in prod-like
-curl http://localhost:8000/health
-```
-
-### Profiles (selective service start)
-
-```bash
-# Start with monitoring stack
-docker compose --profile monitoring up -d
-
-# Start vector stack (Qdrant + AI gateway)
-docker compose --profile vector up -d
-
-# Start processor worker
-docker compose --profile worker up -d
-
-# Start monitoring + vector + worker profiles together
-docker compose --profile monitoring --profile vector --profile worker up -d
-```
-
-> Available profiles in this repo: `monitoring`, `vector`, `worker`.
-
----
-
-## Database Operations
-
-### Connect to PostgreSQL
-
-```bash
-# Via Docker
-docker compose exec db psql -U postgres -d data_pipeline
-
-# Direct psql (if Postgres installed locally)
-psql "postgresql://postgres:postgres@localhost:5432/data_pipeline"
-```
-
-### Useful psql Commands
-
-```sql
--- List tables
-\dt
-
--- Describe a table
-\d observations
-
--- Show active connections
-SELECT pid, usename, application_name, state FROM pg_stat_activity;
-
--- Show table sizes
-SELECT relname, pg_size_pretty(pg_total_relation_size(relid))
-FROM pg_statio_user_tables ORDER BY pg_total_relation_size(relid) DESC;
-
--- Explain a query
-EXPLAIN ANALYZE SELECT * FROM observations WHERE source = 'test' LIMIT 10;
-```
-
-### Redis
-
-```bash
-# Connect to Redis CLI via Docker
-docker compose exec redis redis-cli
-
-# Check all keys (dev only)
-docker compose exec redis redis-cli KEYS "*"
-
-# Flush all cache (dev only)
-docker compose exec redis redis-cli FLUSHALL
-
-# Monitor live commands
-docker compose exec redis redis-cli MONITOR
+# Size audit
+# Full deploy audit: build → size → scan
+just deploy-audit
 ```
 
 ---
 
 ## Observability
 
-### Prometheus Metrics
-
 ```bash
-# View raw metrics
-curl http://localhost:8000/metrics
+source scripts/daily/local-url.sh
+curl_local "$(local_api_url /metrics)"
 
-# Prometheus UI (if compose profile started)
-open http://localhost:9090
-
-# Grafana UI (if compose profile started)
-open http://localhost:3000
-# Default credentials: admin / admin
-```
-
-### Logs
-
-```bash
-# Tail ingestor logs (Docker)
+# Logs
 docker compose logs ingestor -f
-
-# Filter for errors only
 docker compose logs ingestor -f | grep '"level":"ERROR"'
-
-# Filter by correlation ID
 docker compose logs ingestor | grep '"cid":"<value>"'
 ```
 
@@ -559,198 +308,155 @@ docker compose logs ingestor | grep '"cid":"<value>"'
 
 ## Load Testing
 
-### k6
-
-```bash
-# Install k6 (Linux)
-sudo apt-get install k6
-
-# Run a load test script
-k6 run scripts/load_test.js
-
-# With custom VUs and duration
-k6 run --vus 50 --duration 30s scripts/load_test.js
-
-# Output results to JSON
-k6 run --out json=results.json scripts/load_test.js
-```
-
-### Locust (if configured)
-
-```bash
-# Start Locust web UI
-uv run locust -f scripts/testing/locustfile.py --host http://localhost:8000
-
-# Headless mode
-uv run locust -f scripts/testing/locustfile.py \
-  --host http://localhost:8000 \
-  --users 100 --spawn-rate 10 --run-time 60s --headless
-```
-
 ---
 
-## Infrastructure & Terraform (Floci)
+## Infrastructure & Sandbox (Floci)
 
-### One-Time Setup
+Use this section for the local AWS-shaped Floci sandbox. Prefer canonical
+`floci-*` recipes; older `sandbox-*` aliases still exist for compatibility but
+are not the recommended docs surface.
 
-First, configure AWS sandbox profile (see [docs/setup/sandbox-aws-profile.md](setup/sandbox-aws-profile.md)):
+### One-Time AWS Profile Setup
 
 ```bash
-# Add to ~/.aws/credentials
+# ~/.aws/credentials
 [sandbox]
 aws_access_key_id     = test
 aws_secret_access_key = test
 
-# Add to ~/.aws/config
+# ~/.aws/config
 [profile sandbox]
 region = eu-central-1
 ```
 
-### Session Initialization
+See [docs/setup/sandbox-aws-profile.md](../setup/sandbox-aws-profile.md).
+
+### Floci Workflow
 
 ```bash
-# Start Floci emulator
-just sandbox-up
+# Start Floci, seed S3/SQS, start Compose infra, migrate, and seed admin/demo
+just floci-up
 
-# Initialize Terraform backend (once per terminal session before first plan)
-just tf-init
+# Start uvicorn locally with Floci-shaped AWS env
+just floci-dev
+
+# Validate Floci health, S3, SQS, and optional API health
+just floci-validate
+
+# Run Floci-specific E2E tests
+just floci-test
+
+# Stop Floci only; Compose data-plane can keep running
+just floci-down
 ```
 
-### Daily Terraform Workflow
+`just floci-up` already creates the local S3 bucket and SQS queue and seeds
+admin/demo data. Use `just create-admin`, `just seed-demo`, or
+`just seed-source` only for targeted local resets.
+
+### Terraform
 
 ```bash
-# Then iterate as many times as needed (same terminal, no re-init)
-just tf-plan-local          # Review resources to create/modify
-just tf-apply-local         # Apply the plan
-just tf-plan-local          # Make changes, plan again
-just tf-apply-local         # Apply the new plan
-# ... repeat as needed
+# Sandbox/Floci Terraform
+just tf init          # init backend once per terminal session
+TF_ENV=sandbox just tf plan
+TF_ENV=sandbox just tf apply
+TF_ENV=sandbox just tf show
+
+# Full reset: init → plan → apply
+TF_ENV=sandbox just tf fresh
+
+# Real AWS dev Terraform
+TF_ENV=dev just tf plan
+TF_ENV=dev just tf apply
 ```
 
-**Note:** You only run `tf-init` once when you open a new terminal. Subsequent plan/apply commands in the same terminal don't need re-initialization.
+`just tf apply` applies the saved plan from `just tf plan`; it does not run a
+fresh plan first. Use `just tf fresh` when you want init → plan → apply in one
+sequence.
 
-### State Inspection
+### Floci Deploy
 
 ```bash
-# View all deployed resources and their attributes
-just tf-show-local
-
-# List all managed resources by ID
-just tf-state-list
+# Build, push, and deploy to Floci-backed ECS after Terraform has created ECS resources
+just floci-deploy
 ```
 
-### Full Reset
+### Compatibility Aliases
+
+These aliases still run, but new docs should prefer the canonical name on the right:
+
+| Compatibility alias | Canonical recipe |
+|---|---|
+| `just sandbox-up` | `just floci-up` |
+| `just sandbox-down` | `just floci-down` |
+| `just sandbox-reset` | `just floci-reset` |
+| `just sandbox-dev` | `just floci-dev` |
+| `just sandbox` | `just floci-test` |
+| `just sandbox-deploy` | `just floci-deploy` |
+
+### Stack Awareness
+
+Use `just stack-info` to print the active backend stack from env vars and Docker state.
+Call it from `just up`, `just dev`, or `just floci-dev` to get an immediate banner:
 
 ```bash
-# Destroy all resources and start fresh (init → plan → apply)
-just tf-apply-local-fresh
-
-# Or manually destroy and keep state backend
-just tf-destroy-local
+=== STACK SUMMARY ===
+  Cloud backend   : Local-Docker | Floci (…)| AWS (profile=…)
+  Terraform env   : sandbox | dev
+  Postgres        : Local-Compose-Postgres | External (host=…)
+  Cache           : redis://cache:6379 | unset
+  BROKER_URL: broker:29092 | unset
+  MinIO endpoint  : 127.0.0.1:9000 | unset
+  INGESTOR_URL    : $(bash scripts/daily/local-url.sh api-base-url)
+======================
 ```
 
-### Real AWS (Dev Environment)
+### Environment variable matrix (quick reference)
+
+| Variable | local-docker | sandbox | dev | prod |
+|---|---|---|---|---|
+| `ENVIRONMENT` | `development` | `development` | `development` | `production` |
+| `DATABASE_URL` | Compose-injected | Compose-injected | AWS RDS DSN | AWS RDS DSN |
+| `CACHE_URL` | `redis://cache:6379` | `redis://cache:6379` | ElastiCache endpoint | ElastiCache endpoint |
+| `BROKER_URL` | `broker:29092` | `broker:29092` | MSK bootstrap | MSK bootstrap |
+| `LOG_FORMAT` | `json` | `json` | `json` | `json` |
+| `AWS_PROFILE` | unset | `sandbox` | named dev profile | prod profile |
+| `AWS_ENDPOINT_URL` | unset | `http://127.0.0.1:4566` | unset | unset |
+
+### Data movement recipes
 
 ```bash
-# Plan against real AWS (requires AWS credentials and backend config)
-just tf-plan-dev
+# Dump local Compose DB → timestamped .sql
+just pg-dump
 
-# Apply real AWS infrastructure
-just tf-apply-dev
+# Restore into local Compose DB (drops schema first)
+just pg-restore .local-dev/dumps/api-observatory-20260101-120000.sql
+
+# Pull a gzipped dump from S3 and restore into local Compose DB
+just pg-restore-from-s3 s3://api-observatory-local/dumps/prod-snapshot.sql.gz
+
+# Mirror S3 bucket to local dir (Floci or real AWS)
+just s3-dump-local bucket=api-observatory-local dest=.local-dev/dumps/s3-20260101
+
+# Upload local dir to S3
+just s3-restore-to-remote bucket=api-observatory-local src=.local-dev/dumps/s3-20260101
 ```
 
-### Cleanup
+### Safety guards
 
-```bash
-# Destroy Floci infrastructure
-just tf-destroy-local
-
-# Stop Floci emulator
-just sandbox-down
-```
+- `just psql-safe` (default target `db`) blocks connections to `*.rds.amazonaws.com` or `*.amazonaws.com` hostnames.
+- `EXPLAIN ANALYZE` integration tests skip by default; opt in with `ALLOW_EXPLAIN_ANALYZE=true` only against local Postgres.
+- Never run `EXPLAIN ANALYZE` against remote RDS — it executes queries synchronously on the production compute.
 
 ---
 
 ## Git & Conventional Commits
 
 ```bash
-# Commit format: <type>(<scope>): <description>
-git commit -m "feat(observations): add batch delete endpoint"
-git commit -m "fix(auth): handle expired JWT token gracefully"
-git commit -m "docs(commands): add load testing section"
-git commit -m "refactor(crud): extract pagination helper"
-git commit -m "test(observations): add integration test for batch create"
-git commit -m "chore(deps): bump SQLAlchemy to 2.0.36"
-
+git commit -m "feat(sources): add probe interval override"
+git commit -m "fix(agent): handle empty classification response"
+git commit -m "docs(commands): align with MVP justfile"
+git commit -m "chore(deps): bump httpx to 0.28"
 # Types: feat, fix, docs, style, refactor, test, chore, perf, ci
-```
-
----
-
-## Data Zoo Platform Services (Phases 1–8)
-
-Commands will be added here as each phase is built.
-
-### Phase 1: Kafka/Redpanda (Event Streaming)
-
-```bash
-# Start Redpanda
-docker compose -f docker-compose.dataZoo.yml up redpanda -d
-
-# Create a topic
-docker exec -it redpanda rpk topic create observations-raw --partitions 3
-
-# List topics
-docker exec -it redpanda rpk topic list
-
-# Produce test message
-docker exec -it redpanda rpk topic produce observations-raw
-
-# Consume from beginning
-docker exec -it redpanda rpk topic consume observations-raw --from-beginning
-```
-
-### Phase 2: MongoDB (Document Store)
-
-```bash
-# Start MongoDB via compose
-docker compose -f docker-compose.dataZoo.yml up mongo -d
-
-# Connect to Mongo shell
-docker exec -it mongo mongosh
-
-# Switch database
-use dataZoo
-
-# List collections
-show collections
-```
-
-### Phase 3: Qdrant (Vector Store)
-
-```bash
-# Start Qdrant
-docker compose -f docker-compose.dataZoo.yml up qdrant -d
-
-# Qdrant UI
-open http://localhost:6333/dashboard
-
-# Check health
-curl http://localhost:6333/healthz
-```
-
-### Phase 5: Ollama (Local LLM)
-
-```bash
-# Pull a model
-ollama pull llama3.2
-
-# Run interactively
-ollama run llama3.2
-
-# List models
-ollama list
-
-# Check running models
-ollama ps
 ```

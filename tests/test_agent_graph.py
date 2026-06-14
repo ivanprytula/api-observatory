@@ -6,7 +6,8 @@ from langgraph.checkpoint.memory import MemorySaver
 from services.ingestor.api_schemas.observations import ObservationClassification
 
 
-pytestmark = pytest.mark.asyncio
+# File-level pytest markers
+pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
 
 @pytest.fixture

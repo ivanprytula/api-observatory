@@ -1,9 +1,9 @@
-"""Cache integration tests — verify Redis caching behavior for single-observation lookups.
+"""Cache integration tests — verify Cache caching behavior for single-observation lookups.
 
 Tests cover:
 - Cache hits/misses
 - Invalidation on write operations
-- Fail-open behavior when Redis errors
+- Fail-open behavior when Cache errors
 - Metrics increments
 """
 
@@ -129,7 +129,7 @@ async def test_patch_process_invalidates_cache(client_with_cache: AsyncClient) -
 async def test_cache_failopen_on_connection_error(
     client_with_cache: AsyncClient,
 ) -> None:
-    """Verify fail-open: Redis errors don't break the API.
+    """Verify fail-open: Cache errors don't break the API.
 
     1. Create observation
     2. Monkeypatch cache.get to raise exception

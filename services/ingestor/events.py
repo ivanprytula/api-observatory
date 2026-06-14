@@ -135,7 +135,7 @@ async def publish_observation_created(
             "kafka_publish_failed",
             extra={"error": str(exc), "observation_id": observation_id},
         )
-    # Also publish to Redis Pub/Sub so the FastAPI WS endpoint and
+    # Also publish to Cache Pub/Sub so the FastAPI WS endpoint and
     # the Django Channels bridge can stream the event in real time.
     source = payload.get("source", "")
     await _pubsub.publish_observation_created(observation_id, source)

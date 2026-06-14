@@ -111,8 +111,9 @@ module "compute" {
   sg_app_id          = module.network.sg_app_id
 
   ecr_repository_url_ingestor = module.ecr.repository_urls["ingestor"]
-  ecr_repository_url_processor = module.ecr.repository_urls["processor"]
+  ecr_repository_url_dashboard = module.ecr.repository_urls["dashboard"]
   image_tag                   = var.image_tag
+  ingestor_service_name       = "ingestor"
 
   # Cost guard: keep MSK disabled in dev by default (~$2.64/day saved).
   msk_cluster_arn     = var.enable_messaging ? module.messaging[0].cluster_arn : ""
@@ -123,4 +124,7 @@ module "compute" {
   ingestor_cpu           = 256
   ingestor_memory        = 512
   ingestor_desired_count = 1
+  dashboard_cpu          = 256
+  dashboard_memory       = 512
+  dashboard_desired_count = 1
 }

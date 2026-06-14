@@ -15,6 +15,7 @@ is unreachable at startup, a warning is logged and the app starts without tracin
 from __future__ import annotations
 
 import logging
+import os
 from typing import TYPE_CHECKING
 
 
@@ -24,6 +25,16 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _initialized = False
+
+
+def _suppress_tzlocal_output() -> None:
+    """Suppress tzlocal's diagnostic print statements during OTel init.
+
+    tzlocal outputs timezone detection info via print() during tracer provider
+    initialization. Setting TZ env var prevents runtime detection.
+    """
+    # tzlocal checks these env vars; setting them prevents runtime detection
+    os.environ.setdefault("TZ", os.environ.get("TZ", "UTC"))
 
 
 def setup_tracing(
@@ -43,6 +54,9 @@ def setup_tracing(
     global _initialized
     if _initialized:
         return
+
+    # Suppress tzlocal output before importing OTel (which triggers tzlocal)
+    _suppress_tzlocal_output()
 
     try:
         from opentelemetry import trace

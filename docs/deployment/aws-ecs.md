@@ -2,7 +2,8 @@
 
 Track: C — Architecture and Platform Strategy
 
-This guide defines the operational sequence for Phase 11 deployment work (commits 13a-13c): image audit, local sandbox validation, and AWS ECS rollout steps.
+This guide defines the operational sequence for Phase 11 deployment work:
+image audit, local Floci validation, and AWS ECS rollout steps.
 
 ## Scope
 
@@ -12,14 +13,20 @@ Use these docs as source of truth:
 
 - [Cloud deployment model](../cloud-deployment.md)
 - [Floci local workflow](../floci-aws-deployment-workflow.md)
-- [Cost teardown checklist](cost-teardown.md)
+- [Deploy runbook](../deployment/deploy-runbook.md)
+- [Cost teardown checklist](../deployment/cost-teardown.md)
+- [Dev command reference](../dev/commands.md)
+
+This guide shows deployment workflow examples only. For exact recipe names,
+arguments, and compatibility aliases, use [docs/dev/commands.md](../dev/commands.md).
 
 ## Prerequisites
 
 - Docker and Docker Compose
-- Terraform + `tflocal` (install with `uv tool install terraform-local`)
-- `awslocal` (install with `uv tool install awscli-local`)
-- No local Trivy install required (scan runs via Docker Compose service)
+- Terraform
+- AWS CLI
+- No local Trivy install required; scan runs via Docker Compose service
+- **First-time AWS deployment**: Complete [Cloud Security Checklist](cloud-security-checklist.md) before proceeding.
 
 Run host checks first:
 
@@ -37,67 +44,97 @@ just deploy-audit
 
 This gate performs:
 
-1. `docker build` for `api-observatory:local`
-2. MVP size audit (default budget 1.5GB; informational for full feature coverage)
-3. Trivy scan with `--severity CRITICAL --exit-code 1` via compose service
+1. Docker build for `api-observatory:local`.
+2. MVP size audit with default budget 1.5GB.
+3. Trivy scan with `--severity CRITICAL --exit-code 1` via compose service.
 
 Run local stack smoke checks after image audit:
 
 ```bash
-docker compose up -d
-docker compose down
+just up
+just api-check
+just down
 ```
 
 ## Phase 13b: Floci Sandbox + Terraform Plan
 
-MSK messaging is disabled by default in dev Terraform (`enable_messaging = false`) to avoid unnecessary spend in sandbox workflows.
+MSK messaging is disabled by default in dev Terraform (`enable_messaging = false`)
+to avoid unnecessary spend in sandbox workflows.
 
-Run the full sandbox validation chain:
+Run the full Floci validation chain:
 
 ```bash
-just sandbox-up
-just tf-plan-local
-just sandbox-test
-just tf-destroy-local
-just sandbox-down
+just floci-up
+just floci-validate
+TF_ENV=sandbox just tf plan
+TF_ENV=sandbox just tf apply
+just floci-test
+TF_ENV=sandbox just tf destroy
+just floci-down
 ```
+
+For a plan-only rehearsal, stop after `TF_ENV=sandbox just tf plan`.
 
 ## Terraform Variables for Local Sandbox
 
-`just tf-plan-local` uses these defaults when not provided:
+`TF_ENV=sandbox just tf plan` uses the sandbox Terraform defaults when not
+provided:
 
 - `TF_VAR_aws_region=us-east-1`
 - `TF_VAR_aws_profile=default`
 - `TF_VAR_availability_zones=["us-east-1a","us-east-1b"]`
-- `TF_VAR_redis_auth_token=local-dev-redis-token`
+- `TF_VAR_cache_auth_token=local-dev-cache-token`
 - `TF_VAR_enable_messaging=false`
 
 Override any value inline if needed:
 
 ```bash
-TF_VAR_enable_messaging=true just tf-plan-local
+TF_ENV=sandbox TF_VAR_enable_messaging=true just tf plan
 ```
 
 ## AWS ECS Rollout (Real Cloud)
 
-From [infra/terraform/environments/dev](../../infra/terraform/environments/dev):
+The preferred path is the GitHub CD Dev workflow: push to `develop` after CI is
+green and let `cd-dev.yml` deploy.
+
+For a manual real AWS rollout, use the deploy runbook sequence:
 
 ```bash
-terraform init \
-  -backend-config="bucket=<state-bucket>" \
-  -backend-config="key=data-zoo/dev/terraform.tfstate" \
-  -backend-config="region=<aws-region>" \
-  -backend-config="use_lockfile=true"
+just dev-preflight
+just deploy-audit
 
-terraform plan
-terraform apply
+TF_ENV=dev just tf plan
+just deploy-ecs
 ```
 
-Then validate the workload endpoint:
+`just deploy-ecs` applies the reviewed saved Terraform plan and then forces new
+ECS deployments for ingestor and dashboard. The GitHub CD workflow requires
+`dev` environment approval and fails if no ALB DNS is available for smoke tests.
+
+## Streamlit Dashboard (Separate Container)
+
+The Streamlit dashboard runs as a dedicated `dashboard` container, not embedded
+in ingestor. It connects to the ingestor API via `INGESTOR_URL`.
+
+### Local access
+
+- Dashboard is available at `http://127.0.0.1:8501` when running via `just up`
+  or `docker compose up -d dashboard`.
+- The `INGESTOR_URL` environment variable, set to `http://ingestor:8000` in
+  compose, tells Streamlit where to reach the API.
+- Both services start independently via `docker compose up -d ingestor dashboard`.
+
+### Cloud access (ALB)
+
+When deployed via the ECS rollout, the dashboard is served at `/dashboard/`
+through the edge HTTPS proxy:
 
 ```bash
-curl -f https://<alb-dns>/docs
+curl -f https://<alb-dns>/dashboard/
 ```
+
+The `/api/*` path continues to route to the ingestor API. The dashboard service
+gets its own ECS task and target group on port 8501.
 
 ## Verification Gates
 

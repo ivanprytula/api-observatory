@@ -1,7 +1,6 @@
 import logging
 
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from langgraph.graph import END, START, StateGraph
 
 from services.ingestor.config import settings
@@ -43,14 +42,23 @@ def build_graph() -> StateGraph:
     return g  # ty: ignore[invalid-return-type]
 
 
-def get_checkpointer() -> AsyncRedisSaver:
-    # AsyncRedisSaver v0.4.x accepts a Redis URL string as first positional argument
-    return AsyncRedisSaver(settings.redis_url)
+def get_checkpointer() -> MemorySaver | object:
+    # Lazy import to avoid crash when langgraph version doesn't have cache module
+    try:
+        from langgraph.checkpoint.redis.aio import AsyncRedisSaver
+
+        return AsyncRedisSaver(settings.cache_url)  # ty: ignore[no-any-return]
+    except ImportError as e:
+        logger.warning(
+            "cache_checkpointer_unavailable",
+            extra={"error": str(e), "fallback": "memory"},
+        )
+        return MemorySaver()
 
 
 _graph = build_graph()
 
-# Default checkpointer for unit tests and local runs without Redis is MemorySaver.
+# Default checkpointer for unit tests and local runs without Cache is MemorySaver.
 # This ensures that checkpoints work out-of-the-box in all test suites and modules.
 memory_saver = MemorySaver()
 observation_enrichment_agent = _graph.compile(checkpointer=memory_saver)
@@ -59,52 +67,52 @@ observation_enrichment_agent_hitl = _graph.compile(
 )
 
 
-_redis_agent = None
-_redis_agent_hitl = None
+_cache_agent = None
+_cache_agent_hitl = None
 
 
 def get_agent():
-    """Get the compiled enrichment agent, using the Redis checkpointer if enabled."""
-    global _redis_agent
-    if _redis_agent is None:
-        if settings.redis_enabled:
+    """Get the compiled enrichment agent, using the Cache checkpointer if enabled."""
+    global _cache_agent
+    if _cache_agent is None:
+        if settings.cache_enabled:
             try:
                 saver = get_checkpointer()
-                _redis_agent = _graph.compile(checkpointer=saver)
+                _cache_agent = _graph.compile(checkpointer=saver)
             except Exception as e:
                 logger.warning(
-                    "redis_checkpointer_failed",
+                    "cache_checkpointer_failed",
                     extra={"error": str(e), "fallback": "memory"},
                 )
-                _redis_agent = observation_enrichment_agent
+                _cache_agent = observation_enrichment_agent
         else:
-            _redis_agent = observation_enrichment_agent
-    return _redis_agent
+            _cache_agent = observation_enrichment_agent
+    return _cache_agent
 
 
 def get_agent_hitl():
-    """Get the compiled HITL enrichment agent, using the Redis checkpointer if enabled."""
-    global _redis_agent_hitl
-    if _redis_agent_hitl is None:
-        if settings.redis_enabled:
+    """Get the compiled HITL enrichment agent, using the Cache checkpointer if enabled."""
+    global _cache_agent_hitl
+    if _cache_agent_hitl is None:
+        if settings.cache_enabled:
             try:
                 saver = get_checkpointer()
-                _redis_agent_hitl = _graph.compile(
+                _cache_agent_hitl = _graph.compile(
                     checkpointer=saver, interrupt_before=["publish"]
                 )
             except Exception as e:
                 logger.warning(
-                    "redis_checkpointer_failed",
+                    "cache_checkpointer_failed",
                     extra={"error": str(e), "fallback": "memory"},
                 )
-                _redis_agent_hitl = observation_enrichment_agent_hitl
+                _cache_agent_hitl = observation_enrichment_agent_hitl
         else:
-            _redis_agent_hitl = observation_enrichment_agent_hitl
-    return _redis_agent_hitl
+            _cache_agent_hitl = observation_enrichment_agent_hitl
+    return _cache_agent_hitl
 
 
 def compile_with_checkpointer():
-    """Return (agent, agent_hitl) compiled with the Redis checkpointer."""
+    """Return (agent, agent_hitl) compiled with the Cache checkpointer."""
     saver = get_checkpointer()
     return (
         _graph.compile(checkpointer=saver),

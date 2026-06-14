@@ -108,6 +108,29 @@ def pypi_release_time(package: str, version: str) -> datetime.datetime | None:
     return min(times)
 
 
+def ensure_label(
+    owner: str, repo: str, token: str, name: str, color: str, description: str
+):
+    """Create label only if it doesn't already exist (idempotent)."""
+    headers = gh_headers(token)
+    base = f"{GITHUB_API}/repos/{owner}/{repo}/labels"
+    if (
+        requests.get(
+            f"{base}/{name}", headers=headers, timeout=REQUEST_TIMEOUT
+        ).status_code
+        == 200
+    ):
+        return
+    r = requests.post(
+        base,
+        headers=headers,
+        json={"name": name, "color": color, "description": description},
+        timeout=REQUEST_TIMEOUT,
+    )
+    if r.status_code not in (200, 201):
+        print("Failed to create label", r.status_code, r.text)
+
+
 def comment_and_close(
     owner: str,
     repo: str,
@@ -134,21 +157,14 @@ def comment_and_close(
         print("Failed to post comment", r.status_code, r.text)
     # Add an informative label instead of closing the PR so maintainers can test locally.
     label = "early-dependency"
-    # Ensure label exists (create if necessary)
-    labels_url = f"{GITHUB_API}/repos/{owner}/{repo}/labels"
-    label_payload = {
-        "name": label,
-        "color": "f29513",
-        "description": "Dependabot: release is under cooldown/maturation",
-    }
-    rlbl = requests.post(
-        labels_url,
-        headers=gh_headers(token),
-        json=label_payload,
-        timeout=REQUEST_TIMEOUT,
+    ensure_label(
+        owner,
+        repo,
+        token,
+        label,
+        "f29513",
+        "Dependabot: release is under cooldown/maturation",
     )
-    if rlbl.status_code not in (200, 201, 422):
-        print("Failed to ensure label exists", rlbl.status_code, rlbl.text)
     # Add the label to the PR (issues endpoint)
     add_label_url = f"{GITHUB_API}/repos/{owner}/{repo}/issues/{pr_number}/labels"
     rlab = requests.post(
@@ -196,6 +212,12 @@ def main():
 
     package, version = found
     print(f"Detected package {package} new version {version}")
+
+    # Skip GitHub Actions (e.g., "sigstore/cosign-installer").
+    # Dependabot updates actions but they don't have PyPI release times.
+    if "/" in package:
+        print(f"Package {package} appears to be a GitHub Action; skipping PyPI lookup")
+        sys.exit(0)
 
     release_time = pypi_release_time(package, version)
     if not release_time:

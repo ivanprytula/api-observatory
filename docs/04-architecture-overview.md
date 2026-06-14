@@ -1,5 +1,7 @@
 # Architecture Overview — api-observatory MVP
 
+> **MVP Scope** — Describes the Phase 1–3 single-service `ingestor` architecture. For the full long-term vision (Phases 0–8, multi-service), see [design/architecture.md](design/architecture.md).
+
 **MVP scope**: Commits 1-12 (PHASE 1-10). Single service (`ingestor`) + four infrastructure
 components. No Django portal, no analytics service, no MongoDB.
 
@@ -19,15 +21,15 @@ flowchart TD
         API["FastAPI Routers\n/sources  /scorecards\n/drift  /agent  /ws"]
         Auth["JWT Auth + RBAC\n(auth.py / security/)"]
         Agent["LangGraph Agent\n5-node StateGraph\n(agent/graph.py)"]
-        PubSub["Redis Pub/Sub\nFan-out\n(pubsub.py)"]
+        PubSub["Cache Pub/Sub\nFan-out\n(pubsub.py)"]
         RateLimit["slowapi\nRate Limiter\n(rate_limiting.py)"]
         CB["Circuit Breaker\n(libs/platform/)"]
         Metrics["Prometheus + OTEL\n(metrics.py / main.py)"]
-        Cache["Redis Cache\n(cache.py)"]
+        Cache["Cache Cache\n(cache.py)"]
     end
 
     DB[("🗄️ PostgreSQL 17\n:5432\nSourceProfile · ContractSnapshot\nDriftEvent · Scorecard")]
-    Redis(["⚡ Redis 7\n:6379\nCache · Pub/Sub\nSession Store · Rate Limit"])
+    Cache(["⚡ Cache 7\n:6379\nCache · Pub/Sub\nSession Store · Rate Limit"])
     Redpanda(["🔴 Redpanda\n:9092 (Kafka API)\n:8082 (HTTP Proxy)\nDrift Events Topic"])
     OpenAI(["🤖 OpenAI API\ngpt-4o-mini (classify)\ngpt-4o (deep_analyze)"])
 
@@ -54,25 +56,25 @@ flowchart TD
     %% Cache hot path
     API -->|"SETEX TTL=30s"| Cache
     Cache -.->|"cache hit"| API
-    Cache <-->|"TCP"| Redis
+    Cache <-->|"TCP"| Cache
 
     %% Pub/Sub: drift event → WebSocket clients
     Redpanda -->|"Kafka consumer"| PubSub
-    PubSub -->|"PUBLISH channel"| Redis
+    PubSub -->|"PUBLISH channel"| Cache
     PubSub -->|"WS push"| Client
 
     %% Rate limiting
     API -->|"check limits"| RateLimit
-    RateLimit <-->|"INCR/TTL"| Redis
+    RateLimit <-->|"INCR/TTL"| Cache
 
     %% Session store
-    Auth <-->|"GET/SETEX"| Redis
+    Auth <-->|"GET/SETEX"| Cache
 
     %% Agent enrichment
     API -->|"POST /agent/enrich"| Agent
     Agent -->|"RAG context fetch"| DB
     Agent -->|"LLM calls"| OpenAI
-    Agent -->|"checkpointer (run state)"| Redis
+    Agent -->|"checkpointer (run state)"| Cache
     Agent -->|"write result"| DB
 
     %% Observability
@@ -80,7 +82,7 @@ flowchart TD
 
     style ingestor fill:#e3f2fd,stroke:#1976d2,color:#000
     style DB fill:#fff3e0,stroke:#e65100,color:#000
-    style Redis fill:#ffebee,stroke:#c62828,color:#000
+    style Cache fill:#ffebee,stroke:#c62828,color:#000
     style Redpanda fill:#f3e5f5,stroke:#6a1b9a,color:#000
     style OpenAI fill:#e8f5e9,stroke:#2e7d32,color:#000
 ```
@@ -101,7 +103,7 @@ APScheduler (60s tick)
 
 GET /api/v1/scorecards/{source_id}
   └─ SELECT PERCENTILE_CONT(0.95) ... GROUP BY window
-       ├─ cache miss → compute → Redis SETEX 30s → return
+       ├─ cache miss → compute → Cache SETEX 30s → return
        └─ cache hit  → return immediately
 ```
 
@@ -110,12 +112,12 @@ GET /api/v1/scorecards/{source_id}
 ```text
 Browser opens WS /ws?token=<jwt>
   └─ JWT verified on handshake
-       └─ subscribe to Redis channel "drift:events"
+       └─ subscribe to Cache channel "drift:events"
 
 Probe detects schema drift
   └─ INSERT DriftEvent
        └─ Kafka publish → topic "drift.events"
-            └─ Ingestor consumer reads → Redis PUBLISH "drift:events" payload
+            └─ Ingestor consumer reads → Cache PUBLISH "drift:events" payload
                  └─ All WS connections receive live push
 ```
 
@@ -133,7 +135,7 @@ POST /api/v1/agent/enrich/{observation_id}
 
 POST /api/v1/agent/enrich/{observation_id}/review  (HITL mode)
   └─ get_agent_hitl() → StateGraph pauses before "publish"
-       └─ checkpointer saves state in Redis
+       └─ checkpointer saves state in Cache
             └─ POST /api/v1/agent/runs/{run_id}/resume {"approve": true}
                  └─ resume from checkpoint → execute publish node
 ```
@@ -160,16 +162,16 @@ Need `PERCENTILE_CONT`, `JSON` operators, and `LISTEN/NOTIFY` for RLS.
 
 ---
 
-### Redis 7
+### Cache 7
 
 **When**: Any state that is ephemeral, high-frequency, or needs TTL — never the primary truth.
 
-**Why not just PostgreSQL**: Redis gives sub-millisecond reads for hot paths and native pub/sub
+**Why not just PostgreSQL**: Cache gives sub-millisecond reads for hot paths and native pub/sub
 for fan-out to N concurrent WebSocket clients (no polling loop needed).
 
 **Five uses in this MVP**:
 
-| Use | Redis primitive | File |
+| Use | Cache primitive | File |
 |-----|----------------|------|
 | Scorecard cache | `SETEX key 30` | `cache.py` |
 | WebSocket fan-out | `PUBLISH channel payload` | `pubsub.py` |
@@ -180,11 +182,11 @@ for fan-out to N concurrent WebSocket clients (no polling loop needed).
 **Env vars**:
 
 ```bash
-REDIS_ENABLED=true          # must be true for WebSocket, rate limiting, agent HITL
-REDIS_URL=redis://redis:6379/0
+CACHE_ENABLED=true          # must be true for WebSocket, rate limiting, agent HITL
+CACHE_URL=redis://cache:6379/0
 ```
 
-**Fail-open**: When `REDIS_ENABLED=false`, rate limiter uses in-memory storage, cache misses fall
+**Fail-open**: When `CACHE_ENABLED=false`, rate limiter uses in-memory storage, cache misses fall
 through to DB, agent uses `MemorySaver`. Safe for unit tests without infrastructure.
 
 ---
@@ -193,7 +195,7 @@ through to DB, agent uses `MemorySaver`. Safe for unit tests without infrastruct
 
 **When**: Async, durable event delivery from the probe scheduler to any subscriber.
 
-**Why not just Redis pub/sub for events**: Redis pub/sub is fire-and-forget — if no subscriber
+**Why not just Cache pub/sub for events**: Cache pub/sub is fire-and-forget — if no subscriber
 is listening when a message arrives, it is lost. Redpanda persists to disk; consumers can catch up
 after restart. Also enables multiple independent consumer groups (a future analytics service can
 read `drift.events` without affecting the WebSocket consumer).
@@ -213,17 +215,17 @@ in [docs/design/architecture.md](design/architecture.md).
 
 - `:9092` — Kafka wire protocol (aiokafka / kafka-python clients)
 - `:8082` — HTTP Proxy (Pandaproxy, REST produce/consume)
-- `:29092` — internal Docker network (`KAFKA_BROKER_URL=redpanda:29092`)
+- `:29092` — internal Docker network (`BROKER_URL=broker:29092`)
 
 **Env vars**:
 
 ```bash
-KAFKA_ENABLED=true
-KAFKA_BROKER_URL=redpanda:29092       # inside Docker Compose network
-# KAFKA_BROKER_URL=localhost:9092     # if ingestor runs outside Docker
+BROKER_ENABLED=true
+BROKER_URL=broker:29092       # inside Docker Compose network
+# BROKER_URL=127.0.0.1:9092     # if ingestor runs outside Docker
 ```
 
-**Fail-open**: When `KAFKA_ENABLED=false`, probe scheduler skips publishing. All probe results
+**Fail-open**: When `BROKER_ENABLED=false`, probe scheduler skips publishing. All probe results
 still write to PostgreSQL. WebSocket clients receive no live events; polling `/api/v1/drift`
 returns historical events normally.
 
@@ -261,13 +263,13 @@ JWT_SECRET=change-me-32-chars-minimum-random-value
 JWT_ALGORITHM=HS256
 JWT_EXPIRY_MINUTES=30
 
-# ── Redis (enables cache, pub/sub, rate limiting, agent checkpointer) ─────────
-REDIS_ENABLED=true
-REDIS_URL=redis://redis:6379/0
+# ── Cache (enables cache, pub/sub, rate limiting, agent checkpointer) ─────────
+CACHE_ENABLED=true
+CACHE_URL=redis://cache:6379/0
 
 # ── Redpanda / Kafka (enables drift event streaming) ─────────────────────────
-KAFKA_ENABLED=true
-KAFKA_BROKER_URL=redpanda:29092
+BROKER_ENABLED=true
+BROKER_URL=broker:29092
 
 # ── LangGraph Agent (optional — all other endpoints work without this) ─────────
 OPENAI_API_KEY=sk-your-real-key-here
@@ -278,12 +280,12 @@ DOCS_PASSWORD=changeme
 
 # ── Observability (optional — /metrics always exposed) ───────────────────────
 OTEL_ENABLED=false
-OTEL_ENDPOINT=http://localhost:4317
+OTEL_ENDPOINT=http://127.0.0.1:4317
 OTEL_SERVICE_NAME=api-obs-ingestor
 ```
 
-The `docker-compose.yml` sets `KAFKA_BROKER_URL`, `REDIS_URL`, and `SERVICE_VERSION` automatically.
-Copy `.env.example` to `.env`, set `REDIS_ENABLED=true` + `KAFKA_ENABLED=true`, and add a real
+The `docker-compose.yml` sets `BROKER_URL`, `CACHE_URL`, and `SERVICE_VERSION` automatically.
+Copy `.env.example` to `.env`, set `CACHE_ENABLED=true` + `BROKER_ENABLED=true`, and add a real
 `OPENAI_API_KEY` for the full feature set.
 
 ---
@@ -292,14 +294,14 @@ Copy `.env.example` to `.env`, set `REDIS_ENABLED=true` + `KAFKA_ENABLED=true`, 
 
 | Commit | Phase | Components Added | Status |
 |--------|-------|-----------------|--------|
-| 1 | Foundation | FastAPI, SQLAlchemy 2.0, PostgreSQL, Redpanda, Redis | ✅ |
+| 1 | Foundation | FastAPI, SQLAlchemy 2.0, PostgreSQL, Redpanda, Cache | ✅ |
 | 2 | Docs | README, tech-map, learning-paths | ✅ |
 | 3 | DevEx | Copilot instructions, pre-commit hooks, skills | ✅ |
 | 4 | Source Registry | `SourceProfile` CRUD, SSRF prevention | ✅ |
 | 5 | Probe Scheduler | APScheduler, HTTP probes, circuit breaker | ✅ |
 | 6 | Scorecard | `PERCENTILE_CONT` aggregation, rolling 24h window | ✅ |
 | 6b | Contract Drift | Schema snapshot diff, severity classification | ✅ |
-| 6c | WebSocket | Redis pub/sub, JWT on handshake, live fan-out | ✅ |
+| 6c | WebSocket | Cache pub/sub, JWT on handshake, live fan-out | ✅ |
 | 8b | Streamlit | 5-panel real-time dashboard | ✅ |
 | 8c | Bruno | 9 collections, 24+ requests, living API docs | ✅ |
 | 9 | Auth | JWT access/refresh tokens, admin/viewer RBAC | ✅ |

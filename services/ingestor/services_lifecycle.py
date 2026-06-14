@@ -1,7 +1,7 @@
 """Resource initialization and lifespan management for external services.
 
 Encapsulates startup/shutdown logic for:
-- Redis cache (optional)
+- Cache (optional)
 - Kafka producer (optional)
 - MongoDB (optional)
 
@@ -32,56 +32,56 @@ async def initialize_external_services() -> None:
     """Initialize all optional external services during app startup.
 
     Services are initialized in order of dependency:
-    1. Redis (for caching)
-    2. Kafka (for events)
+    1. Cache (for caching)
+    2. Broker (for events)
     3. MongoDB (for storage)
 
     Each service failure is logged but non-fatal (fail-open).
     """
 
-    # Initialize Redis cache (optional)
-    if settings.redis_enabled:
+    # Initialize cache backend (optional)
+    if settings.cache_enabled:
         try:
-            await cache.connect_cache(settings.redis_url)
+            await cache.connect_cache(settings.cache_url)
             logger.info(
                 "cache_connected",
-                extra={"service": "redis", "url": settings.redis_url},
+                extra={"service": "cache", "url": settings.cache_url},
             )
             # Phase 13.4: Warm list cache for top N sources
             await _warm_list_cache()
         except Exception as e:
             logger.warning(
                 "cache_connection_failed",
-                extra={"service": "redis", "error": str(e)},
+                extra={"service": "cache", "error": str(e)},
             )
             # Non-fatal: cache is optional, app continues without it
 
-    # Initialize Redis Pub/Sub (separate connection from cache, optional)
-    if settings.redis_enabled:
+    # Initialize Cache Pub/Sub (separate connection from cache, optional)
+    if settings.cache_enabled:
         try:
-            await pubsub.connect_pubsub(settings.redis_url)
+            await pubsub.connect_pubsub(settings.cache_url)
             logger.info(
                 "pubsub_connected",
-                extra={"service": "redis-pubsub", "url": settings.redis_url},
+                extra={"service": "cache-pubsub", "url": settings.cache_url},
             )
         except Exception as e:
             logger.warning(
                 "pubsub_connection_failed",
-                extra={"service": "redis-pubsub", "error": str(e)},
+                extra={"service": "cache-pubsub", "error": str(e)},
             )
 
-    # Initialize Kafka producer (optional)
-    if settings.kafka_enabled:
+    # Initialize event broker producer (optional)
+    if settings.broker_enabled:
         try:
-            await events.connect_producer(settings.kafka_broker_url)
+            await events.connect_producer(settings.broker_url)
             logger.info(
                 "events_producer_connected",
-                extra={"service": "kafka", "broker": settings.kafka_broker_url},
+                extra={"service": "broker", "broker": settings.broker_url},
             )
         except Exception as e:
             logger.warning(
                 "events_producer_connection_failed",
-                extra={"service": "kafka", "error": str(e)},
+                extra={"service": "broker", "error": str(e)},
             )
             # Non-fatal: events are fail-open, app continues without broker
 
@@ -110,7 +110,7 @@ async def initialize_external_services() -> None:
 async def _warm_list_cache() -> None:
     """Pre-warm the list cache for the top N most active sources.
 
-    Executes on startup (after Redis connects) to reduce cold-start latency.
+    Executes on startup (after Cache connects) to reduce cold-start latency.
     Fails open — any error is logged but does not prevent startup.
     """
     try:
@@ -175,7 +175,7 @@ async def cleanup_external_services() -> None:
 
     Cleanup order (LIFO from initialization):
     1. Kafka producer
-    2. Redis cache
+    2. Cache cache
     3. MongoDB
 
     Each cleanup is attempted even if a prior step fails.
@@ -191,7 +191,7 @@ async def cleanup_external_services() -> None:
             extra={"error": str(e)},
         )
 
-    # Cleanup Redis (safe even if not connected)
+    # Cleanup Cache (safe even if not connected)
     try:
         await cache.disconnect_cache()
         logger.info("cache_disconnected")
@@ -201,7 +201,7 @@ async def cleanup_external_services() -> None:
             extra={"error": str(e)},
         )
 
-    # Cleanup Redis Pub/Sub
+    # Cleanup Cache Pub/Sub
     try:
         await pubsub.disconnect_pubsub()
         logger.info("pubsub_disconnected")

@@ -1,4 +1,8 @@
-# Minimal MVP stack: db, redis, redpanda, ingestor
+# Minimal MVP stack: db, cache, broker, ingestor, dashboard
+# Network model: All services (including Floci AWS emulator) share `api-obs` network
+# for inter-service communication (e.g., ingestor → db, ingestor → cache).
+# Host access: All services expose ports to 127.0.0.1 or 0.0.0.0 for local development.
+
 services:
   db:
     build:
@@ -35,12 +39,15 @@ services:
         limits:
           cpus: '1.0'
           memory: '1G'
+    networks:
+      - api-obs
 
-  redis:
+  cache:
     image: redis:7-alpine
-    container_name: api-obs-redis
+    container_name: api-obs-cache
+    # Local host port exposed on loopback only — ingestor connects via Docker internal network at redis://cache:6379
     ports:
-      - '6379:6379'
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
@@ -60,17 +67,19 @@ services:
         limits:
           cpus: '0.25'
           memory: '256M'
+    networks:
+      - api-obs
 
-  redpanda:
+  broker:
     image: redpandadata/redpanda:v24.1.1
-    container_name: api-obs-redpanda
+    container_name: api-obs-broker
     command:
       - redpanda
       - start
       - --smp 1
       - --overprovisioned
       - --kafka-addr internal://0.0.0.0:29092,external://0.0.0.0:9092
-      - --advertise-kafka-addr internal://redpanda:29092,external://localhost:9092
+      - --advertise-kafka-addr internal://broker:29092,external://localhost:9092
       - --pandaproxy-addr 0.0.0.0:8082
       - --advertise-pandaproxy-addr localhost:8082
     ports:
@@ -94,6 +103,8 @@ services:
         limits:
           cpus: '0.5'
           memory: '512M'
+    networks:
+      - api-obs
 
   ingestor:
     build:
@@ -102,8 +113,8 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/api_observatory
-      KAFKA_BROKER_URL: redpanda:29092
-      REDIS_URL: redis://redis:6379
+      BROKER_URL: broker:29092
+      CACHE_URL: redis://cache:6379
       LOG_FORMAT: json
       SERVICE_VERSION: ${SERVICE_VERSION:-0.1.0}
     volumes:
@@ -113,9 +124,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      redis:
+      cache:
         condition: service_healthy
-      redpanda:
+      broker:
         condition: service_healthy
     healthcheck:
       test: ['CMD', 'python', '-c', 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/readyz", timeout=3)']
@@ -142,6 +153,73 @@ services:
         limits:
           cpus: '0.5'
           memory: '512M'
+    networks:
+      - api-obs
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: services/dashboard/Dockerfile
+    container_name: api-obs-dashboard
+    environment:
+      INGESTOR_URL: http://ingestor:8000
+    ports:
+      - '8501:8501'
+    depends_on:
+      ingestor:
+        condition: service_healthy
+    security_opt: [no-new-privileges:true]
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        reservations:
+          cpus: '0.1'
+          memory: '128M'
+        limits:
+          cpus: '0.25'
+          memory: '256M'
+    networks:
+      - api-obs
+
+  edge:
+    image: nginx:1.27-alpine
+    container_name: api-obs-edge
+    profiles: [https]
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/certs:/etc/nginx/certs:ro
+    depends_on:
+      ingestor:
+        condition: service_healthy
+      dashboard:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://127.0.0.1:80/edge-status']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    security_opt: [no-new-privileges:true]
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        reservations:
+          cpus: '0.1'
+          memory: '64M'
+        limits:
+          cpus: '0.25'
+          memory: '128M'
+    networks:
+      - api-obs
 
   trivy:
     image: aquasec/trivy:0.56.2
@@ -153,8 +231,10 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./.local-dev/tmp/trivy-cache:/root/.cache/trivy
     security_opt: [no-new-privileges:true]
+    networks:
+      - api-obs
 
-  # Floci Docker service (optional; started manually via: just floci-start)
+  # Floci Docker service (optional; started manually via: just floci-up)
   # Docker-based Floci is more universal (works on older CPUs that lack x86-64-v3 support)
   # To use docker-compose instead, uncomment and run: docker compose --profile aws up -d floci
   floci:
@@ -167,6 +247,7 @@ services:
       FLOCI_DEFAULT_REGION: ${AWS_REGION:-us-east-1}
       FLOCI_DEFAULT_ACCOUNT_ID: ${AWS_ACCOUNT_ID:-000000000000}
       FLOCI_DEFAULT_AVAILABILITY_ZONE: ${AWS_AVAILABILITY_ZONE:-us-east-1a}
+      FLOCI_SERVICES_ECS_DOCKER_NETWORK: api-obs
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:rw
       - ./.local-dev/tmp/floci-data:/tmp/floci
@@ -189,3 +270,31 @@ services:
         limits:
           cpus: '0.5'
           memory: '512M'
+    networks:
+      - api-obs
+
+# ─── NETWORK ────────────────────────────────────────────────────────────────
+# All services (microservices + infrastructure emulators) share this network
+# for inter-container communication.
+#
+# Services on `api-obs`:
+#   - db (PostgreSQL)
+#   - cache
+#   - broker (message broker)
+#   - ingestor (FastAPI microservice)
+#   - edge (HTTPS proxy, optional via --profile https)
+#   - floci (AWS emulator, optional via --profile aws)
+#
+# Host access: Each service exposes ports to 127.0.0.1 or 0.0.0.0 for localhost access.
+#   Port mappings:
+#   - db:5432 → localhost:5432
+#   - cache:6379 → localhost:6379 (loopback only; ingestor connects via Docker network at redis://cache:6379)
+#   - cache:6379 → localhost:6379
+#   - broker:9092 (Kafka), 8082 (HTTP) → localhost:9092, 8082
+#   - ingestor:8000 → localhost:8000
+#   - dashboard:8501 → localhost:8501 (Streamlit dashboard)
+#   - edge:80, 443 → localhost:80, 443 (HTTPS via edge)
+#   - floci:4566 → 127.0.0.1:4566 (local only)
+networks:
+  api-obs:
+    driver: bridge

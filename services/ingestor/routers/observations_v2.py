@@ -185,7 +185,7 @@ _sliding_window = SlidingWindowLimiter(
 
 def _client_ip(request: Request) -> str:
     """Extract the best available client IP for rate-limit keying."""
-    # Respect reverse-proxy headers first (nginx, ALB, Cloudflare)
+    # Respect reverse-proxy headers first (edge, ALB, Cloudflare)
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
         return forwarded.split(",")[0].strip()

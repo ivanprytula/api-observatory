@@ -3,6 +3,9 @@ import pytest
 from libs.platform.circuit_breaker import CircuitBreaker, CircuitOpenError
 
 
+pytestmark = pytest.mark.integration
+
+
 class FakeTime:
     def __init__(self, start: float = 0.0) -> None:
         self.t = float(start)

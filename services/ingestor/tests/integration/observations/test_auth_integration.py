@@ -87,7 +87,7 @@ class TestSessionAuth:
             ObservationRequest(source="test", timestamp=observation_timestamp, data={}),
         )
 
-        # Create an expired session directly in the fake redis
+        # Create an expired session directly in the fake cache
         session_id = str(uuid.uuid4())
         await auth._session_client.hset(  # ty: ignore[invalid-await]
             session_id,

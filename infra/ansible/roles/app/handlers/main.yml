@@ -1,0 +1,10 @@
+---
+- name: 'Restart application'
+  community.docker.docker_compose_v2:
+    project_src: '{{ app_dir }}'
+    files:
+      - '{{ docker_compose_file }}'
+    restarted: true
+    state: present
+  become: true
+  become_user: '{{ app_user }}'

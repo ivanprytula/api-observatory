@@ -14,7 +14,6 @@ auth:bearer {
   token: {{token}}
 }
 
-# post-MVP: assertions deferred until OPENAI_API_KEY is configured
 assert {
   res.status: in [200, 500]
 }

@@ -35,8 +35,8 @@ security = HTTPBasic()
 # Module-level type aliases (FastAPI-approved pattern)
 type DocsCredentialsDep = Annotated[HTTPBasicCredentials, Depends(security)]
 
-# Redis-backed session store (module-level singleton, initialized in lifespan).
-# Key pattern: session:{session_id} → Redis hash {user_id, role, created_at}
+# Cache-backed session store (module-level singleton, initialized in lifespan).
+# Key pattern: session:{session_id} → Cache hash {user_id, role, created_at}
 _session_client: Redis | None = None
 
 # Simple role names for RBAC learning examples.
@@ -58,20 +58,20 @@ def _jwt_verification_secrets() -> list[str]:
     return secrets_ordered
 
 
-async def connect_session_store(redis_url: str) -> None:
-    """Initialize the Redis session store.
+async def connect_session_store(cache_url: str) -> None:
+    """Initialize the Cache session store.
 
     Args:
-        redis_url: Redis DSN (e.g. redis://localhost:6379/0)
+        cache_url: Cache DSN (e.g. redis://localhost:6379/0)
     """
     global _session_client
-    _session_client = Redis.from_url(redis_url, decode_responses=True)
+    _session_client = Redis.from_url(cache_url, decode_responses=True)
     await _session_client.ping()  # ty: ignore[invalid-await]
-    logger.info("session_store_connected", extra={"url": redis_url})
+    logger.info("session_store_connected", extra={"url": cache_url})
 
 
 async def disconnect_session_store() -> None:
-    """Close the Redis session store connection."""
+    """Close the Cache session store connection."""
     global _session_client
     if _session_client is not None:
         await _session_client.aclose()
@@ -164,7 +164,7 @@ async def verify_session(
         )
 
     if _session_client is None:
-        # Fallback: no Redis — reject all sessions (fail-closed, not fail-open)
+        # Fallback: no Cache — reject all sessions (fail-closed, not fail-open)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Session store unavailable",
@@ -277,10 +277,10 @@ def jwt_role_guard(*required_roles: str):
 async def create_session(
     user_id: str, custom_data: dict[str, Any] | None = None
 ) -> tuple[str, str]:
-    """Create a Redis-backed session. Returns (session_id, session_id).
+    """Create a Cache-backed session. Returns (session_id, session_id).
 
-    Key pattern: session:{session_id} → Redis hash with TTL.
-    Falls back gracefully when Redis is unavailable (logs warning, returns ID).
+    Key pattern: session:{session_id} → Cache hash with TTL.
+    Falls back gracefully when Cache is unavailable (logs warning, returns ID).
     """
     import uuid
 
@@ -309,7 +309,7 @@ async def create_session(
 
 
 async def delete_session(session_id: str) -> None:
-    """Delete a session from Redis (logout / invalidation).
+    """Delete a session from Cache (logout / invalidation).
 
     Args:
         session_id: The session token to invalidate.
@@ -367,7 +367,7 @@ async def create_refresh_token(
     sub: str,
     custom_claims: dict[str, Any] | None = None,
 ) -> str:
-    """Create a refresh token JWT and store its JTI in Redis for revocation.
+    """Create a refresh token JWT and store its JTI in Cache for revocation.
 
     Returns:
         Signed refresh token string.
@@ -403,7 +403,7 @@ async def create_refresh_token(
 
 
 async def verify_refresh_token(token: str) -> dict[str, Any]:
-    """Verify a refresh token JWT and confirm its JTI exists in Redis.
+    """Verify a refresh token JWT and confirm its JTI exists in Cache.
 
     Raises HTTPException 401 if the token is invalid, expired, or revoked.
     """
@@ -455,12 +455,12 @@ async def verify_refresh_token(token: str) -> dict[str, Any]:
 
 
 async def revoke_refresh_token(jti: str) -> None:
-    """Delete a refresh token JTI from Redis (logout / rotation).
+    """Delete a refresh token JTI from Cache (logout / rotation).
 
-    Fail-open: logs a warning if Redis is unavailable.
+    Fail-open: logs a warning if Cache is unavailable.
     """
     if _session_client is None:
-        logger.warning("refresh_revoke_skipped_no_redis", extra={"jti": jti})
+        logger.warning("refresh_revoke_skipped_no_cache", extra={"jti": jti})
         return
     try:
         await _session_client.delete(f"{_REFRESH_TOKEN_PREFIX}{jti}")  # ty: ignore[invalid-await]

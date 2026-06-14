@@ -33,6 +33,16 @@ output "ingestor_task_definition_arn" {
   value       = try(aws_ecs_task_definition.ingestor_fargate[0].arn, null)
 }
 
+output "dashboard_target_group_arn" {
+  description = "ALB target group ARN for dashboard (ECS only)."
+  value       = try(aws_lb_target_group.dashboard[0].arn, null)
+}
+
+output "dashboard_task_definition_arn" {
+  description = "ECS task definition ARN for dashboard (ECS only)."
+  value       = try(aws_ecs_task_definition.dashboard_fargate[0].arn, null)
+}
+
 output "eks_cluster_endpoint" {
   description = "EKS cluster API endpoint (EKS only)."
   value       = null

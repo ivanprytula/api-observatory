@@ -1,13 +1,4 @@
-  repos:
-  - repo: local
-    hooks:
-      - id: ty
-        name: ty type checker
-        entry: uv run ty check
-        language: system
-        types: [python]
-        pass_filenames: true
-        stages: [manual]
+repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
@@ -16,34 +7,59 @@
       - id: check-yaml
         exclude: ^infra/kubernetes/charts/.*/templates/.*\.ya?ml$
       - id: check-toml
+      - id: check-json
       - id: check-added-large-files
       - id: check-merge-conflict
+      - id: check-executables-have-shebangs
+      - id: check-docstring-first
       - id: debug-statements
+      - id: detect-private-key
+        exclude: >
+          (?x)^(
+            .github/hooks/secrets-scanner/.*|
+          )$
       - id: mixed-line-ending
-        args: [ --fix=lf ]
+        args: [--fix=lf]
       - id: destroyed-symlinks
-
+      - id: detect-aws-credentials
+        args: [--allow-missing-credentials]
+        exclude: >
+          (?x)^(
+            scripts/testing/.*|
+            tests/.*|
+            requirements-audit\.txt|
+            \.gitignore|
+            \.pre-commit-config\.yaml|
+            Justfile|
+            docker-compose\.yml|
+            docs/dev/commands\.md|
+            docs/dev/bruno-collections\.md|
+            docs/dev/streamlit-dashboard\.md|
+            docs/user/dashboard\.md|
+            docs/user/overview\.md|
+            docs/learning-paths\.md|
+            setup/environment-setup\.md|
+            bruno/websocket/.*\.bru
+          )$
+      - id: fix-byte-order-marker
+      - id: name-tests-test
+        args: [--pytest-test-first]
+        exclude: >-
+          (?x)^(
+            tests/__init__\.py|
+            tests/fixtures_shared\.py|
+            tests/unit/__init__\.py|
+            tests/integration/__init__\.py|
+            tests/shared/.*
+          )$
+      - id: requirements-txt-fixer
+        files: ^requirements-audit\.txt$
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.14
+    rev: v0.15.16
     hooks:
       - id: ruff-check
         args: [--fix, --config=pyproject.toml]
       - id: ruff-format
-
-  - repo: local
-    hooks:
-      - id: private-docs-safeguard
-        name: private-docs-safeguard
-        entry: ./scripts/ci/02-pre-commit-private-docs.sh
-        language: script
-        types: [file]
-        pass_filenames: false
-      - id: docs-quality-markdown
-        name: docs-quality-markdown
-        entry: uv run python scripts/ci/docs_quality_check.py --profile precommit
-        language: system
-        types: [markdown]
-        pass_filenames: true
 
   - repo: https://github.com/PyCQA/bandit
     rev: 1.9.4
@@ -60,6 +76,29 @@
           language: system
           files: 'pyproject\\.toml|uv\\.lock|requirements-audit\\.txt'
           pass_filenames: false
+
+  - repo: local
+    hooks:
+      - id: ty
+        name: ty type checker
+        entry: uv run ty check
+        language: system
+        types: [python]
+        pass_filenames: true
+        stages: [manual]
+      - id: private-docs-safeguard
+        name: private-docs-safeguard
+        entry: ./scripts/ci/02-pre-commit-private-docs.sh
+        language: script
+        types: [file]
+        pass_filenames: false
+      - id: docs-quality-markdown
+        name: docs-quality-markdown
+        entry: uv run python scripts/ci/docs_quality_check.py --profile precommit
+        language: system
+        types: [markdown]
+        pass_filenames: true
+
   # Temporarily disabled local contracts version hook.
   # Re-enable after moving the check into CI and fixing environment/tooling parity.
   # - repo: local
@@ -71,6 +110,6 @@
   #     files: ^libs/contracts/.*\.py$
   #     stages: [manual]
 
-  ci:
-    # pre-commit.ci does not allow network calls
-    skip: [pip-audit]
+ci:
+  # pre-commit.ci does not allow network calls
+  skip: [pip-audit]

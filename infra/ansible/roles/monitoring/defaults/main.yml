@@ -1,0 +1,25 @@
+---
+# Monitoring stack defaults — override in group_vars or host_vars.
+
+# node_exporter
+node_exporter_version: '1.7.0'
+node_exporter_web_listen_address: ':9100'
+node_exporter_web_telemetry_path: '/metrics'
+
+# promtail
+promtail_version: '2.9.3'
+promtail_config_path: '/etc/promtail/config.yml'
+promtail_server_port: 9080
+
+# docker-compose monitoring stack
+monitoring_stack_enabled: false
+monitoring_stack_dir: '{{ app_dir }}/infra/monitoring'
+monitoring_stack_compose_file: '{{ monitoring_stack_dir }}/docker-compose.monitoring.yml'
+monitoring_stack_ports:
+  prometheus: 9090
+  loki: 3100
+  grafana: 3000
+  alertmanager: 9093
+
+# telemetry collection interval
+monitoring_scrape_interval: 15s

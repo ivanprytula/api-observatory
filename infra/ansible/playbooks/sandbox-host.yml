@@ -1,0 +1,22 @@
+---
+# Configure a host as a Floci sandbox target (Docker + ECS agent env).
+# Intended for the same machine running Floci container.
+#
+# Usage:
+#   ansible-playbook playbooks/sandbox-host.yml -i inventory/hosts.yml \
+#     --limit dev --ask-become-pass
+#
+# After this playbook:
+#   - Docker is installed and running
+#   - ECS agent container is configured (if ecs_agent_enabled=true)
+#   - node_exporter is running for host metrics
+#   - sysctl tuned for Cache/Redpanda compatibility
+
+- name: 'Configure sandbox/ECS host'
+  hosts: all
+  gather_facts: true
+
+  roles:
+    - role: 'common'
+    - role: 'docker'
+    - role: 'monitoring'

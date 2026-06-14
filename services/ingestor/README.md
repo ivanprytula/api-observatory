@@ -13,7 +13,7 @@ manages scraping jobs, and publishes events to Redpanda.
 ### Spin Up
 
 ```bash
-docker compose up ingestor db redis
+docker compose up ingestor db cache
 ```
 
 ### Check Health
@@ -22,12 +22,12 @@ docker compose up ingestor db redis
 curl http://localhost:8000/readyz
 ```
 
-## Port
+## Ports
 
-| Environment    | Port   |
-| -------------- | ------ |
-| Docker Compose | `8000` |
-| Local dev      | `8000` |
+| Service              | Port   | Environment |
+| -------------------- | ------ | ----------- |
+| FastAPI (API)        | `8000` | All         |
+| Streamlit (Dashboard)| `8501` | Docker (`just up`) |
 
 ## Key Environment Variables
 
@@ -36,7 +36,7 @@ curl http://localhost:8000/readyz
 | `DATABASE_URL`  | `postgresql+asyncpg://...` | Must include `+asyncpg` dialect prefix          |
 | `DB_ECHO`       | `false`                    | Set `true` to log all SQL                       |
 | `LOG_LEVEL`     | `INFO`                     | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
-| `REDIS_URL`     | `redis://redis:6379/0`     | Used for rate limiting and caching              |
+| `CACHE_URL`     | `redis://cache:6379/0`     | Used for rate limiting and caching              |
 | `INFERENCE_URL` | `http://inference:8001`    | Upstream vector search service                  |
 
 ## Architecture

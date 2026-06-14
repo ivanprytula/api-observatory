@@ -1,0 +1,5 @@
+---
+# ECS agent role defaults
+ecs_cluster_name: 'data-zoo-dev'
+aws_region: 'eu-central-1'
+ecs_agent_config_path: '/etc/ecs/ecs.config'

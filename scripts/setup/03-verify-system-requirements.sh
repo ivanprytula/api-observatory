@@ -54,7 +54,7 @@ check_python_version() {
     if command -v python3 &>/dev/null; then
         local version
         version=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)
-        if (( $(echo "$version >= 3.14" | bc -l) )); then
+        if awk 'BEGIN{exit !($version >= 3.14)}'; then
             echo -e "${GREEN}✓${NC} python3 (${version})"
             return 0
         else
@@ -87,8 +87,6 @@ echo ""
 echo "Floci / Terraform (optional)"
 # Terraform CLI — required when using the local Floci Terraform stacks
 check_command_warning "terraform" "terraform (install: https://www.terraform.io/downloads) - required for Floci/infra/terraform" || true
-# tflocal — helper wrapper commonly installed via `uv tool install terraform-local`
-check_command_warning "tflocal" "tflocal (install: uv tool install terraform-local) - wrapper for local Terraform/Floci workflows" || true
 
 echo ""
 echo "Database Backup/Restore:"
@@ -102,6 +100,10 @@ echo ""
 echo "Chaos Testing (Optional but recommended):"
 check_command_warning "nsenter" "util-linux" || true
 check_command_warning "tc" "iproute2" || true
+
+echo ""
+echo "Documentation / Diagramming:"
+check_command_warning "dot" "graphviz (install: apt install graphviz / brew install graphviz) - rendering engine for Terravision architecture diagrams" || true
 
 echo ""
 echo "Optional Diagnostics:"
@@ -136,6 +138,10 @@ if command -v pg_dump &>/dev/null; then
     echo "PostgreSQL:      $(pg_dump --version)"
 fi
 
+if command -v dot &>/dev/null; then
+    echo "Graphviz:        $(dot -V 2>&1 | head -n1)"
+fi
+
 echo ""
 
 if [[ "${FAILED}" -eq 0 ]]; then
@@ -145,7 +151,7 @@ if [[ "${FAILED}" -eq 0 ]]; then
     echo ""
     echo "Next steps:"
     echo "  1. cp .env.example .env"
-    echo "  2. bash scripts/daily/01-start-dev-services.sh"
+    echo "  2. just up"
     echo "  3. uv run pytest tests/ -v"
     echo "  4. bash infra/scripts/backup.sh"
     exit 0

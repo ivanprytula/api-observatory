@@ -67,7 +67,7 @@ Use semantic tags for better accessibility and SEO:
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Learn distributed systems through hands-on Docker scenarios">
   <meta name="keywords" content="architecture, distributed systems, docker">
-  <title>data-pipeline-async</title>
+  <title>api-observatory</title>
 </head>
 ```
 

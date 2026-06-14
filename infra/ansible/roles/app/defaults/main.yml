@@ -1,0 +1,3 @@
+---
+app_compose_pull_timeout: 300
+app_migrate_timeout: 120

@@ -11,7 +11,7 @@ dependencies = [
   # Rate limiting
   "slowapi>=0.1.9",
   # Database (async)
-  "sqlalchemy[asyncio]>=2.0.40",
+  "sqlalchemy[asyncio]>=2.0.50",
   "asyncpg>=0.30.0",
   # Database (sync, for Alembic migrations in production)
   "psycopg[binary]>=3.2",
@@ -29,7 +29,7 @@ dependencies = [
   "alembic>=1.13",
   # HTTP client (async)
   "httpx>=0.28.1",                            # requests-like API, HTTP/2 support
-  "aiohttp>=3.11.0",
+  "aiohttp>=3.13.0",
   "prometheus-fastapi-instrumentator>=7.1.0",
   # AWS SDK
   "boto3>=1.28.0",
@@ -66,7 +66,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Floci is deployed via Docker container (just floci-start) for universal CPU compatibility
+# Floci is deployed via Docker container (just floci-up) for universal CPU compatibility
 # See: https://floci.io/aws/#quickstart
 eval = [
   # Evaluation-only dependency, isolated from default runtime security gate
@@ -86,7 +86,7 @@ dev = [
   "pytest-cov>=6.1.0",
   # testcontainers: auto-provision postgres:17-bookworm for local integration tests
   # (Docker must be running; CI uses GHA service container instead)
-  "testcontainers[postgres,redis]>=4.10.0",
+  "testcontainers[postgres,redis]>=4.14.2",
   "testcontainers-floci>=0.1.1",            # Floci integration testing (Docker required)
   "pygments>=2.20.0",
   "httpx>=0.28.1",
@@ -97,9 +97,14 @@ dev = [
   "ruff>=0.15.10",
   # Load testing
   "locust>=2.32.0",
+  # k6 is a standalone CLI, install via:
+  #   - Linux: sudo apt install k6
+  #   - macOS: brew install grafana/k6/k6
+  #   - or: https://k6.io/docs/getting-started/installation/
   # Type checker
   "ty>=0.0.32",
-
+  # Architecture diagrams from IaC
+  "terravision>=0.41.0",
 ]
 
 [tool.pytest.ini_options]

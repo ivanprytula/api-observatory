@@ -19,10 +19,15 @@ npx @usebruno/cli run bruno/ --env local
 
 ```bash
 # Start the stack first
-docker compose up -d
+just up
 
 just api-test
-# equivalent: cd bruno && bru run . -r --env local
+# equivalent:
+BRUNO_BASE_URL="$(bash scripts/daily/local-url.sh bruno-base-url)"
+cd bruno && bru run . -r --env local --env-var "baseUrl=${BRUNO_BASE_URL}"
+
+# HTTPS parity
+LOCAL_API_SCHEME=https just api-test
 ```
 
 All requests should return 2xx. Exit code is 0 on success, non-zero if any request fails.
@@ -30,17 +35,18 @@ All requests should return 2xx. Exit code is 0 on success, non-zero if any reque
 ## Run a single collection
 
 ```bash
-cd bruno && bru run sources --env local
-cd bruno && bru run scorecards --env local
+BRUNO_BASE_URL="$(bash scripts/daily/local-url.sh bruno-base-url)"
+cd bruno && bru run sources --env local --env-var "baseUrl=${BRUNO_BASE_URL}"
+cd bruno && bru run scorecards --env local --env-var "baseUrl=${BRUNO_BASE_URL}"
 ```
 
 ## Environment variables
 
-The `local` environment is defined in [bruno/environments/local.bru](../../bruno/environments/local.bru).
+The `local` environment is defined in [bruno/environments/local.bru](../../bruno/environments/local.bru). Bruno runs should pass the active base URL with `--env-var baseUrl=...` so HTTP and HTTPS modes do not diverge.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `baseUrl` | `http://localhost:8000` | Ingestor base URL |
+| `baseUrl` | `$(bash scripts/daily/local-url.sh bruno-base-url)` | Ingestor base URL for the active local mode |
 | `token` | _(empty)_ | Bearer token — leave blank during MVP (no auth on routes yet) |
 | `source_id` | `1` | Source ID used by get/patch/contracts/scorecards requests |
 
@@ -92,13 +98,13 @@ Bruno CLI does not support WebSocket connections. Use wscat:
 
 ```bash
 npm install -g wscat
-wscat -c "ws://localhost:8000/ws/records/stream"
+wscat -c "$(bash scripts/daily/local-url.sh websocket-url /ws/observations/stream)"
 ```
 
 Or open the Streamlit dashboard for a browser-based live tail:
 
 ```bash
-uv run streamlit run streamlit_app.py
+uv run streamlit run services/dashboard/streamlit_app.py
 ```
 
 ## CI integration (post-MVP)
@@ -107,7 +113,8 @@ uv run streamlit run streamlit_app.py
 - name: Test API with Bruno
   run: |
     npm install -g @usebruno/cli
-    docker compose up -d
-    cd bruno && bru run . -r --env local
-    docker compose down
+    just up
+    BRUNO_BASE_URL="$(bash scripts/daily/local-url.sh bruno-base-url)"
+    cd bruno && bru run . -r --env local --env-var "baseUrl=${BRUNO_BASE_URL}"
+    just down
 ```

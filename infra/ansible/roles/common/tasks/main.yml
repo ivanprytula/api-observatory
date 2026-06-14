@@ -1,0 +1,50 @@
+---
+- name: 'Update apt cache'
+  ansible.builtin.apt:
+    cache_valid_time: 3600
+    update_cache: true
+  become: true
+
+- name: 'Install system packages'
+  ansible.builtin.apt:
+    name: '{{ common_packages }}'
+    state: present
+  become: true
+
+- name: 'Create application group'
+  ansible.builtin.group:
+    name: '{{ app_group }}'
+    state: present
+  become: true
+
+- name: 'Create application user'
+  ansible.builtin.user:
+    append: true
+    create_home: true
+    group: '{{ app_group }}'
+    groups:
+      - '{{ app_group }}'
+    name: '{{ app_user }}'
+    shell: '/bin/bash'
+    state: present
+  become: true
+
+- name: 'Configure system ulimits'
+  community.general.pam_limits:
+    domain: '{{ item.domain }}'
+    limit_item: '{{ item.item }}'
+    limit_type: '{{ item.type }}'
+    value: '{{ item.value }}'
+  become: true
+  loop: '{{ common_ulimits }}'
+  notify: 'Reload sysctl'
+
+- name: 'Configure sysctl parameters'
+  ansible.posix.sysctl:
+    name: '{{ item.name }}'
+    reload: true
+    state: present
+    sysctl_file: '/etc/sysctl.d/99-app.conf'
+    value: '{{ item.value }}'
+  become: true
+  loop: '{{ common_sysctl }}'

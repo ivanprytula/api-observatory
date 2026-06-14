@@ -19,7 +19,7 @@ vpc_cidr           = "10.0.0.0/16"
 availability_zones = ["us-east-1a", "us-east-1b"]
 github_repository  = "ivanprytula/api-observatory"
 image_tag          = "develop"
-ecr_services       = ["ingestor", "processor"]
+ecr_services       = ["ingestor"]
 
 # ACM certificate ARN for your domain (create in AWS console, then set here)
 # acm_certificate_arn = "arn:aws:acm:eu-central-1:123456789012:certificate/..."

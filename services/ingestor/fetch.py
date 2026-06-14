@@ -22,20 +22,18 @@ logger = logging.getLogger(__name__)
 # jsonplaceholder base URL (free, no authentication required)
 EXTERNAL_API_BASE = "https://jsonplaceholder.typicode.com"
 
-"""
-Per-event-loop HTTP client management.
-
-httpx.AsyncClient instances are bound to the event loop they were created on.
-Sharing a single client across different asyncio event loops can cause
-``RuntimeError: Event loop is closed`` when tests/consumers close a loop while a
-client from another loop still exists. To avoid this, we keep a mapping of
-running event loop -> AsyncClient and return the client for the current loop.
-
-`get_http_client()` and `close_http_client()` operate on the current running
-loop only, which is safe for tests that create/close loops per test. This is a
-best-effort approach for cleanup; a `close_all_http_clients()` helper is also
-provided for global shutdown if needed.
-"""
+# Per-event-loop HTTP client management.
+#
+# httpx.AsyncClient instances are bound to the event loop they were created on.
+# Sharing a single client across different asyncio event loops can cause
+# ``RuntimeError: Event loop is closed`` when tests/consumers close a loop while a
+# client from another loop still exists. To avoid this, we keep a mapping of
+# running event loop -> AsyncClient and return the client for the current loop.
+#
+# `get_http_client()` and `close_http_client()` operate on the current running
+# loop only, which is safe for tests that create/close loops per test. This is a
+# best-effort approach for cleanup; a `close_all_http_clients()` helper is also
+# provided for global shutdown if needed.
 
 # Mapping: event loop -> AsyncClient
 _http_clients: dict[asyncio.AbstractEventLoop, httpx.AsyncClient] = {}

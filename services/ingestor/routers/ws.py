@@ -16,11 +16,11 @@ Architecture:
                                                     │
                                             subscribe_events()
                                                     │
-                                           Redis SUBSCRIBE ingestor:events
+                                           Cache SUBSCRIBE ingestor:events
                                                     │
                                           Ingestor writes / jobs ──► PUBLISH
 
-Graceful fallback: if Redis pub/sub is not enabled (e.g. in tests), the
+Graceful fallback: if Cache pub/sub is not enabled (e.g. in tests), the
 handler sends a single ``{"type": "info", "message": "stream unavailable"}``
 message and keeps the connection open for ping/pong until the client closes.
 
@@ -85,7 +85,7 @@ async def _ws_token(
 class _ConnectionManager:
     """Track active WebSocket connections for logging/metrics.
 
-    Not used for fan-out here (each client has its own Redis subscriber) but
+    Not used for fan-out here (each client has its own Cache subscriber) but
     provides a registry for observability and future broadcast capabilities.
     """
 
@@ -121,7 +121,7 @@ async def observations_stream(
     """Stream real-time ingestor events to the client.
 
     Accepts the WebSocket handshake, then forwards every event published to
-    the ``ingestor:events`` Redis Pub/Sub channel until the client disconnects.
+    the ``ingestor:events`` Cache Pub/Sub channel until the client disconnects.
 
     Query parameters:
         token: Bearer token for authentication.  Pass the same value as you
@@ -154,9 +154,9 @@ async def observations_stream(
     _manager.connect(websocket)
 
     try:
-        if not settings.redis_enabled:
+        if not settings.cache_enabled:
             await websocket.send_json(
-                {"type": "info", "message": "stream unavailable: Redis not enabled"}
+                {"type": "info", "message": "stream unavailable: Cache not enabled"}
             )
             # Keep connection open so client can still close cleanly
             await _idle_until_disconnect(websocket)
@@ -173,13 +173,13 @@ async def observations_stream(
 
 
 async def _stream_events(websocket: WebSocket) -> None:
-    """Subscribe to Redis pub/sub and forward events; send keepalive pings.
+    """Subscribe to Cache pub/sub and forward events; send keepalive pings.
 
     Runs two concurrent tasks:
-    - ``_reader``:   receives events from Redis and forwards to WS client
+    - ``_reader``:   receives events from Cache and forwards to WS client
     - ``_pinger``:   sends a ping every ``_PING_INTERVAL`` seconds
 
-    Either task exiting (client disconnect or Redis error) cancels the other.
+    Either task exiting (client disconnect or Cache error) cancels the other.
 
     Args:
         websocket: Accepted FastAPI WebSocket connection.
@@ -225,7 +225,7 @@ async def _stream_events(websocket: WebSocket) -> None:
 async def _idle_until_disconnect(websocket: WebSocket) -> None:
     """Keep the WebSocket open with periodic pings until the client closes.
 
-    Used when Redis is unavailable — the stream is empty but we keep the
+    Used when Cache is unavailable — the stream is empty but we keep the
     connection so the client can detect the fallback and retry later.
 
     Args:

@@ -29,16 +29,19 @@ echo "Scanning diff from $BASE to $HEAD"
 mapfile -t all_changed_files < <(git diff --name-only --diff-filter=ACMR "$BASE" "$HEAD" | sort -u)
 
 # Filter: exclude dev-only and example files
+# Also exclude dashboard UI file (uses session_state.get() which triggers false positives)
 declare -a EXCLUDE_PATTERNS=(
   '\.example\.'          # *.example.* files (e.g., .env.example, secret.example.yaml)
   '/local/'              # local/ directories (e.g., infra/kubernetes/overlays/local/)
-  '^\.env\.local'        # .env.local* files  '^@\.env\.test'         # .env.test files (test environment vars)
+  '^\.env\.local'        # .env.local* files
+  '^\.env\.test'         # .env.test files (test environment vars)
   'conftest\.py$'        # pytest conftest.py (test fixtures)
-  '\.test\.'            # *.test.* test fixtures          # *.test.* test fixtures
+  '\.test\.'            # *.test.* test fixtures
   '^scripts/testing/'    # scripts/testing/ directory (test-only scripts)
   '^tests/'              # tests/ directory (unit/integration tests)
   'services/*/tests/'    # test directories within services
   '\.md$'                # Markdown files (documentation only)
+  'services/dashboard/streamlit_app\.py$'  # Streamlit dashboard (uses session_state.get() patterns)
 )
 
 mapfile -t changed_files < <(
@@ -87,6 +90,12 @@ for file in "${changed_files[@]}"; do
     # Skip obvious placeholders and test values to reduce noise.
     # Expanded patterns: test keys (sk_test_*, pk_test_*), fake values, demo, example
     if printf '%s' "$line" | grep -qiE -- '(example|placeholder|changeme|dummy|sample|fake|sk_test_|pk_test_|test_|_test_value|demo_|localhost:|test[-_]?key)'; then
+      continue
+    fi
+
+    # Skip lines using bash variable expansion (${VAR:-default}) or (${VAR})
+    # These construct values dynamically from env vars, not hardcoded secrets.
+    if printf '%s' "$line" | grep -qE '\$\{[_A-Z][A-Z_]*(\:-[a-z0-9_.-]+)?\}'; then
       continue
     fi
 

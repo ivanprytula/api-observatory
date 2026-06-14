@@ -42,7 +42,7 @@ from services.ingestor.repositories.scorecards import observation_health_sample
 logger = logging.getLogger(__name__)
 
 
-# Global deduplication tracker (in-memory for single-instance; Redis for distributed)
+# Global deduplication tracker (in-memory for single-instance; Cache for distributed)
 _dedup_tracker = IdempotencyKeyTracker(ttl_seconds=3600)
 _source_probe_breakers: dict[int, CircuitBreaker] = {}
 

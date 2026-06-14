@@ -89,7 +89,9 @@ async def get_jobs_health() -> dict[str, Any]:
             "success_rate": metrics.success_rate,
             "is_healthy": metrics.is_healthy,
             "last_error": metrics.last_error,
-            "next_run_time": next_run_times.get(job_name),
+            "next_run_time": next_run_times.get(job_name).isoformat()
+            if next_run_times.get(job_name)
+            else None,
         }
 
     return {

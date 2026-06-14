@@ -1,4 +1,12 @@
-"""Pydantic schemas for Provider Scorecard endpoints."""
+"""Pydantic schemas for Provider Scorecard endpoints.
+
+Re-exports shared models from libs.contracts.schemas_dashboard so that
+both ingestor and dashboard use the same single source of truth.
+
+Request-only schema HealthSampleCreate and the non-shared
+HealthSampleResponse both remain defined here because they are internal to
+the ingestor.
+"""
 
 from __future__ import annotations
 
@@ -6,15 +14,18 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from services.ingestor.constants import (
+from libs.contracts.constants import (
     HEALTH_SAMPLE_ERROR_MSG_MAX,
     HEALTH_SAMPLE_REGION_MAX,
-    SCORECARD_DEFAULT_SLO_TARGET_PCT,
+)
+from libs.contracts.schemas_dashboard import (
+    ProviderScorecard,
+    ScorecardListResponse,
 )
 
 
 class HealthSampleCreate(BaseModel):
-    """Request body for observationing one provider health probe."""
+    """Request body for observing one provider health probe."""
 
     source_id: int = Field(..., ge=1, description="Source profile ID being probed.")
     sampled_at: datetime = Field(..., description="UTC timestamp when the probe ran.")
@@ -23,7 +34,10 @@ class HealthSampleCreate(BaseModel):
     )
     is_success: bool = Field(..., description="True if the probe succeeded.")
     http_status: int | None = Field(
-        None, ge=100, le=599, description="HTTP status code returned by the provider."
+        None,
+        ge=100,
+        le=599,
+        description="HTTP status code returned by the provider.",
     )
     response_body_hash: str | None = Field(
         None,
@@ -42,14 +56,16 @@ class HealthSampleCreate(BaseModel):
         description="Optional probe region label, e.g. eu-west-1.",
     )
     tenant_id: int | None = Field(
-        None, ge=1, description="Tenant scope for multi-tenant deployments."
+        None,
+        ge=1,
+        description="Tenant scope for multi-tenant deployments.",
     )
 
 
 class HealthSampleResponse(BaseModel):
     """Single health probe observation returned by the API."""
 
-    model_config = ConfigDict(from_attributes=True)  # type: ignore[assignment]
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
     source_id: int
@@ -64,58 +80,9 @@ class HealthSampleResponse(BaseModel):
     created_at: datetime
 
 
-class ProviderScorecard(BaseModel):
-    """Computed reliability scorecard for a single API provider.
-
-    Aggregates health samples within a time window into the three headline
-    BI metrics: uptime %, p95 latency, and error-budget burn rate.
-
-    Error-budget burn rate measures how fast the provider consumes its
-    allowed downtime.  A rate of 1.0 means consuming exactly at budget;
-    >1.0 means burning faster (will exhaust the budget before the window
-    closes); <1.0 means comfortable headroom.
-
-    Formula:
-        error_budget_burn_rate = error_rate / (1.0 - slo_target_pct / 100)
-    where error_rate = 1.0 - uptime_pct / 100.
-    """
-
-    source_id: int = Field(..., description="Source profile ID.")
-    source_name: str = Field(..., description="Human-readable source name.")
-    window_days: int = Field(
-        ..., description="Number of days covered by this scorecard."
-    )
-    sample_count: int = Field(..., ge=0, description="Total probes in the window.")
-    error_count: int = Field(..., ge=0, description="Failed probes in the window.")
-    uptime_pct: float = Field(
-        ..., ge=0.0, le=100.0, description="Uptime percentage (success / total * 100)."
-    )
-    avg_latency_ms: float = Field(..., ge=0.0, description="Mean latency in ms.")
-    p50_latency_ms: float = Field(..., ge=0.0, description="Median latency in ms.")
-    p95_latency_ms: float = Field(
-        ..., ge=0.0, description="95th-percentile latency in ms."
-    )
-    slo_target_pct: float = Field(
-        ...,
-        ge=90.0,
-        le=100.0,
-        description=f"SLO uptime target %. Default {SCORECARD_DEFAULT_SLO_TARGET_PCT}.",
-    )
-    error_budget_burn_rate: float = Field(
-        ...,
-        ge=0.0,
-        description=(
-            "Error-budget consumption rate. "
-            "1.0 = on-budget; >1.0 = burning faster than budget allows."
-        ),
-    )
-    generated_at: datetime = Field(
-        ..., description="UTC timestamp this scorecard was computed."
-    )
-
-
-class ScorecardListResponse(BaseModel):
-    """Paginated list of provider scorecards."""
-
-    items: list[ProviderScorecard]
-    total: int
+__all__ = [
+    "HealthSampleCreate",
+    "HealthSampleResponse",
+    "ProviderScorecard",
+    "ScorecardListResponse",
+]

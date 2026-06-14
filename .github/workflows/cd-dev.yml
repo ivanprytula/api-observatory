@@ -1,0 +1,276 @@
+name: CD Dev
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [develop]
+    types: [completed]
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: eu-central-1
+  TF_VERSION: 1.9.0
+  ECS_CLUSTER: data-zoo-dev
+
+jobs:
+  environment-approval:
+    name: "Require dev environment approval"
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    environment: dev
+    concurrency:
+      group: cd-dev-${{ github.run_id }}-approval
+      cancel-in-progress: false
+    steps:
+      - name: Approval gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Dev environment approval required before Terraform apply and ECS rollout."
+
+  terraform-apply:
+    name: "Terraform plan and apply saved plan"
+    runs-on: ubuntu-latest
+    needs: [environment-approval]
+    if: ${{ github.event.workflow_run.conclusion == 'success' && needs.environment-approval.result == 'success' }}
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+    concurrency:
+      group: cd-dev-${{ github.run_id }}-terraform
+      cancel-in-progress: false
+    outputs:
+      terraform_no_changes: ${{ steps.plan.outputs.no_changes }}
+      alb_dns_name: ${{ steps.alb.outputs.dns }}
+      ingestor: ${{ steps.images.outputs.ingestor }}
+      dashboard: ${{ steps.images.outputs.dashboard }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b #v6.2.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_DEV }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Resolve image refs
+        id: images
+        shell: bash
+        run: |
+          set -euo pipefail
+          TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
+          echo "tree_sha=${TREE_SHA}" >> "$GITHUB_OUTPUT"
+          if [ -n "${{ vars.DEV_ECR_REGISTRY }}" ]; then
+            INGESTOR="${{ vars.DEV_ECR_REGISTRY }}/data-zoo-ingestor:${TREE_SHA}"
+            DASHBOARD="${{ vars.DEV_ECR_REGISTRY }}/data-zoo-dashboard:${TREE_SHA}"
+          else
+            INGESTOR="ghcr.io/${{ github.repository_owner }}/data-zoo-ingestor:tree-${TREE_SHA}"
+            DASHBOARD="ghcr.io/${{ github.repository_owner }}/data-zoo-dashboard:tree-${TREE_SHA}"
+          fi
+          echo "ingestor=${INGESTOR}" >> "$GITHUB_OUTPUT"
+          echo "dashboard=${DASHBOARD}" >> "$GITHUB_OUTPUT"
+
+      - name: Terraform init (remote backend)
+        shell: bash
+        env:
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
+          TF_VAR_aws_profile: data-zoo-dev
+          TF_VAR_image_tag: ${{ steps.images.outputs.tree_sha }}
+        run: |
+          set -euo pipefail
+          cd infra/terraform/environments/dev
+          terraform init -reconfigure \
+            -backend-config="bucket=${{ vars.TERRAFORM_STATE_BUCKET_DEV }}" \
+            -backend-config="key=dev/platform/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+
+      - name: Terraform plan (saved plan)
+        id: plan
+        shell: bash
+        env:
+          TF_IN_AUTOMATION: "1"
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
+          TF_VAR_aws_profile: data-zoo-dev
+          TF_VAR_image_tag: ${{ steps.images.outputs.tree_sha }}
+        run: |
+          set -euo pipefail
+          cd infra/terraform/environments/dev
+          set +e
+          terraform plan \
+            -input=false \
+            -lock-timeout=30m \
+            -var-file=terraform.tfvars \
+            -var-file=terraform.aws.tfvars \
+            -out=tfplan
+          PLAN_EXIT=$?
+          set -e
+          if [ "$PLAN_EXIT" -eq 0 ]; then
+            echo "No Terraform changes detected."
+            echo "no_changes=true" >> "$GITHUB_OUTPUT"
+            echo "No Terraform changes detected." > tfplan.txt
+            echo "{}" > tfplan.json
+          elif [ "$PLAN_EXIT" -eq 2 ]; then
+            echo "Terraform changes detected."
+            echo "no_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Terraform plan failed with exit code ${PLAN_EXIT}." >&2
+            exit "$PLAN_EXIT"
+          fi
+          terraform show -no-color tfplan > tfplan.txt 2>/dev/null || true
+          if [ -f tfplan ]; then
+            terraform show -json tfplan > tfplan.json
+          fi
+          {
+            echo "## Terraform Plan"
+            echo
+            echo '```diff'
+            sed -n '1,240p' tfplan.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Terraform apply saved plan
+        shell: bash
+        env:
+          TF_IN_AUTOMATION: "1"
+        run: |
+          set -euo pipefail
+          cd infra/terraform/environments/dev
+          if [ "${{ steps.plan.outputs.no_changes }}" = "true" ]; then
+            echo "No Terraform changes; skipping apply."
+          else
+            terraform apply -input=false -auto-approve -lock-timeout=30m tfplan
+            echo "Terraform: applied saved plan" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Resolve ALB DNS from Terraform
+        id: alb
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd infra/terraform/environments/dev
+          ALB_DNS=$(terraform output -raw alb_dns_name 2>/dev/null || true)
+          if [ -n "${ALB_DNS:-}" ]; then
+            echo "dns=${ALB_DNS}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload Terraform plan artifact
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: terraform-plan
+          path: |
+            infra/terraform/environments/dev/tfplan.txt
+            infra/terraform/environments/dev/tfplan.json
+            infra/terraform/environments/dev/tfplan
+          if-no-files-found: warn
+
+  ecs-rollout:
+    name: "ECS Fargate rollout"
+    runs-on: ubuntu-latest
+    needs: [terraform-apply]
+    if: ${{ github.event.workflow_run.conclusion == 'success' && needs.terraform-apply.result == 'success' }}
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+    concurrency:
+      group: cd-dev-${{ github.run_id }}-ecs
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b #v6.2.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_DEV }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy ingestor (ECS Fargate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="${{ needs.terraform-apply.outputs.ingestor }}"
+          echo "Deploying ingestor: ${IMAGE}"
+          aws ecs update-service \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --service ingestor \
+            --force-new-deployment \
+            --output text
+          aws ecs wait services-stable \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --services ingestor
+          echo "Ingestor stable"
+
+      - name: Deploy dashboard (ECS Fargate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="${{ needs.terraform-apply.outputs.dashboard }}"
+          echo "Deploying dashboard: ${IMAGE}"
+          aws ecs update-service \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --service dashboard \
+            --force-new-deployment \
+            --output text
+          aws ecs wait services-stable \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --services dashboard
+          echo "Dashboard stable"
+
+      - name: Smoke tests
+        env:
+          DEV_ALB_DNS: ${{ vars.DEV_ALB_DNS }}
+          TERRAFORM_ALB_DNS: ${{ needs.terraform-apply.outputs.alb_dns_name }}
+        run: |
+          set -euo pipefail
+          if [ -n "${DEV_ALB_DNS:-}" ]; then
+            INGESTOR_URL="https://${DEV_ALB_DNS}"
+            DASHBOARD_URL="https://${DEV_ALB_DNS}"
+          elif [ -n "${TERRAFORM_ALB_DNS:-}" ]; then
+            INGESTOR_URL="https://${TERRAFORM_ALB_DNS}"
+            DASHBOARD_URL="https://${TERRAFORM_ALB_DNS}"
+          else
+            echo "::error::No ALB DNS available; refusing to mark deploy successful without smoke tests."
+            exit 1
+          fi
+          bash scripts/smoke-test.sh "$INGESTOR_URL" "$DASHBOARD_URL"
+
+  publish-summary:
+    name: "Publish CD summary"
+    runs-on: ubuntu-latest
+    needs: [environment-approval, terraform-apply, ecs-rollout]
+    if: always()
+    steps:
+      - name: Publish summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATUS="deployed"
+          if [ "${{ needs.terraform-apply.result }}" != "success" ]; then
+            STATUS="terraform failed"
+          elif [ "${{ needs.ecs-rollout.result }}" != "success" ]; then
+            STATUS="ecs rollout or smoke test failed"
+          fi
+          TERRAFORM_STATUS="applied saved plan"
+          if [ "${{ needs.terraform-apply.outputs.terraform_no_changes }}" = "true" ]; then
+            TERRAFORM_STATUS="no changes"
+          fi
+          {
+            echo "## CD Dev"
+            echo "Triggered by CI run: ${{ github.event.workflow_run.html_url }}"
+            echo "Commit: ${{ github.event.workflow_run.head_sha }}"
+            echo "Ingestor: ${{ needs.terraform-apply.outputs.ingestor }}"
+            echo "Dashboard: ${{ needs.terraform-apply.outputs.dashboard }}"
+            echo "Terraform: ${TERRAFORM_STATUS}"
+            echo "ALB: ${{ vars.DEV_ALB_DNS || needs.terraform-apply.outputs.alb_dns_name || 'n/a' }}"
+            echo "Status: ${STATUS}"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -21,7 +21,7 @@ SlidingWindowLimiter — exact rolling window, eliminates boundary attack
 Production note
 ---------------
 Both implementations use in-memory Python dicts.  In a multi-worker deployment
-replace the dicts/deques with Redis and atomic Lua scripts (or use
+replace the dicts/deques with Cache and atomic Lua scripts (or use
 `limits.storage.RedisStorage`).  The *algorithm* stays identical; only the storage
 backend changes.
 """
@@ -82,7 +82,7 @@ class TokenBucketLimiter:
 
     Production swap
     ---------------
-    Replace `self._buckets` with a Redis hash and a Lua script that atomically
+    Replace `self._buckets` with a Cache hash and a Lua script that atomically
     reads, refills, and decrements the bucket in a single round-trip.
 
     Example
@@ -187,7 +187,7 @@ class SlidingWindowLimiter:
 
     Production swap
     ---------------
-    Replace `self._windows` with a Redis sorted set (ZRANGEBYSCORE for eviction,
+    Replace `self._windows` with a Cache sorted set (ZRANGEBYSCORE for eviction,
     ZADD for append, ZCARD for count).  A single Lua script makes it atomic.
 
     Example

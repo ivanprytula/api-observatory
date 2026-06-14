@@ -41,7 +41,7 @@ Internet
   -> ALB
   -> ECS services (private subnets)
      -> RDS PostgreSQL
-     -> ElastiCache Redis
+     -> ElastiCache Cache
      -> Messaging layer (when enabled)
 ```
 

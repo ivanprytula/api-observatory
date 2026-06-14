@@ -1,35 +1,32 @@
-name: Security
+name: Security Audit (Scheduled)
 
 on:
-  pull_request:
-    branches:
-      - main
-      - develop
-  workflow_dispatch:
   schedule:
+    # Daily security audit at 02:00 UTC to catch new vulnerabilities
     - cron: "0 2 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
+  security-events: write
+  packages: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 concurrency:
-  group: security-${{ github.ref }}
+  group: security-audit-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  action-ref-validation:
-    name: Validate action refs are immutable
+  security-audit:
+    name: "Security audit (dependencies + SAST + images)"
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
-      - name: Fail on mutable action refs
+      - name: Validate action refs are immutable
         shell: bash
         run: |
           set -euo pipefail
@@ -40,21 +37,11 @@ jobs:
           fi
           mutable_refs=$(grep -nE 'uses:\s*[^#]+@(v[0-9]+|latest|main|master|develop)\b' "${workflow_files[@]}" || true)
           if [ -n "$mutable_refs" ]; then
-            echo "Mutable GitHub Action references detected. Pin actions to full commit SHAs."
+            echo "❌ Mutable GitHub Action references detected. Pin actions to full commit SHAs."
             echo "$mutable_refs"
             exit 1
           fi
-          echo "All action references are pinned to immutable SHAs."
-
-  python-deps:
-    name: Python dependencies (pip-audit)
-    runs-on: ubuntu-latest
-    needs: action-ref-validation
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+          echo "✅ All action references are pinned to immutable SHAs."
 
       - name: Install uv
         shell: bash
@@ -69,153 +56,125 @@ jobs:
       - name: Export dependencies for audit
         run: uv export --frozen --all-groups --no-hashes --format requirements-txt > requirements-audit.txt
 
-      - name: Run pip-audit
+      - name: Run pip-audit for known vulnerabilities
         uses: pypa/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266 # v1.1.0
         with:
           inputs: requirements-audit.txt
-          # Temporary exception: Starlette major upgrade to 1.x is not yet
-          # compatible with current FastAPI stack in this repository.
-          # Mitigation in place: TrustedHostMiddleware configured in app.
-          # Remove this ignore once FastAPI-compatible Starlette fix lands.
           ignore-vulns: |
             PYSEC-2026-161
 
-  codeql:
-    name: CodeQL analyze
+  codeql-audit:
+    name: "CodeQL SAST (Python)"
     runs-on: ubuntu-latest
-    needs: action-ref-validation
     permissions:
       actions: read
       contents: read
       security-events: write
-    strategy:
-      fail-fast: false
-      matrix:
-        language:
-          - python
-          # - javascript # JavaScript analysis currently causes timeout failures; re-enable once optimized
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4.35.2
+        uses: github/codeql-action/init@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
         with:
-          languages: ${{ matrix.language }}
+          languages: python
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4.35.2
+        uses: github/codeql-action/autobuild@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
 
       - name: Analyze
-        uses: github/codeql-action/analyze@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4.35.2
+        uses: github/codeql-action/analyze@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        with:
+          upload: always
+          category: /language:python
 
-  docker-images:
-    name: Docker images (Trivy)
+  docker-scan:
+    name: "Docker image scan (Trivy)"
     runs-on: ubuntu-latest
-    needs:
-      - action-ref-validation
-      - python-deps
     permissions:
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        dockerfile:
-          - name: ingestor
-            path: Dockerfile
-          - name: database
-            path: infra/database/Dockerfile
+      packages: read
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
-      - name: Build Docker image
+      - name: Build ingestor image for scanning
         env:
           DOCKER_BUILDKIT: "1"
         run: |
-          docker build \
-            -t "${{ matrix.dockerfile.name }}:${{ github.sha }}" \
-            -f "${{ matrix.dockerfile.path }}" \
-            .
+          docker build -t ingestor:audit -f Dockerfile .
 
-      - name: Run Trivy scan
+      - name: "Scan ingestor image: strict (HIGH+CRITICAL)"
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ${{ matrix.dockerfile.name }}:${{ github.sha }}
-          format: table
-          ignore-unfixed: true
-          scanners: vuln
-          # For MVP, gate on base OS packages only to reduce noise from embedded binaries.
-          vuln-type: os
-          severity: CRITICAL,HIGH
-          exit-code: "1"
-
-  docker-images-advisory:
-    name: Docker images advisory (Trivy os+library, non-blocking)
-    runs-on: ubuntu-latest
-    needs:
-      - action-ref-validation
-      - python-deps
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        dockerfile:
-          - name: ingestor
-            path: Dockerfile
-          - name: database
-            path: infra/database/Dockerfile
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Build Docker image
-        env:
-          DOCKER_BUILDKIT: "1"
-        run: |
-          docker build \
-            -t "${{ matrix.dockerfile.name }}:${{ github.sha }}" \
-            -f "${{ matrix.dockerfile.path }}" \
-            .
-
-      - name: Run Trivy advisory scan
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: ${{ matrix.dockerfile.name }}:${{ github.sha }}
+          image-ref: ingestor:audit
           format: table
           ignore-unfixed: true
           scanners: vuln
           vuln-type: os,library
           severity: CRITICAL,HIGH
-          # Advisory mode: keep visibility without blocking merges.
+          exit-code: "1"
+
+      - name: "Scan ingestor image: advisory (MEDIUM+HIGH+CRITICAL, non-blocking)"
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        if: always()
+        with:
+          image-ref: ingestor:audit
+          format: table
+          ignore-unfixed: true
+          scanners: vuln
+          vuln-type: os,library
+          severity: MEDIUM,HIGH,CRITICAL
           exit-code: "0"
 
-  security-summary:
-    name: Security summary
+      - name: Build database image for scanning
+        env:
+          DOCKER_BUILDKIT: "1"
+        run: |
+          docker build -t database:audit -f infra/database/Dockerfile .
+
+      - name: "Scan database image: strict (HIGH+CRITICAL)"
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: database:audit
+          format: table
+          ignore-unfixed: true
+          scanners: vuln
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+
+      - name: "Scan database image: advisory (MEDIUM+HIGH+CRITICAL, non-blocking)"
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        if: always()
+        with:
+          image-ref: database:audit
+          format: table
+          ignore-unfixed: true
+          scanners: vuln
+          vuln-type: os,library
+          severity: MEDIUM,HIGH,CRITICAL
+          exit-code: "0"
+
+  audit-summary:
+    name: Audit complete
     runs-on: ubuntu-latest
-    needs:
-      - action-ref-validation
-      - python-deps
-      - codeql
-      - docker-images
+    needs: [security-audit, codeql-audit, docker-scan]
     if: always()
     steps:
-      - name: Fail if action-ref-validation failed
-        if: needs.action-ref-validation.result != 'success'
-        run: exit 1
+      - name: Report results
+        shell: bash
+        run: |
+          echo "## Security Audit Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Check | Result |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Audit | ${{ needs.security-audit.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| CodeQL | ${{ needs.codeql-audit.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Docker Scan | ${{ needs.docker-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Fail if python-deps failed
-        if: needs.python-deps.result != 'success'
-        run: exit 1
-
-      - name: Fail if codeql failed
-        if: needs.codeql.result != 'success'
-        run: exit 1
-
-      - name: Fail if docker-images failed
-        if: needs.docker-images.result != 'success'
-        run: exit 1
-
-      - name: Security workflow passed
-        run: echo "Security workflow completed successfully."
+          if [ "${{ needs.security-audit.result }}" != "success" ] || [ "${{ needs.codeql-audit.result }}" != "success" ] || [ "${{ needs.docker-scan.result }}" != "success" ]; then
+            echo ""
+            echo "⚠️  Security audit found issues. Review above for details."
+            exit 1
+          fi
+          echo "✅ All security audits passed"

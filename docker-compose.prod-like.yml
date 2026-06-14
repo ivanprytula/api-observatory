@@ -1,0 +1,37 @@
+# Production-like overrides (resource constraints + runtime security)
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod-like.yml up
+#
+# What this adds on top of the base:
+#   - read_only: true      → immutable container filesystem
+#   - tmpfs: [/tmp]        → writable scratch space in RAM
+#
+# What the base already always enforces (no toggle needed):
+#   - security_opt: [no-new-privileges:true]
+#   - cap_drop: [ALL]
+
+services:
+  db:
+    deploy:
+      resources:
+        reservations:
+          cpus: '0.5'
+          memory: '512M'
+        limits:
+          cpus: '1.0'          # Tight (prod-like)
+          memory: '1G'         # Tight (prod-like)
+
+  ingestor:
+    read_only: true           # container filesystem is immutable
+    tmpfs: [/tmp]             # writable scratch space in RAM (e.g. for file uploads, caching, etc.)
+    deploy:
+      resources:
+        reservations:
+          cpus: '0.25'
+          memory: '256M'
+        limits:
+          cpus: '0.5'          # Tight (prod-like) — will OOM if app leaks memory
+          memory: '512M'       # Tight (prod-like) — catch memory leaks early
+
+  dashboard:
+    read_only: true
+    tmpfs: [/tmp]

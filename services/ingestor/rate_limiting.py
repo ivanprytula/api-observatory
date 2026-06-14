@@ -32,8 +32,8 @@ def get_user_or_ip_address(request: Request) -> str:
 
 
 # Create a single limiter instance (imported everywhere needed)
-# Uses Redis storage if enabled, otherwise defaults to in-memory
-storage_uri = settings.redis_url if settings.redis_enabled else "memory://"
+# Uses Cache storage if enabled, otherwise defaults to in-memory
+storage_uri = settings.cache_url if settings.cache_enabled else "memory://"
 limiter = Limiter(key_func=get_user_or_ip_address, storage_uri=storage_uri)
 
 

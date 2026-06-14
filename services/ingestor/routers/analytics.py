@@ -559,19 +559,39 @@ async def _compute_timeseries_fallback(
 async def get_tenant_status(db: DbDep) -> dict[str, Any]:
     """Demonstrate RLS by returning stats for the current tenant.
 
-    This query intentionally omits a WHERE clause for tenant_id.
-    PostgreSQL RLS ensures that only observations belonging to the session's
-    active tenant_id are visible and counted.
+    Filters observations based on the current tenant context (from X-Tenant-ID header
+    or JWT token). This mirrors what PostgreSQL RLS would do at the database level:
+    - Admin bypasses isolation (sees all)
+    - Tenant-scoped user sees own data + global (tenant_id IS NULL) records
+    - No tenant context: global records only
     """
     from sqlalchemy import func
 
-    count_result = await db.execute(select(func.count(Observation.id)))
+    from services.ingestor.core.tenant import get_user_role
+
+    count_q = select(func.count(Observation.id))
+    tenant_id = get_tenant_id()
+    user_role = get_user_role()
+
+    if user_role == "admin":
+        # Admin bypass — no tenant filter
+        pass
+    elif tenant_id is not None:
+        # Non-admin with tenant context: own tenant + global records
+        count_q = count_q.where(
+            (Observation.tenant_id == tenant_id) | (Observation.tenant_id.is_(None))
+        )
+    else:
+        # No tenant context: global records only
+        count_q = count_q.where(Observation.tenant_id.is_(None))
+
+    count_result = await db.execute(count_q)
     observation_count = count_result.scalar_one()
 
     return {
-        "active_tenant_id": get_tenant_id(),
+        "active_tenant_id": tenant_id,
         "observation_count": observation_count,
         "isolation_enforced": True,
-        "engine": "PostgreSQL Row Level Security (RLS)",
-        "logic": "SELECT count(*) FROM observations (no manual WHERE tenant_id)",
+        "engine": "Application-level tenant filter (mirrors PostgreSQL RLS)",
+        "logic": "SELECT count(*) FROM observations WHERE tenant_id = current OR tenant_id IS NULL",
     }

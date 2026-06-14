@@ -6,7 +6,7 @@ This document lists all environment variables used by the project, grouped by ca
 
 - Local development: copy `.env.example` -> `.env` and set the values you need. Do NOT commit `.env` to source control.
 - Production: inject secrets via your platform (ECS task definition, Kubernetes Secret, environment variables from Vault, GitHub Secrets in CI). Do not store production secrets in the repo.
-- Feature flags: some variables enable optional features (Redis, Kafka, OpenAI). If unsure, use the defaults in `.env.example`.
+- Feature flags: some variables enable optional features (Cache, Kafka, OpenAI). If unsure, use the defaults in `.env.example`.
 
 ## How to use
 
@@ -57,16 +57,16 @@ Adjust based on expected load and PostgreSQL max_connections:
 - **`DOCS_USERNAME`** — Username for `/docs` endpoint HTTP Basic auth. If None, docs are public. (Source: [services/ingestor/config.py](../../services/ingestor/config.py))
 - **`DOCS_PASSWORD`** — Password for `/docs` endpoint HTTP Basic auth. If None, docs are public. (Source: [services/ingestor/config.py](../../services/ingestor/config.py))
 
-## Redis / Cache / WebSocket
+## Cache / WebSocket
 
-- **`REDIS_ENABLED`** — Enable Redis-backed features (scorecard cache, WebSocket pub/sub, rate limiting, agent checkpointing). Default: `false`. (Source: [services/ingestor/config.py](../../services/ingestor/config.py))
-- **`REDIS_URL`** — Redis connection URL. Example: `redis://localhost:6379/0` or `redis://redis:6379/0` (Docker network). Default: `redis://localhost:6379/0`. (Source: [services/ingestor/config.py](../../services/ingestor/config.py))
+- **`CACHE_ENABLED`** — Enable Cache-backed features (scorecard cache, WebSocket pub/sub, rate limiting, agent checkpointing). Default: `false`. (Source: [services/ingestor/config.py](../../services/ingestor/config.py))
+- **`CACHE_URL`** — Cache connection URL. Example: `redis://localhost:6379/0` or `redis://cache:6379/0` (Docker network). Default: `redis://localhost:6379/0`. (Source: [services/ingestor/config.py](../../services/ingestor/config.py))
 
-## Kafka / Redpanda (optional)
+## Event Broker / Redpanda (optional)
 
-- **`KAFKA_ENABLED`** — Enable event streaming to Redpanda/Kafka. Default: `false`. (Source: [services/ingestor/config.py](../../services/ingestor/config.py))
-- **`KAFKA_BROKER_URL`** — Kafka bootstrap servers (comma-separated). Example: `localhost:9092` (host) or `redpanda:29092` (Docker network). Default: `localhost:9092`. (Source: [services/ingestor/config.py](../../services/ingestor/config.py))
-- **`KAFKA_STRANGLER_ADAPTER_ENABLED`** — Enable strangler adapter path for Kafka publishing. Default: `false`. (Source: [services/ingestor/config.py](../../services/ingestor/config.py))
+- **`BROKER_ENABLED`** — Enable event streaming to Redpanda/Kafka. Default: `false`. (Source: [services/ingestor/config.py](../../services/ingestor/config.py))
+- **`BROKER_URL`** — Broker bootstrap servers (comma-separated). Example: `localhost:9092` (host) or `broker:29092` (Docker network). Default: `localhost:9092`. (Source: [services/ingestor/config.py](../../services/ingestor/config.py))
+- **`KAFKA_STRANGLER_ADAPTER_ENABLED`** — Enable strangler adapter path for broker publishing. Default: `false`. (Source: [services/ingestor/config.py](../../services/ingestor/config.py))
 
 ## MongoDB (optional)
 
@@ -162,7 +162,7 @@ Adjust based on expected load and PostgreSQL max_connections:
 
 ## Service URLs (for dashboard & frontend)
 
-- **`INGESTOR_URL`** — Ingestor API base URL. Default: `http://localhost:8000`. (Source: [streamlit_app.py](../../streamlit_app.py))
+- **`INGESTOR_URL`** — Ingestor API base URL. Default: `http://localhost:8000`. (Source: [streamlit_app.py](../../services/dashboard/streamlit_app.py))
 
 ## Keycloak / OIDC (optional)
 
@@ -208,13 +208,15 @@ The project currently uses JWT and a simple token-based flow. If you integrate K
 cp .env.example .env
 # Edit .env: set DATABASE_URL, JWT_SECRET, OPENAI_API_KEY if using agent
 bash scripts/setup/03-verify-system-requirements.sh
-bash scripts/setup/01-bootstrap-dev-environment.sh
+just up
 
 # Run tests (no secrets needed for unit tests)
 uv run pytest tests/unit/ -q
 
 # Start services
-just up   # or: just sandbox-up (for Floci/AWS sim)
+just up   # local Docker Compose
+# For Floci/AWS simulation, use:
+just floci-up
 
 # API access
 curl http://localhost:8000/health

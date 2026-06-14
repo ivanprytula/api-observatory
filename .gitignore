@@ -174,12 +174,30 @@ cython_debug/
 .idea/
 
 .vscode/
+.kilo/
+.cursor/
 
 # Mac OS
 .DS_Store
 
 # Infrastructure / Local tests
 docker-compose.override.yml
+
+# Terraform
+*.tfstate
+*.tfstate.backup
+.terraform/
+*.tfvars
+!infra/terraform/**/*.tfvars.example
+
+# Ansible
+vault.yml
+vault.yml.enc
+group_vars/*
+!group_vars/all/vars.yml
+host_vars/
+infra/certs/*.pem
+infra/certs/*-key.pem
 
 .ruff_cache/
 

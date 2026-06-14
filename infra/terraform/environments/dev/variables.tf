@@ -50,9 +50,9 @@ variable "enable_messaging" {
 }
 
 variable "enable_iam" {
-  description = "Enable IAM/OIDC module in dev. Disable for LocalStack MVP runs."
+  description = "Enable IAM/OIDC module in dev. Required for GitHub Actions CI/CD."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "enable_database" {
@@ -76,7 +76,7 @@ variable "nat_gateway_count" {
 variable "ecr_services" {
   description = "ECR repositories to create in dev. Keep this list minimal for MVP."
   type        = list(string)
-  default     = ["ingestor", "processor"]
+  default     = ["ingestor", "dashboard"]
 }
 
 variable "db_master_password" {

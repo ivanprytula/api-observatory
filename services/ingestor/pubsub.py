@@ -1,14 +1,14 @@
-"""Redis Pub/Sub bridge — ingestor-side publisher and subscriber.
+"""Cache Pub/Sub bridge — ingestor-side publisher and subscriber.
 
-Provides a thin async pub/sub layer on top of the existing Redis connection.
+Provides a thin async pub/sub layer on top of the existing Cache connection.
 Used for two purposes:
 
-1. **Publishing** (ingestor → Redis) — called by ``events.py`` and ``jobs.py``
+1. **Publishing** (ingestor → Cache) — called by ``events.py`` and ``jobs.py``
    whenever a significant event occurs:
    - ``type: observation.created`` — after a successful DB write
    - ``type: job.progress``  — from priority-queue job execution steps
 
-2. **Subscribing** (Redis → FastAPI WS) — the WebSocket router subscribes to
+2. **Subscribing** (Cache → FastAPI WS) — the WebSocket router subscribes to
    the shared channel and fans messages out to connected browser clients.
 
 Architecture:
@@ -17,7 +17,7 @@ Architecture:
        │
        ├─► Kafka topic (existing, async events system)
        │
-       └─► Redis PUBLISH  "ingestor:events"
+       └─► Cache PUBLISH  "ingestor:events"
                 │
                 ├─► FastAPI WS /ws/observations/stream  → Browser
                 │
@@ -31,7 +31,7 @@ Message envelope (JSON-serialised):
     {"type": "job.progress",   "job_id": "...", "status": "running",
      "progress": 0.4, "message": "Batch 2/5 complete"}
 
-Fail-open: if Redis is not configured or unavailable, publish() logs a warning
+Fail-open: if Cache is not configured or unavailable, publish() logs a warning
 and returns without raising, keeping the write path non-blocking.
 """
 
@@ -53,8 +53,8 @@ logger = logging.getLogger(__name__)
 # Shared channel name — both services subscribe/publish to this key
 PUBSUB_CHANNEL = "ingestor:events"
 
-# Module-level Redis client dedicated to pub/sub.
-# A *separate* connection is required because a Redis connection in SUBSCRIBE
+# Module-level Cache client dedicated to pub/sub.
+# A *separate* connection is required because a Cache connection in SUBSCRIBE
 # mode can only run pub/sub commands — it cannot be shared with cache reads.
 _pubsub_client: Redis | None = None
 
@@ -64,20 +64,20 @@ _pubsub_client: Redis | None = None
 # ---------------------------------------------------------------------------
 
 
-async def connect_pubsub(redis_url: str) -> None:
-    """Create the dedicated pub/sub Redis connection.
+async def connect_pubsub(cache_url: str) -> None:
+    """Create the dedicated pub/sub Cache connection.
 
     Args:
-        redis_url: Redis connection URL (e.g. ``redis://localhost:6379/0``).
+        cache_url: Cache connection URL (e.g. ``redis://localhost:6379/0``).
     """
     global _pubsub_client
-    _pubsub_client = Redis.from_url(redis_url, decode_responses=True)
+    _pubsub_client = Redis.from_url(cache_url, decode_responses=True)
     await _pubsub_client.ping()  # ty: ignore[invalid-await]
-    logger.info("pubsub_connected", extra={"url": redis_url})
+    logger.info("pubsub_connected", extra={"url": cache_url})
 
 
 async def disconnect_pubsub() -> None:
-    """Close the pub/sub Redis connection gracefully."""
+    """Close the pub/sub Cache connection gracefully."""
     global _pubsub_client
     if _pubsub_client is not None:
         await _pubsub_client.aclose()
@@ -93,7 +93,7 @@ async def disconnect_pubsub() -> None:
 async def publish_event(event_type: str, payload: dict[str, Any]) -> None:
     """Publish a typed event to ``ingestor:events``.
 
-    Fail-open: logs a warning and returns without raising if Redis is not
+    Fail-open: logs a warning and returns without raising if Cache is not
     available.  The write path (DB insert, Kafka) must not be blocked by a
     pub/sub failure.
 
@@ -215,17 +215,17 @@ async def subscribe_events() -> AsyncGenerator[dict[str, Any]]:
         ``{"type": "observation.created", "observation_id": 1, ...}``.
 
     Note:
-        If Redis is not configured (``settings.redis_enabled`` is False) the
+        If Cache is not configured (``settings.cache_enabled`` is False) the
         generator yields nothing and returns immediately so that the WS
         handler can fall back gracefully.
     """
-    if not settings.redis_enabled:
+    if not settings.cache_enabled:
         logger.debug("pubsub_subscribe_skip_disabled")
         return
 
     # Create a fresh connection for this subscriber — pub/sub connections must
     # not be shared with regular command connections.
-    client: Redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    client: Redis = Redis.from_url(settings.cache_url, decode_responses=True)
     pubsub = client.pubsub()
 
     try:

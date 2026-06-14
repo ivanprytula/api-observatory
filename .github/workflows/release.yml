@@ -19,44 +19,125 @@ env:
   IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/data-zoo-ingestor
 
 jobs:
-  build-and-push:
-    name: Build and push image to GHCR
+  # GATE: Verify CI passed on this commit
+  verify-ci:
+    name: "Verify CI passed on tagged commit"
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Assert tag is on main
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git branch -r --contains "${{ github.sha }}" | grep -q 'origin/main'; then
+            echo "❌ Release tags must be cut from main. This tag points to a commit not on origin/main."
+            exit 1
+          fi
+          echo "✅ Tag is on main"
+
+      - name: Check CI workflow status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Checking CI status for commit ${{ github.sha }}..."
+
+          # Get the latest CI workflow run for this commit
+          runs=$(gh run list --workflow=ci.yml --commit=${{ github.sha }} --limit=1 --json status,conclusion --jq '.')
+
+          if [ -z "$runs" ]; then
+            echo "⚠️  No CI runs found for this commit. Allowing release to proceed."
+            echo "Ensure CI workflow was run before tagging."
+            exit 0
+          fi
+
+          conclusion=$(echo "$runs" | jq -r '.[0].conclusion // "unknown"')
+
+          if [ "$conclusion" != "success" ]; then
+            echo "❌ CI workflow did not pass for this commit (status: $conclusion)"
+            echo "Re-run CI on the commit before creating a release tag."
+            exit 1
+          fi
+
+          echo "✅ CI passed for commit ${{ github.sha }}"
+
+  # BUILD: Create and tag release image
+  build-and-push:
+    name: "Build and push release image to GHCR"
+    runs-on: ubuntu-latest
+    needs: [verify-ci]
+    outputs:
+      image-digest: ${{ steps.image-digest.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Log in to GHCR
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      - name: Build release image
-        env:
-          DOCKER_BUILDKIT: "1"
+      - name: Pull candidate image from CI build
         run: |
-          docker build \
-            -t "${IMAGE_NAME}:${GITHUB_REF_NAME}" \
-            -t "${IMAGE_NAME}:latest" \
-            -f Dockerfile \
-            .
+          TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
+          IMAGE_CANDIDATE="${IMAGE_NAME}:tree-${TREE_SHA}"
+          echo "Pulling candidate image: ${IMAGE_CANDIDATE}"
+          docker pull "${IMAGE_CANDIDATE}"
+          docker tag "${IMAGE_CANDIDATE}" "${IMAGE_NAME}:${GITHUB_REF_NAME}"
+          docker tag "${IMAGE_CANDIDATE}" "${IMAGE_NAME}:latest"
 
       - name: Push release image
         run: |
           docker push "${IMAGE_NAME}:${GITHUB_REF_NAME}"
           docker push "${IMAGE_NAME}:latest"
+          echo "✅ Released: ${IMAGE_NAME}:${GITHUB_REF_NAME}"
 
       - name: Resolve pushed image digest
         id: image-digest
         shell: bash
         run: |
           set -euo pipefail
-          repo_digest=$(docker image inspect "${IMAGE_NAME}:${GITHUB_REF_NAME}" --format '{{index .RepoDigests 0}}')
-          digest="${repo_digest#*@}"
+          # Use registry manifest inspection to get the canonical digest (not local RepoDigests)
+          digest=$(docker buildx imagetools inspect "${IMAGE_NAME}:${GITHUB_REF_NAME}" --format '{{json .Manifest}}' | jq -r '.digest')
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "✅ Digest: ${digest}"
+
+  # SIGN: Sign and attest image
+  sign-and-attest:
+    name: "Sign image and attest provenance"
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Get image digest
+        id: image-digest
+        shell: bash
+        # Reuse digest from build-and-push job output; avoids inspecting on fresh runner
+        run: echo "digest=${{ needs.build-and-push.outputs.image-digest }}" >> "$GITHUB_OUTPUT"
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       - name: Sign image with GitHub OIDC
         env:
@@ -74,7 +155,7 @@ jobs:
             "${IMAGE_NAME}@${IMAGE_DIGEST}"
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v3
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v3
         with:
           subject-name: ${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.image-digest.outputs.digest }}
@@ -93,18 +174,37 @@ jobs:
               --repo "${{ github.repository }}" \
               --cert-identity-regex "https://github.com/${{ github.repository }}/.github/workflows/release.yml@.*" \
               --format json > attestation-verify.json; then
-              echo "Provenance attestation verified"
+              echo "✅ Provenance attestation verified"
               break
             fi
 
             if [[ "$attempt" -eq 6 ]]; then
-              echo "Failed to verify provenance attestation after retries" >&2
+              echo "❌ Failed to verify provenance attestation after retries" >&2
               exit 1
             fi
 
             echo "Attestation not yet available (attempt ${attempt}/6); retrying in 10s..."
             sleep 10
           done
+
+  # SBOM: Generate software bill of materials
+  sbom:
+    name: "Generate and upload SBOM"
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Install Syft
         shell: bash
@@ -117,7 +217,45 @@ jobs:
           syft "${IMAGE_NAME}:${GITHUB_REF_NAME}" -o spdx-json > "sbom-${GITHUB_REF_NAME}.spdx.json"
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sbom-${{ github.ref_name }}
           path: sbom-${{ github.ref_name }}.spdx.json
+
+      - name: Attest SBOM to registry
+        uses: actions/attest-sbom@d3fee97dff7e5d12e88de2d5df56a1db87d282e1 # v2.4.0
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ needs.build-and-push.outputs.image-digest }}
+          sbom-path: sbom-${{ github.ref_name }}.spdx.json
+          push-to-registry: true
+
+  # PUBLISH: Final summary
+  release-summary:
+    name: "Release complete"
+    runs-on: ubuntu-latest
+    needs: [verify-ci, build-and-push, sign-and-attest, sbom]
+    if: always()
+    steps:
+      - name: Publish release summary
+        shell: bash
+        run: |
+          {
+            echo "## Release Summary"
+            echo "| Stage | Result |"
+            echo "|-------|--------|"
+            echo "| CI Verification | ${{ needs.verify-ci.result }} |"
+            echo "| Build & Push | ${{ needs.build-and-push.result }} |"
+            echo "| Sign & Attest | ${{ needs.sign-and-attest.result }} |"
+            echo "| SBOM | ${{ needs.sbom.result }} |"
+            echo ""
+            echo "**Release**: ${IMAGE_NAME}:${GITHUB_REF_NAME}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          failed=0
+          [[ "${{ needs.verify-ci.result }}" == "success" ]] || { echo "❌ verify-ci"; failed=1; }
+          [[ "${{ needs.build-and-push.result }}" == "success" ]] || { echo "❌ build-and-push"; failed=1; }
+          [[ "${{ needs.sign-and-attest.result }}" == "success" ]] || { echo "❌ sign-and-attest"; failed=1; }
+          [[ "${{ needs.sbom.result }}" == "success" ]] || { echo "❌ sbom"; failed=1; }
+          [ $failed -eq 0 ] && echo "✅ All release trust gates passed"
+          exit $failed

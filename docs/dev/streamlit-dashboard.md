@@ -15,21 +15,21 @@ Lets reviewers see live data without needing to interact with the REST API direc
 
 ### Prerequisites
 
-- Ingestor running on `localhost:8000` (`docker compose up -d`)
+- Ingestor running through the active local URL mode (`just up` or `LOCAL_API_SCHEME=https just up-https`)
 - Dependencies installed: `uv sync`
 
 ### Start the dashboard
 
 ```bash
-uv run streamlit run streamlit_app.py
+uv run streamlit run services/dashboard/streamlit_app.py
 ```
 
-The dashboard opens at `http://localhost:8501`.
+The dashboard opens at `http://127.0.0.1:8501` for direct Streamlit, or through the active local URL helper when using the edge proxy.
 
 ### With a bearer token (if `API_V1_BEARER_TOKEN` is set on the server)
 
 ```bash
-BEARER_TOKEN=mysecret uv run streamlit run streamlit_app.py
+BEARER_TOKEN=mysecret uv run streamlit run services/dashboard/streamlit_app.py
 ```
 
 Or create `.streamlit/secrets.toml`:
@@ -41,14 +41,14 @@ BEARER_TOKEN = "mysecret"
 ### Point to a remote ingestor
 
 ```bash
-INGESTOR_URL=https://api.example.com uv run streamlit run streamlit_app.py
+INGESTOR_URL=https://api.example.com uv run streamlit run services/dashboard/streamlit_app.py
 ```
 
 ## Environment variables
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `INGESTOR_URL` | `http://localhost:8000` | Base URL of the ingestor service |
+| `INGESTOR_URL` | `$(bash scripts/daily/local-url.sh api-base-url)` | Base URL of the ingestor service |
 | `BEARER_TOKEN` | *(empty)* | Bearer token for the WebSocket `?token=` param |
 
 ## Live Stream panel
@@ -63,24 +63,24 @@ Message types:
 - `drift.detected` — a contract drift event was persisted
 - `job.progress` — background job progress update
 - `ping` — server keepalive (every 30 s)
-- `info` — stream unavailable (Redis not enabled on the server)
+- `info` — stream unavailable (Cache not enabled on the server)
 
 Click **Disconnect** to stop the stream.  Click **Clear** to reset the message list.
 
 ## Architecture
 
 ```text
-streamlit_app.py
+services/dashboard/streamlit_app.py
 │
 ├── httpx (sync) ─── GET /api/v1/scorecards     ─── ingestor
 │                ─── GET /api/v1/sources
 │                ─── GET /api/v1/contracts/sources/{id}/drift-events
 │
-└── websockets ────── WS /ws/observations/stream     ─── ingestor (Redis pub/sub)
+└── websockets ────── WS /ws/observations/stream     ─── ingestor (Cache pub/sub)
      (daemon thread)
 ```
 
-The dashboard never connects to PostgreSQL or Redis directly.
+The dashboard never connects to PostgreSQL or Cache directly.
 All data comes through the ingestor HTTP/WebSocket API.
 
 ## Notes on the WebSocket approach

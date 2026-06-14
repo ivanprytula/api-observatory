@@ -10,9 +10,9 @@ from services.ingestor.constants import CACHE_LIST_MAX_LIMIT, CACHE_LIST_MAX_SKI
 
 
 @pytest.fixture(autouse=True)
-async def fake_redis():
+async def fake_cache():
     """Inject a FakeRedis instance as the cache client for every test."""
-    client = fakeredis.aioredis.FakeRedis()
+    client = fakeredis.aioredis.FakeRedis(decode_responses=True)
     cache_module._client = client
     yield client
     await client.aclose()

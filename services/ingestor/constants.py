@@ -75,9 +75,9 @@ UPSERT_MODE_IDEMPOTENT: str = "idempotent"  # 201 on create, 200 on conflict
 UPSERT_MODE_STRICT: str = "strict"  # 201 on create, 409 on conflict
 
 # ---------------------------------------------------------------------------
-# Caching — Redis
+# Caching — Cache
 # ---------------------------------------------------------------------------
-CACHE_KEY_OBSERVATION: str = "dp:observation:{observation_id}"  # Redis key namespace
+CACHE_KEY_OBSERVATION: str = "dp:observation:{observation_id}"  # Cache key namespace
 
 # ---------------------------------------------------------------------------
 # Source Registry

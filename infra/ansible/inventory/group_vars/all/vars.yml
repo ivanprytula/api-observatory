@@ -1,0 +1,51 @@
+---
+# Non-sensitive variables shared across all hosts.
+# Sensitive values use Jinja2 references to vault_ counterparts defined in vault.yml.
+# Sort order: alphabetical within each logical block.
+
+# ── Application identity ────────────────────────────────────────────────────
+app_dir: '/opt/api-observatory'
+app_group: 'docker'
+app_name: 'api-observatory'
+app_repo_url: 'https://github.com/ivanp/api-observatory.git'
+app_user: 'deploy'
+app_version: 'main'
+
+# ── Docker Compose ──────────────────────────────────────────────────────────
+docker_compose_file: 'docker-compose.prod-like.yml'
+docker_users:
+  - "{{ app_user }}"
+
+# ── Python / uv toolchain ───────────────────────────────────────────────────
+python_version: '3.14'
+uv_install_url: 'https://astral.sh/uv/install.sh'
+
+# ── Application .env variables ──────────────────────────────────────────────
+# Non-sensitive values are set inline; secrets reference vault_ variables.
+compose_env:
+  api_v1_bearer_token: "{{ vault_api_v1_bearer_token }}"
+  background_max_tracked_tasks: '500'
+  background_worker_count: '2'
+  background_worker_queue_size: '200'
+  background_workers_enabled: 'false'
+  database_url: "postgresql+asyncpg://postgres:{{ vault_db_password }}@localhost:5432/api_observatory"
+  docs_password: "{{ vault_docs_password }}"
+  docs_username: 'admin'
+  environment: 'production'
+  jwt_algorithm: 'HS256'
+  jwt_expiry_minutes: '60'
+  jwt_secret: "{{ vault_jwt_secret }}"
+  log_asyncio_level: 'WARNING'
+  log_httpx_level: 'WARNING'
+  log_level: 'INFO'
+  log_sqlalchemy_level: 'WARNING'
+  openai_api_key: "{{ vault_openai_api_key }}"
+  otel_enabled: 'false'
+  otel_endpoint: 'http://localhost:4317'
+  otel_service_name: 'api-observatory-ingestor'
+  cache_enabled: 'false'
+  cache_url: 'redis://localhost:6379/0'
+  sentry_enabled: 'false'
+  sentry_dsn: ''
+  sentry_traces_sample_rate: '0.1'
+  token_expiry_hours: '24'

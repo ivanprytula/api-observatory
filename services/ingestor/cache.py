@@ -1,4 +1,4 @@
-"""Async Redis caching layer — fail-open on connection errors.
+"""Async Redis cache layer — fail-open on connection errors.
 
 This module provides a read cache for single-observation lookups. All cache
 operations are wrapped in try/except to prevent Redis failures from affecting
@@ -46,20 +46,20 @@ _client: Redis | None = None
 logger = logging.getLogger(__name__)
 
 
-async def connect_cache(redis_url: str) -> None:
+async def connect_cache(cache_url: str) -> None:
     """Initialize Redis connection.
 
     Args:
-        redis_url: Redis DSN (e.g., redis://localhost:6379/0)
+        cache_url: Redis DSN (e.g., redis://localhost:6379/0)
 
     Raises:
         Exception: If Redis connection fails (will be caught at startup)
     """
     global _client
-    _client = Redis.from_url(redis_url, decode_responses=True)
+    _client = Redis.from_url(cache_url, decode_responses=True)
     # Ping to verify connection
     await _client.ping()  # type: ignore
-    logger.info("cache_connected", extra={"url": redis_url})
+    logger.info("cache_connected", extra={"url": cache_url})
 
 
 async def disconnect_cache() -> None:
@@ -354,19 +354,19 @@ class _LruNode:
 class LruObservationCache:
     """In-process LRU cache — Proxy in front of the Redis observation functions.
 
-    Transparently intercepts ``get_observation`` and ``set_observation`` calls.
+        Transparently intercepts ``get_observation`` and ``set_observation`` calls.
     On a cache miss the proxy falls through to Redis and back-fills itself.
     On eviction the entry is simply dropped from memory (Redis remains the SoT).
 
-    Proxy contract:
-        ``get_observation_with_lru(id)`` has the same return type as
-        ``get_observation(id)`` — callers do not know which layer answered.
+        Proxy contract:
+            ``get_observation_with_lru(id)`` has the same return type as
+            ``get_observation(id)`` — callers do not know which layer answered.
 
-    Thread-safety:
-        Not thread-safe.  Wrap with ``asyncio.Lock`` for concurrent coroutines.
+        Thread-safety:
+            Not thread-safe.  Wrap with ``asyncio.Lock`` for concurrent coroutines.
 
-    Args:
-        capacity: Maximum number of observations held in memory simultaneously.
+        Args:
+            capacity: Maximum number of observations held in memory simultaneously.
     """
 
     def __init__(self, capacity: int = 256) -> None:
@@ -500,13 +500,13 @@ async def get_observation_with_lru(observation_id: int) -> ObservationResponse |
         return cached  # type: ignore[return-value]
 
     # 2. Fall through to Redis
-    redis_result = await get_observation(observation_id)
-    if redis_result is not None:
+    cache_result = await get_observation(observation_id)
+    if cache_result is not None:
         # Back-fill the LRU so the next request is free
-        _lru.put(observation_id, redis_result)
+        _lru.put(observation_id, cache_result)
         logger.debug("lru_backfill", extra={"observation_id": observation_id})
 
-    return redis_result
+    return cache_result
 
 
 async def invalidate_observation_all_layers(observation_id: int) -> None:
