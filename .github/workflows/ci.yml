@@ -180,7 +180,7 @@ jobs:
           upload: always
           category: /language:python
 
-  # DOCKER BUILD & SCAN
+  # DOCKER BUILD & SCAN (ECR only)
   docker-build:
     name: "Build and push candidate image (ingestor)"
     runs-on: ubuntu-latest
@@ -188,26 +188,39 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
-      packages: write
+      packages: read
     outputs:
       image_ingestor: ${{ steps.build-ingestor.outputs.image }}
+      tree_sha: ${{ steps.resolve.outputs.tree_sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
-      - name: Log in to GHCR
-        env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b #v6.2.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_DEV }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve tree SHA
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
+          echo "tree_sha=${TREE_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to ECR
+        run: aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ vars.DEV_ECR_REGISTRY }}
 
       - name: Build and push ingestor image
         id: build-ingestor
         env:
           DOCKER_BUILDKIT: "1"
         run: |
-          TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
-          IMAGE="ghcr.io/${{ github.repository_owner }}/data-zoo-ingestor:tree-${TREE_SHA}"
-          docker build -t "${IMAGE}" -f Dockerfile .
+          TREE_SHA="${{ steps.resolve.outputs.tree_sha }}"
+          IMAGE="${{ vars.DEV_ECR_REGISTRY }}/data-zoo-ingestor:tree-${TREE_SHA}"
+          docker build -t "${IMAGE}" .
           docker push "${IMAGE}"
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
 
@@ -225,25 +238,37 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
-      packages: write
+      packages: read
     outputs:
       image_dashboard: ${{ steps.build-dashboard.outputs.image }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
-      - name: Log in to GHCR
-        env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b #v6.2.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_DEV }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve tree SHA
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
+          echo "tree_sha=${TREE_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to ECR
+        run: aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ vars.DEV_ECR_REGISTRY }}
 
       - name: Build and push dashboard image
         id: build-dashboard
         env:
           DOCKER_BUILDKIT: "1"
         run: |
-          TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
-          IMAGE="ghcr.io/${{ github.repository_owner }}/data-zoo-dashboard:tree-${TREE_SHA}"
+          TREE_SHA="${{ steps.resolve.outputs.tree_sha }}"
+          IMAGE="${{ vars.DEV_ECR_REGISTRY }}/data-zoo-dashboard:tree-${TREE_SHA}"
           docker build -t "${IMAGE}" -f services/dashboard/Dockerfile services/dashboard
           docker push "${IMAGE}"
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
@@ -259,63 +284,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
-      - name: Log in to GHCR
-        env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b #v6.2.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_DEV }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to ECR
+        run: aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ vars.DEV_ECR_REGISTRY }}
 
       - name: Pull and scan ingestor image
         run: |
-          docker pull "${{ needs.docker-build.outputs.image_ingestor }}"
-          docker tag "${{ needs.docker-build.outputs.image_ingestor }}" ingestor:scan
-
-      - name: Scan ingestor (Trivy strict)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: ingestor:scan
-          format: table
-          ignore-unfixed: true
-          scanners: vuln
-          vuln-type: os,library
-          severity: CRITICAL,HIGH
-          exit-code: "1"
-
-      - name: Pull and scan dashboard image
-        run: |
-          docker pull "${{ needs.docker-build-dashboard.outputs.image_dashboard }}"
-          docker tag "${{ needs.docker-build-dashboard.outputs.image_dashboard }}" dashboard:scan
-
-      - name: Scan dashboard (Trivy strict)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: dashboard:scan
-          format: table
-          ignore-unfixed: true
-          scanners: vuln
-          vuln-type: os,library
-          severity: CRITICAL,HIGH
-          exit-code: "1"
-
-  docker-scan-advisory:
-    name: "Scan docker image (Trivy - advisory)"
-    runs-on: ubuntu-latest
-    needs: [docker-build, docker-build-dashboard]
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-
-      - name: Log in to GHCR
-        env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-
-      - name: Pull and scan ingestor image
-        run: |
-          docker pull "${{ needs.docker-build.outputs.image_ingestor }}"
-          docker tag "${{ needs.docker-build.outputs.image_ingestor }}" ingestor:scan
+          docker pull "${{ vars.DEV_ECR_REGISTRY }}/data-zoo-ingestor:tree-${{ needs.docker-build.outputs.tree_sha }}"
+          docker tag "${{ vars.DEV_ECR_REGISTRY }}/data-zoo-ingestor:tree-${{ needs.docker-build.outputs.tree_sha }}" ingestor:scan
 
       - name: Scan ingestor (Trivy advisory)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0

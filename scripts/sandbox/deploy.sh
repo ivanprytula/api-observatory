@@ -9,7 +9,7 @@ set -euo pipefail
 #       docker compose --profile aws up -d floci
 #       docker run -d --name floci-ecr-registry \
 #         --network api-observatory_api-obs -p 5100:5000 registry:2
-#   - Terraform applied with ECR enabled: just tf-apply
+#   - Terraform applied with ECR enabled: TF_ENV=sandbox just tf apply
 #   - Docker daemon available (Floci mounts /var/run/docker.sock)
 #
 # Flow:
@@ -52,7 +52,7 @@ require_cmd terraform
 require_cmd jq
 
 if ! docker ps --filter "name=api-obs-floci" --filter "status=running" --format '{{.Names}}' | grep -q .; then
-  fail "Floci is not running. Start it with: docker compose --profile aws up -d floci"
+  fail "Floci is not running. Start it with: just floci-up"
 fi
 
 if ! docker ps --filter "name=floci-ecr-registry" --filter "status=running" --format '{{.Names}}' | grep -q .; then
@@ -62,7 +62,7 @@ if ! docker ps --filter "name=floci-ecr-registry" --filter "status=running" --fo
 fi
 
 if ! aws ecs list-clusters "${AWS_ARGS[@]}" 2>/dev/null | grep -q "${CLUSTER}"; then
-  fail "ECS cluster '${CLUSTER}' not found. Apply Terraform first: just tf-apply"
+  fail "ECS cluster '${CLUSTER}' not found. Apply Terraform first: TF_ENV=sandbox just tf plan && TF_ENV=sandbox just tf apply"
 fi
 
 # ── Resolve ECR URIs from Terraform output ─────────────────────────────
@@ -71,7 +71,7 @@ fi
 
 info "Reading ECR repository URIs from Terraform output"
 ECR_URLS=$(cd "${TF_DIR}" && terraform output -json ecr_repository_urls 2>/dev/null) || \
-  fail "Failed to read ecr_repository_urls from Terraform output. Run: just tf-apply"
+  fail "Failed to read ecr_repository_urls from Terraform output. Run: TF_ENV=sandbox just tf plan && TF_ENV=sandbox just tf apply"
 
 INGESTOR_URI=$(echo "$ECR_URLS" | jq -r '.ingestor')
 DASHBOARD_URI=$(echo "$ECR_URLS" | jq -r '.dashboard')
@@ -224,4 +224,4 @@ echo "Access via ALB (task containers reachable inside Docker network):"
 echo "  ALB DNS: ${ALB_DNS:-pending}"
 echo ""
 echo "Next:"
-echo "  just tf-destroy   # clean up sandbox state"
+echo "  TF_ENV=sandbox just tf destroy   # clean up sandbox state"

@@ -19,6 +19,10 @@ _local_wait_ready path="/readyz":
 doctor:
     bash scripts/setup/00-doctor.sh
 
+# Check docs for stale Justfile recipe references.
+docs-check-just-refs:
+    bash scripts/docs/check-just-refs.sh
+
 api-check:
     @bash -c 'source scripts/daily/local-url.sh; if curl_local -sf "$(local_api_url /readyz)" > /dev/null; then echo "stack ready"; else echo "stack not ready — run: just up or LOCAL_API_SCHEME=https just up-https" >&2; exit 1; fi'
 
@@ -32,7 +36,7 @@ floci-health:
 #   just dev             → uvicorn + Compose data-plane (local)
 #   just up              → Compose data-plane only (containerized)
 #   just floci-*         → Full Floci sandbox (training playground)
-#   TF_ENV=dev just deploy → Promote to real AWS dev cloud
+#   TF_ENV=dev just deploy-ecs → Promote to real AWS dev cloud
 #
 # Floci is only started when you explicitly need S3/SQS/ECS-shaped APIs.
 
@@ -136,7 +140,7 @@ floci-reset:
 
 # Full destroy: terraform destroy + stop Floci + stop Compose.
 cleanup:
-    TF_ENV=sandbox just tf-destroy || true
+    TF_ENV=sandbox just tf destroy || true
     docker compose down
 
 # Start uvicorn with Floci-shaped env (S3 + SQS + ECS APIs).
@@ -154,7 +158,7 @@ floci-dev:
 
 # Validate Floci sandbox health before promoting to real AWS.
 # Checks: Floci container running, _floci/health reachable, S3 + SQS seeded, API /health OK.
-# Run independently before deploy-dev: just floci-validate
+# Run independently before deploy-ecs: just floci-validate
 floci-validate:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -204,7 +208,7 @@ floci-validate:
     echo "=== Floci sandbox validated ==="
 
 # Confirm real AWS credentials and required dev config files are in place.
-# Run independently before deploy-dev: just dev-preflight
+# Run independently before deploy-ecs: just dev-preflight
 dev-preflight:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -261,34 +265,37 @@ floci-deploy:
 
 # 2d) AWS Deploy (dev → ECS/Fargate)
 # ─────────────────────────────────────
-# Recommended manual loop before calling deploy-dev:
+# Recommended manual loop before calling deploy-ecs:
 #   just floci-validate              # confirm Floci sandbox is healthy
 #   just dev-preflight               # confirm real AWS creds + config files
 #   just deploy-audit                # build image + CVE scan
-#   TF_ENV=dev just tf-init          # init backend (first time or after provider change)
-#   TF_ENV=dev just tf-validate      # check HCL syntax
-#   TF_ENV=dev just tf-plan          # review the changeset
+#   TF_ENV=dev just tf init          # init backend (first time or after provider change)
+#   TF_ENV=dev just tf validate      # check HCL syntax
+#   TF_ENV=dev just tf plan          # review the changeset
 #   TF_ENV=dev just tf-diagram       # optional: visualise new architecture
 #   # tweak tfvars / modules as needed, re-plan until satisfied
-#   just deploy-dev                  # apply + ECS update
+#   just deploy-ecs                  # apply reviewed plan + ECS update
 
 # Apply the reviewed tfplan.aws, then trigger ECS rolling update + smoke test.
-# Assumes TF_ENV=dev just tf-plan has already been run and tfplan.aws is current.
+# Assumes TF_ENV=dev just tf plan has already been run and tfplan.aws is current.
 # Usage:
-#   just deploy-dev                          # cluster=data-zoo-dev, region from AWS config
-#   IMAGE_TAG=sha-abc1234 just deploy-dev    # report a specific image tag in summary
-#   AWS_PROFILE=my-profile just deploy-dev   # explicit AWS profile
-deploy-dev:
+#   just deploy-ecs                          # cluster=data-zoo-dev, region from AWS config
+#   IMAGE_TAG=sha-abc1234 just deploy-ecs    # report a specific image tag in summary
+#   AWS_PROFILE=my-profile just deploy-ecs   # explicit AWS profile
+infra-dev:
     #!/usr/bin/env bash
     set -euo pipefail
-    IMAGE_TAG="${IMAGE_TAG:-latest}"
+    TF_ENV=dev just tf apply
+
+# Manual AWS ECS deploy wrapper; assumes reviewed tfplan.aws exists.
+deploy-ecs:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    IMAGE_TAG="${IMAGE_TAG:-$(git rev-parse HEAD^{tree} | cut -c1-7)}"
     CLUSTER="${ECS_CLUSTER:-data-zoo-dev}"
 
-    # Apply the plan you already reviewed
-    TF_ENV=dev just tf-apply
+    just infra-dev
 
-    # ECS rolling update + stability wait
-    echo "--- ECS deploy: forcing new deployment ---"
     aws ecs update-service \
         --cluster "${CLUSTER}" \
         --service ingestor \
@@ -311,7 +318,6 @@ deploy-dev:
         --services dashboard
     echo "  [ok] dashboard stable"
 
-    # Post-deploy smoke test via ALB (skipped with a warning if ALB not yet provisioned)
     ALB_DNS=$(aws elbv2 describe-load-balancers \
         --query 'LoadBalancers[?contains(LoadBalancerName, `data-zoo-dev`)].DNSName | [0]' \
         --output text 2>/dev/null || true)
@@ -324,12 +330,10 @@ deploy-dev:
     fi
 
     echo ""
-    echo "=== deploy-dev complete ==="
+    echo "=== deploy-ecs complete ==="
     echo "  Cluster : ${CLUSTER}"
     echo "  Image   : api-observatory:${IMAGE_TAG}"
     echo "  ALB     : ${ALB_DNS:-<not found>}"
-    echo ""
-    echo "Rollback: TF_ENV=dev just tf-destroy   # tears down dev infra"
 
 # ─── STACK AWARENESS ──────────────────────────────────────────────────────────
 
@@ -396,6 +400,7 @@ sandbox-dev:    floci-dev
 #   TF_ENV=dev just tf plan        # force dev environment
 #   just tf fresh                  # init → plan → apply (sandbox by default)
 
+# Unified Terraform runner for sandbox/dev.
 tf cmd:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -475,21 +480,27 @@ tf cmd:
     esac
 
 # Backward-compatible aliases
+# Init Terraform backend.
 tf-init:
     just tf init
 
+# Validate Terraform configuration.
 tf-validate:
     just tf validate
 
+# Create a saved Terraform plan.
 tf-plan:
     just tf plan
 
+# Apply the saved Terraform plan.
 tf-apply:
     just tf apply
 
+# Show Terraform state and outputs.
 tf-show:
     just tf show
 
+# Destroy Terraform-managed resources with confirmation.
 tf-destroy:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -506,6 +517,7 @@ tf-destroy:
     fi
     just tf destroy
 
+# Init → plan → apply in one sequence.
 tf-fresh:
     just tf fresh
 
@@ -521,6 +533,7 @@ tf-fresh:
 #   just tf-diagram png           # PNG output
 #   just tf-diagram html          # Interactive HTML output
 
+# Render Terraform architecture diagrams with Terravision.
 tf-diagram format="png":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -598,6 +611,7 @@ tf-diagram-prepare:
     fi
     echo "Plan files generated for terravision in .local-dev/"
 
+# Validate a saved Terravision JSON plan before rendering.
 tf-diagram-prepare-from-json:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -653,10 +667,12 @@ _check-dashboard-dockerfile:
         exit 1
     fi
 
+# Build the ingestor image.
 docker-build-image tag="api-observatory:local":
     @just _check-ingestor-dockerfile
     docker build -t {{tag}} .
 
+# Build the dashboard image.
 docker-build-dashboard tag="api-observatory-dashboard:local":
     @just _check-dashboard-dockerfile
     docker build -t {{tag}} -f services/dashboard/Dockerfile .
@@ -683,6 +699,7 @@ docker-audit-size image="api-observatory:local":
     fi
     echo "Image size check passed"
 
+# Scan an image for CRITICAL vulnerabilities.
 docker-scan-image image="api-observatory:local":
     docker compose --profile security run --rm trivy image \
         --scanners vuln \
@@ -912,7 +929,7 @@ _sandbox-seed:
 _sandbox-infra:
     #!/usr/bin/env bash
     set -euo pipefail
-    just sandbox-up
+    just floci-up
     docker compose up -d db cache broker ingestor dashboard
     until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
 
@@ -984,5 +1001,6 @@ create-admin:
         echo "WARNING: admin registration completed but token verification failed" >&2
     fi
 
+# Run post-deploy smoke checks.
 smoke-test base-url="{{_local_api_base_url}}" dashboard-url="{{__local_dashboard_url}}":
     bash scripts/smoke-test.sh {{base-url}} {{dashboard-url}}

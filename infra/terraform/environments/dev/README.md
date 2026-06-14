@@ -28,8 +28,9 @@ cp infra/terraform/environments/dev/terraform.aws.tfvars.example \
 ## Commands
 
 ```bash
-just tf-plan-dev    # init + validate + plan (saves tfplan.aws)
-just tf-apply-dev   # apply saved plan
+TF_ENV=dev just tf plan    # validate + plan (saves tfplan.aws)
+TF_ENV=dev just tf apply   # apply saved plan
+just deploy-ecs            # manual ECS deploy wrapper after reviewed Terraform plan
 ```
 
 ## Rule of thumb

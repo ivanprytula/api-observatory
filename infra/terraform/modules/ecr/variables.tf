@@ -6,5 +6,5 @@ variable "project" {
 variable "services" {
   description = "Service names that should get an ECR repository."
   type        = list(string)
-  default     = ["ingestor"]
+  default     = ["ingestor", "dashboard"]
 }

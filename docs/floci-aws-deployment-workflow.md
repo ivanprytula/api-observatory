@@ -1,13 +1,18 @@
 # Floci Sandbox Workflow
 
-Track: A (local onboarding) -> C (deployment progression)
+Track: A (local onboarding) → C (deployment progression)
 
-This document is the local AWS sandbox guide.
-It intentionally avoids duplicating real AWS rollout runbooks.
+This document explains the local AWS-shaped Floci sandbox. It is for rehearsing
+AWS-integrated behavior before real cloud changes.
+
+This doc shows minimal workflow examples only. For exact recipe names,
+arguments, and compatibility aliases, use the command reference:
+
+- [docs/dev/commands.md](dev/commands.md)
 
 Canonical real-cloud runbook:
 
-- [docs/deployment/aws-ecs.md](deployment/aws-ecs.md)
+- [docs/deployment/deploy-runbook.md](deployment/deploy-runbook.md)
 
 ## Objective
 
@@ -15,126 +20,157 @@ Use Floci to validate AWS-integrated behaviors locally before real cloud changes
 
 ## Current Scope
 
-- Start and stop local AWS emulator stack
-- Validate S3 and SQS connectivity for the default sandbox bootstrap
-- Run service-specific AWS tests only when needed; they provision their own resources
-- Run sandbox e2e tests
-- Run local Terraform plan and apply loops where required
+- Start and stop the local AWS emulator stack.
+- Validate S3 and SQS connectivity for the default sandbox bootstrap.
+- Run Floci-specific E2E tests when AWS-shaped behavior is affected.
+- Run Terraform plan/apply loops against the sandbox environment.
+- Deploy ingestor and dashboard to the Floci-backed ECS simulator.
 
 ## Quick Start
 
 ```bash
-just sandbox-up
-just test-aws-connectivity
-just sandbox-test
-just sandbox-down
+# Start Floci, seed S3/SQS, start Compose infra, migrate, and seed admin/demo
+just floci-up
+
+# Validate Floci health, S3, SQS, and optional API health
+just floci-validate
+
+# Run Floci-specific E2E tests
+just floci-test
+
+# Stop Floci only; Compose data-plane can keep running
+just floci-down
 ```
+
+`just floci-up` is the main entrypoint. It starts Floci, creates the local S3
+bucket and SQS queue, starts the Compose data-plane, applies migrations, and
+seeds admin/demo data.
 
 ## Terraform Local Development Workflow
 
-Manage Floci infrastructure via Terraform for testing AWS-integrated resource provisioning.
+Manage Floci infrastructure via Terraform for testing AWS-integrated resource
+provisioning.
 
-**Prerequisite:** One-time workstation setup to add AWS sandbox profile.
-See [docs/setup/sandbox-aws-profile.md](setup/sandbox-aws-profile.md) for instructions.
+**Prerequisite:** one-time workstation setup to add the AWS sandbox profile.
+See [docs/setup/sandbox-aws-profile.md](setup/sandbox-aws-profile.md).
 
-### Daily Workflow (Recommended)
+### Daily Workflow
 
 ```bash
-# In a new terminal session: initialize once
-just tf-init
+# Initialize the sandbox backend once per terminal session
+just tf init
 
-# Then iterate as many times as needed (same terminal)
-just tf-plan-local          # Review resources to create/modify
-just tf-apply-local         # Apply the plan
-just tf-plan-local          # Make changes, plan again
-just tf-apply-local         # Apply the new plan
-# ... repeat as needed
+# Review resource changes
+TF_ENV=sandbox just tf plan
 
-# Inspect state anytime (no re-init needed)
-just tf-show-local          # Full resource details
-just tf-state-list          # List all managed resources
+# Apply the saved plan
+TF_ENV=sandbox just tf apply
+
+# Inspect Terraform state when debugging
+TF_ENV=sandbox just tf show
 ```
 
-**Key point:** `tf-init` runs once per terminal session. You don't re-run it on subsequent plan/apply iterations.
-
-### Clean Slate (Reset All)
+For a full reset from the current Terraform configuration:
 
 ```bash
-just tf-apply-local-fresh   # Destroy everything, re-init, plan & apply from scratch
+TF_ENV=sandbox just tf fresh
+```
+
+### Clean Slate
+
+Use this when you want to destroy current Floci Terraform resources and recreate
+them from scratch:
+
+```bash
+TF_ENV=sandbox just tf destroy
+TF_ENV=sandbox just tf fresh
 ```
 
 ### Full Teardown
 
+Use this at the end of a Floci session:
+
 ```bash
-just tf-destroy-local       # Remove all Floci infrastructure
+TF_ENV=sandbox just tf destroy
+just floci-down
 ```
 
-### When to Use Each
+## Deploy to Floci ECS
 
-| Command | Purpose | Frequency |
-|---------|---------|-----------|
-| `just tf-init` | Validate files, initialize backend, download modules | Once per terminal session |
-| `just tf-plan-local` | Generate resource changes; safe to review before apply | Every iteration |
-| `just tf-apply-local` | Apply the plan from above | Every iteration |
-| `just tf-show-local` | Inspect deployed resource details | On demand (debugging) |
-| `just tf-state-list` | List all managed resources by ID | On demand (inventory) |
-| `just tf-apply-local-fresh` | Full reset: destroy → init → plan → apply | When starting from blank slate |
-| `just tf-destroy-local` | Teardown all resources; keep state backend | Before session end (optional cleanup) |
+After Terraform has created the Floci ECS resources, deploy the current local
+images to the Floci-backed ECS simulator:
 
-### Common Pattern
+```bash
+just floci-deploy
+```
+
+`just floci-deploy` delegates to `scripts/sandbox/deploy.sh` and uses the
+Floci ECR/ECS-shaped APIs exposed by the running Floci stack.
+
+## Common Pattern
 
 ```bash
 # Project start
-just sandbox-up
-just tf-init
+just floci-up
+just floci-validate
 
-# Development loop
-just tf-plan-local
-just tf-apply-local
-# ... make app/infra changes ...
-just tf-plan-local
-just tf-apply-local
+# Terraform iteration
+just tf init
+TF_ENV=sandbox just tf plan
+TF_ENV=sandbox just tf apply
+
+# Deploy and test
+just floci-deploy
+just floci-test
 
 # Session end
-just tf-destroy-local
-just sandbox-down
+TF_ENV=sandbox just tf destroy
+just floci-down
 ```
 
-### Notes
+## Notes
 
-- `tf-init` runs preflight validation and backend initialization only once per session
-- Daily recipes (`tf-plan-local`, `tf-apply-local`) skip re-initialization overhead
-- State is persisted in Floci's S3 backend; use `just tf-show-local` to view it
-- Changes to `infra/terraform/environments/dev/` require `just tf-plan-local` → `just tf-apply-local`
+- Floci must be enabled in `docker-compose.yml` before `just floci-up` can start it.
+- Use `TF_ENV=sandbox` for Floci Terraform operations.
+- Use `TF_ENV=dev` for real AWS dev Terraform operations.
+- The Justfile is the source of truth for recipe names and arguments; run
+  `just --list --unsorted` from the repo root for the live recipe list.
+- Older `sandbox-*` aliases still exist for compatibility, but new docs should
+  use canonical `floci-*` names.
 
 ## Expected Outcomes
 
-- Floci container is healthy.
-- AWS CLI commands work against LocalStack endpoint.
-- Sandbox tests pass for configured services.
+- Floci container is healthy at `http://127.0.0.1:4566/_floci/health`.
+- AWS CLI commands work against the Floci endpoint.
+- The local S3 bucket and SQS queue are reachable.
+- Floci-specific E2E tests pass for the configured services.
 
 ## Tooling Notes
 
-Install wrappers with uv tools:
+Install wrappers with uv tools when needed:
 
 - `awscli-local`
 - `terraform-local`
 
-See detailed install matrix in [docs/setup/system-requirements.md](setup/system-requirements.md).
+See the detailed install matrix in [docs/setup/system-requirements.md](setup/system-requirements.md).
 
 ## When to Use This Doc
 
 Use this guide when:
 
-- developing features that call AWS APIs
-- validating integration tests against local AWS emulation
-- rehearsing infra changes before cloud execution
+- developing features that call AWS APIs;
+- validating integration tests against local AWS emulation;
+- rehearsing infra changes before cloud execution;
+- deploying to the local Floci ECS simulator.
 
-Use [docs/deployment/aws-ecs.md](deployment/aws-ecs.md) for actual AWS rollout steps.
+Use [docs/deployment/deploy-runbook.md](deployment/deploy-runbook.md) for the
+combined sandbox + real AWS deployment workflow.
 
 ## Related Documents
 
+- [docs/dev/commands.md](dev/commands.md)
+- [docs/deployment/deploy-runbook.md](deployment/deploy-runbook.md)
 - [docs/deployment/aws-ecs.md](deployment/aws-ecs.md)
-- [docs/cloud-deployment.md](cloud-deployment.md)
 - [docs/deployment/cost-teardown.md](deployment/cost-teardown.md)
+- [docs/setup/sandbox-aws-profile.md](setup/sandbox-aws-profile.md)
 - [docs/setup/system-requirements.md](setup/system-requirements.md)

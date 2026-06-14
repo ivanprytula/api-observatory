@@ -5,12 +5,12 @@
 #   docker compose --profile aws up -d floci
 #   docker run -d --name floci-ecr-registry \
 #     --network api-observatory_api-obs -p 5100:5000 registry:2
-#   just tf-apply
-#   just sandbox-deploy
+#   TF_ENV=sandbox just tf plan && TF_ENV=sandbox just tf apply
+#   just floci-deploy
 
 aws_region         = "eu-central-1"
 aws_profile        = "sandbox"
-emulator_endpoint  = "http://localhost:4566"
+emulator_endpoint  = "http://127.0.0.1:4566"
 
 vpc_cidr           = "10.0.0.0/16"
 availability_zones = ["eu-central-1a", "eu-central-1b"]
