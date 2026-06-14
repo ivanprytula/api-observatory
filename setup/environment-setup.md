@@ -214,7 +214,9 @@ just up
 uv run pytest tests/unit/ -q
 
 # Start services
-just up   # or: just sandbox-up (for Floci/AWS sim)
+just up   # local Docker Compose
+# For Floci/AWS simulation, use:
+just floci-up
 
 # API access
 curl http://localhost:8000/health

@@ -6,7 +6,7 @@ real containers: ECR registry, RDS Postgres, ElastiCache Redis, ECS Fargate task
 ## Prerequisites
 
 - Docker running rootfull (not rootless) — sibling container creation required
-- Floci running: `docker compose --profile aws up -d floci`
+- Floci running: `docker compose --profile aws up -d floci` or `just floci-up`
 - ECR registry sidecar (pre-create once):
 
   ```bash
@@ -33,18 +33,19 @@ cp infra/terraform/environments/sandbox/terraform.tfvars.example \
 ## Commands
 
 ```bash
-just sandbox-up            # start Floci emulator (real containers)
-just tf-init               # init Terraform backend in sandbox
-just tf-plan               # plan IaC against Floci
-just tf-apply              # apply VPC/ALB/ECS/RDS/ElastiCache/ECR
-just sandbox-deploy        # build + push images to Floci ECR, deploy to ECS
-just tf-destroy            # destroy all sandbox resources
+just floci-up                         # start Floci emulator (real containers)
+just tf init                          # init Terraform backend in sandbox
+TF_ENV=sandbox just tf plan           # plan IaC against Floci
+TF_ENV=sandbox just tf apply          # apply VPC/ALB/ECS/RDS/ElastiCache/ECR
+just floci-deploy                     # build + push images to Floci ECR, deploy to ECS
+TF_ENV=sandbox just tf destroy        # destroy all sandbox resources
 ```
 
 ## What Floci creates
 
 Floci runs real containers for data-plane services:
-- **ECR**: OCI registry on `localhost:5100-5199` — real `docker push`/`pull`
+
+- **ECR**: OCI registry on `127.0.0.1:5100-5199` — real `docker push`/`pull`
 - **RDS**: Postgres on proxy ports `7001-7099`
 - **ElastiCache**: Redis on proxy ports `6379-6399`
 - **ECS**: Real Fargate tasks via mounted Docker socket
@@ -56,7 +57,7 @@ Port conflicts are avoided: Floci uses private proxy port ranges, not host bindi
 Set `emulator_endpoint` in `terraform.tfvars`:
 
 ```hcl
-emulator_endpoint = "http://localhost:4566"
+emulator_endpoint = "http://127.0.0.1:4566"
 ```
 
 Update the matching `endpoints.s3` in `backend.hcl` to the same value.

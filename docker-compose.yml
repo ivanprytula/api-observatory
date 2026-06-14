@@ -234,7 +234,7 @@ services:
     networks:
       - api-obs
 
-  # Floci Docker service (optional; started manually via: just floci-start)
+  # Floci Docker service (optional; started manually via: just floci-up)
   # Docker-based Floci is more universal (works on older CPUs that lack x86-64-v3 support)
   # To use docker-compose instead, uncomment and run: docker compose --profile aws up -d floci
   floci:

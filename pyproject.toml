@@ -66,7 +66,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Floci is deployed via Docker container (just floci-start) for universal CPU compatibility
+# Floci is deployed via Docker container (just floci-up) for universal CPU compatibility
 # See: https://floci.io/aws/#quickstart
 eval = [
   # Evaluation-only dependency, isolated from default runtime security gate

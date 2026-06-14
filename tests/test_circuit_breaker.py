@@ -2,6 +2,7 @@ import pytest
 
 from libs.platform.circuit_breaker import CircuitBreaker, CircuitOpenError
 
+
 pytestmark = pytest.mark.integration
 
 

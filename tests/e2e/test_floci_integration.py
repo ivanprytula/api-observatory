@@ -1,15 +1,15 @@
 """End-to-end tests for Floci (local AWS emulator) sandbox integration.
 
 Verifies that the Floci sandbox is running and that core AWS service operations work:
-1. Floci container is running and accessible at http://localhost:4566
+1. Floci container is running and accessible at http://127.0.0.1:4566
 2. S3 bucket operations (create, list, upload, download)
 3. SQS queue operations (create, send, receive messages)
 
 Prerequisites:
-    just sandbox-up       # starts Floci and provisions base resources
+    just floci-up       # starts Floci and provisions base resources
 
 Run with:
-    just sandbox-test
+    just floci-test
     uv run pytest tests/e2e/test_floci_integration.py -v -m aws
 """
 
@@ -38,17 +38,17 @@ def aws_config() -> dict[str, str]:
     """Get AWS configuration from environment.
 
     LocalStack should be running:
-        just sandbox-up
+        just floci-up
 
     Environment variables expected:
-        AWS_ENDPOINT_URL=http://localhost:4566
+        AWS_ENDPOINT_URL=http://127.0.0.1:4566
         AWS_REGION=us-east-1
         AWS_ACCESS_KEY_ID=test
         AWS_SECRET_ACCESS_KEY=test
         AWS_ACCOUNT_ID=000000000000
     """
     return {
-        "endpoint_url": os.getenv("AWS_ENDPOINT_URL", "http://localhost:4566"),
+        "endpoint_url": os.getenv("AWS_ENDPOINT_URL", "http://127.0.0.1:4566"),
         "region_name": os.getenv("AWS_REGION", "us-east-1"),
         "aws_access_key_id": os.getenv("AWS_ACCESS_KEY_ID", "test"),
         "aws_secret_access_key": os.getenv("AWS_SECRET_ACCESS_KEY", "test"),
@@ -78,7 +78,7 @@ def require_floci_endpoint(aws_config: dict[str, str]) -> None:
             return
     except OSError:
         pytest.skip(
-            f"Floci/LocalStack endpoint is unreachable at {endpoint}. Run `just sandbox-up`.",
+            f"Floci/LocalStack endpoint is unreachable at {endpoint}. Run `just floci-up`.",
             allow_module_level=True,
         )
 
