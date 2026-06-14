@@ -45,7 +45,8 @@ repos:
             tests/__init__\.py|
             tests/fixtures_shared\.py|
             tests/unit/__init__\.py|
-            tests/integration/__init__\.py
+            tests/integration/__init__\.py|
+            tests/shared/.*
           )$
       - id: requirements-txt-fixer
         files: ^requirements-audit\.txt$

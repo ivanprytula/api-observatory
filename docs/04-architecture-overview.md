@@ -1,5 +1,7 @@
 # Architecture Overview — api-observatory MVP
 
+> **MVP Scope** — Describes the Phase 1–3 single-service `ingestor` architecture. For the full long-term vision (Phases 0–8, multi-service), see [design/architecture.md](design/architecture.md).
+
 **MVP scope**: Commits 1-12 (PHASE 1-10). Single service (`ingestor`) + four infrastructure
 components. No Django portal, no analytics service, no MongoDB.
 
@@ -220,7 +222,7 @@ in [docs/design/architecture.md](design/architecture.md).
 ```bash
 BROKER_ENABLED=true
 BROKER_URL=broker:29092       # inside Docker Compose network
-# BROKER_URL=localhost:9092     # if ingestor runs outside Docker
+# BROKER_URL=127.0.0.1:9092     # if ingestor runs outside Docker
 ```
 
 **Fail-open**: When `BROKER_ENABLED=false`, probe scheduler skips publishing. All probe results
@@ -278,7 +280,7 @@ DOCS_PASSWORD=changeme
 
 # ── Observability (optional — /metrics always exposed) ───────────────────────
 OTEL_ENABLED=false
-OTEL_ENDPOINT=http://localhost:4317
+OTEL_ENDPOINT=http://127.0.0.1:4317
 OTEL_SERVICE_NAME=api-obs-ingestor
 ```
 

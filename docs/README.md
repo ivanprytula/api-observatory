@@ -35,6 +35,8 @@ This is the system design, cloud, and long-term technical direction path.
 5. [ADR Index](adr/README.md): decision records and architectural trade-offs.
 6. [Design Decisions](design/decisions.md): cross-cutting rationale.
 
+Note: Architecture documents have different scopes — see [04-architecture-overview.md](04-architecture-overview.md) for the MVP single-service ingestor, and [design/architecture.md](design/architecture.md) for the long-term, multi-service vision.
+
 ## Track D: Business and Interview Narrative
 
 This is the portfolio/career communication path.
@@ -63,7 +65,7 @@ Use these as the single source of truth for each domain:
 | Canonical command source | [dev/commands.md](dev/commands.md) | Exact runnable commands and scripts |
 | Workflow intent and sequence | [03-daily-development.md](03-daily-development.md) | Workflow sequence and cadence, without command duplication |
 | Cloud runtime strategy | [cloud-deployment.md](cloud-deployment.md) | Platform choice, governance, architecture-level deployment policy |
-| Deploy runbook (sandbox + dev) | [deployment/deploy-runbook.md](deployment/deploy-runbook.md) | Pre-flight, deploy steps, smoke-test matrix, rollback, failure modes |
+| Deploy runbook (Floci sandbox + dev) | [deployment/deploy-runbook.md](deployment/deploy-runbook.md) | Pre-flight, deploy steps, smoke-test matrix, rollback, failure modes |
 | Floci local sandbox specifics | [floci-aws-deployment-workflow.md](floci-aws-deployment-workflow.md) | Floci container management, local AWS emulation setup |
 | Real AWS ECS specifics | [deployment/aws-ecs.md](deployment/aws-ecs.md) | Terraform modules, real AWS resource configuration |
 | Cost teardown checklist | [deployment/cost-teardown.md](deployment/cost-teardown.md) | Explicit shutdown and cost-control operations |
