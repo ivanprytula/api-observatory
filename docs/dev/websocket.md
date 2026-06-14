@@ -107,16 +107,18 @@ The connection is then closed by the server.
 npm install -g wscat
 
 # Connect (no auth)
-wscat -c "ws://localhost:8000/ws/observations/stream"
+wscat -c "$(bash scripts/daily/local-url.sh websocket-url /ws/observations/stream)"
 
 # Connect (with token)
-wscat -c "ws://localhost:8000/ws/observations/stream?token=mysecret"
+wscat -c "$(bash scripts/daily/local-url.sh websocket-url '/ws/observations/stream?token=mysecret')"
 ```
 
 ### Browser (JavaScript)
 
 ```javascript
-const ws = new WebSocket('ws://localhost:8000/ws/observations/stream?token=mysecret');
+const wsUrl = new URL('/ws/observations/stream', window.location.origin);
+wsUrl.searchParams.set('token', 'mysecret');
+const ws = new WebSocket(wsUrl.toString());
 
 ws.onmessage = (event) => {
   const msg = JSON.parse(event.data);
@@ -133,11 +135,14 @@ ws.onclose = (event) => {
 ### Python (websockets)
 
 ```python
-import asyncio, json, websockets
+import asyncio, json, subprocess, websockets
 
 async def listen() -> None:
-    url = "ws://localhost:8000/ws/observations/stream?token=mysecret"
-    async with websockets.connect(url) as ws:
+    base_url = subprocess.check_output(
+        ["bash", "scripts/daily/local-url.sh", "websocket-url", "/ws/observations/stream?token=mysecret"],
+        text=True,
+    ).strip()
+    async with websockets.connect(base_url) as ws:
         async for raw in ws:
             msg = json.loads(raw)
             print(msg)

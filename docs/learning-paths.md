@@ -7,7 +7,7 @@ Three tracks covering the full MVP stack (Commits 1-12). Start with architecture
 
 ## Backend Interview Prep
 
-1. Run the stack: `docker compose up -d && curl http://localhost:8000/docs`
+1. Run the stack: `docker compose up -d && curl http://127.0.0.1:8000/docs`
 2. Walk the request flow in [services/ingestor/main.py](../services/ingestor/main.py) (lifespan, router wiring) and [services/ingestor/routers/](../services/ingestor/routers/).
 3. Review async DB patterns in [services/ingestor/models.py](../services/ingestor/models.py) and [services/ingestor/repositories/](../services/ingestor/repositories/).
 4. Study JWT auth + RBAC in [services/ingestor/auth.py](../services/ingestor/auth.py) and [services/ingestor/security/](../services/ingestor/security/).

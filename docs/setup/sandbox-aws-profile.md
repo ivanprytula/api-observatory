@@ -1,7 +1,7 @@
 # Sandbox AWS Profile Setup
 
-One-time workstation setup required before running `just tf-plan-local`, `just sandbox-up`, or
-any recipe that sources `scripts/aws-env.sh`.
+One-time workstation setup required before running `just floci-up` or any
+recipe that sources `scripts/aws-env.sh`.
 
 ## Why a named profile?
 
@@ -10,7 +10,7 @@ variables (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`). Using a dedicated `[s
 keeps emulator credentials fully isolated from real AWS profiles and avoids that conflict.
 
 The profile name `sandbox` is emulator-agnostic — it works with Floci, LocalStack, or any
-AWS-compatible local emulator that listens on `http://localhost:4566`.
+AWS-compatible local emulator that listens on `http://127.0.0.1:4566`.
 
 ## One-time setup
 
@@ -36,13 +36,13 @@ region = eu-central-1
 | Variable            | Value                      | Purpose                                      |
 |---------------------|----------------------------|----------------------------------------------|
 | `AWS_PROFILE`       | `sandbox`                  | Selects the profile for CLI and Terraform     |
-| `AWS_ENDPOINT_URL`  | `http://localhost:4566`    | Redirects all AWS API calls to the emulator  |
+| `AWS_ENDPOINT_URL`  | `http://127.0.0.1:4566`    | Redirects all AWS API calls to the emulator  |
 | `AWS_DEFAULT_REGION`| `eu-central-1`             | Default region for CLI commands              |
 
 Any stale `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` env vars are unset by the script to
 prevent the named-profile conflict.
 
-`infra/terraform/environments/dev/terraform.tfvars` should set `aws_profile = "sandbox"` for local runs, overriding the `aws_profile = "default"` fallback.
+`infra/terraform/environments/sandbox/terraform.tfvars` should set `aws_profile = "sandbox"` for local Floci runs, overriding the `aws_profile = "default"` fallback.
 
 ## Verify the setup
 
@@ -66,13 +66,13 @@ Expected output (emulator responds with dummy account):
 To switch emulators (e.g. from Floci to LocalStack):
 
 1. Update the container image / service name in `docker-compose.yml`.
-2. Verify the health endpoint and update `sandbox-up` in the Justfile if it differs.
+2. Verify the health endpoint and update `floci-up` in the Justfile if it differs.
 3. No credential or profile changes are needed — `[sandbox]` credentials are the same for all
    AWS-compatible emulators.
 
 ## Related files
 
 - [`scripts/aws-env.sh`](../../scripts/aws-env.sh) — exports sandbox env vars
-- [`infra/terraform/environments/dev/terraform.tfvars`](../../infra/terraform/environments/dev/terraform.tfvars) — Terraform variable overrides for local runs
-- [`infra/terraform/environments/dev/main.tf`](../../infra/terraform/environments/dev/main.tf) — AWS provider definition
-- [`Justfile`](../../Justfile) — `sandbox-up`, `tf-plan`, and related recipes
+- [`infra/terraform/environments/sandbox/terraform.tfvars`](../../infra/terraform/environments/sandbox/terraform.tfvars) — Terraform variable overrides for local Floci runs
+- [`infra/terraform/environments/sandbox/main.tf`](../../infra/terraform/environments/sandbox/main.tf) — AWS provider definition
+- [`Justfile`](../../Justfile) — `floci-up`, `floci-validate`, `floci-test`, and `TF_ENV=sandbox just tf plan`

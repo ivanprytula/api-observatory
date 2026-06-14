@@ -6,7 +6,8 @@ This document explains workflow intent and sequence for active development.
 
 Canonical command source:
 
-- [docs/dev/commands.md](dev/commands.md)
+- [dev/commands.md](dev/commands.md)
+- [setup/local-url-matrix.md](setup/local-url-matrix.md)
 
 Use this file for when and why to run each workflow, not as the full command catalog.
 
@@ -22,7 +23,7 @@ Use this baseline sequence during active feature work:
 6. Run lint and formatting gates before opening or updating a PR.
 7. Shut down containers when done.
 
-For exact commands, copy from [docs/dev/commands.md](dev/commands.md).
+For exact commands, copy from [dev/commands.md](dev/commands.md).
 
 ## Two Development Modes
 
@@ -64,12 +65,11 @@ Release confidence path:
 
 For PR check semantics, manual verification, and workflow composition:
 
-- [docs/ci/workflow-reference.md](ci/workflow-reference.md)
+- [ci/workflow-reference.md](ci/workflow-reference.md)
 
 ## Related Documents
 
-- [docs/02-first-time-setup.md](02-first-time-setup.md)
-- [docs/dev/commands.md](dev/commands.md)
-- [docs/dev/developer-guide.md](dev/developer-guide.md)
-- [docs/floci-aws-deployment-workflow.md](floci-aws-deployment-workflow.md)
-- [docs/deployment/aws-ecs.md](deployment/aws-ecs.md)
+- [02-first-time-setup.md](02-first-time-setup.md)
+- [dev/commands.md](dev/commands.md)
+- [floci-aws-deployment-workflow.md](../floci-aws-deployment-workflow.md)
+- [deployment/aws-ecs.md](../deployment/aws-ecs.md)

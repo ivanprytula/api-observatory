@@ -38,8 +38,8 @@ just migrate                # apply database migrations
 
 Next steps:
 
-1. Open API docs: <http://localhost:8000/docs>
-2. Open API docs via edge (if certs configured): <https://localhost/api/docs>
+1. Open API docs with the active local URL helper: `bash scripts/daily/local-url.sh open /api/docs`
+2. Switch to HTTPS parity with `LOCAL_API_SCHEME=https just up-https` when needed
 
 **Pre-commit setup** (run once after clone to prevent commit errors):
 
@@ -62,13 +62,13 @@ After the first commit, pre-commit hooks will run automatically on every commit.
 Start the core services — database, cache, message broker, API, and dashboard. The edge service is optional and provides HTTPS parity with production.
 
 ```bash
-just up      # db, cache, broker, ingestor, dashboard (HTTP)
+just up      # db, cache, broker, ingestor, dashboard (direct HTTP API)
 # For HTTPS parity (requires certs — see Step 6):
-just up-https  # includes edge on :443
+LOCAL_API_SCHEME=https just up-https  # includes edge on :443
 just migrate # apply Alembic migrations (safe to re-run)
 ```
 
-`just up` covers all feature development workflows. The Floci AWS simulator is a separate pre-deploy playground — you do not need it for day-to-day coding. See [docs/floci-aws-deployment-workflow.md](floci-aws-deployment-workflow.md) when you are ready to rehearse AWS-integrated flows before a real cloud deployment.
+`just up` covers all feature development workflows. The Floci AWS simulator is a separate pre-deploy playground — you do not need it for day-to-day coding. See [floci-aws-deployment-workflow.md](../floci-aws-deployment-workflow.md) when you are ready to rehearse AWS-integrated flows before a real cloud deployment.
 
 For a description of every service and its port, see [What Just Happened](#what-just-happened) below.
 
@@ -83,10 +83,12 @@ For a complete list of environment variables and guidance on storing secrets (JW
 docker compose ps
 
 # Verify the ingestor API is responding (started inside Docker by `just up`)
-curl http://localhost:8000/health
+source scripts/daily/local-url.sh
+curl_local -sf "$(local_api_url /health)"
 # Should return: {"status":"healthy"}
 
-# Also available via edge (after just up with certs): https://localhost/api/docs
+# API docs follow the active local URL mode
+bash scripts/daily/local-url.sh open /api/docs
 
 # Run quick test
 uv run pytest tests/unit/ -q
@@ -106,112 +108,13 @@ uv run pytest tests/unit/ -q
 
 ## Step 5 (Optional): Customize Environment
 
-The setup creates a `.env` file with defaults. Edit it if needed:
-
-```bash
-# View current configuration
-cat .env
-
-# Edit if needed (most defaults are fine for local dev)
-nano .env
-
-# Restart Docker Compose services after changing non-app config (e.g. Cache URL, DB port)
-docker compose restart
-# Note: if you changed DATABASE_URL and are running uvicorn directly (not in Docker),
-# stop uvicorn (Ctrl+C) and restart it — docker compose restart does not affect it.
-```
-
-For the full env var matrix (all variables, defaults, CI/CD and deployment contexts), see
-[Environment Setup](setup/environment-setup.md).
+See [setup/environment-setup.md](../setup/environment-setup.md) for detailed environment variable configuration, defaults, and CI/CD contexts.
 
 ---
 
 ## Step 6 (Optional): Enable HTTPS for Local Parity
 
-For maximum local → dev/prod parity, enable HTTPS via edge. This is optional since HTTP on `:8000` works for development.
-
-### 6a. Install mkcert (one-time system install)
-
-```bash
-# macOS
-brew install mkcert
-
-# Ubuntu / Debian
-sudo apt install mkcert libnss3-tools
-
-# Fedora / RHEL
-sudo dnf install mkcert nss-tools
-```
-
-> **Why `libnss3-tools`?** On Linux, Chrome/Chromium uses the NSS (Network Security Services) database for certificate trust, which is **separate from the system trust store**. The `libnss3-tools` package provides `certutil`, which `mkcert` needs in order to register its local CA with Chromium. Without it, Chrome will reject the certificate with `ERR_CERT_AUTHORITY_INVALID`.
-
-### 6b. Install the local CA and generate certificates
-
-```bash
-# Install mkcert's local CA into system + browser trust stores
-mkcert -install
-
-# Generate certificates for localhost, 127.0.0.1, and *.local
-bash scripts/setup/02-setup-local-https.sh
-```
-
-The script will create two files in `infra/certs/`:
-- `localhost+2.pem` — the public certificate
-- `localhost+2-key.pem` — the private key
-
-These are mounted into the edge container at `/etc/nginx/certs/`.
-
-### 6c. Start the stack with edge
-
-```bash
-# Start all services including edge (HTTPS on :443)
-just up-https
-```
-
-### 6d. Verify HTTPS is working
-
-```bash
-# curl should show a valid TLS handshake (no -k needed if CA is trusted)
-curl -v https://localhost/health
-
-# Open API docs in browser
-open https://localhost/api/docs
-```
-
-**Expected output after `just up-https`:**
-
-```text
-✓ All services running (db, cache, broker, ingestor, dashboard, edge)
-✓ HTTPS available at https://localhost + https://localhost/api/*
-```
-
-### 6e. Certificate troubleshooting
-
-If your browser shows **`ERR_CERT_AUTHORITY_INVALID`** or **`NET::ERR_CERT_AUTHORITY_INVALID`**:
-
-1. **Install NSS tools** (Linux/Chrome only) — run once:
-   ```bash
-   sudo apt install libnss3-tools   # Debian/Ubuntu
-   ```
-2. **Re-install the CA** — this registers it with Chromium's NSS store:
-   ```bash
-   mkcert -install
-   # Expected: ✓ installed in Firefox and/or Chrome/Chromium trust store
-   ```
-3. **Restart Chrome completely** — close all windows and reopen. A full restart is required because Chrome caches the NSS trust store at startup.
-4. **Still broken?** Verify the CA is registered:
-   ```bash
-   certutil -L -d sql:$HOME/.pki/nssdb   # List trusted CAs (look for "mkcert")
-   ```
-
-After this step, access the application via HTTPS:
-
-| URL                           | Purpose                                          |
-| ----------------------------- | ------------------------------------------------ |
-| `https://localhost/`          | Dashboard (via edge)                            |
-| `https://localhost/api/docs`  | Swagger UI (interactive API docs)                |
-| `https://localhost/api/redoc` | ReDoc (alternative API docs)                     |
-| `http://localhost:8501/`      | Dashboard (Streamlit, direct — always available) |
+See [setup/local-https-setup.md](../setup/local-https-setup.md) for mkcert installation, local CA setup, certificate generation, and edge HTTPS configuration.
 
 ---
 
@@ -278,23 +181,22 @@ gh api "/repos/${repo}/actions/oidc/customization/sub" --jq '.include_claim_keys
 **`just up` starts (core MVP stack):**
 
 ```text
-PostgreSQL 17          localhost:5432   → Primary persistence (scorecards, observations, drift events)
-Cache                  localhost:6379   → Scorecard TTL cache, WebSocket pub/sub, rate-limit backend
-Redpanda (Kafka)       localhost:9092   → Drift events, async processing, DLQ
-Ingestor API           localhost:8000   → FastAPI — probes, scorecards, agent enrichment
-Dashboard (Streamlit)  localhost:8501   → Visual UI for scorecards, drift, live stream
+PostgreSQL 17          127.0.0.1:5432   → Primary persistence (scorecards, observations, drift events)
+Cache                  127.0.0.1:6379   → Scorecard TTL cache, WebSocket pub/sub, rate-limit backend
+Redpanda (Kafka)       127.0.0.1:9092   → Drift events, async processing, DLQ
+Ingestor API           127.0.0.1:8000   → FastAPI — probes, scorecards, agent enrichment
+Dashboard (Streamlit)  127.0.0.1:8501   → Visual UI for scorecards, drift, live stream
 ```
 
 **Optional services:**
 
 ```text
-Floci (AWS emulator)   localhost:4566   → pre-deploy sandbox only: just sandbox-up
+Floci (AWS emulator)   127.0.0.1:4566   → pre-deploy sandbox only: just floci-up
 ```
 
 **Additional services (optional):**
 
 ```text
-Floci (AWS emulator)   localhost:4566   → pre-deploy sandbox only: just sandbox-up
 PostgreSQL (tests)     auto-provisioned → ephemeral DB via testcontainers
 ```
 
@@ -322,22 +224,26 @@ For canonical command workflows, use **[03 — Daily Development](03-daily-devel
 
 ### Access the Application
 
-| URL                          | Purpose                                 |
-| ---------------------------- | --------------------------------------- |
-| `http://localhost:8000/`     | API (direct HTTP, always available)     |
-| `http://localhost:8000/docs` | Swagger UI (direct HTTP)                |
-| `http://localhost:8501/`     | Dashboard (Streamlit, always available) |
+Use the shared local URL helper so HTTP and HTTPS modes stay in sync:
+
+```bash
+bash scripts/daily/local-url.sh open /api/docs
+LOCAL_API_SCHEME=https bash scripts/daily/local-url.sh open /api/docs
+```
+
+Full URL matrix: [setup/local-url-matrix.md](setup/local-url-matrix.md).
 
 ### Submit a Test Request
 
 ```bash
-# Direct HTTP (always works after `just up`):
-curl -X POST http://localhost:8000/api/v1/observations \
+# Direct HTTP (always works after `just up` when LOCAL_API_SCHEME is unset or http):
+source scripts/daily/local-url.sh
+curl_local -X POST "$(local_api_url /api/v1/observations)" \
   -H "Content-Type: application/json" \
   -d '{"source": "test", "timestamp": "2024-04-22T12:00:00", "data": {}}'
 ```
 
-For additional API usage and request patterns, use Swagger at `http://localhost:8000/docs` (direct) or `https://localhost/api/docs` (HTTPS via edge).
+For additional API usage and request patterns, use Swagger via `bash scripts/daily/local-url.sh open /api/docs`.
 For ongoing command workflows, use [03-daily-development.md](03-daily-development.md) and
 [dev/commands.md](dev/commands.md).
 
@@ -375,7 +281,7 @@ lsof -i :80        # edge HTTP
 
 ### HTTPS / Certificate Issues
 
-**`ERR_CERT_AUTHORITY_INVALID` in Chrome/Chromium** — see [Step 6e](#6e-certificate-troubleshooting) above.
+**`ERR_CERT_AUTHORITY_INVALID` in Chrome/Chromium** — see [setup/local-https-setup.md](../setup/local-https-setup.md) for troubleshooting.
 
 **`curl: (60) SSL certificate problem`** when running `curl`:
 ```bash
@@ -388,7 +294,7 @@ mkcert -CAROOT   # prints CA root directory
 ls -la "$(mkcert -CAROOT)"
 ```
 
-**Nginx returns "404 Not Found"** on `https://localhost/`:
+**Nginx returns "404 Not Found"** on `https://127.0.0.1/`:
 - The root location block (`location /`) was commented out in `infra/nginx/nginx.conf`. Ensure it is uncommented and proxies to the dashboard upstream (or whichever service should serve the root path).
 - After editing `infra/nginx/nginx.conf`, reload edge:
   ```bash
