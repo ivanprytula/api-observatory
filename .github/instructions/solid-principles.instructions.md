@@ -940,7 +940,7 @@ async def checkout(
 
 ---
 
-## SOLID in data-pipeline-async
+## SOLID in api-observatory
 
 ### Example: Applying SOLID to Scenario 1
 

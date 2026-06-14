@@ -16,7 +16,7 @@ Always start with a shebang and include metadata:
 # Script: start.sh
 # Description: Spin up Docker Compose services
 # Usage: ./start.sh [--build]
-# Author: data-pipeline-async
+# Author: api-observatory
 ################################################################################
 
 set -o errexit      # Exit on error

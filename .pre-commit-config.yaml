@@ -14,6 +14,10 @@ repos:
       - id: check-docstring-first
       - id: debug-statements
       - id: detect-private-key
+        exclude: >
+          (?x)^(
+            .github/hooks/secrets-scanner/.*|
+          )$
       - id: mixed-line-ending
         args: [--fix=lf]
       - id: destroyed-symlinks

@@ -39,17 +39,19 @@ def include_object(
       are created by raw SQL in the partitioning migration and are not
       SQLAlchemy ORM models.
     """
-    if type_ == "table" and reflected and compare_to is None:
-        # Table exists in DB but has no counterpart in our metadata → skip.
+    # Only filter tables; non-table objects are included.
+    if type_ != "table" or not reflected:
+        return True
+
+    # Table exists in DB but has no counterpart in our metadata → skip.
+    if compare_to is None:
         return False
-    if (
-        type_ == "table"
-        and reflected
-        and name is not None
+
+    # Skip the observations archive partitions created outside ORM migrations.
+    return not (
+        name is not None
         and (name == "observations_archive" or name.startswith("observations_archive_"))
-    ):
-        return False
-    return True
+    )
 
 
 # URL priority: programmatic override (testing) > app settings (production).

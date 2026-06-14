@@ -535,7 +535,7 @@ docker compose down
 Cost-guard: `enable_messaging = false` by default in `infra/terraform/environments/dev/main.tf` (MSK = $2.64/day). Without MSK: ~$2.50/day → 2-day test ≈ $5.
 
 ```bash
-just sandbox-up && just tf-plan-local && just sandbox-test && just tf-destroy-local
+just floci-up && just floci-validate && TF_ENV=sandbox just tf plan && TF_ENV=sandbox just tf apply && just floci-test && TF_ENV=sandbox just tf destroy && just floci-down
 ```
 
 ### Commit 13c — `docs(deploy): AWS ECS step-by-step, cost teardown` [DONE]
@@ -663,8 +663,8 @@ docker compose down
 ### After commit 13 — deployment
 
 ```bash
-just sandbox-up && just sandbox-test && just tf-destroy-local
-terraform output | grep alb_dns_name
+just floci-up && just floci-validate && just floci-test && TF_ENV=sandbox just tf destroy && just floci-down
+TF_ENV=sandbox just tf show | grep -E 'alb|dns'
 curl https://<alb-dns>/docs        # 200 OK
 terraform destroy                  # clean, no billable resources remain
 # Post-MVP release gate:
@@ -688,8 +688,7 @@ env -u DATABASE_URL_TEST uv run pytest tests/ services/ingestor/tests/ -q -m "in
 
 ## Excluded from Scope
 
-- Other services (inference, dashboard, analytics, webhook, timeseries, search)
+- Other services (inference, analytics, webhook, timeseries, search)
 - Kubernetes manifests (ECS is the deploy target)
-- CI/CD workflow changes (14 workflows already solid)
 - Semantic diff for contract drift (hash comparison is sufficient)
 - Cursor pagination (offset is fine for MVP scale)
