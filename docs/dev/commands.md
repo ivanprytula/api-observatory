@@ -2,8 +2,14 @@
 
 Track: B — Engineering Execution
 
-All CLI commands for daily development, testing, migrations, and infrastructure.
-Use Ctrl+F to jump to any section.
+Single command reference for daily development, testing, migrations, and infrastructure.
+
+The `Justfile` is the source of truth for recipe names, arguments, and behavior.
+Run `just --list --unsorted` from the repo root for the live recipe list.
+
+Prefer canonical recipe names in new docs. Compatibility aliases such as
+`sandbox-up` still exist, but Floci workflows should document `floci-*` names.
+Workflow docs should link here instead of duplicating this catalog.
 
 ---
 
@@ -306,6 +312,10 @@ docker compose logs ingestor | grep '"cid":"<value>"'
 
 ## Infrastructure & Sandbox (Floci)
 
+Use this section for the local AWS-shaped Floci sandbox. Prefer canonical
+`floci-*` recipes; older `sandbox-*` aliases still exist for compatibility but
+are not the recommended docs surface.
+
 ### One-Time AWS Profile Setup
 
 ```bash
@@ -316,50 +326,79 @@ aws_secret_access_key = test
 
 # ~/.aws/config
 [profile sandbox]
-region = us-east-1
+region = eu-central-1
 ```
 
 See [docs/setup/sandbox-aws-profile.md](../setup/sandbox-aws-profile.md).
 
-### Sandbox Workflow
+### Floci Workflow
 
 ```bash
-# Terminal 1 — start Floci + infra
-just sandbox-up
+# Start Floci, seed S3/SQS, start Compose infra, migrate, and seed admin/demo
+just floci-up
 
-# Terminal 2 — migrate + start uvicorn with Floci env
-just sandbox-dev
+# Start uvicorn locally with Floci-shaped AWS env
+just floci-dev
 
-# Terminal 1 (after ingestor is up) — seed data
-just sandbox-seed
+# Validate Floci health, S3, SQS, and optional API health
+just floci-validate
+
+# Run Floci-specific E2E tests
+just floci-test
+
+# Stop Floci only; Compose data-plane can keep running
+just floci-down
 ```
 
-### Sandbox Tests
-
-```bash
-just sandbox   # Floci + infra + AWS integration tests
-```
+`just floci-up` already creates the local S3 bucket and SQS queue and seeds
+admin/demo data. Use `just create-admin`, `just seed-demo`, or
+`just seed-source` only for targeted local resets.
 
 ### Terraform
 
 ```bash
-just tf-init    # init backend (auto-detects sandbox or dev)
-just tf-plan    # validate + plan
-just tf-apply   # apply (runs tf-plan first)
-just tf-destroy # destroy all resources
-just tf-fresh   # init → plan → apply
+# Sandbox/Floci Terraform
+just tf init          # init backend once per terminal session
+TF_ENV=sandbox just tf plan
+TF_ENV=sandbox just tf apply
+TF_ENV=sandbox just tf show
 
-# Real AWS:
-TF_ENV=dev just tf-plan
-TF_ENV=dev just tf-apply
+# Full reset: init → plan → apply
+TF_ENV=sandbox just tf fresh
+
+# Real AWS dev Terraform
+TF_ENV=dev just tf plan
+TF_ENV=dev just tf apply
 ```
 
----
+`just tf apply` applies the saved plan from `just tf plan`; it does not run a
+fresh plan first. Use `just tf fresh` when you want init → plan → apply in one
+sequence.
 
-## Stack Awareness
+### Floci Deploy
+
+```bash
+# Build, push, and deploy to Floci-backed ECS after Terraform has created ECS resources
+just floci-deploy
+```
+
+### Compatibility Aliases
+
+These aliases still run, but new docs should prefer the canonical name on the right:
+
+| Compatibility alias | Canonical recipe |
+|---|---|
+| `just sandbox-up` | `just floci-up` |
+| `just sandbox-down` | `just floci-down` |
+| `just sandbox-reset` | `just floci-reset` |
+| `just sandbox-dev` | `just floci-dev` |
+| `just sandbox` | `just floci-test` |
+| `just sandbox-deploy` | `just floci-deploy` |
+
+### Stack Awareness
 
 Use `just stack-info` to print the active backend stack from env vars and Docker state.
-Call it from `just up`, `just dev`, or `just sandbox-dev` to get an immediate banner:
+Call it from `just up`, `just dev`, or `just floci-dev` to get an immediate banner:
 
 ```bash
 === STACK SUMMARY ===

@@ -1,14 +1,22 @@
-# Deploy Runbook — Sandbox + Dev (AWS ECS/Fargate)
+# Deploy Runbook — Floci Sandbox + Dev AWS ECS/Fargate
 
 Track: C — Architecture and Platform Strategy
 
-Canonical source of truth for deploying the ingestor + dashboard to
-(1) the Floci sandbox emulator and (2) the real AWS dev environment.
+Canonical workflow reference for deploying the ingestor + dashboard to:
+
+1. the local Floci sandbox emulator; and
+2. the real AWS dev environment.
+
+Command names and arguments live in the `Justfile`; the live recipe list is
+`just --list --unsorted`. This runbook shows minimal deploy sequences and links
+to the command reference for the full catalog:
+
+- [docs/dev/commands.md](../dev/commands.md)
 
 ## Contents
 
 1. [Pre-flight checklist](#pre-flight-checklist)
-2. [Sandbox deploy (Floci)](#sandbox-deploy-floci)
+2. [Floci sandbox deployment](#floci-sandbox-deployment)
 3. [Dev deploy (real AWS)](#dev-deploy-real-aws)
 4. [Smoke test matrix](#smoke-test-matrix)
 5. [Rollback procedures](#rollback-procedures)
@@ -22,79 +30,80 @@ Canonical source of truth for deploying the ingestor + dashboard to
 Run once per session, before any deploy.
 
 ```bash
-# 1. Verify host
+# 1. Verify host tooling
 just doctor
 
-# 2. Start infra (local or Floci depending on target)
-just up                              # local Docker Compose
+# 2. Start the target infra
+just up                         # local Docker Compose
 # OR
-just sandbox-up                      # Floci emulator for sandbox/terraform
+just floci-up                   # Floci sandbox emulator
 
-# 3. Authenticate AWS
-source scripts/aws-env.sh            # sets AWS_REGION, ECR_ENDPOINT, etc.
-aws sts get-caller-identity          # confirm credentials are active
+# 3. Authenticate for the target
+source scripts/aws-env.sh       # sandbox/Floci only
+aws sts get-caller-identity     # confirm credentials are active
 
-# 4. Verify Terraform backend (sandbox only)
-just tf-init                         # one-time per terminal session
+# 4. Initialize Terraform backend when using Terraform
+just tf init                    # sandbox by default
+TF_ENV=dev just tf init         # real AWS dev
+```
+
+For real AWS dev deploys, also run:
+
+```bash
+just dev-preflight
 ```
 
 ---
 
-## Sandbox deploy (Floci)
+## Floci sandbox deployment
 
-Target: local Floci emulator (real containers, loopback ECR at `127.0.0.1:5100-5199`).
+Target: local Floci emulator with S3/SQS/ECS-shaped APIs.
 
 ### Steps
 
 ```bash
-# A. Apply Terraform (creates ECR repos, RDS, ElastiCache, ALB, ECS)
-just tf-plan
-just tf-apply
+# A. Start Floci and seed the local AWS-shaped data plane
+just floci-up
 
-# B. Build, push, and deploy
-just sandbox-deploy
+# B. Apply Terraform to create Floci-backed ECR, RDS, ElastiCache, ALB, and ECS
+TF_ENV=sandbox just tf plan
+TF_ENV=sandbox just tf apply
+
+# C. Build, push, and deploy to Floci-backed ECS
+just floci-deploy
+
+# D. Validate Floci health and run Floci-specific E2E tests
+just floci-validate
+just floci-test
 ```
 
-`sandbox-deploy` runs the full chain:
-
-1. Read ECR URIs from Terraform output
-2. Authenticate Docker against Floci ECR
-3. Build ingestor + dashboard images, tag with `${IMAGE_TAG:-develop}`
-4. Push images to Floci registry
-5. Re-register ECS task definitions with fresh image URIs
-6. `update-service --force-new-deployment` for both services
-7. `wait services-stable` (blocking, up to 2 minutes per service by default)
-8. **Run smoke-test script** (`scripts/smoke-test.sh`) against the ALB DNS or `localhost`
-9. Print ALB DNS + ECS service state summary
+`just floci-deploy` delegates to `scripts/sandbox/deploy.sh`. It uses the
+Floci ECR/ECS-shaped APIs exposed by the running Floci stack.
 
 ### One-click reset
 
 ```bash
-just tf-destroy   # tears down all sandbox resources
-just sandbox-down # stops Floci container
+TF_ENV=sandbox just tf destroy
+just floci-down
 ```
 
-### ECS_MOCK mode (local dev without real AWS)
-
-For faster local iteration, set `ECS_MOCK=true`:
+For a clean sandbox rebuild after destroy:
 
 ```bash
-ECS_MOCK=true just sandbox-deploy
+TF_ENV=sandbox just tf fresh
+just floci-deploy
 ```
-
-With ECS_MOCK, ECS task definitions register straight to RUNNING without
-waiting for real container pulls. Useful for testing the deploy script logic
-without the full Floci data plane.
 
 ### Sandbox network access note
 
-Floci-provisioned ECS tasks run inside Docker containers on the `api-obs` network.
-The ALB target group routes to container IPs. If smoke-tests fail with connection
-refused but ECS shows RUNNING tasks, verify:
+Floci-provisioned ECS tasks run inside Docker containers on the `api-obs`
+network. The ALB target group routes to container IPs. If smoke-tests fail with
+connection refused but ECS shows running tasks, verify:
 
-1. The ALB listener rule includes the correct path (`/`, `/api/*`, `/dashboard/*`)
-2. The security group attached to the ALB allows inbound 80/443
-3. The target group health check path matches the container's health endpoint
+1. The ALB listener rule includes the correct path (`/`, `/api/*`,
+   `/dashboard/*`).
+2. The security group attached to the ALB allows inbound 80/443.
+3. The target group health check path matches the container health endpoint.
 
 ---
 
@@ -102,7 +111,7 @@ refused but ECS shows RUNNING tasks, verify:
 
 Target: real AWS account (`data-zoo-dev` ECS cluster, `eu-central-1`).
 
-### Trigger
+### Preferred path
 
 Push to `develop` after CI is green:
 
@@ -110,38 +119,49 @@ Push to `develop` after CI is green:
 git push origin develop
 ```
 
-`cd-dev.yml` fires automatically on CI success:
+`cd-dev.yml` fires automatically after CI success:
 
-1. OIDC → AWS credentials (`AWS_ROLE_ARN_DEV`)
-2. Resolve image digests (`ghcr.io/<owner>/data-zoo-<service>:tree-<sha>`)
-3. `update-service --force-new-deployment` for ingestor
-4. `wait services-stable` for ingestor
-5. `update-service --force-new-deployment` for dashboard
-6. `wait services-stable` for dashboard
-7. **Smoke-test** via `scripts/smoke-test.sh` against `https://${DEV_ALB_DNS}`
-8. Publish GitHub step summary (ingestor + dashboard image refs + status)
+1. Require `dev` environment approval in GitHub Actions.
+2. OIDC → AWS credentials using `AWS_ROLE_ARN_DEV`.
+3. Resolve image digests from `DEV_ECR_REGISTRY`.
+4. Initialize Terraform using `TERRAFORM_STATE_BUCKET_DEV`.
+5. Save a Terraform plan, publish it to the workflow summary, and apply that saved plan.
+6. Force new deployments for ingestor and dashboard.
+7. Wait for ECS services to stabilize.
+8. Smoke-test via `scripts/smoke-test.sh`; the workflow fails if no ALB DNS is available.
+9. Publish GitHub step summary with image refs, Terraform status, ALB, and deploy status.
 
-### Manual trigger
+### Manual deploy
+
+Use this when you need to run the deploy locally instead of through GitHub
+Actions:
 
 ```bash
-# Re-run from GitHub UI: Actions → CD Dev → Run workflow
-# OR push a no-op commit to develop:
-git commit --allow-empty -m "trigger dev deploy" && git push
+just dev-preflight
+just deploy-audit
+
+TF_ENV=dev just tf plan
+just deploy-ecs
 ```
+
+`just deploy-ecs` applies the reviewed saved Terraform plan, then forces new
+ECS deployments for ingestor and dashboard.
 
 ### Environment variables required in GitHub
 
 | Variable | Purpose |
 |----------|---------|
 | `AWS_ROLE_ARN_DEV` | OIDC role for CI to assume |
-| `DEV_ALB_DNS` | ALB DNS for smoke-tests (without it smoke-tests are skipped) |
+| `DEV_ECR_REGISTRY` | Dev ECR registry for image references |
+| `TERRAFORM_STATE_BUCKET_DEV` | S3 bucket for the dev Terraform backend |
+| `DEV_ALB_DNS` | ALB DNS for smoke-tests; workflow fails if neither this nor Terraform output is available |
 
 ---
 
 ## Smoke test matrix
 
-Run by `scripts/smoke-test.sh`. Non-blocking dashboard checks are
-gracefully skipped if the dashboard path is not reachable.
+Run by `scripts/smoke-test.sh`. Non-blocking dashboard checks are gracefully
+skipped if the dashboard path is not reachable.
 
 | Check | Endpoint | Expected |
 |-------|----------|----------|
@@ -157,8 +177,8 @@ gracefully skipped if the dashboard path is not reachable.
 
 ### Smoke-test exit codes
 
-- `0` — all checked endpoints returned expected codes
-- `1` — at least one endpoint failed; review output and investigate
+- `0` — all checked endpoints returned expected codes.
+- `1` — at least one endpoint failed; review output and investigate.
 
 ### Running smoke-tests manually
 
@@ -166,10 +186,10 @@ gracefully skipped if the dashboard path is not reachable.
 # Local Docker Compose
 bash scripts/smoke-test.sh http://127.0.0.1:8000 http://127.0.0.1:8501
 
-# Floci sandbox (after deploy, substitute actual ALB DNS)
+# Floci sandbox after deploy; substitute the actual ALB DNS when available
 bash scripts/smoke-test.sh http://127.0.0.1:8000 120
 
-# AWS dev (from any machine with network access to the ALB)
+# AWS dev from any machine with network access to the ALB
 bash scripts/smoke-test.sh https://my-alb.eu-central-1.elb.amazonaws.com
 ```
 
@@ -177,31 +197,30 @@ bash scripts/smoke-test.sh https://my-alb.eu-central-1.elb.amazonaws.com
 
 ## Rollback procedures
 
-### Sandbox rollback
+### Floci sandbox rollback
 
 ```bash
-# Quick rollback: destroy and recreate from last known good tfplan
-just tf-destroy
-just tf-fresh    # init → plan → apply
-
-# OR manual:
-just tf-apply    # re-apply previous plan (if tfplan file still exists)
+# Quick rollback: destroy and recreate from the current Terraform configuration
+TF_ENV=sandbox just tf destroy
+TF_ENV=sandbox just tf fresh
+just floci-deploy
 ```
 
-If images are the problem, push a known-good tag:
+If images are the problem, push or build a known-good tag:
 
 ```bash
 export IMAGE_TAG=<previous-commit-sha>
-just sandbox-deploy
+just floci-deploy
 ```
 
 ### Dev rollback
 
 There is no automated CD rollback workflow yet.
+
 Manual procedure:
 
 ```bash
-# 1. Identify last known-good task definition revision
+# 1. Identify the last known-good task definition revision
 aws ecs describe-services \
   --cluster data-zoo-dev \
   --services ingestor dashboard \
@@ -214,14 +233,14 @@ aws ecs describe-task-definition \
   jq '.containerDefinitions[0].image = "ghcr.io/<owner>/data-zoo-ingestor:tree-<sha>" | del(.taskDefinitionArn) | del(.revision) | del(.status)' | \
   aws ecs register-task-definition --cli-input-json -
 
-# 3. Force new deployment with old task def
+# 3. Force a new deployment with the old task definition
 aws ecs update-service \
   --cluster data-zoo-dev \
   --service ingestor \
   --force-new-deployment
 ```
 
-**Recommendation:** Cut a `v*` tag on `main` after every validated dev deploy.
+**Recommendation:** cut a `v*` tag on `main` after every validated dev deploy.
 Rollback = redeploy the last released tag.
 
 ---
@@ -230,24 +249,25 @@ Rollback = redeploy the last released tag.
 
 | Symptom | Likely cause | Fix |
 |---------|-------------|-----|
-| `docker login to ... failed` | Floci ECR auth token expired or Floci down | Restart Floci: `just sandbox-reset` |
-| `Failed to push ...` | Registry sidecar unreachable | Check `floci-ecr-registry` container is running on `api-obs` network |
-| `ECS cluster '...' not found` | Terraform not applied | Run `just tf-apply` |
+| `docker login to ... failed` | Floci ECR auth token expired or Floci down | Restart Floci with `just floci-reset` |
+| `Failed to push ...` | Registry sidecar unreachable | Check the Floci ECR registry container on the `api-obs` network |
+| `ECS cluster '...' not found` | Terraform not applied | Run `TF_ENV=sandbox just tf plan` and `TF_ENV=sandbox just tf apply` |
 | `ecr_repository_urls` missing from Terraform output | `enable_ecr = false` in `terraform.tfvars` | Set `enable_ecr = true` and re-apply |
 | `update-service ... failed` | Service name mismatch | Verify ECS service name matches Terraform output |
 | `services-stable` timeout | CrashLoopBackOff or OOM | Check CloudWatch logs / Floci task logs; roll back image tag |
-| Smoke-test `/readyz` non-200 | DB migration not run or DB unreachable | `just migrate`, check ECS task env for `DATABASE_URL` |
+| Smoke-test `/readyz` non-200 | DB migration not run or DB unreachable | Run `just migrate`; check ECS task env for `DATABASE_URL` |
 | Smoke-test 401 on `/api/v1/*` | Missing/invalid bearer token | Dashboard and some endpoints require auth; `/metrics`, `/health`, `/readyz` are open |
 | Dashboard health 404 at `/dashboard/_stcore/health` | ALB path-based routing not configured or dashboard task down | Check ALB listener rules; check ECS dashboard service events |
-| `DEV_ALB_DNS not set — skipping smoke tests` | GitHub var not configured | Set `DEV_ALB_DNS` in repo Settings → Variables |
-| Terraform state lock timeout | Another `tf apply` running | Wait for it to finish, or `terraform force-unlock <LOCK_ID>` if stuck |
+| `DEV_ALB_DNS not set and Terraform has no ALB output` | No endpoint available for smoke-tests | Set `DEV_ALB_DNS` or fix Terraform ALB output; the workflow fails closed |
+| Terraform state lock timeout | Another Terraform apply is running | Wait for it to finish, or `terraform force-unlock <LOCK_ID>` if stuck |
 
 ### Floci-specific gotchas
 
-- Floci requires **rootful Docker** (sibling container creation). Rootless Docker cannot create the ECS backend containers.
-- Floci uses **private proxy port ranges** for RDS/ElastiCache (7001-7099, 6379-6399) — no host port conflicts.
-- The ECR registry sidecar (`registry:2` container) must be on the **same Docker network** (`api-obs`) as Floci.
-- State is stored in Floci S3 at `http://127.0.0.1:4566`. If state is corrupted, delete the bucket key and re-init.
+- Floci requires rootful Docker for sibling container creation.
+- Floci uses private proxy port ranges for RDS/ElastiCache.
+- The ECR registry sidecar must be on the same Docker network as Floci.
+- State is stored in Floci S3 at `http://127.0.0.1:4566`. If state is corrupted,
+  delete the bucket key and re-init.
 
 ---
 
@@ -255,16 +275,19 @@ Rollback = redeploy the last released tag.
 
 | Command | Context | Purpose |
 |---------|---------|---------|
-| `just sandbox-up` | Local dev | Start Floci + Docker infra |
-| `just sandbox-down` | Local dev | Stop Floci |
-| `just sandbox-reset` | Local dev | Restart Floci cleanly |
-| `just tf-init` | Sandbox | Init Terraform backend |
-| `just tf-plan` | Sandbox | Plan changes |
-| `just tf-apply` | Sandbox | Apply plan |
-| `just tf-destroy` | Sandbox | Tear down all resources |
-| `just sandbox-deploy` | Sandbox | Build + push + ECS deploy + smoke-test |
-| `just tf-fresh` | Sandbox | init → plan → apply in one shot |
+| `just floci-up` | Local dev | Start Floci + Docker infra + seed S3/SQS/admin/demo |
+| `just floci-down` | Local dev | Stop Floci |
+| `just floci-reset` | Local dev | Restart Floci cleanly |
+| `just floci-validate` | Local dev | Validate Floci health, S3, SQS, and optional API health |
+| `just floci-test` | Local dev | Run Floci-specific E2E tests |
+| `just tf init` | Sandbox | Init Terraform backend |
+| `TF_ENV=sandbox just tf plan` | Sandbox | Plan changes |
+| `TF_ENV=sandbox just tf apply` | Sandbox | Apply saved plan |
+| `TF_ENV=sandbox just tf destroy` | Sandbox | Tear down Floci Terraform resources |
+| `just floci-deploy` | Sandbox | Build + push + Floci ECS deploy + smoke-test |
+| `TF_ENV=sandbox just tf fresh` | Sandbox | Init → plan → apply in one shot |
 | `just deploy-audit` | Anywhere | Build + size check + Trivy scan |
+| `TF_ENV=dev just tf plan` | Dev AWS | Plan real AWS changes |
+| `TF_ENV=dev just tf apply` | Dev AWS | Apply real AWS changes |
+| `just deploy-ecs` | Dev AWS | Manual ECS deploy wrapper |
 | `bash scripts/smoke-test.sh <BASE_URL>` | Anywhere | Post-deploy smoke test |
-| `just sandbox` | Local dev | Full sandbox loop: up → seed → AWS tests |
-| `just deploy-dev` | Local dev trigger | Push to `develop` to trigger CD Dev |
