@@ -60,10 +60,11 @@ aws s3api put-bucket-versioning \
   --versioning-configuration Status=Enabled
 
 # Enable default encryption (AES-256 / SSE-S3)
-aws s3api put-bucket-encryption \
-  --bucket "${BUCKET}" \
-  --server-side-encryption-configuration \
-  '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+# Not needed — new buckets are encrypted by default
+# aws s3api put-bucket-encryption \
+#   --bucket "${BUCKET}" \
+#   --server-side-encryption-configuration \
+#   '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
 
 # Block all public access
 aws s3api put-public-access-block \

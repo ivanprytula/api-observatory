@@ -206,6 +206,7 @@ logs/
 .local-dev/
 
 learning_docs/
+examples/
 
 # Copilot local memory artifacts
 .copilot/memories/
