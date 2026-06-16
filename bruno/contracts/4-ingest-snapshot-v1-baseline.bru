@@ -1,0 +1,30 @@
+meta {
+  name: Ingest snapshot v1 — baseline
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/contracts/snapshots
+  body: none
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "source_id": {{source_id}},
+    "payload_schema": {
+      "userId": "integer",
+      "id": "integer",
+      "title": "string",
+      "body": "string"
+    },
+    "schema_version": "1.0.0",
+    "snapshot_note": "Baseline — all fields present"
+  }
+}

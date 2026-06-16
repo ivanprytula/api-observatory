@@ -106,7 +106,7 @@ main() {
     echo "     curl -v $(LOCAL_API_SCHEME=https bash scripts/daily/local-url.sh api-url /health)"
     echo ""
     echo "Full documentation:"
-    echo "     docs/setup/local-https-setup.md"
+    echo "     docs/04-setup/local-https-setup.md"
     echo ""
     log "Setup complete!"
 }

@@ -151,11 +151,9 @@ docker compose down
 
 ### Commit 2 — `docs: README, tech-map, learning-paths` [DONE]
 
-**Contents**: `README.md` (rewrite), `docs/tech-map.md`, `docs/learning-paths.md`
+**Contents**: `README.md` (rewrite), `docs/learning-paths.md`
 
 **README**: mission (1 sentence), quick start (3 commands max), What's Running table (service → port → purpose), links to tech-map and learning-paths.
-
-**tech-map.md** — interview topic → exact `file:function` reference:
 
 | Topic | Where in code |
 |-------|---------------|
@@ -555,7 +553,6 @@ env -u DATABASE_URL_TEST uv run pytest tests/ services/ingestor/tests/ -q -m "in
 - `just probe-once` — run one full probe cycle manually
 - `just scorecard SOURCE_ID` — print current scorecard for a source
 - `just seed-demo` — seed 3 demo SourceProfiles (httpbin.org, jsonplaceholder.typicode.com, postman-echo.com)
-- `just tech-map` — `bat docs/tech-map.md || cat docs/tech-map.md`
 - `just api-test` — `cd bruno && bru run . -r --env local` (added Commit 8c)
 
 ---

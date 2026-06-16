@@ -37,7 +37,7 @@ COMPATIBILITY_ALIASES=(
   "sandbox-dev"
 )
 ALLOWED_ALIAS_FILES=(
-  "docs/dev/commands.md"
+  "docs/05-development/commands.md"
 )
 
 errors=0

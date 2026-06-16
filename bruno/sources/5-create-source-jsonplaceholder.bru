@@ -1,0 +1,22 @@
+meta {
+  name: Create source — jsonplaceholder-posts
+  method: POST
+  url: {{baseUrl}}/api/v1/sources
+  type: json
+  seq: 5
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "name": "jsonplaceholder-posts",
+    "base_url": "https://jsonplaceholder.typicode.com",
+    "health_check_path": "/posts/1",
+    "probe_interval_seconds": 10,
+    "is_active": true
+  }
+}

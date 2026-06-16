@@ -157,7 +157,7 @@ if [[ "${FAILED}" -eq 0 ]]; then
     exit 0
 else
     echo -e "${RED}════════════════════════════════════════════════════════════════════════════${NC}"
-    echo -e "${RED}✗ ${FAILED} required package(s) missing. See docs/setup/system-requirements.md${NC}"
+    echo -e "${RED}✗ ${FAILED} required package(s) missing. See docs/04-setup/system-requirements.md${NC}"
     echo -e "${RED}════════════════════════════════════════════════════════════════════════════${NC}"
     exit 1
 fi

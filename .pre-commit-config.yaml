@@ -32,12 +32,12 @@ repos:
             \.pre-commit-config\.yaml|
             Justfile|
             docker-compose\.yml|
-            docs/dev/commands\.md|
-            docs/dev/bruno-collections\.md|
-            docs/dev/streamlit-dashboard\.md|
-            docs/user/dashboard\.md|
-            docs/user/overview\.md|
-            docs/learning-paths\.md|
+            docs/05-development/commands\.md|
+            docs/05-development/bruno-collections\.md|
+            docs/09-user-guides/streamlit-dashboard\.md|
+            docs/09-user-guides/dashboard\.md|
+            docs/09-user-guides/overview\.md|
+            docs/01-intro/learning-paths\.md|
             setup/environment-setup\.md|
             bruno/websocket/.*\.bru
           )$

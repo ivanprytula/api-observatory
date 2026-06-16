@@ -1,0 +1,25 @@
+meta {
+  name: Ingest snapshot v2 — drift trigger
+  method: POST
+  url: {{baseUrl}}/api/v1/contracts/snapshots
+  type: json
+  seq: 5
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "source_id": {{source_id}},
+    "payload_schema": {
+      "userId": "integer",
+      "id": "integer",
+      "body": "string"
+    },
+    "schema_version": "2.0.0",
+    "snapshot_note": "After migration — title field removed"
+  }
+}
