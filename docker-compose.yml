@@ -234,6 +234,93 @@ services:
     networks:
       - api-obs
 
+  # ── Monitoring (optional; started via: just up-monitoring) ────────────────
+
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    profiles: [monitoring]
+    container_name: api-obs-prometheus
+    volumes:
+      - ./infra/monitoring/prometheus.local.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/monitoring/rules/alert.local.rules.yml:/etc/prometheus/rules/alert.rules.yml:ro
+    ports:
+      - '127.0.0.1:9090:9090'
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    security_opt: [no-new-privileges:true]
+    networks:
+      - api-obs
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    profiles: [monitoring]
+    container_name: api-obs-grafana
+    volumes:
+      - ./infra/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./infra/monitoring/grafana/provisioning/dashboards/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./infra/monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+    ports:
+      - '127.0.0.1:3000:3000'
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+    security_opt: [no-new-privileges:true]
+    networks:
+      - api-obs
+
+  loki:
+    image: grafana/loki:3.4.2
+    profiles: [monitoring]
+    container_name: api-obs-loki
+    ports:
+      - '127.0.0.1:3100:3100'
+    command: ['-config.file=/etc/loki/local-config.yaml']
+    security_opt: [no-new-privileges:true]
+    networks:
+      - api-obs
+
+  promtail:
+    image: grafana/promtail:3.4.2
+    profiles: [monitoring]
+    container_name: api-obs-promtail
+    volumes:
+      - ./infra/monitoring/promtail.yml:/etc/promtail/promtail.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ['-config.file=/etc/promtail/promtail.yml']
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    networks:
+      - api-obs
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    profiles: [monitoring]
+    container_name: api-obs-alertmanager
+    volumes:
+      - ./infra/monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - '127.0.0.1:9093:9093'
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    security_opt: [no-new-privileges:true]
+    networks:
+      - api-obs
+
+  mailpit:
+    image: axllent/mailpit:v1.24
+    profiles: [monitoring]
+    container_name: api-obs-mailpit
+    ports:
+      - '127.0.0.1:8025:8025'
+    security_opt: [no-new-privileges:true]
+    networks:
+      - api-obs
+
   # Floci Docker service (optional; started manually via: just floci-up)
   # Docker-based Floci is more universal (works on older CPUs that lack x86-64-v3 support)
   # To use docker-compose instead, uncomment and run: docker compose --profile aws up -d floci
@@ -283,6 +370,7 @@ services:
 #   - broker (message broker)
 #   - ingestor (FastAPI microservice)
 #   - edge (HTTPS ingress proxy, started by default with `just up`)
+#   - prometheus, grafana, loki, promtail, alertmanager, mailpit (monitoring, optional via `just up-monitoring`)
 #   - floci (AWS emulator, optional via --profile aws)
 #
 # Host access:

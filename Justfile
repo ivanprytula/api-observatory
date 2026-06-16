@@ -74,6 +74,19 @@ up:
 
 
 
+# Start monitoring stack (Prometheus, Grafana, Loki, Promtail, Alertmanager, Mailpit).
+up-monitoring:
+    @just stack-info
+    docker compose --profile monitoring up -d prometheus grafana loki promtail alertmanager mailpit
+    echo "monitoring ready — Grafana http://127.0.0.1:3000, Prometheus http://127.0.0.1:9090"
+
+
+
+# Start the full stack: data-plane + monitoring. Combines `up` and `up-monitoring`.
+up-all: up up-monitoring
+
+
+
 # Reset DB and ingestor containers (keep Floci state intact if running).
 db-reset:
     @just stack-info
@@ -625,7 +638,7 @@ ops:
     #!/usr/bin/env bash
     set -euo pipefail
     # ─── Container lifecycle ─────────────────────────────────────
-    # docker compose down
+    docker compose down
     # docker compose up -d floci
     # docker compose down floci
     # docker compose logs -f ingestor
