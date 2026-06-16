@@ -56,7 +56,6 @@ from services.ingestor.notifications import notify_background_task_failed
 from services.ingestor.rate_limiting import limiter
 from services.ingestor.routers import (
     abuse_detection,
-    agent,
     analytics,
     api_keys,
     auth,
@@ -420,13 +419,6 @@ _OPENAPI_TAGS: list[dict[str, str]] = [
         "description": "Analytics endpoints backed by MongoDB aggregation pipelines.",
     },
     {
-        "name": "agent",
-        "description": (
-            "AI agent orchestration endpoints for asynchronous observation "
-            "analysis workflows."
-        ),
-    },
-    {
         "name": "source-registry",
         "description": (
             "CRUD management for external API source profiles. "
@@ -618,7 +610,6 @@ app.include_router(observations.router)
 app.include_router(observations_v2.router)
 app.include_router(scraper.router)
 app.include_router(analytics.router)
-app.include_router(agent.router, prefix="/api/v1/agent", tags=["agent"])
 app.include_router(background_processing.router)
 app.include_router(notifications.router)
 app.include_router(vector_search.router)
