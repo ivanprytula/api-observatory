@@ -2,7 +2,6 @@
 
 Track: B — Engineering Execution
 
-
 **Status**: Active (Starting April 2026)
 **Frequency**: 1st Monday of each month
 **Owner**: Infrastructure/Security team
@@ -69,8 +68,6 @@ If vulnerabilities found → proceed to Step 2
 docker pull python:3.14-slim 2>&1 | grep "Digest:"
 ```
 
-
-
 ### PostgreSQL Image: Find Latest Secure Digest
 
 ```bash
@@ -79,8 +76,8 @@ docker pull postgres:17-alpine 2>&1 | grep "Digest:"
 
 Decision: Alpine vs Bookworm?
 
-| Variant                 | Size    | Vulns                  | Notes                                                                      |
-| ----------------------- | ------- | ---------------------- | -------------------------------------------------------------------------- |
+| Variant                 | Size    | Vulns                  | Notes                                                                     |
+| ----------------------- | ------- | ---------------------- | ------------------------------------------------------------------------- |
 | `postgres:17-alpine`    | ~100 MB | Fewer (smaller base)   | ❌ Limited apk packages for pgvector build tools                           |
 | `postgres:17-bookworm`  | ~250 MB | Fewer than postgres:17 | **✅ Chosen** — Debian tools available, full pgvector v0.7.4 compatibility |
 | `postgres:17` (default) | ~250 MB | 1 CRITICAL + 13 HIGH   | ❌ Avoid; vulnerable                                                       |
@@ -148,8 +145,6 @@ Run the test script:
 ```bash
 bash scripts/test_digest_updates.sh
 ```
-
-
 
 ---
 

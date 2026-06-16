@@ -18,7 +18,7 @@ S3 state bucket must be created manually before first `TF_ENV=dev just tf init`.
 No DynamoDB table needed — all backends use `use_lockfile = true` (Terraform ≥ 1.9
 S3-native locking via a `.tflock` object in S3).
 
-See bootstrap commands in `docs/deployment/cloud-security-checklist.md` Step 1.
+See bootstrap commands in Cloud Security Checklist Step 1.
 
 Required before `TF_ENV=dev just tf init`:
 

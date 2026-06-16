@@ -8,7 +8,7 @@
 # Usage with AWS CLI profile:
 #   export TF_VAR_aws_profile=data-zoo-dev
 #   export TF_VAR_redis_auth_token=$(aws ssm get-parameter \
-#     --name "/data-zoo/dev/redis-auth-token" \
+#     --name "/api-obs/dev/redis-auth-token" \
 #     --with-decryption --query Parameter.Value --output text \
 #     --profile data-zoo-dev)
 #   terraform apply
