@@ -437,7 +437,6 @@ jobs:
       - docker-build
       - docker-build-dashboard
       - docker-scan-security
-      - docker-scan-advisory
       - codeql
       - integration-tests
     if: always()
@@ -457,7 +456,7 @@ jobs:
           [[ "${{ needs.codeql.result }}" == "success" ]] || { echo "❌ CodeQL"; failed=1; }
           [[ "${{ needs.integration-tests.result }}" == "success" ]] || { echo "❌ Integration tests"; failed=1; }
           # Advisory scan: report status but do not block
-          [[ "${{ needs.docker-scan-advisory.result }}" == "success" ]] || echo "⚠️  Docker advisory scan: ${{ needs.docker-scan-advisory.result }}"
+          [[ "${{ needs.docker-scan-security.result }}" == "success" ]] || echo "⚠️  Docker advisory scan: ${{ needs.docker-scan-security.result }}"
           [ $failed -eq 0 ] && echo "✅ All CI checks passed"
           exit $failed
 
@@ -476,7 +475,7 @@ jobs:
           | Docker Build (ingestor) | ${{ needs.docker-build.result }} |
           | Docker Build (dashboard) | ${{ needs.docker-build-dashboard.result }} |
           | Docker Security | ${{ needs.docker-scan-security.result }} |
-          | Docker Advisory | ${{ needs.docker-scan-advisory.result }} |
+          | Docker Advisory | ${{ needs.docker-scan-security.result }} |
           | CodeQL | ${{ needs.codeql.result }} |
           | Integration Tests | ${{ needs.integration-tests.result }} |
           EOF
