@@ -1,0 +1,28 @@
+statefulset:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+storage:
+  persistentVolume:
+    enabled: true
+    size: 1Gi
+post_install_job:
+  enabled: false
+console:
+  enabled: false
+tls:
+  enabled: false
+external:
+  enabled: false
+listeners:
+  kafka:
+    port: 9092
+  admin:
+    port: 9644
+  http:
+    port: 8082

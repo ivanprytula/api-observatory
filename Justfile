@@ -819,6 +819,107 @@ _auto-init:
 create-admin: _auto-init
 seed: init
 
+# ─── K3Sc / K8S LOCAL SANDBOX ──────────────────────────────────────────────────
+#
+# Prerequisites: k3d, helm, kubectl, docker.
+#   brew install k3d helm kubectl  # macOS
+#   or: curl -sfL https://get.k3s.io | sh -
+# Full lifecycle: just k3s-up → wait → just k3s-status → just k3s-down
+
+# Create the k3d cluster for local sandbox.
+k3s-cluster-create:
+    k3d cluster create --config infra/kubernetes/k3d.yaml \
+      --kubeconfig-update-default --kubeconfig-switch-context
+    echo "cluster data-zoo created — context: k3d-data-zoo"
+
+# Delete the k3d cluster.
+k3s-cluster-delete:
+    k3d cluster delete data-zoo
+
+# Build Docker images for ingestor and dashboard, tagged for k3d.
+k3s-build:
+    docker build -t data-zoo/ingestor:latest .
+    docker build -t data-zoo/dashboard:latest -f services/dashboard/Dockerfile .
+    echo "images built: data-zoo/ingestor:latest, data-zoo/dashboard:latest"
+
+# Import locally-built images into the k3d cluster.
+k3s-load-images:
+    k3d image import -c data-zoo \
+      data-zoo/ingestor:latest \
+      data-zoo/dashboard:latest
+
+# Install infrastructure services (PostgreSQL, Redis, Redpanda) via Helm.
+k3s-deploy-infra:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    helm repo add bitnami https://charts.bitnami.com/bitnami 2>/dev/null || true
+    helm repo add redpanda https://charts.vectorized.io 2>/dev/null || true
+    helm repo update
+    kubectl create namespace data-zoo --dry-run=client -o yaml | kubectl apply -f -
+    for chart in postgresql redis; do
+      helm upgrade --install "$chart" "bitnami/$chart" \
+        --namespace data-zoo \
+        --values "infra/kubernetes/helm-values/${chart}.yaml" \
+        --wait
+    done
+    helm upgrade --install redpanda redpanda/redpanda \
+      --namespace data-zoo \
+      --values infra/kubernetes/helm-values/redpanda.yaml \
+      --wait
+
+# Apply the secret (from example — edit secret.example.yaml first for real secrets).
+k3s-secret:
+    kubectl apply -n data-zoo -f infra/kubernetes/overlays/local/secret.example.yaml
+
+# Deploy app services via kustomize overlay.
+k3s-deploy:
+    kubectl apply -k infra/kubernetes/overlays/local
+    echo "kustomize applied — waiting for rollout..."
+    kubectl -n data-zoo rollout status deployment/ingestor --timeout=120s
+    kubectl -n data-zoo rollout status deployment/dashboard --timeout=120s
+    echo "all deployments ready"
+
+# Show cluster status: pods, deployments, services, ingress.
+k3s-status:
+    @echo "=== Pods ==="
+    @kubectl -n data-zoo get pods -o wide
+    @echo ""
+    @echo "=== Deployments ==="
+    @kubectl -n data-zoo get deployments
+    @echo ""
+    @echo "=== Services ==="
+    @kubectl -n data-zoo get services
+    @echo ""
+    @echo "=== Ingress ==="
+    @kubectl -n data-zoo get ingress
+
+# Tail logs for a service (e.g. just k3s-logs ingestor).
+k3s-logs service="":
+    @kubectl -n data-zoo logs "deployment/{{service}}" --tail=50 -f
+
+# Port-forward a service port to localhost.
+k3s-port-forward service="" local-port="" remote-port="":
+    kubectl -n data-zoo port-forward "deployment/{{service}}" {{local-port}}:{{remote-port}}
+
+# Full lifecycle: create cluster → build images → load → deploy infra → deploy apps.
+k3s-up:
+    @just k3s-cluster-create
+    @just k3s-build
+    @just k3s-load-images
+    @just k3s-deploy-infra
+    @just k3s-secret
+    @just k3s-deploy
+    @echo ""
+    @echo "=== k3s-up complete ==="
+    @just k3s-status
+    @echo ""
+    @echo "Ingress:  http://ingestor.127.0.0.1.nip.io:8080"
+    @echo "          http://dashboard.127.0.0.1.nip.io:8080"
+
+# Tear down the entire k3d cluster.
+k3s-down:
+    k3d cluster delete data-zoo
+
 # Run post-deploy smoke checks.
 smoke-test base-url="{{_local_api_base_url}}" dashboard-url="{{__local_dashboard_url}}":
     bash scripts/smoke-test.sh {{base-url}} {{dashboard-url}}

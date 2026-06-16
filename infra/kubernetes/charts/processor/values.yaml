@@ -1,0 +1,45 @@
+# replicas MUST remain 1.
+# This service is a Kafka consumer group with a single partition.
+# Adding replicas causes consumer group rebalancing churn.
+# Scale by increasing topic partitions first, then increment replicaCount.
+replicaCount: 1
+
+image:
+  repository: data-zoo/processor
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8002
+
+probes:
+  liveness:
+    path: /health
+  readiness:
+    path: /readyz
+
+# startupProbe failureThreshold × periodSeconds = max startup window.
+# processor waits for Redpanda consumer group join; allow up to 180s.
+startup:
+  failureThreshold: 18
+  periodSeconds: 10
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "256Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
+env:
+  environment: local
+
+secrets:
+  name: data-zoo-app-secrets
+  brokerUrlKey: broker_url
+
+configmap:
+  name: data-zoo-app-config
+  kafkaTopicKey: kafka_topic

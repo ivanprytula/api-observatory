@@ -1,0 +1,41 @@
+replicaCount: 1
+
+image:
+  repository: data-zoo/inference
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8001
+
+probes:
+  liveness:
+    path: /health
+  readiness:
+    path: /readyz
+
+# startupProbe failureThreshold × periodSeconds = max startup window.
+# inference loads sentence-transformers on boot; allow up to 300s.
+startup:
+  failureThreshold: 30
+  periodSeconds: 10
+
+resources:
+  requests:
+    cpu: "500m"
+    memory: "1Gi"
+  limits:
+    cpu: "2000m"
+    memory: "2Gi"
+
+env:
+  environment: local
+
+secrets:
+  name: data-zoo-app-secrets
+  qdrantUrlKey: qdrant_url
+
+configmap:
+  name: data-zoo-app-config
+  logLevelKey: log_level

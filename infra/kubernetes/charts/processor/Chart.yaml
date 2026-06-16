@@ -1,0 +1,6 @@
+apiVersion: v2
+name: processor
+description: Helm chart for data-zoo processor service (Kafka consumer)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

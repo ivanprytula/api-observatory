@@ -1,0 +1,6 @@
+apiVersion: v2
+name: analytics
+description: Helm chart for data-zoo analytics service
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

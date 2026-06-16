@@ -1,0 +1,23 @@
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: data-zoo
+servers: 1
+agents: 0
+ports:
+  - port: 8080:80@loadbalancer
+  - port: 8443:443@loadbalancer
+options:
+  k3d:
+    wait: true
+    timeout: 120s
+  k3s:
+    extraArgs:
+      - arg: --debug
+        nodeFilters:
+          - server:*
+registries:
+  create:
+    name: data-zoo-registry
+    host: "0.0.0.0"
+    hostPort: "5000"
