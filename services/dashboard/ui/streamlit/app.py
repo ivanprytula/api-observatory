@@ -5,7 +5,9 @@ Refactored to use framework-agnostic core modules and UI panels.
 
 from __future__ import annotations
 
+import sys
 import time
+from pathlib import Path
 
 import streamlit as st
 from services.dashboard.core.config import config
@@ -16,6 +18,9 @@ from services.dashboard.ui.streamlit.panels.agent_enrichment import (
 )
 from services.dashboard.ui.streamlit.panels.drift_events import render_drift_events
 from services.dashboard.ui.streamlit.panels.live_stream import render_live_stream
+from services.dashboard.ui.streamlit.panels.observations import (
+    render_observations_panel,
+)
 from services.dashboard.ui.streamlit.panels.probe_scheduler import (
     render_probe_scheduler,
     render_queue_retry_health,
@@ -26,6 +31,12 @@ from services.dashboard.ui.streamlit.panels.source_health import (
     render_ingestion_throughput,
     render_source_health_table,
 )
+from streamlit.errors import StreamlitSecretNotFoundError
+
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[4]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 
 def main() -> None:
@@ -34,7 +45,7 @@ def main() -> None:
         page_title="API Observatory",
         page_icon="🔭",
         layout="wide",
-        initial_sidebar_state="collapsed",
+        initial_sidebar_state="auto",
     )
 
     st.title("🔭 API Observatory")
@@ -43,6 +54,20 @@ def main() -> None:
     # Initialize UI adapter and auth manager
     ui = StreamlitUIAdapter()
     manager = ui.auth_manager_from_session()
+
+    # Auto-login from secrets.toml if available and not already logged in
+    if not manager.state.logged_in:
+        try:
+            auth = st.secrets.get("auth", {})
+        except StreamlitSecretNotFoundError:
+            auth = {}
+        if auth:
+            username = auth.get("username")
+            password = auth.get("password")
+            if username and password:
+                error = manager.do_login(username, password)
+                if not error:
+                    ui.sync_auth_to_session(manager)
 
     # Render auth sidebar
     render_auth_sidebar(ui, manager)
@@ -58,6 +83,7 @@ def main() -> None:
     render_probe_scheduler(ui, manager)
     render_freshness_heatmap(ui, manager)
     render_drift_events(ui, manager)
+    render_observations_panel(ui, manager)
     render_live_stream(ui, manager)
     render_agent_enrichment(ui, manager)
     render_service_health(ui, manager)

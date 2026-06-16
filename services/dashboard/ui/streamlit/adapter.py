@@ -13,7 +13,7 @@ class StreamlitUIAdapter:
     """Implements UIAdapter using Streamlit API calls."""
 
     def __init__(self) -> None:
-        self._session: dict[str, Any] = st.session_state
+        self._session: Any = st.session_state
         if "ws_messages" not in self._session:
             self._session.ws_messages = []  # type: ignore[attr-defined]
         if "ws_connected" not in self._session:
@@ -36,6 +36,14 @@ class StreamlitUIAdapter:
             self._session.agent_hitl_paused = False  # type: ignore[attr-defined]
         if "agent_stream_events" not in self._session:
             self._session.agent_stream_events = []  # type: ignore[attr-defined]
+        if "access_token" not in self._session:
+            self._session.access_token = ""  # type: ignore[attr-defined]
+        if "refresh_token" not in self._session:
+            self._session.refresh_token = ""  # type: ignore[attr-defined]
+        if "logged_in" not in self._session:
+            self._session.logged_in = False  # type: ignore[attr-defined]
+        if "auth_username" not in self._session:
+            self._session.auth_username = ""  # type: ignore[attr-defined]
 
     # -- UIAdapter primitives --
 
@@ -57,7 +65,7 @@ class StreamlitUIAdapter:
     def render_dataframe(
         self, rows: Sequence[Mapping[str, Any]], width: int | str = "stretch"
     ) -> None:
-        st.dataframe(list(rows), width=width)
+        st.dataframe(list(rows), width=width)  # ty:ignore[invalid-argument-type]
 
     def rerun(self) -> None:
         st.rerun()
@@ -174,25 +182,37 @@ class StreamlitUIAdapter:
     def empty(self) -> Any:
         return st.empty()
 
-    def columns(self, spec: list[int] | int) -> Any:
-        return st.columns(spec)
+    def columns(self, spec: int | Sequence[int | float]) -> Any:
+        return st.columns(spec)  # type: ignore[arg-type]
 
     def form(self, key: str) -> Any:
         return st.form(key)
 
-    def text_input(self, label: str, key: str | None = None) -> Any:
-        return st.text_input(label, key=key)
+    def text_input(
+        self,
+        label: str,
+        value: str = "",
+        placeholder: str = "",
+        key: str | None = None,
+    ) -> Any:
+        return st.text_input(label, value=value, placeholder=placeholder, key=key)
 
     def number_input(
         self,
         label: str,
-        min_value: int | None = None,
-        value: int = 1,
-        step: int = 1,
+        min_value: int | float | None = None,
+        max_value: int | float | None = None,
+        value: int | float = 0,
+        step: int | float = 1,
         key: str | None = None,
-    ) -> Any:
+    ) -> int | float:
         return st.number_input(
-            label=label, min_value=min_value, value=value, step=step, key=key
+            label=label,
+            min_value=min_value,
+            max_value=max_value,
+            value=value,
+            step=step,
+            key=key,
         )
 
     def button(self, label: str, key: str | None = None, **kwargs: Any) -> Any:
@@ -213,14 +233,17 @@ class StreamlitUIAdapter:
     def header(self, text: str) -> None:
         st.header(text)
 
+    def subheader(self, text: str) -> None:
+        st.subheader(text)
+
     def markdown(self, text: str) -> None:
         st.markdown(text)
 
     def json(self, data: Any, expanded: bool = True) -> None:
         st.json(data, expanded=expanded)
 
-    def write(self, data: Any) -> None:
-        st.write(data)
+    def write(self, text: Any) -> None:
+        st.write(text)
 
     def divider(self) -> None:
         st.divider()

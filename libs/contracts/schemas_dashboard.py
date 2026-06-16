@@ -242,3 +242,50 @@ class CompatibilityReportResponse(BaseModel):
     added_fields: list[str]
     removed_fields: list[str]
     type_changed_fields: dict[str, DriftTypeChange]
+
+
+# ---------------------------------------------------------------------------
+# Observations (cross-service, read-only dashboard view)
+# ---------------------------------------------------------------------------
+
+
+class ObservationResponse(BaseModel):
+    """Dashboard view of a single observation from the ingestor service."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int = Field(..., description="Auto-incremented primary key.")
+    source: str = Field(..., description="Origin identifier.")
+    timestamp: datetime = Field(..., description="Observation timestamp (naive UTC).")
+    raw_data: dict[str, Any] = Field(
+        ..., description="The original data payload as stored."
+    )
+    tags: list[str] = Field(..., description="Labels applied to this observation.")
+    processed: bool = Field(
+        ..., description="True if the observation has been marked as processed."
+    )
+    created_at: datetime = Field(..., description="Row creation timestamp (UTC).")
+    updated_at: datetime | None = Field(
+        None, description="Last update timestamp (UTC), or null if never updated."
+    )
+    deleted_at: datetime | None = Field(
+        None, description="Soft-delete timestamp (UTC), or null if not archived."
+    )
+
+
+class PaginationMeta(BaseModel):
+    """Pagination metadata for list responses."""
+
+    total: int = Field(..., description="Total matching observations (unpaged).")
+    skip: int = Field(..., description="Offset into result set.")
+    limit: int = Field(..., description="Page size used in query.")
+    has_more: bool = Field(
+        ..., description="True if more results exist beyond current page."
+    )
+
+
+class ObservationListResponse(BaseModel):
+    """Paginated list of observations from the ingestor service."""
+
+    observations: list[ObservationResponse]
+    pagination: PaginationMeta

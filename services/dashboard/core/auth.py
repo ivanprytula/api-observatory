@@ -86,7 +86,7 @@ class AuthManager:
         self._state.access_token = access_token
         self._state.refresh_token = refresh_token
         self._state.username = username
-        self._state.logged_in = True
+        self._state.logged_in = bool(access_token)
         if expires_in is not None:
             self._state.token_expires_at = time.time() + expires_in
 
@@ -107,7 +107,7 @@ class AuthManager:
         self._state.refresh_token = new_refresh_token
         if expires_in is not None:
             self._state.token_expires_at = time.time() + expires_in
-        self._state.logged_in = True
+        self._state.logged_in = bool(new_access_token)
 
     def rotate_from_dict(self, body: dict) -> bool:
         access = body.get("access_token", "")

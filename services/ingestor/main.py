@@ -491,6 +491,11 @@ _OPENAPI_TAGS: list[dict[str, str]] = [
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
+    servers=[
+        {"url": url.strip()}
+        for url in settings.openapi_servers.split(",")
+        if url.strip()
+    ],
     description=(
         "Async data pipeline platform built on FastAPI, SQLAlchemy 2.0, and asyncpg.\n\n"
         "The API now spans authenticated observation ingestion, advanced rate-limiting demos, "

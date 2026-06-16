@@ -65,6 +65,59 @@ class UIAdapter(Protocol):
     def clear_cache(self) -> None:
         """Clear any framework-level data cache."""
 
+    def header(self, text: str) -> None:
+        """Render a section header."""
+
+    def subheader(self, text: str) -> None:
+        """Render a subsection header."""
+
+    def write(self, text: Any) -> None:
+        """Render markdown / text."""
+
+    def caption(self, text: str) -> None:
+        """Render small caption text."""
+
+    def text_input(
+        self,
+        label: str,
+        value: str = "",
+        placeholder: str = "",
+        key: str | None = None,
+    ) -> str:
+        """Render a text input widget and return its current value."""
+        ...
+
+    def number_input(
+        self,
+        label: str,
+        min_value: int | float | None = None,
+        max_value: int | float | None = None,
+        value: int | float = 0,
+        step: int | float = 1,
+        key: str | None = None,
+    ) -> int | float:
+        """Render a numeric input widget and return its current value."""
+        ...
+
+    def button(self, label: str, key: str | None = None) -> bool:
+        """Render a button and return True when clicked."""
+        ...
+
+    def columns(self, spec: int | Sequence[int | float]) -> Any:
+        """Return a list of column context-managers."""
+        ...
+
+    def json(self, data: Any) -> None:
+        """Render a JSON payload."""
+
+    def empty(self) -> Any:
+        """Return an empty placeholder container."""
+        ...
+
+    def expander(self, label: str, expanded: bool = False) -> Any:
+        """Return an expander context-manager."""
+        ...
+
 
 # ---- Panel callbacks ----
 # Each panel receives the adapter plus the current auth and config.

@@ -356,6 +356,17 @@ class Settings(BaseSettings):
         description="Timeout (seconds) for HTTP scrapers.",
     )
 
+    # ============ OpenAPI / Swagger ============
+    openapi_servers: str = Field(
+        default="http://127.0.0.1:8000,https://127.0.0.1/api",
+        description=(
+            "Comma-separated OpenAPI server URLs for Swagger UI. "
+            "Set OPENAPI_SERVERS to override. "
+            "Default: http://127.0.0.1:8000 (direct HTTP) and "
+            "https://127.0.0.1/api (edge proxy HTTPS)."
+        ),
+    )
+
     # ============ LLM Integration (Phase 2) ============
     openai_enabled: bool = Field(
         default=False,

@@ -6,8 +6,8 @@ from datetime import UTC, datetime
 
 from services.dashboard.core.api_client import (
     DashboardApiError,
+    cached_fetch_scorecards,
     fetch_prometheus_metrics,
-    fetch_scorecards,
     fetch_sources,
 )
 from services.dashboard.core.auth import AuthManager
@@ -23,7 +23,8 @@ def render_source_health_table(
 ) -> None:
     """Render the source health scorecard table."""
     try:
-        scorecards_resp = fetch_scorecards(auth=auth)
+        # Use cached version with auth token for 60-second TTL
+        scorecards_resp = cached_fetch_scorecards(token=auth.access_token)
         scorecards = scorecards_resp.items
         if not scorecards:
             ui.show_info(

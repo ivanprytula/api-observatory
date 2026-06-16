@@ -6,7 +6,6 @@ Adapters can call these directly; caching should wrap them (framework-specific).
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 import httpx
@@ -15,6 +14,8 @@ from services.dashboard.core.auth import AuthManager
 from services.dashboard.core.config import config
 from services.dashboard.core.models import (
     DriftEventResponse,
+    ObservationListResponse,
+    ObservationResponse,
     ScorecardListResponse,
     SourceHealthResponse,
     SourceProfileResponse,
@@ -22,9 +23,12 @@ from services.dashboard.core.models import (
 
 
 if TYPE_CHECKING:
-    pass
-
-logger = logging.getLogger(__name__)
+    import streamlit as st
+else:
+    try:
+        import streamlit as st
+    except ImportError:
+        st = None  # type: ignore[assignment,unreachable,misc]
 
 
 class DashboardApiError(Exception):
@@ -33,6 +37,52 @@ class DashboardApiError(Exception):
     def __init__(self, message: str, status_code: int | None = None) -> None:
         super().__init__(message)
         self.status_code = status_code
+
+
+def _streamlit_cache_data(ttl: int = 60):
+    """Decorator to cache API calls in Streamlit with TTL (in seconds).
+
+    Falls back gracefully if not running in Streamlit context.
+    """
+    if st is None:
+        return lambda fn: fn
+    try:
+        return st.cache_data(ttl=ttl, show_spinner=False)
+    except AttributeError, RuntimeError:
+        # Not in Streamlit context; return no-op decorator
+        return lambda fn: fn
+
+
+# Cached wrappers for Streamlit (cache based on token string, which is hashable)
+@_streamlit_cache_data(ttl=60)
+def cached_fetch_scorecards(
+    token: str | None = None,
+    limit: int = 50,
+    timeout: float | None = None,
+) -> ScorecardListResponse:
+    """Cached version of fetch_scorecards for Streamlit."""
+
+    # Rebuild AuthManager-like object from token for the original function
+    class _AuthProxy:
+        def __init__(self, access_token: str | None) -> None:
+            self.access_token = access_token or ""
+
+    return fetch_scorecards(auth=_AuthProxy(token), limit=limit, timeout=timeout)  # type: ignore
+
+
+@_streamlit_cache_data(ttl=60)
+def cached_fetch_sources(
+    token: str | None = None,
+    limit: int = 50,
+    timeout: float | None = None,
+) -> list[SourceProfileResponse]:
+    """Cached version of fetch_sources for Streamlit."""
+
+    class _AuthProxy:
+        def __init__(self, access_token: str | None) -> None:
+            self.access_token = access_token or ""
+
+    return fetch_sources(auth=_AuthProxy(token), limit=limit, timeout=timeout)  # type: ignore
 
 
 def _headers(auth: AuthManager | None = None) -> dict[str, str]:
@@ -247,3 +297,53 @@ async def fetch_sources_async(
             return [SourceProfileResponse(**item) for item in data.get("items", [])]
     except httpx.HTTPError as exc:
         raise DashboardApiError(f"Async sources fetch failed: {exc}") from exc
+
+
+def fetch_observations(
+    auth: AuthManager,
+    page: int = 1,
+    page_size: int = 25,
+    source_filter: str | None = None,
+    timeout: float | None = None,
+) -> ObservationListResponse:
+    """Return parsed observation list with pagination.
+
+    Args:
+        auth: Authentication manager for token handling.
+        page: Page number (1-indexed), converted to skip for API.
+        page_size: Number of items per page.
+        source_filter: Optional source name filter.
+        timeout: Request timeout in seconds.
+    """
+    url = f"{config.api_base_url}/api/v1/observations"
+    skip = (page - 1) * page_size
+    params: dict[str, int | str] = {"skip": skip, "limit": page_size}
+    if source_filter:
+        params["source"] = source_filter
+
+    try:
+        with httpx.Client(timeout=timeout or config.request_timeout) as client:
+            r = client.get(url, params=params, headers=_headers(auth))
+            _handle_error(r, "fetch_observations")
+            data = r.json()
+            return ObservationListResponse(**data)
+    except httpx.HTTPError as exc:
+        raise DashboardApiError(f"Network error fetching observations: {exc}") from exc
+
+
+def fetch_observation(
+    observation_id: int,
+    auth: AuthManager,
+    timeout: float | None = None,
+) -> ObservationResponse:
+    """Fetch a single observation by ID."""
+    url = f"{config.api_base_url}/api/v1/observations/{observation_id}"
+    try:
+        with httpx.Client(timeout=timeout or config.request_timeout) as client:
+            r = client.get(url, headers=_headers(auth))
+            _handle_error(r, f"fetch_observation({observation_id})")
+            return ObservationResponse(**r.json())
+    except httpx.HTTPError as exc:
+        raise DashboardApiError(
+            f"Network error fetching observation {observation_id}: {exc}"
+        ) from exc
