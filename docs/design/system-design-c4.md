@@ -109,5 +109,4 @@ flowchart TB
 
 - [docs/04-architecture-overview.md](../04-architecture-overview.md)
 - [docs/monorepo-structure.md](../monorepo-structure.md)
-- [docs/tech-map.md](../tech-map.md)
 - [docs/observability.md](../observability.md)

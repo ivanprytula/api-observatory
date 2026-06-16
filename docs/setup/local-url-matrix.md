@@ -92,7 +92,8 @@ local_open_url /api/docs
 # Dashboard
 local_open_url /
 
-# Bruno with the active local base URL
+# Bruno Desktop: open bruno/ in Bruno, select local env, run requests visually
+# CLI (CI / headless):
 BRUNO_BASE_URL="$(bash scripts/daily/local-url.sh bruno-base-url)"
 cd bruno && bru run . -r --env local --env-var "baseUrl=${BRUNO_BASE_URL}"
 

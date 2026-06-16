@@ -11,10 +11,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCAN_DIRS=(
   "docs"
   ".github/prompts"
-  "setup"
   "infra/terraform/environments"
-  "learning_docs"
-  ".kilo/plans"
 )
 REMOVED_RECIPES=(
   "tf-plan-local"

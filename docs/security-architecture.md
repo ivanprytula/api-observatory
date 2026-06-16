@@ -135,6 +135,6 @@ configuration and severity thresholds.
 ## Related
 
 - [Architecture Overview](04-architecture-overview.md) — full auth/RBAC table in context
-- [pillar-5-security.md](progress/pillar-5-security.md) — deep auth pattern learning reference
+- [pillar-5-security.md](design/pillar-5-security.md) — deep auth pattern learning reference
 - [github-actions-security-hardening.md](github-actions-security-hardening.md) — CI SHA pinning
 - [docker-security-scanning-setup.md](setup/docker-security-scanning-setup.md) — Trivy setup

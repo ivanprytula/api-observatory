@@ -97,7 +97,7 @@ api-observatory/  (formerly data-pipeline-async)
 │   ├── adr/                       (← Phase 0: ADR stubs)
 │   │   ├── 001-kafka-vs-rabbitmq.md
 │   │   ├── 002-qdrant-vs-pgvector.md
-│   │   └── 003-htmx-vs-react.md
+│   │   └── 003-htmx-vs-react.md  →  docs/adr/003-htmx-vs-react.md
 │   ├── architecture.md            (← This file, monorepo target structure)
 │   ├── pillar-*.md               (Consolidated domain knowledge)
 │   └── decisions.md              (Tech choice trade-off reasons)
@@ -231,7 +231,7 @@ graph TB
 
 - [ADR 001: Kafka vs RabbitMQ](adr/001-kafka-vs-rabbitmq.md) — Why Redpanda + Kafka API
 - [ADR 002: Qdrant vs pgvector](adr/002-qdrant-vs-pgvector.md) — Why Qdrant primary, pgvector secondary
-- [ADR 003: HTMX vs React](adr/003-htmx-vs-react.md) — Why HTMX + backend templates (Phase 6)
+- [ADR 003: HTMX vs React](../adr/003-htmx-vs-react.md) — Why HTMX + backend templates (Phase 6)
 - This file: `docs/architecture.md` — Monorepo target + data flow diagrams
 
 ---
@@ -735,7 +735,7 @@ services:
 
 ### ADR
 
-See [ADR #004: Scraper Architecture](adr/004-scraper-architecture.md) for detailed decision rationale.
+See [Phase 2 Scraper Integration](../personal/../personal/MIDDLE-TIER-GRIND-OUTPUT-GUIDE.md) for scraper architecture notes.
 
 ---
 

@@ -28,13 +28,23 @@ All commands: [docs/dev/commands.md](docs/dev/commands.md)
 
 See [docs/04-architecture-overview.md](docs/04-architecture-overview.md) for the full flow diagram.
 
+## Documentation Map
+
+| Directory | What you'll find |
+|-----------|-----------------|
+| [docs/](docs/) | All documentation — setup, dev workflows, architecture, deployment, runbooks |
+| [services/ingestor/](services/ingestor/) | FastAPI service source — routes, schemas, repos, agent, tests |
+| [tests/](tests/) | Test suite — unit, integration, e2e, shared fixtures |
+| [libs/](libs/) | Shared Python libraries — contracts, resilience, platform |
+| [infra/](infra/) | Infrastructure — Terraform, Kubernetes, CI, Docker |
+| [scripts/](scripts/) | Shell scripts — setup, testing, daily dev, deployment |
+| [.github/hooks/](.github/hooks/) | Pre-commit hooks — secrets scanner, tool guardian, governance audit |
+
 ## Read Next
 
-- [docs/README.md](docs/README.md) — Full docs index and track navigation
 - [docs/user/overview.md](docs/user/overview.md) — User-facing guide (purpose, functionality)
 - [docs/dev/commands.md](docs/dev/commands.md) — All CLI commands
 - [docs/04-architecture-overview.md](docs/04-architecture-overview.md) — Visual flow diagram
-- [docs/tech-map.md](docs/tech-map.md) — Interview topic → exact file:function map
 - [docs/deployment/aws-ecs.md](docs/deployment/aws-ecs.md) — ECS deployment sequence
 
 Local Review for uncommitted changes

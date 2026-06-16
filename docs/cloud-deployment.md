@@ -66,4 +66,4 @@ Before production rollout:
 - [docs/deployment/cost-teardown.md](deployment/cost-teardown.md)
 - [docs/floci-aws-deployment-workflow.md](floci-aws-deployment-workflow.md)
 - [docs/ci/workflow-reference.md](ci/workflow-reference.md)
-- [docs/adr/004-ecs-fargate-vs-eks.md](adr/004-ecs-fargate-vs-eks.md)
+- [docs/adr/008-ecs-fargate-vs-eks.md](adr/008-ecs-fargate-vs-eks.md)

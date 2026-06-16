@@ -12,7 +12,6 @@ Three tracks covering the full MVP stack (Commits 1-12). Start with architecture
 3. Review async DB patterns in [services/ingestor/models.py](../services/ingestor/models.py) and [services/ingestor/repositories/](../services/ingestor/repositories/).
 4. Study JWT auth + RBAC in [services/ingestor/auth.py](../services/ingestor/auth.py) and [services/ingestor/security/](../services/ingestor/security/).
 5. Trace a LangGraph agent run: [services/ingestor/agent/graph.py](../services/ingestor/agent/graph.py) → [routers/agent.py](../services/ingestor/routers/agent.py).
-6. Explain trade-offs from [docs/tech-map.md](tech-map.md) — interview-ready topic map.
 
 ---
 
@@ -44,5 +43,5 @@ Three tracks covering the full MVP stack (Commits 1-12). Start with architecture
 1. Start with the ADR: [docs/adr/012-langgraph-agent.md](adr/012-langgraph-agent.md) — dual-model cost design.
 2. Trace state transitions in [agent/graph.py](../services/ingestor/agent/graph.py) (`build_graph()` function).
 3. Review each node in [agent/nodes.py](../services/ingestor/agent/nodes.py): RAG fetch → classify → deep analyze → publish.
-4. Test interactively with Bruno: `cd bruno && bru run agent --env local`.
+4. Test interactively with Bruno Desktop: open `bruno/` in Bruno, select `local` env, run the `z-agent` collection.
 5. See HITL approval flow in Streamlit: launch app → Agent Enrichment → HITL Review tab.

@@ -80,9 +80,8 @@ just up
 # Apply database schema
 just migrate
 
-# Seed admin user and demo sources
-just create-admin
-just seed-demo
+# Manual bootstrap (prints curl commands)
+just init
 ```
 
 The Streamlit dashboard is now bundled inside the `ingestor` container — it starts automatically alongside the API.

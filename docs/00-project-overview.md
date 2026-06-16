@@ -24,9 +24,7 @@ It is designed as both a working system and a learning portfolio.
 
 ## Documentation Navigation
 
-The canonical index for all tracks is:
-
-- [docs/README.md](README.md)
+The canonical index is the root [README.md](../README.md) (Documentation Map section).
 
 Use this reading order for most contributors:
 
@@ -82,7 +80,7 @@ For execution-first onboarding:
 
 ## Related Top-Level Docs
 
-- [docs/README.md](README.md)
+- [README.md](../README.md) — Documentation Map
 - [docs/01-system-setup.md](01-system-setup.md)
 - [docs/02-first-time-setup.md](02-first-time-setup.md)
 - [docs/03-daily-development.md](03-daily-development.md)

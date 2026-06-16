@@ -23,12 +23,7 @@ doctor:
 docs-check-just-refs:
     bash scripts/docs/check-just-refs.sh
 
-api-check:
-    @bash -c 'source scripts/daily/local-url.sh; if curl_local -sf "$(local_api_url /readyz)" > /dev/null; then echo "stack ready"; else echo "stack not ready — run: just up or LOCAL_API_SCHEME=https just up-https" >&2; exit 1; fi'
 
-floci-health:
-    @bash -c 'source scripts/daily/local-url.sh; if curl_local -sf "$(local_api_url /health)" > /dev/null; then echo "API: healthy"; else echo "API: not responding"; fi'
-    @curl -sf http://127.0.0.1:4566/_floci/health > /dev/null && echo "Floci: healthy" || echo "Floci: not responding"
 
 # ─── DAILY DEV FLOWS ─────────────────────────────────────────────────────────
 #
@@ -43,61 +38,47 @@ floci-health:
 # 2a) Local development (uvicorn + live reload)
 # ─────────────────────────────────────────────
 
-# Start uvicorn with live reload against Compose data-plane.
-# Set LOCAL_API_SCHEME=https and run just up-https when API clients need edge HTTPS.
+# Start both ingestor (uvicorn --reload) and dashboard (Streamlit hot-reload) locally.
+# Data-plane (db, cache, broker) runs in Compose; both app services reload on file save.
+# For HTTPS API access from the host (e.g. curl, Bruno), set LOCAL_API_SCHEME=https.
 dev:
-    @just stack-info
-    docker compose up -d --build db cache broker dashboard
-    docker compose stop ingestor >/dev/null 2>&1 || true
-    docker compose rm -f ingestor >/dev/null 2>&1 || true
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PYTHONPATH="${PWD}"
+    just stack-info
+    # Data-plane only — app services run locally with hot reload
+    docker compose up -d db cache broker
+    docker compose stop ingestor dashboard >/dev/null 2>&1 || true
+    docker compose rm -f ingestor dashboard >/dev/null 2>&1 || true
     until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
     just migrate
-    uv run uvicorn services.ingestor.main:app --reload --port 8000
+    # Streamlit hot-reloads .py files on save automatically
+    uv run streamlit run services/dashboard/ui/streamlit/app.py \
+        --server.port=8501 --server.address=0.0.0.0 --server.headless=true \
+        --server.fileWatcherType=auto &
+    DASHBOARD_PID=$!
+    trap "kill $DASHBOARD_PID 2>/dev/null || true" EXIT INT TERM
+    echo "dashboard  → http://localhost:8501  (pid $DASHBOARD_PID, hot-reload on)"
+    echo "ingestor   → http://localhost:8000  (uvicorn --reload)"
+    uv run uvicorn services.ingestor.main:app --port 8000 --reload --reload-dir services/ingestor
 
 # 2b) Containerized development (Compose data-plane only)
 # ─────────────────────────────────────────────────────────
 
-# Start Compose data-plane (db, cache, broker, ingestor, dashboard).
-# Use LOCAL_API_SCHEME=https just up-https for edge HTTPS parity.
+# Start containerized fleet with HTTPS ingress (prod-parity).
 up:
     @just stack-info
-    docker compose up -d --build db cache broker ingestor dashboard
-
-# Start Compose data-plane plus edge HTTPS proxy.
-up-https:
-    @just stack-info
-    docker compose --profile https up -d --build db cache broker ingestor dashboard edge
-
-# Stop everything.
-down:
-    docker compose down
-    # docker compose --profile https down edge   # down-https (stops only HTTPS edge)
-
-# Stop HTTPS edge only (data-plane keeps running).
-down-https:
-    docker compose --profile https down edge
-
-# Start Compose + Floci (on demand).
-# Floci service must be uncommented in docker-compose.yml.
-up-floci:
-    docker compose up -d floci
-
-# Stop Floci only (Compose data-plane keeps running).
-down-floci:
-    docker compose down floci
-
-# Full containerized stack (db + cache + broker + ingestor + dashboard).
-dev-dashboard:
-    @just stack-info
-    docker compose up -d --build db cache broker ingestor dashboard
+    docker compose up -d --build db cache broker ingestor dashboard edge
     just _local_wait_ready
-    echo "stack ready"
+    echo "stack ready — https://127.0.0.1 (edge)"
+
+
 
 # Reset DB and ingestor containers (keep Floci state intact if running).
 db-reset:
     @just stack-info
     docker compose rm -sfv ingestor db || true
-    docker compose up -d --build db cache broker ingestor dashboard
+    docker compose up -d --build db cache broker ingestor dashboard edge
     just _local_wait_ready
     echo "stack ready"
 
@@ -120,7 +101,7 @@ floci-up:
         fi
         sleep 1
     done
-    docker compose up -d --build db cache broker ingestor dashboard
+    docker compose up -d --build db cache broker ingestor dashboard edge
     until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
     just migrate
     just _sandbox-seed
@@ -129,31 +110,29 @@ floci-up:
 floci-down:
     docker compose down floci
 
-# Restart Floci services only (preserves DB state, no re-seeding).
-floci-restart:
-    docker compose up -d floci
 
-# Wipe Floci state (buckets, queues, task history) and restart clean.
-floci-reset:
-    docker compose down floci
-    just floci-up
 
-# Full destroy: terraform destroy + stop Floci + stop Compose.
-cleanup:
-    TF_ENV=sandbox just tf destroy || true
-    docker compose down
-
-# Start uvicorn with Floci-shaped env (S3 + SQS + ECS APIs).
+# Start both ingestor and dashboard locally with hot reload, using Floci-shaped env (S3 + SQS + ECS APIs).
 floci-dev:
     #!/usr/bin/env bash
     set -euo pipefail
-    @just stack-info
+    export PYTHONPATH="${PWD}"
+    just stack-info
     source scripts/aws-env.sh
-    docker compose up -d db cache broker dashboard
-    docker compose stop ingestor >/dev/null 2>&1 || true
-    docker compose rm -f ingestor >/dev/null 2>&1 || true
+    # Data-plane only — app services run locally with hot reload
+    docker compose up -d db cache broker
+    docker compose stop ingestor dashboard >/dev/null 2>&1 || true
+    docker compose rm -f ingestor dashboard >/dev/null 2>&1 || true
     until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
     just migrate
+    # Streamlit hot-reloads .py files on save automatically
+    uv run streamlit run services/dashboard/ui/streamlit/app.py \
+        --server.port=8501 --server.address=0.0.0.0 --server.headless=true \
+        --server.fileWatcherType=auto &
+    DASHBOARD_PID=$!
+    trap "kill $DASHBOARD_PID 2>/dev/null || true" EXIT INT TERM
+    echo "dashboard  → http://localhost:8501  (pid $DASHBOARD_PID, hot-reload on)"
+    echo "ingestor   → http://localhost:8000  (uvicorn --reload)"
     uv run uvicorn services.ingestor.main:app --reload --port 8000
 
 # Validate Floci sandbox health before promoting to real AWS.
@@ -268,7 +247,7 @@ floci-deploy:
 # Recommended manual loop before calling deploy-ecs:
 #   just floci-validate              # confirm Floci sandbox is healthy
 #   just dev-preflight               # confirm real AWS creds + config files
-#   just deploy-audit                # build image + CVE scan
+#   docker build -t api-observatory:local . && just docker-scan-image  # build image + CVE scan
 #   TF_ENV=dev just tf init          # init backend (first time or after provider change)
 #   TF_ENV=dev just tf validate      # check HCL syntax
 #   TF_ENV=dev just tf plan          # review the changeset
@@ -370,25 +349,15 @@ stack-info:
     echo "  Cache           : ${CACHE}"
     echo "  Event broker    : ${BROKER_URL:-unset}"
     echo "  MinIO endpoint  : ${MINIO_ENDPOINT:-unset}"
-    echo "  INGESTOR_URL    : $(_local_api_base_url)"
+    echo "  INGESTOR_URL    : $(local_api_base_url)"
     echo "======================"
 
-# ─── BACKWARD-COMPATIBLE SANDBOX ALIASES ──────────────────────────────────────
-# Old sandbox-* names delegate to floci-*. Remove when no longer referenced.
 
-sandbox:        floci-test
-sandbox-up:     floci-up
-sandbox-down:   floci-down
-sandbox-reset:  floci-reset
-sandbox-deploy: floci-deploy
-sandbox-dev:    floci-dev
 
 # ─── INFRASTRUCTURE & IMAGES ──────────────────────────────────────────────────
 #
 # 3a) Terraform (unified — sandbox or dev via TF_ENV)
-# 3b) Docker Images & Audit
-# 3c) Backups & Restore
-# 3d) Ansible Automation
+# 3b) CVE scan
 
 # 3a) Terraform
 # ───────────────
@@ -479,27 +448,6 @@ tf cmd:
             ;;
     esac
 
-# Backward-compatible aliases
-# Init Terraform backend.
-tf-init:
-    just tf init
-
-# Validate Terraform configuration.
-tf-validate:
-    just tf validate
-
-# Create a saved Terraform plan.
-tf-plan:
-    just tf plan
-
-# Apply the saved Terraform plan.
-tf-apply:
-    just tf apply
-
-# Show Terraform state and outputs.
-tf-show:
-    just tf show
-
 # Destroy Terraform-managed resources with confirmation.
 tf-destroy:
     #!/usr/bin/env bash
@@ -517,9 +465,7 @@ tf-destroy:
     fi
     just tf destroy
 
-# Init → plan → apply in one sequence.
-tf-fresh:
-    just tf fresh
+
 
 # ─── TERRAVISION (architecture diagrams from IaC) ──────────────────────────────
 #
@@ -567,7 +513,7 @@ tf-diagram format="png":
             EXIT_CODE=$?
             set -e
             if [ $EXIT_CODE -ne 0 ]; then
-                echo "HCL parsing may fail on complex for loops. Try: just tf-diagram-prepare && just tf-diagram html" >&2
+                echo "HCL parsing may fail on complex for loops. Try: terraform show -json tfplan > .local-dev/tfplan-sandbox.json && just tf-diagram html" >&2
                 exit $EXIT_CODE
             fi
             echo "Interactive HTML diagram written to ${OUTFILE}.html"
@@ -577,127 +523,16 @@ tf-diagram format="png":
             EXIT_CODE=$?
             set -e
             if [ $EXIT_CODE -ne 0 ]; then
-                echo "HCL parsing may fail on complex for loops. Try: just tf-diagram-prepare && just tf-diagram ${FORMAT}" >&2
+                echo "HCL parsing may fail on complex for loops. Try: terraform show -json tfplan > .local-dev/tfplan-sandbox.json && just tf-diagram ${FORMAT}" >&2
                 exit $EXIT_CODE
             fi
             echo "Diagram written to ${OUTFILE}.${FORMAT}"
         fi
     fi
 
-# Generate pre-plan files for terravision (avoids HCL parsing issues).
-tf-diagram-prepare:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    ENV="${TF_ENV:-sandbox}"
-    PLANDIR="infra/terraform/environments/${ENV}"
-    if [ -f "/tmp/tfplan.bin" ]; then
-        PLAN_SRC="/tmp/tfplan.bin"
-    elif [ -f "${PLANDIR}/tfplan" ]; then
-        PLAN_SRC="${PLANDIR}/tfplan"
-    else
-        echo "No plan binary found. Run 'just tf plan' first to generate a plan." >&2
-        exit 1
-    fi
-    mkdir -p .local-dev
-    echo "Extracting plan JSON from $PLAN_SRC..."
-    cd "$PLANDIR"
-    terraform show -json "$PLAN_SRC" > "${OLDPWD}/.local-dev/tfplan-${ENV}.json"
 
-    echo "Generating graph..."
-    if ! terraform graph > "${OLDPWD}/.local-dev/graph-${ENV}.dot" 2>/dev/null; then
-        echo "Note: terraform graph failed (backend may not be initialized)." >&2
-        echo "To fix: run 'just tf init' first." >&2
-        echo 'digraph G {}' > "${OLDPWD}/.local-dev/graph-${ENV}.dot"
-    fi
-    echo "Plan files generated for terravision in .local-dev/"
 
-# Validate a saved Terravision JSON plan before rendering.
-tf-diagram-prepare-from-json:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    ENV="${TF_ENV:-sandbox}"
-    PLANDIR="infra/terraform/environments/${ENV}"
-    PLANFILE=".local-dev/tfplan-${ENV}.json"
-    if [ ! -f "$PLANFILE" ]; then
-        echo "Plan file not found: $PLANFILE" >&2
-        echo "Create it with: cd $PLANDIR && terraform show -json tfplan > ../$PLANFILE" >&2
-        exit 1
-    fi
-    if [ ! -s "$PLANFILE" ]; then
-        echo "Plan file is empty: $PLANFILE" >&2
-        exit 1
-    fi
-    if ! uv run python3 -c "import json; json.load(open('$PLANFILE'))" 2>/dev/null; then
-        echo "Plan file is not valid JSON: $PLANFILE" >&2
-        echo "Regenerate it with: cd $PLANDIR && terraform show -json tfplan > ../$PLANFILE" >&2
-        exit 1
-    fi
-    mkdir -p .local-dev/diagrams
-    echo "Plan file ready: $PLANFILE"
-    echo "Now run: just tf-diagram html"
 
-tf-diagram-svg:
-    just tf-diagram svg
-
-tf-diagram-png:
-    just tf-diagram png
-
-tf-diagram-html:
-    just tf-diagram html
-
-# 3b) Docker Images & Audit
-# ──────────────────────────
-
-# Buildability guards (fail fast with a clear message if Dockerfile is missing).
-_check-ingestor-dockerfile:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ ! -f Dockerfile ]; then
-        echo "Missing ingestor Dockerfile at ./Dockerfile" >&2
-        echo "Create it or run from the repo root." >&2
-        exit 1
-    fi
-
-_check-dashboard-dockerfile:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ ! -f services/dashboard/Dockerfile ]; then
-        echo "Missing dashboard Dockerfile at services/dashboard/Dockerfile" >&2
-        echo "Run the dashboard move or restore from git history." >&2
-        exit 1
-    fi
-
-# Build the ingestor image.
-docker-build-image tag="api-observatory:local":
-    @just _check-ingestor-dockerfile
-    docker build -t {{tag}} .
-
-# Build the dashboard image.
-docker-build-dashboard tag="api-observatory-dashboard:local":
-    @just _check-dashboard-dockerfile
-    docker build -t {{tag}} -f services/dashboard/Dockerfile .
-
-# One-shot audit: build → size check → CRITICAL CVE scan
-# Comment out the steps you don't need, or keep all three for a full audit.
-deploy-audit tag="api-observatory:local":
-    just docker-build-image {{tag}}
-    just docker-audit-size {{tag}}
-    just docker-scan-image {{tag}}
-    @docker image inspect {{tag}} --format 'Digest: {{{{index .RepoDigests 0}}}}' 2>/dev/null || \
-      docker inspect --format 'ID: {{{{.ID}}}}' {{tag}}
-
-docker-audit-size image="api-observatory:local":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    SIZE_BYTES=$(docker image inspect {{image}} --format='{{{{.Size}}}}')
-    SIZE_MB=$((SIZE_BYTES / 1024 / 1024))
-    LIMIT_MB=${DOCKER_IMAGE_SIZE_LIMIT_MB:-1500}
-    echo "Image {{image}} size: ${SIZE_MB}MB"
-    if (( SIZE_MB > LIMIT_MB )); then
-        echo "WARNING: image exceeds ${LIMIT_MB}MB budget (allowed for MVP while functionality is prioritized)" >&2
-        exit 0
-    fi
-    echo "Image size check passed"
 
 # Scan an image for CRITICAL vulnerabilities.
 docker-scan-image image="api-observatory:local":
@@ -710,58 +545,9 @@ docker-scan-image image="api-observatory:local":
         {{image}}
     echo "No CRITICAL CVEs detected"
 
-# 3c) Backups & Restore
-# ──────────────────────
 
-# Uncomment the variant to change storage target (local is default).
-backup:
-    bash infra/scripts/backup.sh
-    # BACKUP_STORAGE=s3 bash infra/scripts/backup.sh       # → backup-s3
-    # BACKUP_STORAGE=both bash infra/scripts/backup.sh      # → backup-both
 
-backup-s3:
-    BACKUP_STORAGE=s3 bash infra/scripts/backup.sh
 
-backup-both:
-    BACKUP_STORAGE=both bash infra/scripts/backup.sh
-
-# For S3 restore, use restore-s3-postgres instead (different CLI signature).
-restore-postgres file="":
-    bash infra/scripts/restore.sh postgres {{file}}
-
-restore-s3-postgres s3uri:
-    bash infra/scripts/restore.sh postgres --from-s3 {{s3uri}}
-
-# 3d) Ansible Automation
-# ───────────────────────
-
-ansible-requirements:
-    cd infra/ansible && ansible-galaxy collection install -r requirements.yml
-
-ansible-bootstrap:
-    cd infra/ansible && ansible-playbook playbooks/bootstrap.yml -i inventory/hosts.yml \
-      --ask-vault-pass --limit dev
-
-ansible-provision-ec2:
-    cd infra/ansible && ansible-playbook playbooks/provision-ec2.yml -inventory/aws_ec2.yml \
-      --limit dev --ask-become-pass --ask-vault-pass
-
-ansible-sandbox-host:
-    cd infra/ansible && ansible-playbook playbooks/sandbox-host.yml -i inventory/hosts.yml \
-      --limit dev --ask-become-pass
-
-ansible-local-dev:
-    cd infra/ansible && ansible-playbook playbooks/local-dev.yml -i inventory/hosts.yml \
-      --limit dev --ask-become-pass
-
-ansible-ecs-host:
-    cd infra/ansible && ansible-playbook playbooks/ecs-host.yml -i inventory/aws_ec2.yml \
-      --limit dev --ask-become-pass --ask-vault-pass
-
-# Drift check (read-only, safe to run repeatedly)
-ansible-drift:
-    cd infra/ansible && ansible-playbook playbooks/drift-check.yml -i inventory/hosts.yml \
-      --ask-vault-pass --limit dev
 
 # ─── DATABASE MANAGEMENT ──────────────────────────────────────────────────────
 
@@ -782,73 +568,7 @@ psql-safe db-host="db":
         psql "postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@${TARGET}:5432/api_observatory"
     fi
 
-# Deprecated: use psql-safe instead to avoid accidental prod shell access.
-# To re-enable the old unsafe path, uncomment below and comment psql-safe.
-# db-shell:
-#     @echo "WARNING: db-shell opens an interactive shell without safety checks." >&2
-#     @echo "  Use 'just psql-safe' instead — it blocks accidental prod shells." >&2
-#     docker compose exec db psql -U postgres -d api_observatory
 
-db-shell:
-    @echo "WARNING: db-shell opens an interactive shell without safety checks." >&2
-    @echo "  Use 'just psql-safe' instead — it blocks accidental prod shells." >&2
-    docker compose exec db psql -U postgres -d api_observatory
-
-# Dump the local Compose DB to a timestamped SQL file (default: .local-dev/dumps/).
-pg-dump file=".local-dev/dumps/api-observatory-$(date +%Y%m%d-%H%M%S).sql":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    mkdir -p "$(dirname "{{file}}")"
-    docker compose exec -T db pg_dump -U postgres api_observatory > "{{file}}"
-    echo "Dumped to {{file}} ($(wc -c < "{{file}}") bytes)"
-
-# Restore a SQL dump into the local Compose DB (wipes public schema first).
-pg-restore file="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -z "{{file}}" ] || [ ! -f "{{file}}" ]; then
-        echo "Usage: just pg-restore <dump.sql>" >&2
-        exit 1
-    fi
-    docker compose exec -T db psql -U postgres -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" api_observatory
-    docker compose exec -T db psql -U postgres -d api_observatory < "{{file}}"
-    echo "Restored from {{file}}"
-
-# Restore a gzipped SQL dump from S3 into the local Compose DB.
-pg-restore-from-s3 s3-uri="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -z "{{s3-uri}}" ]; then
-        echo "Usage: just pg-restore-from-s3 s3://bucket/path/dump.sql.gz" >&2
-        exit 1
-    fi
-    TMP="/tmp/api-obs-restore-$$.sql.gz"
-    aws s3 cp "{{s3-uri}}" "$TMP"
-    gunzip -c "$TMP" | docker compose exec -T db psql -U postgres -d api_observatory
-    rm -f "$TMP"
-    echo "Restored from {{s3-uri}}"
-
-# Inject --endpoint-url when an AWS emulator is configured (Floci/localstack).
-_aws-flags:
-    @if [ -n "${AWS_ENDPOINT_URL:-}" ]; then echo --endpoint-url "$AWS_ENDPOINT_URL"; fi
-
-# Mirror an S3 bucket (local or remote) to a local directory for offline browsing.
-s3-dump-local bucket="api-observatory-local" dest=".local-dev/dumps/s3-$(date +%Y%m%d-%H%M%S)":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    mkdir -p "{{dest}}"
-    aws $(just _aws-flags) s3 cp "s3://{{bucket}}" "{{dest}}" --recursive
-    echo "S3 mirrored to {{dest}} ($(find {{dest}} -type f | wc -l) files)"
-
-# Upload a local directory to an S3 bucket (local or remote).
-s3-restore-to-remote bucket="api-observatory-local" src=".local-dev/dumps/s3-YYYYMMDD-HHMMSS":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ ! -d "{{src}}" ]; then
-        echo "Source directory {{src}} does not exist" >&2
-        exit 1
-    fi
-    aws $(just _aws-flags) s3 cp "{{src}}" "s3://{{bucket}}/" --recursive
 
 # ─── TESTING & UTILITIES ──────────────────────────────────────────────────────
 
@@ -868,8 +588,7 @@ test-e2e:
 # E2E smoke: db-reset → admin → seed → Bruno
 api-test:
     just db-reset
-    just create-admin
-    just seed-source
+    just _auto-init
     BRUNO_BASE_URL="$(just _local_api_base_url)"
     cd bruno && bru run auth ops sources contracts scorecards websocket -r --env local --env-var "baseUrl=${BRUNO_BASE_URL}"
 
@@ -900,18 +619,85 @@ test-chaos:
     echo ""
     uv run pytest tests/e2e/test_chaos.py -v --no-cov --run-chaos
 
-# Logs / shell / restart for any Compose service.
+# One recipe to hold all thin CLI wrappers as commented lines.
+# Uncomment the line you need, save, and run: just ops
 ops:
     #!/usr/bin/env bash
     set -euo pipefail
-    MODE="${1:-logs}"
-    SVC="${2:-ingestor}"
-    case "$MODE" in
-        logs) docker compose logs -f "$SVC" ;;
-        shell) docker compose exec "$SVC" /bin/bash ;;
-        restart) docker compose restart "$SVC" ;;
-        *) echo "Usage: just ops <logs|shell|restart> [service]"; exit 1 ;;
-    esac
+    # ─── Container lifecycle ─────────────────────────────────────
+    # docker compose down
+    # docker compose up -d floci
+    # docker compose down floci
+    # docker compose logs -f ingestor
+    # docker compose exec ingestor /bin/bash
+    # docker compose restart ingestor
+    # docker compose ps --filter 'name=api-obs-floci' --filter 'status=running'
+    #
+    # ─── DB / psql ────────────────────────────────────────────────
+    # docker compose exec db psql -U postgres -d api_observatory
+    # docker compose exec -T db pg_dump -U postgres api_observatory > .local-dev/dumps/dump.sql
+    # docker compose exec -T db psql -U postgres -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" api_observatory
+    # docker compose exec -T db psql -U postgres -d api_observatory < dump.sql
+    # docker compose rm -sfv ingestor db && docker compose up -d --build db cache broker ingestor dashboard edge
+    #
+    # ─── Docker images ────────────────────────────────────────────
+    # test -f Dockerfile
+    # test -f services/dashboard/Dockerfile
+    # docker build -t api-observatory:local .
+    # docker build -t api-observatory-dashboard:local -f services/dashboard/Dockerfile .
+    # docker image inspect api-observatory:local --format='{{ "{{" }}.Size{{ "}}" }}'
+    # docker compose --profile security run --rm trivy image --scanners vuln --severity CRITICAL --ignore-unfixed --timeout 15m --exit-code 1 api-observatory:local
+    #
+    # ─── S3 (aws) ─────────────────────────────────────────────────
+    # aws s3 ls s3://api-observatory-local
+    # aws s3 cp s3://api-observatory-local .local-dev/dumps/ --recursive
+    # aws s3 cp .local-dev/dumps/ s3://api-observatory-local/ --recursive
+    # aws s3 mb s3://api-observatory-local
+    # aws sqs get-queue-url --queue-name pipeline-events
+    # aws sqs create-queue --queue-name pipeline-events
+    #
+    # ─── Health checks ────────────────────────────────────────────
+    # curl -sf http://127.0.0.1:8000/readyz
+    # curl -sf http://127.0.0.1:4566/_floci/health
+    # curl -sf http://127.0.0.1:8000/health
+    #
+    # ─── Backup / Restore ─────────────────────────────────────────
+    # bash infra/scripts/backup.sh
+    # BACKUP_STORAGE=s3 bash infra/scripts/backup.sh
+    # BACKUP_STORAGE=both bash infra/scripts/backup.sh
+    # bash infra/scripts/restore.sh postgres <file>
+    # bash infra/scripts/restore.sh postgres --from-s3 s3://bucket/path/dump.sql.gz
+    #
+    # ─── Ansible ──────────────────────────────────────────────────
+    # cd infra/ansible && ansible-galaxy collection install -r requirements.yml
+    # cd infra/ansible && ansible-playbook playbooks/bootstrap.yml -i inventory/hosts.yml --ask-vault-pass --limit dev
+    # cd infra/ansible && ansible-playbook playbooks/drift-check.yml -i inventory/hosts.yml --ask-vault-pass --limit dev
+    # cd infra/ansible && ansible-playbook playbooks/provision-ec2.yml -i inventory/aws_ec2.yml --limit dev --ask-become-pass --ask-vault-pass
+    # cd infra/ansible && ansible-playbook playbooks/sandbox-host.yml -i inventory/hosts.yml --limit dev --ask-become-pass
+    # cd infra/ansible && ansible-playbook playbooks/local-dev.yml -i inventory/hosts.yml --limit dev --ask-become-pass
+    # cd infra/ansible && ansible-playbook playbooks/ecs-host.yml -i inventory/aws_ec2.yml --limit dev --ask-become-pass --ask-vault-pass
+    #
+    # ─── Terraform shortcuts ──────────────────────────────────────
+    # just tf init
+    # just tf plan
+    # just tf apply
+    # just tf show
+    # TF_ENV=dev just tf plan
+    # just tf fresh
+    # just tf-diagram png
+    # just tf-diagram svg
+    # just tf-diagram html
+    #
+    # ─── Terraform destroy (with confirmation) ────────────────────
+    # cd infra/terraform/environments/sandbox && terraform destroy -auto-approve -lock=false -var-file=terraform.tfvars
+    #
+    # ─── Terraform diagram prep ───────────────────────────────────
+    # mkdir -p .local-dev && terraform show -json tfplan > .local-dev/tfplan-sandbox.json
+    # terraform graph > .local-dev/graph-sandbox.dot 2>/dev/null || echo 'digraph G {}' > .local-dev/graph-sandbox.dot
+    #
+    # ─── Full destroy ─────────────────────────────────────────────
+    # TF_ENV=sandbox just tf destroy || true; docker compose down
+    echo "Edit Justfile recipe 'ops': uncomment the line you need and run again."
 
 migrate:
     uv run alembic upgrade head
@@ -922,8 +708,7 @@ _sandbox-seed:
     set -euo pipefail
     source scripts/daily/local-url.sh
     until curl_local -sf "$(local_api_url /health)" > /dev/null 2>&1; do sleep 1; done
-    just create-admin
-    just seed-demo
+    just _auto-init
 
 # Private: start Floci + Docker infra for sandbox workflows
 _sandbox-infra:
@@ -962,31 +747,47 @@ _get_token:
     echo "ERROR: failed to obtain auth token after 3 attempts (last HTTP=${HTTP_CODE:-?} body=${BODY:-}${BODY:+...})" >&2
     exit 1
 
-seed-source:
-    #!/usr/bin/env bash
-    TOKEN=$(just _get_token)
-    bash .local-dev/scripts/seed-sources.sh "$TOKEN" \
-      .local-dev/payloads/source-seed-internal.json
-    echo "seed-source complete"
+# Print copy-pasteable curl commands for manual bootstrap.
+# Run after `just up` or `just dev`.
+# Alternatively, open Bruno Desktop → run auth/1-register.bru then auth/2-login.bru.
+init:
+    @echo ""
+    @echo "--- Bruno Desktop alternative ---"
+    @echo "  Just open bruno/ in Bruno Desktop, then:"
+    @echo "    1. Select env 'local' (right sidebar)"
+    @echo '    2. Run "auth/1-register.bru"'
+    @echo '    3. Run "auth/2-login.bru"  (auto-sets token)'
+    @echo '    4. Run "sources/2-create-source.bru"  (auto-sets source_id)'
+    @echo ""
+    @echo "--- Or use curl ---"
+    @echo "1. Register as admin"
+    @echo ""
+    @echo '  curl -X POST http://127.0.0.1:8000/api/v1/auth/register \'
+    @echo "    -H 'Content-Type: application/json' \\"
+    @echo "    -d '{\"username\":\"admin\",\"password\":\"admin123\",\"email\":\"admin@example.com\",\"role\":\"admin\"}'"
+    @echo ""
+    @echo "2. Sign in, save token"
+    @echo ""
+    @echo "  TOKEN=\$(curl -s -X POST http://127.0.0.1:8000/api/v1/auth/token \\"
+    @echo "    -H 'Content-Type: application/x-www-form-urlencoded' \\"
+    @echo "    -d 'username=admin&password=admin123' | python3 -c \"import sys,json; print(json.load(sys.stdin)['access_token'])\")"
+    @echo ""
+    @echo "3. Register a source"
+    @echo ""
+    @echo '  curl -X POST http://127.0.0.1:8000/api/v1/sources \'
+    @echo "    -H \"Authorization: Bearer \$TOKEN\" \\"
+    @echo "    -H 'Content-Type: application/json' \\"
+    @echo "    -d '{\"name\":\"httpbin\",\"base_url\":\"https://httpbin.org\",\"health_check_path\":\"/get\",\"probe_interval_seconds\":10}'"
+    @echo ""
+    @echo "4. Verify"
+    @echo ""
+    @echo '  curl http://127.0.0.1:8000/api/v1/sources \'
+    @echo "    -H \"Authorization: Bearer \$TOKEN\""
+    @echo ""
 
-seed-demo:
-    #!/usr/bin/env bash
-    TOKEN=$(just _get_token)
-    bash .local-dev/scripts/seed-sources.sh "$TOKEN" \
-      .local-dev/payloads/source-httpbin.json \
-      .local-dev/payloads/source-jsonplaceholder.json \
-      .local-dev/payloads/source-postman-echo.json
-    echo "seed-demo complete"
-
-seed-probes:
-    #!/usr/bin/env bash
-    TOKEN=$(just _get_token)
-    bash .local-dev/scripts/seed-sources.sh "$TOKEN" \
-      .local-dev/payloads/source-probe-ok.json \
-      .local-dev/payloads/source-probe-fail.json
-    echo "seed-probes complete — wait ~10s for first probe cycle"
-
-create-admin:
+# Private: auto-create admin + seed demo sources (used by CI and sandbox).
+# Equivalent to running the 4 curl commands from `just init` programmatically.
+_auto-init:
     #!/usr/bin/env bash
     set -euo pipefail
     source scripts/daily/local-url.sh
@@ -995,11 +796,15 @@ create-admin:
       -H 'Content-Type: application/json' \
       -d '{"username":"admin","password":"admin123","email":"admin@example.com","role":"admin"}' \
       >/dev/null 2>&1 || true
-    if just _get_token >/dev/null 2>&1; then
-        echo "admin user registered and verified"
-    else
-        echo "WARNING: admin registration completed but token verification failed" >&2
-    fi
+    TOKEN=$(just _get_token)
+    BASE_URL="$(local_api_url)" \
+      bash .local-dev/scripts/seed-sources.sh "$TOKEN" \
+        .local-dev/payloads/source-*.json
+    echo "auto-init complete — probe sources run every 10s"
+
+# Backward compat: old recipe names delegate to _auto-init.
+create-admin: _auto-init
+seed: init
 
 # Run post-deploy smoke checks.
 smoke-test base-url="{{_local_api_base_url}}" dashboard-url="{{__local_dashboard_url}}":

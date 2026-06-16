@@ -187,7 +187,7 @@ services:
   edge:
     image: nginx:1.27-alpine
     container_name: api-obs-edge
-    profiles: [https]
+    profiles: [ingress]
     ports:
       - '80:80'
       - '443:443'
@@ -282,18 +282,16 @@ services:
 #   - cache
 #   - broker (message broker)
 #   - ingestor (FastAPI microservice)
-#   - edge (HTTPS proxy, optional via --profile https)
+#   - edge (HTTPS ingress proxy, started by default with `just up`)
 #   - floci (AWS emulator, optional via --profile aws)
 #
-# Host access: Each service exposes ports to 127.0.0.1 or 0.0.0.0 for localhost access.
-#   Port mappings:
+# Host access:
+#   - edge:80, 443 → localhost:80, 443 — primary entrypoint (HTTPS via nginx)
+#   - ingestor:8000 → localhost:8000 — direct HTTP (debug only, not prod-like)
+#   - dashboard:8501 → localhost:8501 — direct HTTP (debug only, not prod-like)
 #   - db:5432 → localhost:5432
 #   - cache:6379 → localhost:6379 (loopback only; ingestor connects via Docker network at redis://cache:6379)
-#   - cache:6379 → localhost:6379
 #   - broker:9092 (Kafka), 8082 (HTTP) → localhost:9092, 8082
-#   - ingestor:8000 → localhost:8000
-#   - dashboard:8501 → localhost:8501 (Streamlit dashboard)
-#   - edge:80, 443 → localhost:80, 443 (HTTPS via edge)
 #   - floci:4566 → 127.0.0.1:4566 (local only)
 networks:
   api-obs:

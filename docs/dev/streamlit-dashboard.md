@@ -48,7 +48,7 @@ INGESTOR_URL=https://api.example.com uv run streamlit run services/dashboard/str
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `INGESTOR_URL` | `$(bash scripts/daily/local-url.sh api-base-url)` | Base URL of the ingestor service |
+| `INGESTOR_URL` | `http://127.0.0.1:8000` | Base URL of the ingestor service |
 | `BEARER_TOKEN` | *(empty)* | Bearer token for the WebSocket `?token=` param |
 
 ## Live Stream panel

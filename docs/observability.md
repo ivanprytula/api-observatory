@@ -243,5 +243,5 @@ This gives operational visibility without requiring CLI access.
 ## Related
 
 - [Architecture Overview](04-architecture-overview.md) — service boundaries and deployment
-- [pillar-4-observability.md](progress/pillar-4-observability.md) — observability learning reference and code examples
+- [pillar-4-observability.md](design/pillar-4-observability.md) — observability learning reference and code examples
 - [docker-compose.yml](../docker-compose.yml) — all service ports and OTEL env vars

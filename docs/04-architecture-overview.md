@@ -315,8 +315,7 @@ Copy `.env.example` to `.env`, set `CACHE_ENABLED=true` + `BROKER_ENABLED=true`,
 
 ## Related Docs
 
-- [docs/tech-map.md](tech-map.md) — interview topic → file:function map
 - [docs/adr/012-langgraph-agent.md](adr/012-langgraph-agent.md) — dual-model cost design
 - [docs/design/architecture.md](design/architecture.md) — extended diagrams, ADR 001 (Kafka vs RabbitMQ)
-- [docs/dev/bruno-collections.md](dev/bruno-collections.md) — API testing with Bruno CLI
+- [docs/dev/bruno-collections.md](dev/bruno-collections.md) — API testing with Bruno
 - [docs/dev/streamlit-dashboard.md](dev/streamlit-dashboard.md) — dashboard usage guide

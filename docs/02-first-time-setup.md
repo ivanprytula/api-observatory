@@ -27,6 +27,7 @@ cp .env.example .env        # create local configuration
 uv sync                     # sync Python dependencies
 just up                     # start Docker services (db, cache, broker, ingestor, dashboard)
 just migrate                # apply database migrations
+just init                   # print curl commands for manual bootstrap
 ```
 
 **Expected output:**
@@ -36,10 +37,31 @@ just migrate                # apply database migrations
 ✓ Database schema initialized
 ```
 
-Next steps:
+Next steps — run the 4 commands from `just init` to register an admin user, sign in, and register a demo source:
 
-1. Open API docs with the active local URL helper: `bash scripts/daily/local-url.sh open /api/docs`
-2. Switch to HTTPS parity with `LOCAL_API_SCHEME=https just up-https` when needed
+```bash
+# 1. Register as admin
+curl -X POST http://127.0.0.1:8000/api/v1/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"admin123","email":"admin@example.com","role":"admin"}'
+
+# 2. Sign in, save token
+TOKEN=$(curl -s -X POST http://127.0.0.1:8000/api/v1/auth/token \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'username=admin&password=admin123' | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+# 3. Register a demo source
+curl -X POST http://127.0.0.1:8000/api/v1/sources \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"httpbin","base_url":"https://httpbin.org","health_check_path":"/get","probe_interval_seconds":10}'
+
+# 4. Verify
+curl http://127.0.0.1:8000/api/v1/sources \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+For HTTPS parity, set `LOCAL_API_SCHEME=https just up` (requires mkcert certs — see Step 6).
 
 **Pre-commit setup** (run once after clone to prevent commit errors):
 
@@ -79,53 +101,28 @@ For a complete list of environment variables and guidance on storing secrets (JW
 ## Step 4: Verify Setup
 
 ```bash
-# Check all containers are running
 docker compose ps
-
-# Verify the ingestor API is responding (started inside Docker by `just up`)
-source scripts/daily/local-url.sh
-curl_local -sf "$(local_api_url /health)"
-# Should return: {"status":"healthy"}
-
-# API docs follow the active local URL mode
-bash scripts/daily/local-url.sh open /api/docs
-
-# Run quick test
-uv run pytest tests/unit/ -q
-# Should show: 192 passed, 10 skipped
+curl -sf http://127.0.0.1:8000/health          # expect {"status":"healthy"}
+uv run pytest tests/unit/ -q                     # expect 192 passed, 10 skipped
 ```
 
-> **Mode 2 (optional — IDE debugging/hot-reload):** Stop the ingestor container first, then run uvicorn locally:
->
-> ```bash
-> docker compose stop ingestor
-> uv run uvicorn services.ingestor.main:app --reload
-> ```
->
-> See [dev/commands.md](dev/commands.md#run-dev-server-no-docker) for details.
+---
+
+## Step 5 (Optional): Enable HTTPS for Local Parity
+
+Run `bash scripts/setup/02-setup-local-https.sh` to generate mkcert certs, then start with `LOCAL_API_SCHEME=https just up`.
 
 ---
 
-## Step 5 (Optional): Customize Environment
+## Step 6 (Optional): Customize Environment
 
-See [setup/environment-setup.md](../setup/environment-setup.md) for detailed environment variable configuration, defaults, and CI/CD contexts.
-
----
-
-## Step 6 (Optional): Enable HTTPS for Local Parity
-
-See [setup/local-https-setup.md](../setup/local-https-setup.md) for mkcert installation, local CA setup, certificate generation, and edge HTTPS configuration.
+See [setup/environment-setup.md](../setup/environment-setup.md) for environment variables, defaults, and CI/CD contexts.
 
 ---
 
 ## Step 7 (When Ready): CI/CD and Real AWS Access
 
-> Come back here once the project is running locally via Floci (Steps 3–4).
-> This step requires an AWS account, OIDC trust configuration, and GitHub repository secrets.
-> For the full progression path — local Floci → AWS staging → production — see
-> [Floci + AWS Deployment Workflow](floci-aws-deployment-workflow.md).
-
-Use `gh` directly — it natively supports vars, secrets, and environment-scoped configuration:
+Requires an AWS account, OIDC trust, and GitHub secrets. Set variables with `gh`:
 
 ```bash
 repo="ivanprytula/api-observatory"
@@ -224,28 +221,15 @@ For canonical command workflows, use **[03 — Daily Development](03-daily-devel
 
 ### Access the Application
 
-Use the shared local URL helper so HTTP and HTTPS modes stay in sync:
-
 ```bash
-bash scripts/daily/local-url.sh open /api/docs
-LOCAL_API_SCHEME=https bash scripts/daily/local-url.sh open /api/docs
-```
+# API docs (Swagger)
+curl http://127.0.0.1:8000/docs
 
-Full URL matrix: [setup/local-url-matrix.md](setup/local-url-matrix.md).
-
-### Submit a Test Request
-
-```bash
-# Direct HTTP (always works after `just up` when LOCAL_API_SCHEME is unset or http):
-source scripts/daily/local-url.sh
-curl_local -X POST "$(local_api_url /api/v1/observations)" \
+# Submit a test observation
+curl -X POST http://127.0.0.1:8000/api/v1/observations \
   -H "Content-Type: application/json" \
   -d '{"source": "test", "timestamp": "2024-04-22T12:00:00", "data": {}}'
 ```
-
-For additional API usage and request patterns, use Swagger via `bash scripts/daily/local-url.sh open /api/docs`.
-For ongoing command workflows, use [03-daily-development.md](03-daily-development.md) and
-[dev/commands.md](dev/commands.md).
 
 ---
 
@@ -327,30 +311,7 @@ uv sync --upgrade
 
 ## Next Steps
 
-1. **Configure environment variables**: See **[Environment Setup](setup/environment-setup.md)**
-2. **Understand daily workflows**: See **[03 — Daily Development](03-daily-development.md)**
-3. **Explore the architecture**: See **[04 — Architecture Overview](04-architecture-overview.md)**
-4. **Enable HTTPS (optional)**: `bash scripts/setup/02-setup-local-https.sh` then ``
-5. **Run tests**: `just test-unit` (fast) or `just test-integration` (requires PostgreSQL)
-6. **Start the dev server**: `just dev`
-
----
-
-## Important: Environment for Testing
-
-Most unit tests use **in-memory SQLite** and don't require a running PostgreSQL. Integration tests do require PostgreSQL.
-
-To run tests:
-
-```bash
-# Run all (unit + integration)
-uv run pytest tests/ -v
-
-# Just unit tests (fast, no DB required)
-uv run pytest tests/unit/ -v
-
-# Just integration tests (requires PostgreSQL)
-uv run pytest tests/integration/ -v
-```
-
-See **[Dev Commands](dev/commands.md)** for detailed testing and CI-related command workflows.
+1. **Run tests**: `just test-unit` (fast) or `uv run pytest tests/ -v`
+2. **Start the dev server with hot-reload**: `just dev`
+3. **Enable HTTPS (optional)**: run `bash scripts/setup/02-setup-local-https.sh` then `LOCAL_API_SCHEME=https just up`
+4. **Configure environment**: copy `.env.example` to `.env` and edit as needed

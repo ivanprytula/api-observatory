@@ -79,19 +79,11 @@ The certificate is at "localhost+2.pem" and the key is at "localhost+2-key.pem"
 ### 3. Run Local Environment
 
 ```bash
-# Certs are mounted by docker-compose.yml when edge starts
 just up-https
 
-# Services now available through the active local URL helper:
-LOCAL_API_SCHEME=https bash scripts/daily/local-url.sh open /api/docs
-LOCAL_API_SCHEME=https bash scripts/daily/local-url.sh open /
-```
-
-#### Verify HTTPS is working
-
-```bash
-LOCAL_API_SCHEME=https bash scripts/daily/local-url.sh api-url /api/v1/observations | xargs curl -v
-# Should show certificate chain and 200/3xx depending on auth/probe coverage
+# Verify HTTPS
+curl -vk https://127.0.0.1/api/api/v1/observations
+# Should show certificate chain and 200/3xx
 ```
 
 ---
@@ -229,9 +221,8 @@ sudo update-ca-certificates
 # Start all services (edge on :443 HTTPS, :80 HTTP redirect)
 just up-https
 
-# Access services through the active local URL helper
-LOCAL_API_SCHEME=https bash scripts/daily/local-url.sh open /
-LOCAL_API_SCHEME=https bash scripts/daily/local-url.sh open /api/docs
+# Access services
+curl -k https://127.0.0.1/api/docs
 ```
 
 ### Run Tests
@@ -302,7 +293,7 @@ spec:
 | Issue                          | Solution                                                                  |
 | ------------------------------ | ------------------------------------------------------------------------- |
 | Browser shows "Not Secure"     | Reinstall mkcert CA: `mkcert -install`                                    |
-| `curl` against edge fails | Use `LOCAL_API_SCHEME=https bash scripts/daily/local-url.sh api-url /health` and check certs: `ls infra/certs/*.pem` |
+| `curl` against edge fails | Check certs: `ls infra/certs/*.pem` and use `curl -k https://127.0.0.1/api/health` |
 | edge can't find cert file     | Verify docker-compose mounts: `docker inspect <edge-id>`                 |
 | Port 443 already in use        | `lsof -i :443` to find process, then `kill -9 <pid>`                      |
 | Certificate expired            | Regenerate: `cd infra/certs && rm -f *.pem && mkcert localhost 127.0.0.1` |
@@ -314,7 +305,7 @@ spec:
 1. ✅ Install mkcert (`sudo apt-get install -y mkcert libnss3-tools`)
 2. ✅ Generate certs (`mkcert localhost 127.0.0.1`)
 3. ✅ Start services (`just up-https`)
-4. ✅ Visit `$(LOCAL_API_SCHEME=https bash scripts/daily/local-url.sh api-url /api/docs)`
+4. ✅ Visit `https://127.0.0.1/api/docs`
 5. ✅ See browser shows `localhost` as secure ✓
 
 ---

@@ -107,10 +107,10 @@ The connection is then closed by the server.
 npm install -g wscat
 
 # Connect (no auth)
-wscat -c "$(bash scripts/daily/local-url.sh websocket-url /ws/observations/stream)"
+wscat -c "ws://127.0.0.1:8000/ws/observations/stream"
 
 # Connect (with token)
-wscat -c "$(bash scripts/daily/local-url.sh websocket-url '/ws/observations/stream?token=mysecret')"
+wscat -c "ws://127.0.0.1:8000/ws/observations/stream?token=mysecret"
 ```
 
 ### Browser (JavaScript)
@@ -138,10 +138,7 @@ ws.onclose = (event) => {
 import asyncio, json, subprocess, websockets
 
 async def listen() -> None:
-    base_url = subprocess.check_output(
-        ["bash", "scripts/daily/local-url.sh", "websocket-url", "/ws/observations/stream?token=mysecret"],
-        text=True,
-    ).strip()
+    base_url = "ws://127.0.0.1:8000/ws/observations/stream?token=mysecret"
     async with websockets.connect(base_url) as ws:
         async for raw in ws:
             msg = json.loads(raw)

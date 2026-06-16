@@ -23,26 +23,14 @@ just doctor
 `just doctor` verifies host requirements and prepares `.local-dev/` folders for raw dumps, verbose
 responses, traceback captures, and local logs.
 
-### Local URL Switchers
+### Local URLs
 
-Use `LOCAL_API_SCHEME` to choose whether local API clients hit the direct ingestor port or the edge proxy:
+| Mode | API base | API docs | Dashboard |
+|---|---|---|---|
+| Direct HTTP | `http://127.0.0.1:8000` | `http://127.0.0.1:8000/docs` | `http://127.0.0.1:8501` |
+| Edge HTTPS | `https://127.0.0.1/api` | `https://127.0.0.1/api/docs` | `https://127.0.0.1/` |
 
-| Mode | Command prefix | API base | API docs | Dashboard |
-|---|---|---|---|---|
-| Direct HTTP | none/default | `http://127.0.0.1:8000` | `http://127.0.0.1:8000/docs` | `http://127.0.0.1:8501` |
-| Edge HTTPS | `LOCAL_API_SCHEME=https` | `https://127.0.0.1/api` | `https://127.0.0.1/api/docs` | `https://127.0.0.1/` |
-
-Shared helper:
-
-```bash
-source scripts/daily/local-url.sh
-
-curl_local -sf "$(local_api_url /health)"
-local_open_url /api/docs
-BRUNO_BASE_URL="$(bash scripts/daily/local-url.sh bruno-base-url)"
-```
-
-Full matrix and override variables: [docs/setup/local-url-matrix.md](../setup/local-url-matrix.md).
+Prefix commands with `LOCAL_API_SCHEME=https` to switch to edge proxy mode.
 
 ### Start Services
 
@@ -78,17 +66,13 @@ uv run uvicorn services.ingestor.main:app --reload --port 8001
 ### Health Check
 
 ```bash
-# Uses LOCAL_API_SCHEME and local edge path defaults:
+# Quick check (uses local-url.sh under the hood):
 just api-check
 
 # Manual equivalent:
-source scripts/daily/local-url.sh
-curl_local -sf "$(local_api_url /health)"
-curl_local -sf "$(local_api_url /readyz)"
-curl_local -sf "$(local_api_url /metrics)"
-
-# HTTPS parity:
-LOCAL_API_SCHEME=https just api-check
+curl -sf http://127.0.0.1:8000/health
+curl -sf http://127.0.0.1:8000/readyz
+curl -sf http://127.0.0.1:8000/metrics
 ```
 
 ## Database Management
@@ -156,17 +140,11 @@ uv run alembic upgrade head --sql   # dry-run
 ## Seeding
 
 ```bash
-# Create default admin user (201 on first run, 409 if already exists — both OK)
-just create-admin
+# Print copy-pasteable curl commands for manual bootstrap
+just init
 
-# Seed one demo source (required by contracts tests — creates source_id=1)
-just seed-source
-
-# Seed three demo sources for probe/scorecard/drift workflows
-just seed-demo
-
-# Seed one healthy + one failing source for probe contrast demo
-just seed-probes
+# Or auto-seed admin + demo sources (headless):
+just _auto-init
 ```
 
 ---
@@ -175,57 +153,46 @@ just seed-probes
 
 ### Bruno (end-to-end)
 
+**Desktop:** Open `bruno/` in Bruno Desktop → select `local` env → run requests visually.
+
 ```bash
-# Full E2E cycle: db-reset → create-admin → seed-source → Bruno collections
+# CI / headless: full E2E cycle
 just api-test
 
-# Run Bruno manually with the active local base URL
-BRUNO_BASE_URL="$(bash scripts/daily/local-url.sh bruno-base-url)"
-cd bruno && bru run . -r --env local --env-var "baseUrl=${BRUNO_BASE_URL}"
-
-# HTTPS parity:
-LOCAL_API_SCHEME=https just api-test
+# Manual CLI run
+BRUNO_BASE_URL="http://127.0.0.1:8000" \
+  cd bruno && bru run . -r --env local --env-var "baseUrl=${BRUNO_BASE_URL}"
 ```
 
 ### curl — Auth
 
 ```bash
-source scripts/daily/local-url.sh
-TOKEN=$(curl_local -sf -X POST "$(local_api_url /api/v1/auth/token)" \
+TOKEN=$(curl -s -X POST http://127.0.0.1:8000/api/v1/auth/token \
   -H 'Content-Type: application/x-www-form-urlencoded' \
   -d 'username=admin&password=admin123' | \
   python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-curl_local -H "Authorization: Bearer $TOKEN" "$(local_api_url /api/v1/scorecards)"
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8000/api/v1/scorecards
 ```
 
 ### curl — Core Resources
 
 ```bash
-source scripts/daily/local-url.sh
+BASE=http://127.0.0.1:8000
+AUTH="Authorization: Bearer $TOKEN"
 
-# Sources
-curl_local -H "Authorization: Bearer $TOKEN" "$(local_api_url /api/v1/sources)"
-curl_local -H "Authorization: Bearer $TOKEN" "$(local_api_url /api/v1/sources/1/health)"
-
-# Scorecards
-curl_local -H "Authorization: Bearer $TOKEN" "$(local_api_url '/api/v1/scorecards?limit=20')"
-
-# Drift events
-curl_local -H "Authorization: Bearer $TOKEN" \
-  "$(local_api_url /api/v1/contracts/sources/1/drift-events)"
-
-# Agent enrichment
-curl_local -X POST -H "Authorization: Bearer $TOKEN" \
-  "$(local_api_url /api/v1/agent/enrich/1)"
+curl -H "$AUTH" "$BASE/api/v1/sources"
+curl -H "$AUTH" "$BASE/api/v1/sources/1/health"
+curl -H "$AUTH" "$BASE/api/v1/scorecards?limit=20"
+curl -H "$AUTH" "$BASE/api/v1/contracts/sources/1/drift-events"
+curl -X POST -H "$AUTH" "$BASE/api/v1/agent/enrich/1"
 ```
 
 ### OpenAPI
 
 ```bash
-source scripts/daily/local-url.sh
-local_open_url /api/docs
-curl_local "$(local_api_url /openapi.json)"
+curl http://127.0.0.1:8000/openapi.json
+# Or visit http://127.0.0.1:8000/docs in a browser
 ```
 
 ---
@@ -295,13 +262,9 @@ just deploy-audit
 ## Observability
 
 ```bash
-source scripts/daily/local-url.sh
-curl_local "$(local_api_url /metrics)"
-
-# Logs
+curl http://127.0.0.1:8000/metrics
 docker compose logs ingestor -f
 docker compose logs ingestor -f | grep '"level":"ERROR"'
-docker compose logs ingestor | grep '"cid":"<value>"'
 ```
 
 ---
@@ -408,7 +371,7 @@ Call it from `just up`, `just dev`, or `just floci-dev` to get an immediate bann
   Cache           : redis://cache:6379 | unset
   BROKER_URL: broker:29092 | unset
   MinIO endpoint  : 127.0.0.1:9000 | unset
-  INGESTOR_URL    : $(bash scripts/daily/local-url.sh api-base-url)
+  INGESTOR_URL    : http://127.0.0.1:8000
 ======================
 ```
 
