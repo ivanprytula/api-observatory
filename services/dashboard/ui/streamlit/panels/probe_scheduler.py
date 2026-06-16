@@ -1,13 +1,17 @@
-"""Panel 2: Probe Scheduler controls and status."""
+"""Panel 2: Probe Scheduler controls and status.
+
+Split into:
+  - ``use_*`` — data-fetching hooks
+  - ``render_*`` — pure display from pre-fetched data
+"""
 
 from __future__ import annotations
 
 from services.dashboard.core.api_client import (
     DashboardApiError,
+    api,
     fetch_prometheus_metrics,
     fetch_scheduler_jobs,
-    fetch_sources,
-    probe_source,
 )
 from services.dashboard.core.auth import AuthManager
 from services.dashboard.core.metrics_parser import (
@@ -15,6 +19,36 @@ from services.dashboard.core.metrics_parser import (
     parse_prometheus_counter,
 )
 from services.dashboard.ui.protocols import UIAdapter
+
+
+# ---------------------------------------------------------------------------
+# Hooks
+# ---------------------------------------------------------------------------
+
+
+def use_sources(token: str = "") -> dict:
+    try:
+        sources = api.sources.list(token=token)
+    except DashboardApiError:
+        sources = []
+    return {"sources": sources}
+
+
+def use_queue_retry_metrics() -> dict:
+    try:
+        metrics = fetch_prometheus_metrics()
+    except DashboardApiError:
+        metrics = ""
+    return {
+        "dlq_depth": parse_metric_value(metrics, "dead_letter_queue_depth") or 0,
+        "retries_total": parse_prometheus_counter(metrics, "retry_total"),
+        "failed_total": parse_prometheus_counter(metrics, "jobs_failed_total"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Renderers
+# ---------------------------------------------------------------------------
 
 
 def render_probe_scheduler(ui: UIAdapter, auth: AuthManager) -> None:
@@ -25,12 +59,8 @@ def render_probe_scheduler(ui: UIAdapter, auth: AuthManager) -> None:
         ui.show_warning("Log in to run probes.")
         return
 
-    try:
-        sources = fetch_sources(auth=auth)
-    except DashboardApiError as e:
-        ui.show_error(f"Could not fetch sources: {e}")
-        return
-
+    data = use_sources(token=auth.access_token)
+    sources = data["sources"]
     if not sources:
         ui.show_info("No sources registered yet — run `just seed-probes` first.")
         return
@@ -41,9 +71,9 @@ def render_probe_scheduler(ui: UIAdapter, auth: AuthManager) -> None:
     if col_all.button("▶ Probe all", key="probe_all"):
         for src in sources:
             try:
-                result = probe_source(src.id, auth=auth)
+                result = api.sources.probe(src.id, token=auth.access_token)
                 probe_results[src.id] = result.model_dump()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 probe_results[src.id] = {"error": str(exc)}
         ui.probe_results = probe_results
         ui.rerun()
@@ -59,9 +89,9 @@ def render_probe_scheduler(ui: UIAdapter, auth: AuthManager) -> None:
 
         if col_btn.button("▶ Probe", key=f"probe_{sid}"):
             try:
-                result = probe_source(sid, auth=auth)
+                result = api.sources.probe(sid, token=auth.access_token)
                 probe_results[sid] = result.model_dump()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 probe_results[sid] = {"error": str(exc)}
             ui.probe_results = probe_results
             ui.rerun()
@@ -81,7 +111,6 @@ def render_probe_scheduler(ui: UIAdapter, auth: AuthManager) -> None:
                     f"{status_icon} reachable={ok} &nbsp; ⏱ {latency_str}{sla_str}"
                 )
 
-    # Scheduler job status
     with ui.expander("Scheduler job status", expanded=False):
         try:
             jobs = fetch_scheduler_jobs()
@@ -108,14 +137,10 @@ def render_queue_retry_health(ui: UIAdapter, auth: AuthManager) -> None:
     """Render Queue & Retry Health metrics."""
     ui.header("📦 Queue & Retry Health")
 
-    try:
-        metrics = fetch_prometheus_metrics()
-    except DashboardApiError:
-        metrics = ""
-
-    dlq_depth = parse_metric_value(metrics, "dead_letter_queue_depth") or 0
-    retries_total = parse_prometheus_counter(metrics, "retry_total")
-    failed_total = parse_prometheus_counter(metrics, "jobs_failed_total")
+    data = use_queue_retry_metrics()
+    dlq_depth = data["dlq_depth"]
+    retries_total = data["retries_total"]
+    failed_total = data["failed_total"]
 
     q1, q2, q3 = ui.columns(3)
     q1.metric("Dead-letter queue depth", f"{dlq_depth:,.0f}")

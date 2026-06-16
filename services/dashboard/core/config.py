@@ -35,9 +35,6 @@ class DashboardConfig:
     probe_timeout: float = field(
         default_factory=lambda: float(os.environ.get("DASHBOARD_PROBE_TIMEOUT", "10.0"))
     )
-    agent_timeout: float = field(
-        default_factory=lambda: float(os.environ.get("DASHBOARD_AGENT_TIMEOUT", "60.0"))
-    )
     stream_timeout: float = field(
         default_factory=lambda: float(
             os.environ.get("DASHBOARD_STREAM_TIMEOUT", "120.0")

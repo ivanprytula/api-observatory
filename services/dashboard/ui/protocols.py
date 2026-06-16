@@ -31,6 +31,9 @@ class SessionStore(Protocol):
     def set(self, key: str, value: Any) -> None:
         """Generic session-state write."""
 
+    def setdefault(self, key: str, default: Any = None) -> Any:
+        """Set key to default if absent; return the value."""
+
 
 # ---- Rendering primitives ----
 
@@ -117,6 +120,28 @@ class UIAdapter(Protocol):
     def expander(self, label: str, expanded: bool = False) -> Any:
         """Return an expander context-manager."""
         ...
+
+    def divider(self) -> None:
+        """Render a horizontal divider."""
+
+    def checkbox(self, label: str, value: bool = False, key: str | None = None) -> bool:
+        """Render a checkbox and return its current value."""
+        ...
+
+    def form(self, key: str) -> Any:
+        """Return a form context-manager."""
+        ...
+
+    def form_submit_button(self, label: str, key: str | None = None) -> bool:
+        """Render a form submit button and return True when clicked."""
+        ...
+
+    def container(self) -> Any:
+        """Return a container context-manager."""
+        ...
+
+    def markdown(self, text: str) -> None:
+        """Render markdown text."""
 
 
 # ---- Panel callbacks ----

@@ -4,7 +4,7 @@ Public surface:
     DashboardConfig, config     — settings
     AuthManager, AuthState      — OAuth2 lifecycle
     DashboardApiError           — typed API error
-    api_client functions        — typed HTTP functions (fetch_*, probe_*, agent_*)
+    api_client functions        — typed HTTP functions (fetch_*, probe_*, source CRUD)
     metrics_parser              — Prometheus text parsing
 """
 

@@ -20,7 +20,6 @@ def render_auth_sidebar(ui: UIAdapter, manager: AuthManager) -> None:
                     if error:
                         ui.show_error(error)
                     else:
-                        ui.sync_auth_to_session(manager)
                         ui.clear_cache()
                         ui.rerun()
         else:

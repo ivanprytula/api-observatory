@@ -1,65 +1,95 @@
-"""Panel 3: Drift Events table."""
+"""Panel: Drift Events — schema contract changes per source.
+
+Split into:
+  - ``use_*`` — data-fetching hooks
+  - ``render_*`` — pure display from pre-fetched data
+"""
 
 from __future__ import annotations
 
-from typing import Any
-
 from services.dashboard.core.api_client import (
     DashboardApiError,
-    fetch_drift_events,
-    fetch_sources,
+    api,
 )
 from services.dashboard.core.auth import AuthManager
 from services.dashboard.ui.protocols import UIAdapter
 
 
-def render_drift_events(ui: UIAdapter, auth: AuthManager) -> None:
-    """Render the drift events table across all sources."""
-    ui.header("Drift Events")
+# ---------------------------------------------------------------------------
+# Hooks
+# ---------------------------------------------------------------------------
 
+
+def use_drift_events(token: str = "") -> dict:
     try:
-        sources = fetch_sources(auth=auth)
+        sources = api.sources.list(token=token)
     except DashboardApiError:
-        ui.show_info("Could not fetch sources.")
-        return
+        sources = []
 
-    if not sources:
-        ui.show_info("No sources registered yet.")
-        return
-
-    all_drift: list[dict[str, Any]] = []
+    events: list[dict] = []
     for src in sources:
         try:
-            events = fetch_drift_events(src.id, auth=auth)
-            for ev in events:
-                all_drift.append(
+            evts = api.drift.list(source_id=src.id, token=token)
+            for e in evts:
+                events.append(
                     {
-                        "Source": src.name,
-                        "Detected": ev.created_at.isoformat()[:19].replace("T", " "),
-                        "Type": ev.event_type,
-                        "Severity": ev.severity,
-                        "Score": f"{ev.compatibility_score:.1f}",
-                        "Summary": ev.summary or "—",
+                        "source_name": src.name,
+                        "severity": e.severity,
+                        "event_type": e.event_type,
+                        "compatibility_score": e.compatibility_score,
+                        "summary": e.summary or "",
+                        "created_at": e.created_at.isoformat()[:19]
+                        if e.created_at
+                        else "—",
+                        "added_fields": len(e.added_fields or []),
+                        "removed_fields": len(e.removed_fields or []),
                     }
                 )
         except DashboardApiError:
             pass
 
-    # Sort newest first
-    all_drift.sort(key=lambda r: r["Detected"], reverse=True)
+    events.sort(key=lambda x: x["created_at"], reverse=True)
+    return {"events": events}
 
-    if not all_drift:
+
+# ---------------------------------------------------------------------------
+# Renderers
+# ---------------------------------------------------------------------------
+
+
+def render_drift_events(ui: UIAdapter, auth: AuthManager) -> None:
+    """Render all drift events across sources."""
+    ui.header("Drift Events")
+
+    data = use_drift_events(token=auth.access_token)
+    events = data["events"]
+
+    if not events:
         ui.show_info("No drift events detected yet.")
         return
 
-    severity_icon = {
-        "critical": "🔴",
-        "high": "🟠",
-        "medium": "🟡",
-        "low": "🔵",
-        "none": "⚪",
-    }
-    for row in all_drift:
-        row["Severity"] = f"{severity_icon.get(row['Severity'], '')} {row['Severity']}"
+    rows = []
+    for ev in events:
+        severity_icon = {
+            "critical": "🔴",
+            "high": "🟠",
+            "medium": "🟡",
+            "low": "🟢",
+        }.get(ev["severity"], "⚪")
+        rows.append(
+            {
+                "Source": ev["source_name"],
+                "Event": ev["event_type"],
+                f"{severity_icon} Severity": ev["severity"],
+                "Score": (
+                    f"{ev['compatibility_score']:.1f}"
+                    if ev["compatibility_score"] is not None
+                    else "—"
+                ),
+                "Summary": ev["summary"][:60] if ev["summary"] else "—",
+                "Fields ±": f"+{ev['added_fields']}/-{ev['removed_fields']}",
+                "Time": ev["created_at"],
+            }
+        )
 
-    ui.render_dataframe(all_drift[:50], width="stretch")
+    ui.render_dataframe(rows, width="stretch")

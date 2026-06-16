@@ -1,146 +1,174 @@
-"""Panel: Observations list with pagination and detail view (read-only MVP)."""
+"""Panel: Observations list with pagination and detail view (read-only MVP).
+
+Split into:
+  - ``use_*`` — data-fetching hooks (no UI imports)
+  - ``render_*`` — pure display from pre-fetched data
+"""
 
 from __future__ import annotations
 
-import streamlit as st
 from services.dashboard.core.api_client import (
     DashboardApiError,
-    fetch_observation,
-    fetch_observations,
+    api,
 )
 from services.dashboard.core.auth import AuthManager
 from services.dashboard.ui.protocols import UIAdapter
+
+
+_OBS_SESSION_DEFAULTS: dict[str, object] = {
+    "obs_page": 1,
+    "obs_source_filter": "",
+    "obs_detail_id": None,
+}
+
+
+# ---------------------------------------------------------------------------
+# Hooks
+# ---------------------------------------------------------------------------
+
+
+def use_observations_page(
+    token: str = "", page: int = 1, source_filter: str = ""
+) -> dict:
+    try:
+        resp = api.observations.list(
+            token=token,
+            page=page,
+            page_size=25,
+            source_filter=source_filter or None,
+        )
+        return {
+            "observations": resp.observations,
+            "pagination": resp.pagination,
+        }
+    except DashboardApiError:
+        return {"observations": [], "pagination": None}
+
+
+def use_observation_detail(token: str = "", observation_id: int | None = None) -> dict:
+    if observation_id is None:
+        return {"observation": None}
+    try:
+        obs = api.observations.get(observation_id, token=token)
+        return {"observation": obs}
+    except DashboardApiError as e:
+        return {"observation": None, "error": e}
+    except Exception as exc:
+        return {"observation": None, "error": exc}
+
+
+# ---------------------------------------------------------------------------
+# Renderers
+# ---------------------------------------------------------------------------
 
 
 def render_observations_panel(ui: UIAdapter, auth: AuthManager) -> None:
     """Render the observations list with pagination, filtering, and detail view."""
     ui.subheader("Observations")
 
-    # Pagination and filter state
-    if "obs_page" not in st.session_state:
-        st.session_state.obs_page = 1
-    if "obs_source_filter" not in st.session_state:
-        st.session_state.obs_source_filter = ""
-    if "obs_detail_id" not in st.session_state:
-        st.session_state.obs_detail_id = None
+    for key, default in _OBS_SESSION_DEFAULTS.items():
+        ui.setdefault(key, default)
 
-    # Filter widget
     source_filter = ui.text_input(
         "Filter by source (optional)",
-        value=st.session_state.obs_source_filter,
+        value=ui.get("obs_source_filter", ""),
         placeholder="e.g., sensor.prod",
     )
-    st.session_state.obs_source_filter = source_filter
+    ui.set("obs_source_filter", source_filter)
 
-    # Pagination controls
     col_prev, col_page, col_next = ui.columns(3)
     with col_prev:
-        if ui.button("← Previous", key="obs_prev") and st.session_state.obs_page > 1:
-            st.session_state.obs_page -= 1
-            st.rerun()
+        page = ui.get("obs_page", 1)
+        if ui.button("← Previous", key="obs_prev") and page > 1:
+            ui.set("obs_page", page - 1)
+            ui.rerun()
     with col_page:
-        ui.write(f"Page {st.session_state.obs_page}")
+        ui.write(f"Page {ui.get('obs_page', 1)}")
     with col_next:
         if ui.button("Next →", key="obs_next"):
-            st.session_state.obs_page += 1
-            st.rerun()
+            ui.set("obs_page", ui.get("obs_page", 1) + 1)
+            ui.rerun()
 
-    # Fetch and display observations
-    try:
-        list_resp = fetch_observations(
-            auth=auth,
-            page=st.session_state.obs_page,
-            page_size=25,
-            source_filter=source_filter if source_filter else None,
-        )
-        observations = list_resp.observations
-        pagination = list_resp.pagination
+    data = use_observations_page(
+        token=auth.access_token,
+        page=ui.get("obs_page", 1),
+        source_filter=source_filter,
+    )
+    observations = data["observations"]
+    pagination = data["pagination"]
 
-        if not observations:
-            ui.show_info("No observations found matching your filters.")
-            return
+    if not observations:
+        ui.show_info("No observations found matching your filters.")
+        return
 
-        # Display list as table
-        rows = []
-        for obs in observations:
-            tags_str = ", ".join(obs.tags) if obs.tags else "—"
-            processed_badge = "✓ Yes" if obs.processed else "✗ No"
-            rows.append(
-                {
-                    "ID": obs.id,
-                    "Source": obs.source,
-                    "Timestamp": obs.timestamp.isoformat() if obs.timestamp else "—",
-                    "Tags": tags_str,
-                    "Processed": processed_badge,
-                }
-            )
-
-        ui.render_dataframe(rows, width="stretch")
-
-        # Pagination info
-        ui.caption(
-            f"Total: {pagination.total} | "
-            f"Showing {len(observations)} on page {st.session_state.obs_page} | "
-            f"Has more: {'Yes' if pagination.has_more else 'No'}"
+    rows = []
+    for obs in observations:
+        tags_str = ", ".join(obs.tags) if obs.tags else "—"
+        processed_badge = "✓ Yes" if obs.processed else "✗ No"
+        rows.append(
+            {
+                "ID": obs.id,
+                "Source": obs.source,
+                "Timestamp": obs.timestamp.isoformat() if obs.timestamp else "—",
+                "Tags": tags_str,
+                "Processed": processed_badge,
+            }
         )
 
-        # Detail view toggle (optional: expand single observation JSON)
-        st.divider()
-        ui.subheader("Detail View")
-        detail_id_input = ui.number_input(
-            "Enter observation ID to view details",
-            min_value=1,
-            value=st.session_state.obs_detail_id or 1,
-            step=1,
+    ui.render_dataframe(rows, width="stretch")
+
+    ui.caption(
+        f"Total: {pagination.total} | "
+        f"Showing {len(observations)} on page {ui.get('obs_page', 1)} | "
+        f"Has more: {'Yes' if pagination.has_more else 'No'}"
+    )
+
+    ui.divider()
+    ui.subheader("Detail View")
+    detail_id_input = ui.number_input(
+        "Enter observation ID to view details",
+        min_value=1,
+        value=ui.get("obs_detail_id") or 1,
+        step=1,
+    )
+
+    if ui.button("Load Details", key="obs_detail_load"):
+        ui.set("obs_detail_id", detail_id_input)
+        ui.rerun()
+
+    if ui.get("obs_detail_id"):
+        detail = use_observation_detail(
+            token=auth.access_token,
+            observation_id=ui.get("obs_detail_id"),
         )
+        obs = detail.get("observation")
+        err = detail.get("error")
 
-        if ui.button("Load Details", key="obs_detail_load"):
-            st.session_state.obs_detail_id = detail_id_input
-            st.rerun()
-
-        if st.session_state.obs_detail_id:
-            try:
-                detail_obs = fetch_observation(
-                    observation_id=st.session_state.obs_detail_id, auth=auth
+        if err:
+            if hasattr(err, "status_code") and err.status_code == 401:
+                ui.show_warning("You are not authorized to view this observation.")
+            elif hasattr(err, "status_code") and err.status_code == 404:
+                ui.show_warning(f"Observation #{ui.get('obs_detail_id')} not found.")
+            else:
+                ui.show_error(f"Could not fetch observation details: {err}")
+        elif obs:
+            ui.show_success(f"Observation #{obs.id} from {obs.source}")
+            detail_cols = ui.columns(2)
+            with detail_cols[0]:
+                ui.write("**Metadata**")
+                ui.write(
+                    f"- Source: {obs.source}\n"
+                    f"- Timestamp: {obs.timestamp}\n"
+                    f"- Processed: {'Yes' if obs.processed else 'No'}\n"
+                    f"- Created: {obs.created_at}\n"
+                    f"- Updated: {obs.updated_at or 'Never'}"
                 )
-                ui.show_success(
-                    f"Observation #{detail_obs.id} from {detail_obs.source}"
-                )
-                detail_cols = ui.columns(2)
-                with detail_cols[0]:
-                    ui.write("**Metadata**")
-                    ui.write(
-                        f"- Source: {detail_obs.source}\n"
-                        f"- Timestamp: {detail_obs.timestamp}\n"
-                        f"- Processed: {'Yes' if detail_obs.processed else 'No'}\n"
-                        f"- Created: {detail_obs.created_at}\n"
-                        f"- Updated: {detail_obs.updated_at or 'Never'}"
-                    )
-                with detail_cols[1]:
-                    ui.write("**Tags**")
-                    if detail_obs.tags:
-                        for tag in detail_obs.tags:
-                            ui.write(f"- {tag}")
-                    else:
-                        ui.write("(none)")
-                ui.write("**Data Payload**")
-                ui.json(detail_obs.raw_data)
-            except DashboardApiError as e:
-                if e.status_code == 401:
-                    ui.show_warning("You are not authorized to view this observation.")
-                elif e.status_code == 404:
-                    ui.show_warning(
-                        f"Observation #{st.session_state.obs_detail_id} not found."
-                    )
+            with detail_cols[1]:
+                ui.write("**Tags**")
+                if obs.tags:
+                    for tag in obs.tags:
+                        ui.write(f"- {tag}")
                 else:
-                    ui.show_error(f"Could not fetch observation details: {e}")
-            except Exception as exc:  # noqa: BLE001
-                ui.show_error(f"Error loading observation detail: {exc}")
-
-    except DashboardApiError as e:
-        if e.status_code == 401:
-            ui.show_warning("Log in from the sidebar to view observations.")
-        else:
-            ui.show_error(f"Could not reach ingestor: {e}")
-    except Exception as exc:  # noqa: BLE001
-        ui.show_error(f"Error loading observations: {exc}")
+                    ui.write("(none)")
+            ui.write("**Data Payload**")
+            ui.json(obs.raw_data)
