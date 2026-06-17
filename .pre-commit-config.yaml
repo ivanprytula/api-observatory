@@ -55,7 +55,7 @@ repos:
       - id: requirements-txt-fixer
         files: ^requirements-audit\.txt$
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.16
+    rev: v0.15.17
     hooks:
       - id: ruff-check
         args: [--fix, --config=pyproject.toml]
@@ -68,7 +68,7 @@ repos:
         args: ["-c", "pyproject.toml", "-r", "src"]
         additional_dependencies: ["bandit[toml]"]
   - repo: https://github.com/pypa/pip-audit
-    rev: v2.10.0
+    rev: v2.10.1
     hooks:
         - id: pip-audit
           name: pip-audit (wrapper)

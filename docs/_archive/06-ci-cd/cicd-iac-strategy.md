@@ -118,7 +118,7 @@ Use this split:
 - `AWS_REGION=eu-central-1`
 - `ECR_REPOSITORY_PREFIX=data-zoo`
 - `PYTHON_VERSION=3.14`
-- `UV_VERSION=0.11.7`
+- `UV_VERSION=0.11.211`
 
 ### Environment Variables (`vars` in `dev`, `prod`)
 

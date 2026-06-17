@@ -166,7 +166,7 @@ ansible-playbook infra/ansible/playbooks/drift-check.yml         # read-only aud
 
 ```bash
 # 1. Scan current digests
-bash scripts/scan_base_images.sh
+just docker-scan-image
 
 # 2. Find new digests
 docker pull python:3.14-slim 2>&1 | grep "Digest:"

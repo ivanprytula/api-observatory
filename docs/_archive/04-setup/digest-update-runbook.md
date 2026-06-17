@@ -53,7 +53,7 @@ postgres:17  # ← VULNERABLE (1 CRITICAL, 13 HIGH as of April 22, 2026)
 Run the scan script:
 
 ```bash
-bash scripts/scan_base_images.sh
+just docker-scan-image
 ```
 
 If vulnerabilities found → proceed to Step 2

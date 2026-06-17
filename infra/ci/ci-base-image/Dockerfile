@@ -4,7 +4,7 @@ FROM python:3.14-slim@sha256:5b3879b6f3cb77e712644d50262d05a7c146b7312d784a18eff
 
 # Build-time arguments
 ARG PIP_VERSION=26.0
-ARG UV_VERSION=0.11.7
+ARG UV_VERSION=0.11.21
 
 # Install build-time system dependencies (headers, compilers, etc.)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -56,7 +56,7 @@ PY
 FROM python:3.14-slim@sha256:5b3879b6f3cb77e712644d50262d05a7c146b7312d784a18eff7ff5462e77033 AS runtime
 
 ARG PIP_VERSION=26.0
-ARG UV_VERSION=0.11.7
+ARG UV_VERSION=0.11.21
 
 # Install minimal runtime system packages (no compilers)
 RUN apt-get update && apt-get install -y --no-install-recommends \
