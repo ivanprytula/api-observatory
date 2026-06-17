@@ -199,6 +199,5 @@ Adopt when team/project complexity grows:
 
 ## Related Project Documents
 
-- [cicd-iac-gitops-portable-strategy.md](../06-ci-cd/cicd-iac-strategy.md)
-- [github-actions-security-hardening.md](../06-ci-cd/github-actions-security.md)
-- [cloud-deployment.md](../07-deployment/cloud-deployment.md)
+- [CI/CD](../06-ci-cd/ci-cd.md)
+- [Deployment Guide](../07-deployment/deployment-guide.md)

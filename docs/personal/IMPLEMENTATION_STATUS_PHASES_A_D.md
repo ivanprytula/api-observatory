@@ -331,4 +331,4 @@ Per user request: "maybe will do it someday" — deferred for future roadmap ite
 - Roadmap — Long-term strategy
 - Phase 1 Portfolio Item — Event streaming deep-dive
 - ADR Index — Architectural decisions
-- [Cloud Deployment Guide](../07-deployment/cloud-deployment.md) — AWS patterns
+- [Deployment Guide](../07-deployment/deployment-guide.md) — AWS patterns

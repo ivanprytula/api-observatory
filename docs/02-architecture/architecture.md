@@ -1423,9 +1423,141 @@ See ADR 004 (Docker BuildKit) for full rationale.
 | dev/prod environment split    | Different sizing (Spot vs Reserved, 1 vs 3 NAT GWs) to optimize costs      |
 | Rolling updates (0% downtime) | ALB health checks + circuit breaker ensure smooth deployments              |
 
+---
+
+## C4 System Design (Structural View)
+
+Complements the flow-oriented diagrams above with a C4 viewpoint.
+
+### Level 1: Context
+
+```mermaid
+flowchart LR
+    User["API Consumer\n(Bruno, curl, Streamlit)"]
+    Team["Developer / Operator"]
+    subgraph Platform["Data Pipeline Platform"]
+      Ingestor["Ingestor API\nFastAPI service"]
+    end
+    ExtAPI["External HTTP APIs\nsource providers"]
+    OpenAI["OpenAI API\nagent enrichment"]
+    AWS["AWS runtime\n(ECS, RDS, ElastiCache)"]
+    User -->|REST, WebSocket| Ingestor
+    Team -->|deploy, observe, maintain| Ingestor
+    Ingestor -->|probe and ingest| ExtAPI
+    Ingestor -->|LLM calls| OpenAI
+    Team -->|deploy target| AWS
+```
+
+### Level 2: Containers
+
+```mermaid
+flowchart TB
+    Client["Client\nHTTP + WS"]
+    Streamlit["Streamlit dashboard\nlocal UI"]
+    subgraph App["Application Boundary"]
+      Ingestor["Ingestor\nFastAPI + APScheduler"]
+    end
+    Postgres[("PostgreSQL\nsource profiles, observations, drift, scorecards")]
+    Cache[("Cache\ncache, sessions, pub/sub, rate-limit state")]
+    Redpanda[("Redpanda\nKafka-compatible event bus")]
+    Client --> Ingestor
+    Streamlit --> Ingestor
+    Ingestor --> Postgres
+    Ingestor --> Cache
+    Ingestor --> Redpanda
+```
+
+### Level 3: Components (Ingestor)
+
+```mermaid
+flowchart TB
+    Router["API routers\nservices/ingestor/routers/"]
+    Security["Security and auth\nservices/ingestor/security/"]
+    Jobs["Schedulers and jobs\nservices/ingestor/jobs.py"]
+    Repos["Repositories\nservices/ingestor/repositories/"]
+    Obs["Observability\nmetrics + tracing + logging"]
+    Agent["Agent workflow\nservices/ingestor/agent/"]
+    Router --> Security
+    Router --> Repos
+    Router --> Agent
+    Jobs --> Repos
+    Security --> Repos
+    Repos --> DB[("PostgreSQL")]
+    Router --> Cache[("Cache cache/pubsub")]
+    Jobs --> Bus[("Redpanda topics")]
+    Router --> Obs
+    Jobs --> Obs
+    Security --> Obs
+```
+
+---
+
+## MVP Runtime Overview (Phase 1-3)
+
+The MVP runs as a single service (`ingestor`) + four infrastructure components. No analytics service, no MongoDB.
+
+### Request Flow: Probe Scheduler → Scorecard
+
+```text
+APScheduler (60s tick)
+  └─ httpx.get(source.probe_url)
+       ├─ success → INSERT ContractSnapshot → compare schema → maybe INSERT DriftEvent → publish to Redpanda
+       └─ failure → probe_result recorded in DB
+
+GET /api/v1/scorecards/{source_id}
+  └─ SELECT PERCENTILE_CONT(0.95) ... GROUP BY window
+       ├─ cache miss → compute → Cache SETEX 30s → return
+       └─ cache hit  → return immediately
+```
+
+### Request Flow: WebSocket Real-Time Push
+
+```text
+Browser opens WS /ws?token=<jwt>
+  └─ JWT verified → subscribe to Cache channel "drift:events"
+
+Probe detects schema drift
+  └─ INSERT DriftEvent → Kafka publish → Ingestor consumer reads
+       → Cache PUBLISH "drift:events" → all WS connections receive push
+```
+
+### Request Flow: LangGraph Agent Enrichment
+
+```text
+POST /api/v1/agent/enrich/{observation_id}
+  └─ StateGraph execution
+       ├─ fetch_context  → SELECT related observations (RAG)
+       ├─ classify       → gpt-4o-mini (~500ms)
+       ├─ [if priority≥4] → deep_analyze → gpt-4o (~1-2s)
+       └─ format_result → UPDATE observation + INSERT enrichment
+```
+
+---
+
+## Pillars Quick Reference
+
+The platform was developed across 8 learning pillars. Each pillar is a domain knowledge module (archived under `_archive/` for full detail).
+
+| Pillar | Focus | Key Technologies | Status |
+|--------|-------|-----------------|--------|
+| 1 — Core Backend | Python/FastAPI fundamentals, async patterns, Pydantic v2 | FastAPI, SQLAlchemy 2.0, Pydantic v2 | ✅ Complete |
+| 2 — Database | PostgreSQL internals, SQLAlchemy ORM, migrations, CQRS | PostgreSQL 17, SQLAlchemy, Alembic | ✅ Complete |
+| 2b — Core Model & Migrations | Schema design, migration workflow, data modeling | Alembic, SQLAlchemy ORM | ✅ Complete |
+| 3 — Scheduling | APScheduler integration, job registry, health endpoints | APScheduler, cron expressions | ✅ Complete |
+| 3b — Ops & Infrastructure | Docker, Compose, Makefile/Just, system setup | Docker, Compose, Just, Terraform | ✅ Complete |
+| 4 — Observability | Structured logging, Prometheus, OpenTelemetry, Sentry | structlog, Prometheus, OTel, Sentry | ✅ Complete |
+| 5 — Security | JWT auth, RBAC, rate limiting, audit, abuse detection | PyJWT, slowapi, bcrypt | ✅ Complete |
+| 6 — AI & LLM | LangGraph agent, OpenAI integration, SSE streaming | LangGraph, OpenAI, SSE | ✅ Complete |
+| 7 — Data & ETL | Scraping, MongoDB, pgvector, Qdrant | httpx, Playwright, Qdrant, pgvector | ✅ Complete |
+| 8 — Notifications | Multi-channel alerting (Slack, Telegram, webhook, email) | httpx, Resend API | ✅ Complete |
+
+---
+
 ## Related Documents
 
 - [API Routes](../../services/ingestor/routers/observations.py)
 - [Database Models](../../services/ingestor/models.py)
 - [Performance Benchmarks](../../services/ingestor/tests/integration/observations/test_performance.py)
+- [Technology Decisions](decisions.md) — full decision trees and ADR index
+- [Security Architecture](security-architecture.md) — auth layers, RBAC, RLS
 - ADR 003 (HTMX vs React)

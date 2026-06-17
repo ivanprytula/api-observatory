@@ -173,11 +173,11 @@ Day 1 / Week 1 / Month 1 milestones per role. Check off each milestone as it is 
 | **AI/ML Engineer**               | Understand data model and async job patterns                         | Prototype feature extraction or model hook against API        | Experiment notebook or ML pipeline integrated with ingestor  |
 | **DBA**                          | Review ORM models and current Alembic migrations                     | Audit index coverage and query plans for key read paths       | Index and constraint recommendations merged; runbook updated |
 | **Product Manager**              | Read `00-project-overview.md`, roadmap, and phase status             | Map user outcomes to current API surface                      | Backlog prioritised with measurable acceptance criteria      |
-| **Product Owner**                | Read `00-project-overview.md` and `04-architecture-overview.md`      | Define sprint goal with 3 measurable acceptance criteria      | First sprint delivered; retrospective findings logged        |
+| **Product Owner**                | Read `00-project-overview.md` and `02-architecture/architecture.md`  | Define sprint goal with 3 measurable acceptance criteria      | First sprint delivered; retrospective findings logged        |
 | **Security Specialist**          | Review auth flow, secrets management, and OWASP checklist            | Run dependency audit (`pip-audit`) and triage findings        | Security findings resolved or risk-accepted with ADR         |
-| **Cloud-Native Engineer**        | Read `cloud-deployment.md`; validate Docker Compose stack            | Review Kubernetes manifests and CI pipeline                   | Infrastructure-as-code change or hardening PR merged         |
+| **Cloud-Native Engineer**        | Read `07-deployment/deployment-guide.md`; validate Docker Compose stack | Review Kubernetes manifests and CI pipeline                   | Infrastructure-as-code change or hardening PR merged         |
 | **SRE**                          | Locate metrics, alerting config, and healthcheck endpoints           | Validate SLO targets, error budget, and incident runbook      | Post-incident review cycle established; runbook updated      |
-| **System/Application Architect** | Read all ADRs and `04-architecture-overview.md`                      | Map service boundaries and identify coupling hotspots         | Architecture decision logged in `adr/`; backlog aligned      |
+| **System/Application Architect** | Read all ADRs and `02-architecture/architecture.md`                  | Map service boundaries and identify coupling hotspots         | Architecture decision logged in `adr/`; backlog aligned      |
 
 ## Team-Level Working Agreement
 

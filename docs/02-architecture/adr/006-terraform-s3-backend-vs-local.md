@@ -223,7 +223,7 @@ If accidentally committed: remove the file from git history using `git filter-re
 
 - [ADR 008: ECS Fargate vs EKS](008-ecs-fargate-vs-eks.md) (what we're managing with Terraform)
 - [ADR 005: GitHub OIDC vs Long-Lived Keys](005-github-oidc-vs-long-lived-keys.md) (how CI/CD accesses state)
-- [Phase 7: Cloud Deployment](../cloud-deployment.md) (complete S3 backend setup guide)
+- [Deployment Guide](../../07-deployment/deployment-guide.md) (complete S3 backend setup guide)
 
 ---
 

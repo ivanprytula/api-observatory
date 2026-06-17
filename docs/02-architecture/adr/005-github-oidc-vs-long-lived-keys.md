@@ -234,7 +234,7 @@ Only **non-sensitive** values:
 ## Related Decisions
 
 - [ADR 008: ECS Fargate vs EKS](008-ecs-fargate-vs-eks.md) (compute choice)
-- [Phase 7: Cloud Deployment](../cloud-deployment.md) (comprehensive setup guide)
+- [Deployment Guide](../../07-deployment/deployment-guide.md) (comprehensive setup guide)
 
 ---
 
