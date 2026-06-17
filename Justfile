@@ -483,7 +483,7 @@ tf-destroy:
 # ─── TERRAVISION (architecture diagrams from IaC) ──────────────────────────────
 #
 # Generate professional cloud architecture diagrams from Terraform code.
-# Install: `uv sync --group dev` (terravision is in the dev dependency group)
+# Install: `uv pip install terravision`
 # Docs: https://patrickchugh.github.io/terravision
 #
 # Usage:
