@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     # REQUIRED: Must be set via DATABASE_URL environment variable
     # ============ Database ============
     database_url: str = Field(
-        default="postgresql+asyncpg://localhost:5432/data_pipeline",
+        default="postgresql+asyncpg://localhost:5432/api_observatory",
         description="PostgreSQL connection string (asyncpg driver)",
     )
 
@@ -47,7 +47,7 @@ class Settings(BaseSettings):
 
     # ============ App ============
     app_name: str = Field(
-        default="Data Pipeline API (async)",
+        default="api-observatory",
         description="Application name",
     )
     app_version: str = Field(
@@ -192,7 +192,7 @@ class Settings(BaseSettings):
     )
 
     mongo_db_name: str = Field(
-        default="datazoo",
+        default="api_observatory",
         description="MongoDB database name",
     )
 

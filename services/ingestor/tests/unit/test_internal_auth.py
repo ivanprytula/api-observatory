@@ -42,7 +42,7 @@ class TestGenerateInternalToken:
     def test_claims_are_correct(self) -> None:
         token = generate_internal_token("ingestor")
         payload = jwt.decode(token, _TEST_SECRET, algorithms=["HS256"])
-        assert payload["iss"] == "data-zoo-internal"
+        assert payload["iss"] == "api-observatory"
         assert payload["sub"] == "ingestor"
         assert "exp" in payload
         assert "iat" in payload
@@ -73,12 +73,12 @@ class TestVerifyInternalToken:
         claims = verify_internal_token(token)
         assert isinstance(claims, ServiceClaims)
         assert claims.sub == "dashboard"
-        assert claims.iss == "data-zoo-internal"
+        assert claims.iss == "api-observatory"
 
     def test_expired_token_raises(self) -> None:
         # Generate a token with exp in the past
         payload = {
-            "iss": "data-zoo-internal",
+            "iss": "api-observatory",
             "sub": "ingestor",
             "iat": int(time.time()) - 120,
             "exp": int(time.time()) - 60,
@@ -118,7 +118,7 @@ class TestVerifyInternalToken:
         old_secret = "previous-internal-secret"
         monkeypatch.setenv("INTERNAL_JWT_SECRET_PREVIOUS", old_secret)
         payload = {
-            "iss": "data-zoo-internal",
+            "iss": "api-observatory",
             "sub": "ingestor",
             "iat": int(time.time()),
             "exp": int(time.time()) + 60,
@@ -155,7 +155,7 @@ class TestRequireInternalAuth:
     @pytest.mark.asyncio
     async def test_expired_token_raises_401(self) -> None:
         payload = {
-            "iss": "data-zoo-internal",
+            "iss": "api-observatory",
             "sub": "ingestor",
             "iat": int(time.time()) - 120,
             "exp": int(time.time()) - 60,

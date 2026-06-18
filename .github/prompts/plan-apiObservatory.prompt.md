@@ -3,7 +3,7 @@
 **Status**: Active ✅
 **Updated**: 2026-05-24
 **Repo**: https://github.com/ivanprytula/api-observatory.git
-**Local dir**: /home/ivanp/PersonalProjects/data-pipeline-async (orphan branch `foundation`, index cleared)
+**Local dir**: /home/ivanp/PersonalProjects/api-observatory (orphan branch `foundation`, index cleared)
 **Job context**: Middle/middle+ Python dev role — prioritise shippable demo over completeness
 
 ## TL;DR

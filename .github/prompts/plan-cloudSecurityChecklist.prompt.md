@@ -63,7 +63,7 @@ Steps:
    - Provider URL: `https://token.actions.githubusercontent.com`
    - Audience: `sts.amazonaws.com`
 2. Create IAM role `github-actions-dev`:
-   - Trust policy: OIDC, condition `sub` = `repo:<owner>/data-pipeline-async:*`
+   - Trust policy: OIDC, condition `sub` = `repo:<owner>/api-observatory:*`
    - Permission policy: see minimal policy below
 3. Set GitHub Actions variable `AWS_ROLE_ARN_DEV` = `arn:aws:iam::<account-id>:role/github-actions-dev`
 

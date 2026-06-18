@@ -9,7 +9,7 @@ Accepted (May 2026)
 
 ## Context
 
-As the `api-observatory` project matured into Phase 5+ (formerly data-pipeline-async), it required both a way to manage administrative metadata (DataSources, IngestionConfigs) and a way to monitor real-time operational metrics. Initially, a single "Dashboard" was considered, but the requirements for these two domains began to diverge:
+As the `api-observatory` project matured into Phase 5+, it required both a way to manage administrative metadata (DataSources, IngestionConfigs) and a way to monitor real-time operational metrics. Initially, a single "Dashboard" was considered, but the requirements for these two domains began to diverge:
 
 1. **Management (Control Plane):** Requires complex relationships, relational integrity, form-heavy administrative interfaces, and long-term state management.
 2. **Operations (Observability Plane):** Requires real-time updates, low-latency metric streams, high-concurrency read-only views, and quick operational "firefighting" tools.

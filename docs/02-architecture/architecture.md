@@ -64,7 +64,7 @@ Client polls terminal state: succeeded | failed | cancelled
 ## Monorepo Target Structure (Phases 0–8)
 
 ```text
-api-observatory/  (formerly data-pipeline-async)
+api-observatory/
 ├── ingestor/                          (Phase 1+: Ingestor service)
 │   ├── main.py
 │   ├── crud.py                   (Ingestor-specific CRUD: Record operations)

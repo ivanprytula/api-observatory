@@ -61,9 +61,9 @@ full = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ivanprytula/data-pipeline-async"
-Repository = "https://github.com/ivanprytula/data-pipeline-async"
-Issues = "https://github.com/ivanprytula/data-pipeline-async/issues"
+Homepage = "https://github.com/ivanprytula/api-observatory"
+Repository = "https://github.com/ivanprytula/api-observatory"
+Issues = "https://github.com/ivanprytula/api-observatory/issues"
 LinkedIn = "https://linkedin.com/in/ivanprytula"
 
 [tool.uv]

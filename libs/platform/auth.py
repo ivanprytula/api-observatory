@@ -4,7 +4,7 @@ Provides token generation and verification for M2M calls within the data-zoo
 cluster. All services share a single INTERNAL_JWT_SECRET (from Secrets Manager).
 
 Token claims:
-- iss: "data-zoo-internal"
+- iss: "api-observatory"
 - sub: <service-name>
 - exp: now + 60 seconds (short-lived; refreshed on each outbound request)
 - iat: issued-at timestamp
@@ -46,7 +46,7 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-_ISSUER = "data-zoo-internal"
+_ISSUER = "api-observatory"
 _TOKEN_TTL_SECONDS = 60
 _ALGORITHM = "HS256"
 _MIN_TOKEN_TTL_SECONDS = 30
@@ -137,7 +137,7 @@ class ServiceClaims(BaseModel):
 
     Attributes:
         sub: Name of the calling service (e.g., "ingestor", "processor").
-        iss: Must be "data-zoo-internal".
+        iss: Must be "api-observatory".
         exp: Expiry timestamp (validated by PyJWT).
         iat: Issued-at timestamp.
     """

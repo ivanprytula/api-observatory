@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Deploy ingestor + dashboard to Floci sandbox (real containers).
-# The project was previously named data-pipeline-async.
+# Repo: api-observatory
 #
 # prerequisites
 #   - Floci running with ECR registry sidecar:
