@@ -26,7 +26,7 @@ The full loop: start stack → terraform → build+push → deploy → smoke tes
 | # | Step | Command | Expected |
 |---|------|---------|----------|
 | 1.1 | Start data-plane + Floci | `just floci-up` | All containers running, S3 bucket + SQS queue seeded |
-| 1.2 | Create ECR registry sidecar | See below | `docker ps --filter name=floci-ecr-registry` shows running |
+| 1.2 | Create ECR registry sidecar | Auto-started with `just floci-up` via `docker compose` | `docker ps --filter name=floci-ecr-registry` shows running |
 | 1.3 | Init Terraform backend | `TF_ENV=sandbox just tf init` | Backend initialized |
 | 1.4 | Review infrastructure plan | `TF_ENV=sandbox just tf plan` | Shows resources to create — skim the output for unexpected changes |
 | 1.5 | Visualize the architecture | `just tf-diagram png` | PNG diagram in `.local-dev/diagrams/data-zoo-sandbox.png` |
@@ -38,11 +38,7 @@ The full loop: start stack → terraform → build+push → deploy → smoke tes
 
 **Gate:** 1.1–1.9 pass. If 1.7 or 1.9 fails, investigate the specific error, fix it, re-trigger from 1.4, do NOT fix unrelated issues. If you find a minor bug, note it in a TODO and keep going.
 
-> **1.2 details:**
-> ```bash
-> NET=$(docker inspect api-obs-ingestor --format '{{range $n, $v := .NetworkSettings.Networks}}{{$n}}{{"\n"}}{{end}}' | grep _api-obs)
-> docker run -d --name floci-ecr-registry --network "$NET" -p 5100:5000 registry:2
-> ```
+> **1.2 details:** Now handled automatically by `just floci-up` — the `floci-ecr-registry` service is defined in `docker-compose.yml` under the `aws` profile. If you previously created the container manually, remove it first: `docker rm -f floci-ecr-registry`.
 
 **Reinforcement loop:** Run 1.2 → 1.6 three times. Each iteration should be faster. Goal: complete the full loop in under 10 minutes.
 
@@ -147,7 +143,6 @@ Read this every time you feel the urge to "just fix this one thing":
 ```bash
 # Phase 1 — Sandbox (local)
 just floci-up
-NET=$(docker inspect api-obs-ingestor --format '{{range $n, $v := .NetworkSettings.Networks}}{{$n}}{{"\n"}}{{end}}' | grep _api-obs) && docker run -d --name floci-ecr-registry --network "$NET" -p 5100:5000 registry:2
 TF_ENV=sandbox just tf init
 TF_ENV=sandbox just tf plan
 just tf-diagram png

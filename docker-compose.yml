@@ -360,6 +360,21 @@ services:
     networks:
       - api-obs
 
+  # Local Docker registry sidecar for Floci ECR emulation.
+  # Floci intercepts ECR API calls and proxies push/pull to this registry,
+  # so `docker push` to the local ECR endpoint actually pushes here.
+  # Started automatically with `just floci-up` (aws profile).
+  floci-ecr-registry:
+    image: registry:2
+    container_name: floci-ecr-registry
+    profiles: [aws]
+    ports:
+      - '127.0.0.1:5100:5000'
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    networks:
+      - api-obs
+
 # ─── NETWORK ────────────────────────────────────────────────────────────────
 # All services (microservices + infrastructure emulators) share this network
 # for inter-container communication.

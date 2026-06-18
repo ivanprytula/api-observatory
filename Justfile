@@ -104,7 +104,7 @@ floci-up:
     #!/usr/bin/env bash
     set -euo pipefail
     just stack-info
-    docker compose --profile aws up -d floci   # minimal: Floci-only start
+    docker compose --profile aws up -d floci floci-ecr-registry
     for i in $(seq 1 60); do
         if curl -sf http://127.0.0.1:4566/_floci/health > /dev/null 2>&1; then
             break
@@ -708,10 +708,10 @@ ops:
     #!/usr/bin/env bash
     set -euo pipefail
     # ─── Container lifecycle ─────────────────────────────────────
-    docker compose down
+    # docker compose down
     # docker compose up -d floci
     # docker compose down floci
-    # docker compose logs -f ingestor
+    docker compose logs -f ingestor
     # docker compose exec ingestor /bin/bash
     # docker compose restart ingestor
     # docker compose ps --filter 'name=api-obs-floci' --filter 'status=running'
