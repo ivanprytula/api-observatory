@@ -33,10 +33,10 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     HOME="/tmp"
 
-# Copy dashboard source + approved shared contracts (boundary-safe)
-COPY --chown=appuser:appgroup services/dashboard/ ./services/dashboard/
+# Copy dashboard source — least-changed layers first for cache efficiency
 COPY --chown=appuser:appgroup services/__init__.py ./services/
 COPY --chown=appuser:appgroup libs/contracts/ ./libs/contracts/
+COPY --chown=appuser:appgroup services/dashboard/ ./services/dashboard/
 
 USER appuser
 

@@ -45,6 +45,7 @@ dev:
     #!/usr/bin/env bash
     set -euo pipefail
     export PYTHONPATH="${PWD}"
+    set -a; source "${PWD}/.env"; set +a
     just stack-info
     # Data-plane only — app services run locally with hot reload
     docker compose up -d db cache broker
@@ -73,6 +74,20 @@ up:
     echo "stack ready — https://127.0.0.1 (edge)"
 
 
+# Start full stack with hot-reload via Compose Watch + uvicorn/streamlit reload.
+# First builds and starts everything, then watches only the app services.
+# Source code is synced into containers (ignoring __pycache__/).
+# uvicorn --reload / Streamlit poll watcher restart the process on file change.
+# Dependency file changes (pyproject.toml, uv.lock) trigger a full image rebuild.
+watch:
+    @just stack-info
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build db cache broker ingestor dashboard
+    just _local_wait_ready
+    echo ""
+    echo "Watching for file changes — Compose Watch syncs code into containers."
+    echo "Stop with Ctrl+C.  Containers keep running in the background."
+    echo ""
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml watch ingestor dashboard
 
 # Start monitoring stack (Prometheus, Grafana, Loki, Promtail, Alertmanager, Mailpit).
 up-monitoring:
@@ -84,7 +99,6 @@ up-monitoring:
 
 # Start the full stack: data-plane + monitoring. Combines `up` and `up-monitoring`.
 up-all: up up-monitoring
-
 
 
 # Reset DB and ingestor containers (keep Floci state intact if running).
@@ -204,6 +218,7 @@ floci-dev:
     #!/usr/bin/env bash
     set -euo pipefail
     export PYTHONPATH="${PWD}"
+    set -a; source "${PWD}/.env"; set +a
     just stack-info
     source scripts/aws-env.sh
     # Data-plane only — app services run locally with hot reload
@@ -402,6 +417,7 @@ stack-info:
     #!/usr/bin/env bash
     set -euo pipefail
     PROJECT_ROOT="$(pwd)"
+    set -a; source "${PROJECT_ROOT}/.env"; set +a
     source "${PROJECT_ROOT}/scripts/daily/local-url.sh"
     TF="${TF_ENV:-sandbox}"
     if [ -n "${AWS_PROFILE:-}" ] && [ "$AWS_PROFILE" != "sandbox" ]; then
@@ -429,7 +445,6 @@ stack-info:
     echo "  Postgres        : ${DB}"
     echo "  Cache           : ${CACHE}"
     echo "  Event broker    : ${BROKER_URL:-unset}"
-    echo "  MinIO endpoint  : ${MINIO_ENDPOINT:-unset}"
     echo "  INGESTOR_URL    : $(local_api_base_url)"
     echo "======================"
 
@@ -708,10 +723,11 @@ ops:
     #!/usr/bin/env bash
     set -euo pipefail
     # ─── Container lifecycle ─────────────────────────────────────
-    # docker compose down
+    docker compose down
+    # docker compose --profile ingress down
     # docker compose up -d floci
-    # docker compose down floci
-    docker compose logs -f ingestor
+    # docker compose --profile aws down
+    # docker compose logs -f ingestor
     # docker compose exec ingestor /bin/bash
     # docker compose restart ingestor
     # docker compose ps --filter 'name=api-obs-floci' --filter 'status=running'

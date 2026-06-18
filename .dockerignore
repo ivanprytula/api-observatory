@@ -9,7 +9,7 @@ __pycache__/
 *.coverage
 .coverage*
 .cache/
-pytest_cache/
+.pytest_cache/
 .env
 .env.*
 .vscode/
@@ -23,23 +23,49 @@ build/
 .eggs/
 *.egg-info/
 *.egg
+
+# Python tooling caches (large, never needed in images)
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Virtual environment (massive, kills build context)
+.venv/
+
+# Agent tooling data (large, irrelevant)
+.kilo/
+.copilot/
+
+# Streamlit local config
+.streamlit/
+
+# Terraform state/cache
+.terraform/
+
 # Exclude test and local dev files
 *.md
 learning_docs/
 tests/
 scripts/
+bruno/
+examples/
+
 # Exclude repo metadata and docs (large, never needed in images)
 .git/
 .github/
 docs/
 _archive/
+
 # Exclude sensitive and generated root files
 secrets-findings.json
+
 # Exclude Docker artifacts
 Dockerfile*
 .dockerignore
+
 # Exclude local volumes
 pg_data/
+.local-dev/
 
 # Coverage reports
 htmlcov/

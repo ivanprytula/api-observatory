@@ -1,5 +1,9 @@
-# Development overrides (loose resources for debugging)
-# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# Development overrides (loose resources + hot-reload + compose watch for debugging)
+# Compose Watch syncs source code into containers with better granularity than
+# bind mounts (ignores __pycache__/, .venv/, etc.). uvicorn --reload / Streamlit
+# poll watcher restart the process on file change automatically.
+# Dependency file changes (pyproject.toml, uv.lock) trigger a full image rebuild.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --watch
 
 services:
   db:
@@ -13,6 +17,25 @@ services:
           memory: '2G'         # No memory pressure
 
   ingestor:
+    command: >
+      sh -c "alembic upgrade head && uvicorn services.ingestor.main:app
+      --host 0.0.0.0 --port 8000 --reload"
+    develop:
+      watch:
+        - action: sync
+          path: ./services/ingestor
+          target: /app/services/ingestor
+          ignore:
+            - __pycache__/
+        - action: sync
+          path: ./libs
+          target: /app/libs
+          ignore:
+            - __pycache__/
+        - action: rebuild
+          path: pyproject.toml
+        - action: rebuild
+          path: uv.lock
     deploy:
       resources:
         reservations:
@@ -21,3 +44,26 @@ services:
         limits:
           cpus: '2.0'          # Generous for debugging
           memory: '1G'         # Can grow during profiling
+
+  dashboard:
+    command: >
+      streamlit run services/dashboard/ui/streamlit/app.py
+      --server.port=8501 --server.address=0.0.0.0
+      --server.headless=true --server.fileWatcherType=poll
+    develop:
+      watch:
+        - action: sync
+          path: ./services/dashboard
+          target: /app/services/dashboard
+          ignore:
+            - __pycache__/
+        - action: sync
+          path: ./services/__init__.py
+          target: /app/services/__init__.py
+        - action: sync
+          path: ./libs/contracts
+          target: /app/libs/contracts
+          ignore:
+            - __pycache__/
+        - action: rebuild
+          path: services/dashboard/pyproject.toml

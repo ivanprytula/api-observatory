@@ -46,11 +46,11 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     HOME="/tmp"
 
-# Copy source code and migration files
+# Copy source code — most frequently changed files last for cache efficiency
 COPY --chown=appuser:appgroup libs/ ./libs/
-COPY --chown=appuser:appgroup services/ingestor/ ./services/ingestor/
 COPY --chown=appuser:appgroup alembic.ini ./
 COPY --chown=appuser:appgroup alembic/ ./alembic/
+COPY --chown=appuser:appgroup services/ingestor/ ./services/ingestor/
 
 USER appuser
 
