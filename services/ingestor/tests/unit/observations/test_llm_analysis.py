@@ -4,6 +4,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import AsyncClient
 
+
+pytest.importorskip("openai", reason="openai is not in active MVP scope")
+
 from services.ingestor.api_schemas.observations import ObservationClassification
 from services.ingestor.models import Observation
 

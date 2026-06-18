@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-import pandas as pd
-import polars as pl
+
+if TYPE_CHECKING:
+    import pandas as pd
+    import polars as pl
 
 
 ETLBackend = Literal["polars", "pandas", "dask"]
@@ -109,6 +111,8 @@ class TabularETLEngine:
         numeric_fields: list[str] | None,
         preview_limit: int,
     ) -> TabularPreviewResult:
+        import polars as pl
+
         frame = pl.from_dicts(observations)
         frame = _apply_polars_ops(
             frame,
@@ -148,6 +152,8 @@ class TabularETLEngine:
         numeric_fields: list[str] | None,
         preview_limit: int,
     ) -> TabularPreviewResult:
+        import pandas as pd
+
         frame = pd.DataFrame.from_observations(observations)
         frame = _apply_pandas_ops(
             frame,
@@ -187,6 +193,8 @@ def _apply_polars_ops(
     sort_by: str | None,
     descending: bool,
 ) -> pl.DataFrame:
+    import polars as pl
+
     if rename_columns:
         applicable = {
             current: renamed
@@ -217,6 +225,7 @@ def _apply_pandas_ops(
     sort_by: str | None,
     descending: bool,
 ) -> pd.DataFrame:
+
     if rename_columns:
         applicable = {
             current: renamed
@@ -241,6 +250,8 @@ def _apply_pandas_ops(
 def _summarize_polars(
     frame: pl.DataFrame, numeric_fields: list[str]
 ) -> list[NumericSummary]:
+    import polars as pl
+
     summaries: list[NumericSummary] = []
     for field in numeric_fields:
         if field not in frame.columns:
@@ -261,6 +272,8 @@ def _summarize_polars(
 def _summarize_pandas(
     frame: pd.DataFrame, numeric_fields: list[str]
 ) -> list[NumericSummary]:
+    import pandas as pd
+
     summaries: list[NumericSummary] = []
     for field in numeric_fields:
         if field not in frame.columns:
@@ -279,6 +292,8 @@ def _summarize_pandas(
 
 
 def _as_optional_float(value: object) -> float | None:
+    import pandas as pd
+
     if pd.isna(value):
         return None
     if value is None:

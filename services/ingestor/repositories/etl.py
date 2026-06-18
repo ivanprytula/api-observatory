@@ -7,11 +7,12 @@ from services.ingestor.api_schemas.etl import (
     ETLPreviewResponse,
     NumericFieldSummary,
 )
-from services.ingestor.transformations.tabular import TabularETLEngine
 
 
 def preview_etl_transform(payload: ETLPreviewRequest) -> ETLPreviewResponse:
     """Run a bounded ETL preview for a small observation batch."""
+    from services.ingestor.transformations.tabular import TabularETLEngine
+
     result = TabularETLEngine.preview(
         backend=payload.backend,  # ty: ignore[arg-type]
         observations=payload.observations,

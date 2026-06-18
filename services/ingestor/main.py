@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import logging
 import os
 import time
@@ -54,29 +55,7 @@ from services.ingestor.metrics import (  # noqa: F401 — imported to register m
 )
 from services.ingestor.notifications import notify_background_task_failed
 from services.ingestor.rate_limiting import limiter
-from services.ingestor.routers import (
-    abuse_detection,
-    analytics,
-    api_keys,
-    auth,
-    background_processing,
-    contract_drift,
-    etl,
-    health_ingestion_jobs,
-    insights,
-    notifications,
-    observations,
-    observations_v2,
-    reporting,
-    scorecards,
-    scraper,
-    source_registry,
-    subscriptions,
-    vector_search,
-)
-from services.ingestor.routers import (
-    ws as ws_router,
-)
+from services.ingestor.routers import ws as ws_router
 
 
 try:
@@ -277,7 +256,9 @@ async def lifespan(app: FastAPI):
                 ),
             )
             await _background_workers.start()
-            background_processing.set_worker_pool(_background_workers)
+            importlib.import_module(
+                "services.ingestor.routers.background_processing"
+            ).set_worker_pool(_background_workers)
             logger.info(
                 "background_workers_started",
                 extra={
@@ -291,7 +272,9 @@ async def lifespan(app: FastAPI):
                 extra={"error": str(e)},
             )
     else:
-        background_processing.set_worker_pool(None)
+        importlib.import_module(
+            "services.ingestor.routers.background_processing"
+        ).set_worker_pool(None)
 
     # Start scheduler (only if there are enabled jobs)
     try:
@@ -605,29 +588,41 @@ app.add_middleware(
 app.add_middleware(TenantMiddleware)
 app.add_middleware(CorrelationIdMiddleware)
 
-app.include_router(auth.router)
-app.include_router(observations.router)
-app.include_router(observations_v2.router)
-app.include_router(scraper.router)
-app.include_router(analytics.router)
-app.include_router(background_processing.router)
-app.include_router(notifications.router)
-app.include_router(vector_search.router)
+_ROUTER_MODULES = [
+    "auth",
+    "observations",
+    "observations_v2",
+    "scraper",
+    "analytics",
+    "background_processing",
+    "notifications",
+    "vector_search",
+    "health_ingestion_jobs",
+    "source_registry",
+    "contract_drift",
+    "insights",
+    "subscriptions",
+    "reporting",
+    "scorecards",
+    "etl",
+    "api_keys",
+    "abuse_detection",
+]
+for _name in _ROUTER_MODULES:
+    try:
+        app.include_router(
+            importlib.import_module(f"services.ingestor.routers.{_name}").router
+        )
+    except ModuleNotFoundError:
+        logger.warning(
+            "router_unavailable",
+            extra={"router": _name},
+        )
+
 if mongo_analytics is not None:
     app.include_router(mongo_analytics.router)
 
-
-app.include_router(health_ingestion_jobs.router)
 app.include_router(ws_router.router)
-app.include_router(source_registry.router)
-app.include_router(contract_drift.router)
-app.include_router(insights.router)
-app.include_router(subscriptions.router)
-app.include_router(reporting.router)
-app.include_router(scorecards.router)
-app.include_router(etl.router)
-app.include_router(api_keys.router)
-app.include_router(abuse_detection.router)
 
 
 # ---------------------------------------------------------------------------

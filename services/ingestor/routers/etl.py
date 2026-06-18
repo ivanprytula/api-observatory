@@ -7,7 +7,6 @@ from fastapi import APIRouter, HTTPException, status
 from services.ingestor.api_schemas.etl import ETLPreviewRequest, ETLPreviewResponse
 from services.ingestor.constants import API_V1_PREFIX
 from services.ingestor.repositories.etl import preview_etl_transform
-from services.ingestor.transformations.tabular import UnsupportedETLBackendError
 
 
 router = APIRouter(prefix=f"{API_V1_PREFIX}/etl", tags=["etl"])
@@ -24,6 +23,8 @@ _R501 = {"501": {"description": "Requested ETL backend is intentionally unavaila
 )
 async def preview_transform(payload: ETLPreviewRequest) -> ETLPreviewResponse:
     """Run a small ETL preview using the requested backend."""
+    from services.ingestor.transformations.tabular import UnsupportedETLBackendError
+
     try:
         return preview_etl_transform(payload)
     except UnsupportedETLBackendError as exc:
