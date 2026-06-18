@@ -8,7 +8,7 @@ set -euo pipefail
 #   - Floci running with ECR registry sidecar:
 #       docker compose --profile aws up -d floci
 #       docker run -d --name floci-ecr-registry \
-#         --network api-observatory_api-obs -p 5100:5000 registry:2
+#         --network <compose-project>_api-obs -p 5100:5000 registry:2
 #   - Terraform applied with ECR enabled: TF_ENV=sandbox just tf apply
 #   - Docker daemon available (Floci mounts /var/run/docker.sock)
 #
@@ -41,6 +41,17 @@ fail() { echo -e "${RED}[FAIL]${NC} $*" >&2; exit 1; }
 
 require_cmd() { command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"; }
 
+# Detect the Docker Compose project network dynamically.
+# Returns the full network name (e.g. api-observatory_api-obs).
+_detect_compose_network() {
+    local network
+    network=$(docker inspect api-obs-ingestor --format '{{range $net, $v := .NetworkSettings.Networks}}{{$net}}{{"\n"}}{{end}}' 2>/dev/null | grep '_api-obs' | head -1 || true)
+    if [ -z "$network" ]; then
+        fail "Cannot detect Docker Compose network. Is the stack running?"
+    fi
+    echo "$network"
+}
+
 AWS_ARGS=(--endpoint-url "http://${ECR_ENDPOINT}" --region "${AWS_REGION}")
 
 # ── Preflight ──────────────────────────────────────────────────────────
@@ -56,9 +67,10 @@ if ! docker ps --filter "name=api-obs-floci" --filter "status=running" --format 
 fi
 
 if ! docker ps --filter "name=floci-ecr-registry" --filter "status=running" --format '{{.Names}}' | grep -q .; then
+  NET=$(_detect_compose_network)
   fail "ECR registry sidecar not running. Start it with:
     docker run -d --name floci-ecr-registry \\
-      --network api-observatory_api-obs -p 5100:5000 registry:2"
+      --network $NET -p 5100:5000 registry:2"
 fi
 
 if ! aws ecs list-clusters "${AWS_ARGS[@]}" 2>/dev/null | grep -q "${CLUSTER}"; then
@@ -87,8 +99,17 @@ fi
 INGESTOR_TAGGED="${INGESTOR_URI/:latest/:${IMAGE_TAG}}"
 DASHBOARD_TAGGED="${DASHBOARD_URI/:latest/:${IMAGE_TAG}}"
 
-# Registry host for docker login: strip repo path from URI
-REGISTRY_HOST=$(echo "$INGESTOR_URI" | sed 's|/[^/]*$||')
+# Registry host:port for docker login — strip path, fix Floci port
+REGISTRY_HOST=$(echo "$INGESTOR_URI" | sed 's|/.*||')
+# Floci ECR registry sidecar maps port 5000 (internal) to 5100 (host).
+# Terraform output returns the internal port — translate for host access.
+if echo "$REGISTRY_HOST" | grep -q ':5000$'; then
+  REGISTRY_HOST="${REGISTRY_HOST%:5000}:5100"
+fi
+# Apply the same port fix to tagged image URIs
+_fix_port() { echo "$1" | sed 's/:5000\//:5100\//'; }
+INGESTOR_TAGGED=$(_fix_port "$INGESTOR_TAGGED")
+DASHBOARD_TAGGED=$(_fix_port "$DASHBOARD_TAGGED")
 
 info "Ingestor ECR: ${INGESTOR_TAGGED}"
 info "Dashboard ECR: ${DASHBOARD_TAGGED}"

@@ -87,7 +87,10 @@ Internet → Route53 → ALB → ECS services (private subnets)
 
 ```bash
 just floci-up                              # start Floci + seed
-TF_ENV=sandbox just tf plan && just tf apply  # Terraform
+TF_ENV=sandbox just tf init                # init state backend
+TF_ENV=sandbox just tf plan                # review changeset
+just floci-sync-state                      # drop stale ECS from state (Floci restarts)
+TF_ENV=sandbox just tf apply               # apply infra
 just floci-deploy                          # build, push, deploy
 just floci-validate                        # health check
 just floci-test                            # E2E tests

@@ -121,6 +121,12 @@ resource "aws_lb" "main" {
 
   enable_deletion_protection = var.environment == "prod"
 
+  # Floci/LocalStack SetSubnets response lacks expected XML node.
+  # Subnet changes are intentional via plan, not drift — safe to ignore.
+  lifecycle {
+    ignore_changes = [subnets]
+  }
+
   access_logs {
     bucket  = var.alb_access_log_bucket
     prefix  = "${var.project}-${var.environment}-alb"

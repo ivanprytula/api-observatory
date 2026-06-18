@@ -104,12 +104,9 @@ floci-up:
     #!/usr/bin/env bash
     set -euo pipefail
     just stack-info
-    # docker compose up -d floci   # minimal: Floci-only start (like up-floci)
+    docker compose --profile aws up -d floci   # minimal: Floci-only start
     for i in $(seq 1 60); do
         if curl -sf http://127.0.0.1:4566/_floci/health > /dev/null 2>&1; then
-            source scripts/aws-env.sh
-            aws s3 mb s3://api-observatory-local >/dev/null 2>&1 || true
-            aws sqs create-queue --queue-name pipeline-events >/dev/null 2>&1 || true
             break
         fi
         sleep 1
@@ -123,7 +120,84 @@ floci-up:
 floci-down:
     docker compose down floci
 
+# Sync sandbox state after Floci restart: remove ephemeral resources from state
+# so Terraform creates them fresh instead of failing on drain-destroy.
+floci-sync-state:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source scripts/aws-env.sh floci
+    # Delete ECS services from Floci's in-memory state
+    for svc in ingestor dashboard; do
+        if aws ecs delete-service --cluster data-zoo-sandbox --service "$svc" --force --endpoint-url http://127.0.0.1:4566 >/dev/null 2>&1; then
+            echo "  [del] ecs service $svc (Floci)"
+        else
+            echo "  [ok] ecs service $svc already absent (Floci)"
+        fi
+    done
+    # Drop from Terraform state so it creates fresh
+    DIR="infra/terraform/environments/sandbox"
+    cd "$DIR"
+    terraform init -reconfigure -backend-config=backend.hcl >/dev/null 2>&1
+    for addr in \
+        'module.compute.aws_ecs_service.ingestor_fargate[0]' \
+        'module.compute.aws_ecs_service.dashboard_fargate[0]' \
+        'module.compute.aws_lb_listener.http_redirect[0]' \
+        'module.compute.aws_lb_listener_rule.dashboard[0]'; do
+        if terraform state rm "$addr" >/dev/null 2>&1; then
+            echo "  [rm] $addr (state)"
+        else
+            echo "  [ok] $addr already absent (state)"
+        fi
+    done
 
+
+
+# Clean destroy for Floci sandbox: rm Floci-broken resources from state, then destroy.
+# Uses a timeout to handle Floci VPC deletion hangs, then cleans up any remaining state.
+floci-destroy:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source scripts/aws-env.sh floci
+    DIR="infra/terraform/environments/sandbox"
+    cd "$DIR"
+    terraform init -backend-config=backend.hcl
+
+    for addr in \
+        'module.compute.aws_ecs_service.ingestor_fargate[0]' \
+        'module.compute.aws_ecs_service.dashboard_fargate[0]' \
+        'module.compute.aws_lb_listener.http_redirect[0]' \
+        'module.compute.aws_lb_listener_rule.dashboard[0]'; do
+        terraform state rm "$addr" 2>/dev/null || true
+    done
+
+    # Kill ECS services in Floci's in-memory state to stop the reconciler noise
+    for svc in ingestor dashboard; do
+        if aws ecs delete-service --cluster data-zoo-sandbox --service "$svc" --force --endpoint-url http://127.0.0.1:4566 >/dev/null 2>&1; then
+            echo "  [del] ecs service $svc (Floci)"
+        fi
+    done
+
+    timeout 120 terraform destroy -auto-approve -lock=false -var-file=terraform.tfvars || \
+        echo "  [timeout] terraform destroy exceeded 2m — cleaning up remaining state..."
+
+    for addr in $(terraform state list 2>/dev/null || true); do
+        echo "  Cleaning up: $addr"
+        r_id=$(terraform state show "$addr" 2>/dev/null | awk '/^\s+id\s+=/{print $3; exit}' | tr -d '"' || true)
+        if [ -n "$r_id" ]; then
+            case "$addr" in
+                *aws_vpc*)             aws ec2 delete-vpc --vpc-id "$r_id"          ;;
+                *aws_subnet*)          aws ec2 delete-subnet --subnet-id "$r_id"     ;;
+                *aws_lb_target_group*) aws elbv2 delete-target-group --target-group-arn "$r_id" ;;
+                *aws_lb.main*)         aws elbv2 delete-load-balancer --load-balancer-arn "$r_id" ;;
+                *aws_db_instance*)     aws rds delete-db-instance --db-instance-identifier "$r_id" --skip-final-snapshot ;;
+                *aws_elasticache_replication_group*) aws elasticache delete-replication-group --replication-group-id "$r_id" ;;
+                *aws_elasticache_cluster*) aws elasticache delete-cache-cluster --cache-cluster-id "$r_id" ;;
+                *aws_ecr_repository*)  aws ecr delete-repository --repository-name "$r_id" --force ;;
+            esac 2>/dev/null || true
+        fi
+        terraform state rm "$addr" 2>/dev/null || true
+    done
+    echo "  [ok] Sandbox destroyed."
 
 # Start both ingestor and dashboard locally with hot reload, using Floci-shaped env (S3 + SQS + ECS APIs).
 floci-dev:
@@ -149,7 +223,7 @@ floci-dev:
     uv run uvicorn services.ingestor.main:app --reload --port 8000
 
 # Validate Floci sandbox health before promoting to real AWS.
-# Checks: Floci container running, _floci/health reachable, S3 + SQS seeded, API /health OK.
+# Checks: Floci container running, _floci/health reachable, state bucket reachable, API /health OK.
 # Run independently before deploy-ecs: just floci-validate
 floci-validate:
     #!/usr/bin/env bash
@@ -172,24 +246,16 @@ floci-validate:
     fi
     echo "  [ok] Floci health endpoint OK"
 
-    # 3. S3 bucket reachable (AWS_ENDPOINT_URL set by scripts/aws-env.sh)
-    source scripts/aws-env.sh
-    if ! aws s3 ls s3://api-observatory-local > /dev/null 2>&1; then
-        echo "FAIL: Floci S3 bucket 'api-observatory-local' not found." >&2
-        echo "  Seed it with: just floci-up" >&2
+    # 3. Terraform state bucket reachable
+    source scripts/aws-env.sh floci
+    if ! aws s3 ls s3://s3-native-lock-setup > /dev/null 2>&1; then
+        echo "FAIL: Terraform state bucket 's3-native-lock-setup' not found." >&2
+        echo "  Run: TF_ENV=sandbox just tf init" >&2
         exit 1
     fi
-    echo "  [ok] Floci S3 bucket reachable"
+    echo "  [ok] Terraform state bucket reachable"
 
-    # 4. SQS queue reachable
-    if ! aws sqs get-queue-url --queue-name pipeline-events > /dev/null 2>&1; then
-        echo "FAIL: Floci SQS queue 'pipeline-events' not found." >&2
-        echo "  Seed it with: just floci-up" >&2
-        exit 1
-    fi
-    echo "  [ok] Floci SQS queue reachable"
-
-    # 5. Application API health (soft-warn only — stack may not be running)
+    # 4. Application API health (soft-warn only — stack may not be running)
     source scripts/daily/local-url.sh
     if curl_local -sf "$(local_api_url /health)" > /dev/null 2>&1; then
         echo "  [ok] Application API /health OK"
@@ -243,16 +309,18 @@ dev-preflight:
 
 # Run Floci-specific E2E tests (AWS emulator required).
 floci-test:
+    #!/usr/bin/env bash
+    set -euo pipefail
     just _sandbox-infra
     just _sandbox-seed
-    source scripts/aws-env.sh
+    source scripts/aws-env.sh floci
     uv run pytest tests/e2e/test_floci_integration.py -v -m aws --no-cov
 
 # Build + push to Floci ECR + ECS deploy.
 floci-deploy:
     #!/usr/bin/env bash
     set -euo pipefail
-    source scripts/aws-env.sh
+    source scripts/aws-env.sh floci
     bash scripts/sandbox/deploy.sh
 
 # 2d) AWS Deploy (dev → ECS/Fargate)
@@ -392,7 +460,7 @@ tf cmd:
         DIR="infra/terraform/environments/dev"
     else
         DIR="infra/terraform/environments/sandbox"
-        source scripts/aws-env.sh
+        source scripts/aws-env.sh floci
     fi
     cd "$DIR"
 
@@ -498,15 +566,17 @@ tf-diagram format="png":
     set -euo pipefail
     FORMAT="${format:-png}"
     ENV="${TF_ENV:-sandbox}"
+    PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")"
+    LOCAL_DEV="$PROJECT_ROOT/.local-dev"
     if [ "$ENV" = "dev" ]; then
-        DIR="infra/terraform/environments/dev"
+        DIR="$PROJECT_ROOT/infra/terraform/environments/dev"
     else
-        DIR="infra/terraform/environments/sandbox"
+        DIR="$PROJECT_ROOT/infra/terraform/environments/sandbox"
     fi
-    mkdir -p .local-dev/diagrams
-    OUTFILE=".local-dev/diagrams/data-zoo-${ENV}"
-    PLANFILE=".local-dev/tfplan-${ENV}.json"
-    GRAPHFILE=".local-dev/graph-${ENV}.dot"
+    mkdir -p "$LOCAL_DEV/diagrams"
+    OUTFILE="$LOCAL_DEV/diagrams/data-zoo-${ENV}"
+    PLANFILE="$LOCAL_DEV/tfplan-${ENV}.json"
+    GRAPHFILE="$LOCAL_DEV/graph-${ENV}.dot"
     USE_PLAN=false
     if [ -f "$PLANFILE" ] && [ -f "$GRAPHFILE" ]; then
         USE_PLAN=true
@@ -526,7 +596,7 @@ tf-diagram format="png":
             EXIT_CODE=$?
             set -e
             if [ $EXIT_CODE -ne 0 ]; then
-                echo "HCL parsing may fail on complex for loops. Try: terraform show -json tfplan > .local-dev/tfplan-sandbox.json && just tf-diagram html" >&2
+                echo "HCL parsing may fail on complex for loops. Try: terraform show -json tfplan > \"$LOCAL_DEV/tfplan-${ENV}.json\" && just tf-diagram html" >&2
                 exit $EXIT_CODE
             fi
             echo "Interactive HTML diagram written to ${OUTFILE}.html"
@@ -536,7 +606,7 @@ tf-diagram format="png":
             EXIT_CODE=$?
             set -e
             if [ $EXIT_CODE -ne 0 ]; then
-                echo "HCL parsing may fail on complex for loops. Try: terraform show -json tfplan > .local-dev/tfplan-sandbox.json && just tf-diagram ${FORMAT}" >&2
+                echo "HCL parsing may fail on complex for loops. Try: terraform show -json tfplan > \"$LOCAL_DEV/tfplan-${ENV}.json\" && just tf-diagram ${FORMAT}" >&2
                 exit $EXIT_CODE
             fi
             echo "Diagram written to ${OUTFILE}.${FORMAT}"
@@ -705,8 +775,8 @@ ops:
     # cd infra/terraform/environments/sandbox && terraform destroy -auto-approve -lock=false -var-file=terraform.tfvars
     #
     # ─── Terraform diagram prep ───────────────────────────────────
-    # mkdir -p .local-dev && terraform show -json tfplan > .local-dev/tfplan-sandbox.json
-    # terraform graph > .local-dev/graph-sandbox.dot 2>/dev/null || echo 'digraph G {}' > .local-dev/graph-sandbox.dot
+    # cd infra/terraform/environments/sandbox && terraform show -json tfplan > "$(git rev-parse --show-toplevel)/.local-dev/tfplan-sandbox.json"
+    # cd infra/terraform/environments/sandbox && terraform graph > "$(git rev-parse --show-toplevel)/.local-dev/graph-sandbox.dot"
     #
     # ─── Full destroy ─────────────────────────────────────────────
     # TF_ENV=sandbox just tf destroy || true; docker compose down

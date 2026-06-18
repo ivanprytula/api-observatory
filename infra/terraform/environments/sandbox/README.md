@@ -10,8 +10,14 @@ real containers: ECR registry, RDS Postgres, ElastiCache Redis, ECS Fargate task
 - ECR registry sidecar (pre-create once):
 
   ```bash
+  # Find the compose network first:
+  docker inspect api-obs-ingestor \
+    --format '{{range $n, $v := .NetworkSettings.Networks}}{{$n}}{{"\n"}}{{end}}' \
+    | grep _api-obs
   docker run -d --name floci-ecr-registry \
-    --network api-observatory_api-obs -p 5100:5000 registry:2
+    --network $(docker inspect api-obs-ingestor \
+      --format '{{range $n, $v := .NetworkSettings.Networks}}{{$n}}{{"\n"}}{{end}}' \
+      | grep _api-obs) -p 5100:5000 registry:2
   ```
 
 ## File map

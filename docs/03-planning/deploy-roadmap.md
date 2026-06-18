@@ -10,14 +10,12 @@
 
 | # | Step | Check |
 |---|------|-------|
-| 0.1 | Docker running, `uv` installed, Python 3.14 | `docker ps` / `uv --version` |
-| 0.2 | AWS CLI installed, credentials configured for sandbox | `aws sts get-caller-identity` |
-| 0.3 | Floci ECR registry sidecar running | `docker ps --filter name=floci-ecr-registry` |
-| 0.4 | Sandbox config files exist | `ls infra/terraform/environments/sandbox/terraform.tfvars` + `backend.hcl` |
-| 0.5 | Backend init once | `TF_ENV=sandbox just tf init` |
-| 0.6 | Confirm you can push to ECR sidecar | `echo "test" \| docker exec -i floci-ecr-registry tee /var/lib/registry/test` |
+| 0.1 | Docker running | `docker ps` |
+| 0.2 | `uv` installed | `uv --version` |
+| 0.3 | AWS CLI sandbox profile has credentials | `aws configure list --profile sandbox \| grep -q access_key` |
+| 0.4 | Sandbox Terraform config files exist | `ls infra/terraform/environments/sandbox/terraform.tfvars` + `backend.hcl` |
 
-**Gate:** all 0.1–0.5 green. If one fails, fix it, recheck, move on.
+**Gate:** 0.1–0.4 green. Run each check exactly once. If one fails, fix it, recheck, move on.
 
 ---
 
@@ -28,13 +26,23 @@ The full loop: start stack → terraform → build+push → deploy → smoke tes
 | # | Step | Command | Expected |
 |---|------|---------|----------|
 | 1.1 | Start data-plane + Floci | `just floci-up` | All containers running, S3 bucket + SQS queue seeded |
-| 1.2 | Provision infra | `TF_ENV=sandbox just tf apply` | VPC, ALB, ECR repos, RDS, ElastiCache, ECS cluster created |
-| 1.3 | Build images + push to ECR + deploy to ECS | `just floci-deploy` | Images pushed, task defs re-registered, ECS services stable |
-| 1.4 | Validate sandbox health | `just floci-validate` | All 5 checks pass |
-| 1.5 | Run E2E tests against deployed stack | `just floci-test` | All tests pass |
-| 1.6 | Clean up sandbox | `TF_ENV=sandbox just tf destroy` | All resources deleted |
+| 1.2 | Create ECR registry sidecar | See below | `docker ps --filter name=floci-ecr-registry` shows running |
+| 1.3 | Init Terraform backend | `TF_ENV=sandbox just tf init` | Backend initialized |
+| 1.4 | Review infrastructure plan | `TF_ENV=sandbox just tf plan` | Shows resources to create — skim the output for unexpected changes |
+| 1.5 | Visualize the architecture | `just tf-diagram png` | PNG diagram in `.local-dev/diagrams/data-zoo-sandbox.png` |
+| 1.6 | Provision infra | `TF_ENV=sandbox just tf apply` | VPC, ALB, ECR repos, RDS, ElastiCache, ECS cluster created |
+| 1.7 | Build images + push to ECR + deploy to ECS | `just floci-deploy` | Images pushed, task defs re-registered, ECS services stable |
+| 1.8 | Validate sandbox health | `just floci-validate` | All 5 checks pass |
+| 1.9 | Run E2E tests against deployed stack | `just floci-test` | All tests pass |
+| 1.10 | Clean up sandbox | `TF_ENV=sandbox just tf destroy` | All resources deleted |
 
-**Gate:** 1.1–1.5 pass. If 1.3 or 1.5 fails, investigate the specific error, fix it, re-trigger from 1.3, do NOT fix unrelated issues. If you find a minor bug, note it in a TODO and keep going.
+**Gate:** 1.1–1.9 pass. If 1.7 or 1.9 fails, investigate the specific error, fix it, re-trigger from 1.4, do NOT fix unrelated issues. If you find a minor bug, note it in a TODO and keep going.
+
+> **1.2 details:**
+> ```bash
+> NET=$(docker inspect api-obs-ingestor --format '{{range $n, $v := .NetworkSettings.Networks}}{{$n}}{{"\n"}}{{end}}' | grep _api-obs)
+> docker run -d --name floci-ecr-registry --network "$NET" -p 5100:5000 registry:2
+> ```
 
 **Reinforcement loop:** Run 1.2 → 1.6 three times. Each iteration should be faster. Goal: complete the full loop in under 10 minutes.
 
@@ -139,6 +147,10 @@ Read this every time you feel the urge to "just fix this one thing":
 ```bash
 # Phase 1 — Sandbox (local)
 just floci-up
+NET=$(docker inspect api-obs-ingestor --format '{{range $n, $v := .NetworkSettings.Networks}}{{$n}}{{"\n"}}{{end}}' | grep _api-obs) && docker run -d --name floci-ecr-registry --network "$NET" -p 5100:5000 registry:2
+TF_ENV=sandbox just tf init
+TF_ENV=sandbox just tf plan
+just tf-diagram png
 TF_ENV=sandbox just tf apply
 just floci-deploy
 just floci-validate
