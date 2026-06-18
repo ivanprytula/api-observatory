@@ -7,6 +7,8 @@ Split into:
 
 from __future__ import annotations
 
+import httpx
+
 from services.dashboard.core.api_client import (
     DashboardApiError,
     api,
@@ -29,7 +31,7 @@ from services.dashboard.ui.protocols import UIAdapter
 def use_sources(token: str = "") -> dict:
     try:
         sources = api.sources.list(token=token)
-    except DashboardApiError:
+    except httpx.HTTPStatusError, DashboardApiError:
         sources = []
     return {"sources": sources}
 
@@ -37,7 +39,7 @@ def use_sources(token: str = "") -> dict:
 def use_queue_retry_metrics() -> dict:
     try:
         metrics = fetch_prometheus_metrics()
-    except DashboardApiError:
+    except httpx.HTTPStatusError, DashboardApiError:
         metrics = ""
     return {
         "dlq_depth": parse_metric_value(metrics, "dead_letter_queue_depth") or 0,
@@ -129,7 +131,7 @@ def render_probe_scheduler(ui: UIAdapter, auth: AuthManager) -> None:
                 next_run = jinfo.get("next_run_time", "—")
                 next_str = str(next_run)[:19] if next_run else "—"
                 c3.caption(f"next: {next_str}")
-        except DashboardApiError as exc:
+        except (httpx.HTTPStatusError, DashboardApiError) as exc:
             ui.show_warning(f"Could not fetch scheduler status: {exc}")
 
 

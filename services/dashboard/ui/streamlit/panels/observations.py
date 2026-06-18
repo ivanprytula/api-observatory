@@ -7,6 +7,8 @@ Split into:
 
 from __future__ import annotations
 
+import httpx
+
 from services.dashboard.core.api_client import (
     DashboardApiError,
     api,
@@ -41,7 +43,7 @@ def use_observations_page(
             "observations": resp.observations,
             "pagination": resp.pagination,
         }
-    except DashboardApiError:
+    except httpx.HTTPStatusError, DashboardApiError:
         return {"observations": [], "pagination": None}
 
 
@@ -51,7 +53,7 @@ def use_observation_detail(token: str = "", observation_id: int | None = None) -
     try:
         obs = api.observations.get(observation_id, token=token)
         return {"observation": obs}
-    except DashboardApiError as e:
+    except (httpx.HTTPStatusError, DashboardApiError) as e:
         return {"observation": None, "error": e}
     except Exception as exc:
         return {"observation": None, "error": exc}

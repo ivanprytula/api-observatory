@@ -7,6 +7,8 @@ Split into:
 
 from __future__ import annotations
 
+import httpx
+
 from services.dashboard.core.api_client import (
     DashboardApiError,
     api,
@@ -24,7 +26,7 @@ def use_sources(token: str = "") -> dict:
     try:
         sources = api.sources.list(token=token)
         return {"sources": sources, "error": None}
-    except DashboardApiError as e:
+    except (httpx.HTTPStatusError, DashboardApiError) as e:
         return {"sources": [], "error": e}
 
 
@@ -34,7 +36,7 @@ def use_source_by_id(token: str = "", source_id: int = 0) -> dict:
         for s in sources:
             if s.id == source_id:
                 return {"source": s}
-    except DashboardApiError:
+    except httpx.HTTPStatusError, DashboardApiError:
         pass
     return {"source": None}
 

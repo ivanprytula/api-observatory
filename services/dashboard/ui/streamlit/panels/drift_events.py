@@ -7,6 +7,8 @@ Split into:
 
 from __future__ import annotations
 
+import httpx
+
 from services.dashboard.core.api_client import (
     DashboardApiError,
     api,
@@ -23,7 +25,7 @@ from services.dashboard.ui.protocols import UIAdapter
 def use_drift_events(token: str = "") -> dict:
     try:
         sources = api.sources.list(token=token)
-    except DashboardApiError:
+    except httpx.HTTPStatusError, DashboardApiError:
         sources = []
 
     events: list[dict] = []
@@ -45,7 +47,7 @@ def use_drift_events(token: str = "") -> dict:
                         "removed_fields": len(e.removed_fields or []),
                     }
                 )
-        except DashboardApiError:
+        except httpx.HTTPStatusError, DashboardApiError:
             pass
 
     events.sort(key=lambda x: x["created_at"], reverse=True)
