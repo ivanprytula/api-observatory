@@ -16,11 +16,13 @@ Backend engineer with deep technical expertise across async systems, databases, 
 
 **What I Deliver**:
 
+- ✅ Security-in-mind, from code to production: secrets scanning (Gitleaks), IaC scanning (Checkov), dependency auditing (pip-audit), container scanning (Trivy), SAST (Bandit), and runtime hardening (no-new-privileges, read-only rootfs, seccomp) — applied at every stage
 - ✅ 5+ years of real production experience across multiple domains (SaaS, data systems, trading platforms)
 - ✅ Concrete technical results: eliminated weekly service restarts, debugged concurrent system failures, optimized data pipelines for 1000+ events/sec
 - ✅ Proactive problem-solving: diagnosed issues BEFORE they became incidents; prevented cascading failures
 - ✅ T-shaped skills: deep in backend/data/databases; practical familiarity with CI/CD, Kubernetes workflows, and observability tooling
 - ✅ Full-stack accountability: code → testing → deployment → production monitoring
+- ✅ Collaborative and adaptable: work best with clear requirements but experienced with vague ones — skilled at DoD refinement, managing out-of-scope, and constructively pushing back to keep delivery focused
 
 **Where I'm Headed**: Middle → Middle+ roles where I can own technical decisions on complex systems, contribute to architecture alongside senior engineers, and grow leadership skills through real projects and mentoring relationships.
 

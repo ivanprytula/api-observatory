@@ -63,6 +63,11 @@ jobs:
           ignore-vulns: |
             PYSEC-2026-161
 
+      - name: "Scan full repo for secrets (Gitleaks)"
+        uses: docker://ghcr.io/gitleaks/gitleaks:v8.21.2
+        with:
+          args: detect --source=/github/workspace --verbose --no-banner
+
   codeql-audit:
     name: "CodeQL SAST (Python)"
     runs-on: ubuntu-latest

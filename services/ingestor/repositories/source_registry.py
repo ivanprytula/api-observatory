@@ -239,7 +239,7 @@ async def probe_source_health(
 
     try:
         async with httpx.AsyncClient(
-            timeout=SOURCE_HEALTH_TIMEOUT_SECONDS, follow_redirects=True
+            timeout=SOURCE_HEALTH_TIMEOUT_SECONDS, follow_redirects=False
         ) as http:
             response = await http.head(target_url)
             # Some servers reject HEAD; fall back to GET with no body read

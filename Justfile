@@ -19,9 +19,33 @@ _local_wait_ready path="/readyz":
 doctor:
     bash scripts/setup/00-doctor.sh
 
+# Recreate .venv with the latest Python 3.14 using uv.
+# Steps: update .python-version → remove old .venv → create → sync → verify.
+bootstrap-venv:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== bootstrap-venv ==="
+    echo "1/6  Checking uv…"
+    command -v uv >/dev/null || { echo "uv not found — install it first"; exit 1; }
+    echo "2/6  Setting .python-version to 3.14.6…"
+    echo "3.14.6" > .python-version
+    echo "3/6  Removing old .venv…"
+    rm -rf .venv
+    echo "4/6  Creating venv with Python 3.14.6…"
+    uv venv --python 3.14.6
+    echo "5/6  Syncing dependencies…"
+    uv sync
+    echo "6/6  Verifying…"
+    uv run python --version
+    echo "=== done ==="
+
 # Check docs for stale Justfile recipe references.
 docs-check-just-refs:
     bash scripts/docs/check-just-refs.sh
+
+# Generate high-entropy secrets for .env configuration (db, redis, jwt, etc.).
+generate-secrets:
+    uv run python scripts/tools/generate-secrets.py
 
 
 
@@ -344,6 +368,8 @@ floci-deploy:
 #   just floci-validate              # confirm Floci sandbox is healthy
 #   just dev-preflight               # confirm real AWS creds + config files
 #   docker build -t api-observatory:local . && just docker-scan-image  # build image + CVE scan
+#   just gitleaks-scan               # scan repo for leaked secrets
+#   just checkov-scan                # scan IaC for misconfigurations
 #   TF_ENV=dev just tf init          # init backend (first time or after provider change)
 #   TF_ENV=dev just tf validate      # check HCL syntax
 #   TF_ENV=dev just tf plan          # review the changeset
@@ -644,6 +670,41 @@ docker-scan-image image="api-observatory:local":
     echo "No CRITICAL CVEs detected"
 
 
+# Scan repo or staged changes for leaked secrets with Gitleaks (Docker).
+# Usage:
+#   just gitleaks-scan          # full repo
+#   just gitleaks-scan staged   # staged changes only
+# For pre-commit integration: pre-commit run --hook-stage manual gitleaks
+gitleaks-scan scope="repo":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
+    if [ "{{ scope }}" = "staged" ]; then
+        echo "=== Gitleaks: scanning staged changes (via pre-commit) ==="
+        uv run pre-commit run gitleaks
+    elif [ "{{ scope }}" = "repo" ]; then
+        echo "=== Gitleaks: scanning full repo (Docker) ==="
+        docker compose --profile security run --rm gitleaks detect --verbose --config /repo/.gitleaks.toml
+    else
+        echo "Usage: just gitleaks-scan [repo|staged]" >&2
+        exit 1
+    fi
+
+# Audit Python dependencies for known vulnerabilities (runs via pre-commit hook and CI).
+pip-audit:
+    uv run python scripts/ci/pip_audit_wrapper.py
+
+# Lint Dockerfiles with Hadolint (runs in Docker to avoid native dep issues).
+# Usage:
+#   just hadolint-scan            # scan all Dockerfiles
+#   just hadolint-scan Dockerfile # scan a single file
+hadolint-scan target="/repo/Dockerfile /repo/services/dashboard/Dockerfile /repo/infra/database/Dockerfile":
+    docker compose --profile security run --rm hadolint {{target}}
+
+# Scan IaC files (Terraform, Docker Compose, K8s) for misconfigurations with Checkov.
+# Runs in Docker (like Trivy) to avoid native dependency issues on Python 3.14.
+checkov-scan:
+    docker compose --profile security run --rm checkov --directory /repo/infra/ --compact --soft-fail
 
 
 
@@ -738,6 +799,12 @@ ops:
     # docker compose exec -T db psql -U postgres -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" api_observatory
     # docker compose exec -T db psql -U postgres -d api_observatory < dump.sql
     # docker compose rm -sfv ingestor db && docker compose up -d --build db cache broker ingestor dashboard edge
+    #
+    # ─── Security scans ──────────────────────────────────────────
+    # pre-commit run --hook-stage manual gitleaks   # staged secret scan (via pre-commit)
+    # just gitleaks-scan                 # full repo secret scan
+    # just gitleaks-scan staged          # staged changes only
+    # just checkov-scan                  # IaC misconfiguration scan (via Docker)
     #
     # ─── Docker images ────────────────────────────────────────────
     # test -f Dockerfile

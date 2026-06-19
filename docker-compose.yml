@@ -48,8 +48,11 @@ services:
     # Local host port exposed on loopback only — ingestor connects via Docker internal network at redis://cache:6379
     ports:
       - "127.0.0.1:6379:6379"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-cache_secret}
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-cache_secret}"]
     healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
+      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD:-cache_secret}', 'ping']
       interval: 5s
       timeout: 3s
       retries: 5
@@ -114,7 +117,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/api_observatory
       BROKER_URL: broker:29092
-      CACHE_URL: redis://cache:6379
+      CACHE_URL: redis://:${REDIS_PASSWORD:-cache_secret}@cache:6379/0
       LOG_FORMAT: json
       SERVICE_VERSION: ${SERVICE_VERSION:-0.1.0}
     ports:
@@ -226,6 +229,39 @@ services:
     security_opt: [no-new-privileges:true]
     networks:
       - api-obs
+
+  checkov:
+    image: bridgecrew/checkov:3.2.360
+    container_name: api-obs-checkov
+    profiles: [security]
+    entrypoint: ["checkov"]
+    command: ["--help"]
+    working_dir: /repo
+    volumes:
+      - .:/repo
+    security_opt: [no-new-privileges:true]
+
+  gitleaks:
+    image: ghcr.io/gitleaks/gitleaks:v8.21.2
+    container_name: api-obs-gitleaks
+    profiles: [security]
+    entrypoint: ["gitleaks"]
+    command: ["--help"]
+    working_dir: /repo
+    volumes:
+      - .:/repo
+    security_opt: [no-new-privileges:true]
+
+  hadolint:
+    image: hadolint/hadolint:v2.12.0
+    container_name: api-obs-hadolint
+    profiles: [security]
+    entrypoint: ["hadolint"]
+    command: ["--help"]
+    working_dir: /repo
+    volumes:
+      - .:/repo
+    security_opt: [no-new-privileges:true]
 
   # ── Monitoring (optional; started via: just up-monitoring) ────────────────
 

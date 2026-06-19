@@ -42,6 +42,10 @@ Default shape: result, key validation, next step if needed. Keep explanations sh
 
 Treat any path covered by `.gitignore`, `.dockerignore`, `.pre-commit-config.yaml` `exclude:` lists, or any other project ignore file as out of scope. Do not read, grep, or display the contents of ignored files unless the user explicitly names that specific file in that specific message. Typical ignored paths: `.venv/`, `.env`, `.env.*`, `node_modules/`, `_archive/`, `*.log`, build artifacts, `.copilot/`, `.kilo/`, `.cursor/`, `.aws/`, `.gcp/`, `.azure/`, `.ssh/`.
 
+### Never read `.env`, `.env.*`, or any local secrets file
+
+Never read `.env`, `.env.*`, `secrets/`, `credentials`, or any other file that contains secrets, API keys, passwords, or tokens — even if committed (test fixtures in `.env.example` are fine). If you need info from these files, ask the user to check and share only the relevant line/value, masked if needed. This overrides the general "read scope" allowance — `.env` is never in scope regardless of `.gitignore` status.
+
 ### Never read `~/.aws/*` (or any cloud credential store)
 
 Never read `~/.aws/credentials`, `~/.aws/config`, `~/.aws/sso/`, `~/.aws/amazonq/`, or any file under `~/.aws/`. The same rule applies to other providers: `~/.gcp/`, `~/.azure/`, `~/.kube/config`, `~/.docker/config.json`, `~/.netrc`, `~/.boto`, `~/.config/gcloud/`, `~/.config/gh/hosts.yml`, `~/.ssh/id_*`, `~/.gnupg/`. When a hook, linter, or CI rule appears to come from a credential file, fix the *configuration* (`pre-commit-config.yaml`, exclude lists, env-var setup) — never the credential file itself. Treat placeholder values (`test`, `example`, `AKIAIOSFODNN7EXAMPLE`) the same as real values.
