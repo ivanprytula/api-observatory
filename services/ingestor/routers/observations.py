@@ -9,7 +9,6 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
-from openai import AsyncOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import services.ingestor.vector_search as vs_bridge
@@ -556,6 +555,8 @@ async def analyze_observation(
         logger.warning("rag_context_failed", extra={"error": str(exc)})
         context_text = "No additional context available."
 
+    from openai import AsyncOpenAI
+
     client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     # Build augmented prompt
@@ -617,6 +618,8 @@ async def analyze_observation_stream(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
             detail="LLM analysis is disabled or OPENAI_API_KEY is missing",
         )
+
+    from openai import AsyncOpenAI
 
     client = AsyncOpenAI(api_key=settings.openai_api_key)
 
