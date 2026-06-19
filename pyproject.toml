@@ -5,9 +5,9 @@ requires-python = ">=3.14"
 authors = [{ name = "Ivan Prytula", email = "ivanprytula.dev@gmail.com" }]
 maintainers = [{ name = "Ivan Prytula", email = "ivanprytula.dev@gmail.com" }]
 dependencies = [
-  "fastapi>=0.136.3",
+  "fastapi>=0.137.2",
   "uvicorn[standard]>=0.45.0",
-  "slowapi>=0.1.9",
+  "slowapi>=0.1.10",
   "sqlalchemy[asyncio]>=2.0.50",
   "asyncpg>=0.30.0",
   "psycopg[binary]>=3.2",
@@ -40,7 +40,7 @@ tracing = [
   "opentelemetry-exporter-otlp>=1.41.0",
 ]
 messaging = ["aiokafka>=0.11"]
-ai = ["openai>=1.55.0"]
+ai = ["openai>=2.43.0"]
 etl = [
   "pandas>=2.2.3",
   "polars[rtcompat]>=1.30.0",
@@ -53,7 +53,7 @@ full = [
   "opentelemetry-instrumentation-sqlalchemy>=0.46b0",
   "opentelemetry-exporter-otlp>=1.41.0",
   "aiokafka>=0.11",
-  "openai>=1.55.0",
+  "openai>=2.43.0",
   "pandas>=2.2.3",
   "polars[rtcompat]>=1.30.0",
   "sentry-sdk[fastapi]>=2.19.2",
@@ -74,7 +74,7 @@ members = ["services/ingestor"]
 
 [dependency-groups]
 dev = [
-  "pytest>=9.0.3",
+  "pytest>=9.1.0",
   "pytest-asyncio>=0.25.3",
   "pytest-cov>=6.1.0",
   # testcontainers: auto-provision postgres:17-bookworm for local integration tests
@@ -84,19 +84,19 @@ dev = [
   "pygments>=2.20.0",
   "httpx>=0.28.1",
   "aiosqlite>=0.20.0",                      # async SQLite for tests (no real PG needed)
-  "fakeredis>=2.35.1",                      # in-memory redis for tests
+  "fakeredis>=2.36.2",                      # in-memory redis for tests
   # Pre-commit hooks & linting
   "pre-commit>=4.5.1",
-  "ruff>=0.15.10",
+  "ruff>=0.15.18",
   # Load testing
-  "locust>=2.32.0",
+  "locust>=2.44.4",
   # k6 is a standalone CLI, install via:
   #   - Linux: sudo apt install k6
   #   - macOS: brew install grafana/k6/k6
   #   - or: https://k6.io/docs/getting-started/installation/
-  "ty>=0.0.32",
-  "pip-audit>=2.10.0",
-  "boto3>=1.28.0",                           # E2E tests against Floci S3/SQS
+  "ty>=0.0.50",
+  "pip-audit>=2.10.1",
+  "boto3>=1.43.33",                           # E2E tests against Floci S3/SQS
 ]
 
 [tool.pytest.ini_options]
