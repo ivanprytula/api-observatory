@@ -178,7 +178,10 @@ def _alembic_upgrade(sync_url: str) -> None:
     from alembic import command
 
     cfg = Config(str(_ALEMBIC_INI))
-    cfg.set_main_option("sqlalchemy.url", sync_url)
+    # Escape bare % signs — configparser.BasicInterpolation treats them as
+    # interpolation syntax, but testcontainers passwords often contain
+    # URL-encoded characters like %23.
+    cfg.set_main_option("sqlalchemy.url", sync_url.replace("%", "%%"))
     command.upgrade(cfg, "head")
 
 

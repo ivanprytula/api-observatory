@@ -20,7 +20,7 @@ repos:
       - id: name-tests-test
         args: [--pytest-test-first]
         exclude: >-
-          (?x)^(FOWA
+          (?x)^(
             tests/fixtures_shared\.py|
             tests/unit/__init__\.py|
             tests/integration/__init__\.py|

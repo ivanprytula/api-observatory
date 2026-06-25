@@ -31,7 +31,7 @@ class TestLLMAnalysis:
     @patch(
         "services.ingestor.routers.observations.vs_bridge.search_observation_documents"
     )
-    @patch("services.ingestor.routers.observations.AsyncOpenAI")
+    @patch("openai.AsyncOpenAI")
     async def test_analyze_observation_success(
         self,
         mock_openai_class,
@@ -79,7 +79,7 @@ class TestLLMAnalysis:
 
     @patch("services.ingestor.routers.observations.settings")
     @patch("services.ingestor.routers.observations.get_observation_op")
-    @patch("services.ingestor.routers.observations.AsyncOpenAI")
+    @patch("openai.AsyncOpenAI")
     async def test_analyze_observation_stream_success(
         self,
         mock_openai_class,
