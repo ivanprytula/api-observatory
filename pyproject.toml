@@ -70,7 +70,7 @@ LinkedIn = "https://linkedin.com/in/ivanprytula"
 environments = ["sys_platform == 'linux'"]
 
 [tool.uv.workspace]
-members = ["services/ingestor"]
+members = ["services/ingestor", "services/dashboard"]
 
 [dependency-groups]
 dev = [

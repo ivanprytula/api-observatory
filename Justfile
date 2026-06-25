@@ -784,8 +784,8 @@ ops:
     #!/usr/bin/env bash
     set -euo pipefail
     # ─── Container lifecycle ─────────────────────────────────────
-    docker compose down
-    # docker compose --profile ingress down
+    # docker compose down
+    docker compose --profile ingress down
     # docker compose up -d floci
     # docker compose --profile aws down
     # docker compose logs -f ingestor
