@@ -215,3 +215,6 @@ secrets-findings.json
 
 # Azure credentials
 .azure_credentials
+
+# Local planning docs
+docs/.plans/
