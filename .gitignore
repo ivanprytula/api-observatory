@@ -212,3 +212,6 @@ examples/
 .copilot/memories/
 
 secrets-findings.json
+
+# Azure credentials
+.azure_credentials

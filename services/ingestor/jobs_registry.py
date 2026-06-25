@@ -113,6 +113,24 @@ async def register_source_probe_jobs(scheduler: JobScheduler, db: AsyncSession) 
         ) -> dict[str, Any]:
             return await job_handlers.run_source_probe(session, _source_id)
 
+        snapshot_job_name = f"contract_snapshot_source_{source_id}"
+        if snapshot_job_name not in scheduler._jobs:
+            snapshot_interval = max(300, interval_seconds * 5)
+
+            @scheduler.job(
+                name=snapshot_job_name,
+                trigger=IntervalTrigger(seconds=snapshot_interval),
+                max_retries=1,
+                timeout_seconds=30,
+                tags={"contract-drift", "snapshot"},
+            )
+            async def source_snapshot_job(
+                session: AsyncSession, _source_id: int = source_id
+            ) -> dict[str, Any]:
+                return await job_handlers.run_source_contract_snapshot(
+                    session, _source_id
+                )
+
         registered += 1
 
     logger.info(

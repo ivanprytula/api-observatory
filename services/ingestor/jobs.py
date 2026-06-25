@@ -30,12 +30,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from libs.platform.circuit_breaker import CircuitBreaker, CircuitOpenError
 from libs.platform.retry import IdempotencyKeyTracker, exponential_backoff
+from services.ingestor.api_schemas.contract_drift import ContractSnapshotCreate
 from services.ingestor.api_schemas.observations import ObservationRequest
 from services.ingestor.api_schemas.scorecards import HealthSampleCreate
 from services.ingestor.constants import SOURCE_HEALTH_TIMEOUT_SECONDS
 from services.ingestor.fetch import get_http_client
 from services.ingestor.models import Observation, SourceProfile
 from services.ingestor.repositories import observations as crud
+from services.ingestor.repositories.contract_drift import create_contract_snapshot
 from services.ingestor.repositories.scorecards import observation_health_sample
 
 
@@ -131,6 +133,53 @@ async def run_source_probe(db: AsyncSession, source_id: int) -> dict[str, Any]:
         "latency_ms": elapsed_ms,
         "response_body_hash": body_hash,
         "is_success": is_success,
+    }
+
+
+async def run_source_contract_snapshot(
+    db: AsyncSession, source_id: int
+) -> dict[str, Any]:
+    """Fetch a sample response from a source and ingest it as a contract snapshot."""
+    stmt = select(SourceProfile).where(
+        SourceProfile.id == source_id,
+        SourceProfile.deleted_at.is_(None),
+        SourceProfile.is_active.is_(True),
+    )
+    profile = (await db.execute(stmt)).scalar_one_or_none()
+    if profile is None:
+        return {"source_id": source_id, "skipped": True, "reason": "source_inactive"}
+
+    target_url = (
+        f"{profile.base_url.rstrip('/')}/{profile.health_check_path.lstrip('/')}"
+    )
+    breaker = _get_source_probe_breaker(source_id)
+
+    if breaker.is_open:
+        return {"source_id": source_id, "skipped": True, "reason": "circuit_open"}
+
+    try:
+        client = await get_http_client()
+        response = await breaker.call(
+            lambda: client.get(target_url, timeout=SOURCE_HEALTH_TIMEOUT_SECONDS)
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except CircuitOpenError, httpx.HTTPError, ValueError:
+        return {"source_id": source_id, "skipped": True, "reason": "fetch_failed"}
+
+    if not isinstance(payload, dict):
+        return {"source_id": source_id, "skipped": True, "reason": "non_dict_response"}
+
+    snapshot, drift_event = await create_contract_snapshot(
+        db,
+        ContractSnapshotCreate(source_id=source_id, payload_schema=payload),
+    )
+
+    return {
+        "source_id": source_id,
+        "snapshot_id": snapshot.id if snapshot else None,
+        "drift_detected": drift_event is not None,
+        "drift_event_id": drift_event.id if drift_event else None,
     }
 
 
