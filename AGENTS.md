@@ -83,13 +83,13 @@ Use H1 once for the document title. H2 for major sections, H3 for subsections; n
 
 Shebang + metadata block. `set -o errexit -o pipefail -o nounset -o errtrace`. Trap ERR with a line-number reporter. Define `info`/`success`/`warn`/`error`/`require_command`/`command_exists` helpers at the top. Quote every variable (`"${var}"`). Use `${SCRIPT_DIR}` and `${PROJECT_ROOT}`; never hardcode paths. `trap cleanup EXIT` for teardown. Lint with `shellcheck`.
 
-### SOLID principles → see `.github/instructions/solid-principles.instructions.md`
+### Design principles → see `CLAUDE.md` (ACROSS) and `.github/instructions/solid-principles.instructions.md`
 
-- **S** — Single Responsibility. One reason to change.
-- **O** — Open/Closed. Extend, don't modify an `if-elif` chain.
-- **L** — Liskov Substitution. No `NotImplementedError` from a method the parent promised; use composition.
-- **I** — Interface Segregation. No fat interfaces; split into focused capability ABCs.
-- **D** — Dependency Inversion. Depend on abstractions; inject via constructor or `Depends`. Bind in one factory.
+Use ACROSS as the primary design lens — it prioritizes change management over structural purity. Use SOLID as a secondary reference when ACROSS doesn't give a clear answer. When they conflict, ACROSS wins:
+
+- **ACROSS "Simple As Possible"** overrides strict OCP — don't add abstraction layers to avoid modifying code unless the change pattern is proven.
+- **ACROSS "Abstractions & Decomposition"** replaces rigid SRP — a module has *defined* responsibilities, not necessarily *single* responsibility.
+- **ACROSS "Composition by Default"** aligns with LSP/DIP but is more pragmatic — use interfaces when you have two implementations, not when you might someday.
 
 ### Design patterns → see `.github/instructions/design-patterns.instructions.md`
 
