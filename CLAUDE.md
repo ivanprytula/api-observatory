@@ -139,3 +139,29 @@ Never:
 - [ ] Do my function/class names describe domain actions, not implementation mechanics?
 - [ ] Do my API endpoints use domain language?
 - [ ] Do my return types communicate success/failure explicitly (Result type, typed errors)?
+
+---
+
+## Git & Commits
+
+- When committing, amend trivial fixes (type hints, formatting, `type: ignore`) into the related prior commit instead of creating separate micro-commits.
+- Keep commits atomic and grouped by logical change.
+- Use conventional commit prefixes: `feat:`, `fix:`, `test:`, `docs:`, `chore:`, `refactor:`.
+
+## Safety & Editing Rules
+
+- Never delete code, constants, or services without explicit confirmation — the user often retains code for upcoming UI/feature work.
+- Prefer flagging unused code over removing it.
+- Do not revert user changes unless explicitly asked.
+
+## Python Tooling
+
+- Use `uv` only for local development (`uv run`, `uv add`, `uv sync`).
+- Do NOT add `[build-system]` / `build-backend` to the root `pyproject.toml`.
+- Do NOT modify Dockerfiles to use `uv` unless explicitly asked — Docker images use `pip`.
+
+## Shell Scripting
+
+- Never suppress errors in shell/provisioning scripts.
+- Always use `set -euo pipefail` and `trap` for cleanup.
+- Echo key variables (location, IP, SKU) before use to make failures visible.
