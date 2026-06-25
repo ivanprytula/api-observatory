@@ -248,10 +248,17 @@ class MetricsResource:
 
 
 class AuthResource:
-    """Login / refresh / logout."""
+    """Login / register / refresh / logout."""
 
     def __init__(self, client: SyncClient) -> None:
         self._c = client
+
+    def register(self, username: str, email: str, password: str) -> dict:
+        return self._c.request(
+            "POST",
+            "/api/v1/auth/register",
+            json={"username": username, "email": email, "password": password},
+        )
 
     def login(self, username: str, password: str) -> dict:
         return self._c.request(

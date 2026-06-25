@@ -122,6 +122,30 @@ class AuthManager:
     # API call helpers (Core-level, no UI dependencies)
     # ------------------------------------------------------------------
 
+    def do_register(self, username: str, email: str, password: str) -> str | None:
+        """POST /api/v1/auth/register.
+
+        Returns an error message string or None on success.
+        Does NOT auto-login — caller switches to the login tab on success.
+        """
+        url = f"{self.config.api_base_url}/api/v1/auth/register"
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                r = client.post(
+                    url,
+                    json={
+                        "username": username,
+                        "email": email,
+                        "password": password,
+                    },
+                )
+                if r.status_code == 201:
+                    return None
+                detail = r.json().get("detail", r.text[:120])
+                return f"Registration failed ({r.status_code}): {detail}"
+        except Exception as exc:  # noqa: BLE001
+            return f"Connection error: {exc}"
+
     def do_login(self, username: str, password: str) -> str | None:
         """POST /api/v1/auth/token.
 
