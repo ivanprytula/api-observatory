@@ -1,8 +1,0 @@
----
-# Non-sensitive variables for AWS-provisioned hosts (sandbox/dev/prod).
-# Override per-environment in host_vars or extra vars.
-
-# ECS agent (for EC2 launch type or ECS Anywhere)
-ecs_agent_enabled: false
-ecs_cluster_name: 'data-zoo-dev'
-aws_region: 'eu-central-1'
