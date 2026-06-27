@@ -52,12 +52,15 @@ generate-secrets:
 # ─── DAILY DEV FLOWS ─────────────────────────────────────────────────────────
 #
 # Primary loops:
-#   just dev             → uvicorn + Compose data-plane (local)
-#   just up              → Compose data-plane only (containerized)
-#   just floci-*         → Full Floci sandbox (training playground)
-#   TF_ENV=dev just deploy-ecs → Promote to real AWS dev cloud
+#   just dev                        → uvicorn + Compose data-plane (local)
+#   just up                         → Compose data-plane only (containerized)
+#   CLOUD=azure just sandbox-up     → Azure emulator (floci-az)
+#   CLOUD=aws   just sandbox-up     → AWS emulator (floci-aws)
+#   CLOUD=gcp   just sandbox-up     → GCP emulator (floci-gcp)
+#   CLOUD=aws   just sandbox-dev    → hot-reload dev against emulator
+#   TF_ENV=aws-sandbox just tf plan → Terraform against emulator
 #
-# Floci is only started when you explicitly need S3/SQS/ECS-shaped APIs.
+# Emulators start only when you explicitly need cloud-shaped APIs.
 
 # 2a) Local development (uvicorn + live reload)
 # ─────────────────────────────────────────────
@@ -133,125 +136,104 @@ db-reset:
     just _local_wait_ready
     echo "stack ready"
 
-# 2c) Sandbox / AWS-shaped development
+
+# 2c) Sandbox / emulator-backed development
 # ─────────────────────────────────────
 
-# Start Floci + Compose data-plane + seed admin + demo.
-# Uncomment the single docker compose line for the minimal Floci-only variant.
-floci-up:
+
+# ─── CLOUD SANDBOXES (local Floci emulators — $0, no credentials) ────────────
+#
+# All sandboxes use Floci (wire-compatible with real cloud SDKs/CLIs).
+# Switch clouds with CLOUD env var — one set of recipes, three clouds.
+#
+# Usage:
+#   CLOUD=azure just sandbox-up        # start floci-az + data plane (default)
+#   CLOUD=aws   just sandbox-up        # start floci-aws + data plane
+#   CLOUD=gcp   just sandbox-up        # start floci-gcp + data plane
+#   CLOUD=aws   just sandbox-dev       # hot-reload dev against AWS emulator
+#   CLOUD=gcp   just sandbox-validate  # health check before promoting to cloud
+#   TF_ENV=aws-sandbox just tf plan    # Terraform against emulator
+#
+# Cloud config table:
+#   CLOUD    profile   container          port   TF_ENV
+#   azure    azure     api-obs-floci-az   4577   azure-sandbox
+#   aws      aws       api-obs-floci-aws  4566   aws-sandbox
+#   gcp      gcp       api-obs-floci-gcp  4588   gcp-sandbox
+
+# Start Floci emulator + data-plane services, run migrations.
+sandbox-up:
     #!/usr/bin/env bash
     set -euo pipefail
+    CLOUD="${CLOUD:-azure}"
+    case "$CLOUD" in
+        azure) PROFILE=azure; SERVICE=floci-az;  PORT=4577 ;;
+        aws)   PROFILE=aws;   SERVICE=floci-aws; PORT=4566 ;;
+        gcp)   PROFILE=gcp;   SERVICE=floci-gcp; PORT=4588 ;;
+        *)     echo "FAIL: Unknown CLOUD=${CLOUD}. Use: azure, aws, gcp" >&2; exit 1 ;;
+    esac
     just stack-info
-    docker compose --profile aws up -d floci floci-ecr-registry
+    docker compose --profile "$PROFILE" up -d "$SERVICE"
+    echo "  Waiting for ${SERVICE} health on port ${PORT}..."
     for i in $(seq 1 60); do
-        if curl -sf http://127.0.0.1:4566/_floci/health > /dev/null 2>&1; then
-            break
-        fi
+        if curl -sf "http://127.0.0.1:${PORT}/health" > /dev/null 2>&1; then break; fi
         sleep 1
     done
+    curl -sf "http://127.0.0.1:${PORT}/health" > /dev/null 2>&1 || { echo "FAIL: ${SERVICE} not healthy after 60s"; exit 1; }
+    echo "  [ok] ${SERVICE} healthy"
     docker compose up -d --build db cache broker ingestor dashboard edge
     until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
     just migrate
     just _sandbox-seed
 
-# Stop Floci only (Compose data-plane keeps running).
-floci-down:
-    docker compose down floci
-
-# Sync sandbox state after Floci restart: remove ephemeral resources from state
-# so Terraform creates them fresh instead of failing on drain-destroy.
-floci-sync-state:
+# Stop Floci emulator only (Compose data-plane keeps running).
+sandbox-down:
     #!/usr/bin/env bash
     set -euo pipefail
-    source scripts/aws-env.sh floci
-    # Delete ECS services from Floci's in-memory state
-    for svc in ingestor dashboard; do
-        if aws ecs delete-service --cluster data-zoo-sandbox --service "$svc" --force --endpoint-url http://127.0.0.1:4566 >/dev/null 2>&1; then
-            echo "  [del] ecs service $svc (Floci)"
-        else
-            echo "  [ok] ecs service $svc already absent (Floci)"
-        fi
-    done
-    # Drop from Terraform state so it creates fresh
-    DIR="infra/terraform/environments/sandbox"
-    cd "$DIR"
-    terraform init -reconfigure -backend-config=backend.hcl >/dev/null 2>&1
-    for addr in \
-        'module.compute.aws_ecs_service.ingestor_fargate[0]' \
-        'module.compute.aws_ecs_service.dashboard_fargate[0]' \
-        'module.compute.aws_lb_listener.http_redirect[0]' \
-        'module.compute.aws_lb_listener_rule.dashboard[0]'; do
-        if terraform state rm "$addr" >/dev/null 2>&1; then
-            echo "  [rm] $addr (state)"
-        else
-            echo "  [ok] $addr already absent (state)"
-        fi
-    done
+    CLOUD="${CLOUD:-azure}"
+    case "$CLOUD" in
+        azure) docker compose --profile azure down floci-az  ;;
+        aws)   docker compose --profile aws   down floci-aws ;;
+        gcp)   docker compose --profile gcp   down floci-gcp ;;
+        *)     echo "FAIL: Unknown CLOUD=${CLOUD}. Use: azure, aws, gcp" >&2; exit 1 ;;
+    esac
 
-
-
-# Clean destroy for Floci sandbox: rm Floci-broken resources from state, then destroy.
-# Uses a timeout to handle Floci VPC deletion hangs, then cleans up any remaining state.
-floci-destroy:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    source scripts/aws-env.sh floci
-    DIR="infra/terraform/environments/sandbox"
-    cd "$DIR"
-    terraform init -backend-config=backend.hcl
-
-    for addr in \
-        'module.compute.aws_ecs_service.ingestor_fargate[0]' \
-        'module.compute.aws_ecs_service.dashboard_fargate[0]' \
-        'module.compute.aws_lb_listener.http_redirect[0]' \
-        'module.compute.aws_lb_listener_rule.dashboard[0]'; do
-        terraform state rm "$addr" 2>/dev/null || true
-    done
-
-    # Kill ECS services in Floci's in-memory state to stop the reconciler noise
-    for svc in ingestor dashboard; do
-        if aws ecs delete-service --cluster data-zoo-sandbox --service "$svc" --force --endpoint-url http://127.0.0.1:4566 >/dev/null 2>&1; then
-            echo "  [del] ecs service $svc (Floci)"
-        fi
-    done
-
-    timeout 120 terraform destroy -auto-approve -lock=false -var-file=terraform.tfvars || \
-        echo "  [timeout] terraform destroy exceeded 2m — cleaning up remaining state..."
-
-    for addr in $(terraform state list 2>/dev/null || true); do
-        echo "  Cleaning up: $addr"
-        r_id=$(terraform state show "$addr" 2>/dev/null | awk '/^\s+id\s+=/{print $3; exit}' | tr -d '"' || true)
-        if [ -n "$r_id" ]; then
-            case "$addr" in
-                *aws_vpc*)             aws ec2 delete-vpc --vpc-id "$r_id"          ;;
-                *aws_subnet*)          aws ec2 delete-subnet --subnet-id "$r_id"     ;;
-                *aws_lb_target_group*) aws elbv2 delete-target-group --target-group-arn "$r_id" ;;
-                *aws_lb.main*)         aws elbv2 delete-load-balancer --load-balancer-arn "$r_id" ;;
-                *aws_db_instance*)     aws rds delete-db-instance --db-instance-identifier "$r_id" --skip-final-snapshot ;;
-                *aws_elasticache_replication_group*) aws elasticache delete-replication-group --replication-group-id "$r_id" ;;
-                *aws_elasticache_cluster*) aws elasticache delete-cache-cluster --cache-cluster-id "$r_id" ;;
-                *aws_ecr_repository*)  aws ecr delete-repository --repository-name "$r_id" --force ;;
-            esac 2>/dev/null || true
-        fi
-        terraform state rm "$addr" 2>/dev/null || true
-    done
-    echo "  [ok] Sandbox destroyed."
-
-# Start both ingestor and dashboard locally with hot reload, using Floci-shaped env (S3 + SQS + ECS APIs).
-floci-dev:
+# Start local dev with hot reload against a Floci emulator.
+sandbox-dev:
     #!/usr/bin/env bash
     set -euo pipefail
     export PYTHONPATH="${PWD}"
     set -a; source "${PWD}/.env"; set +a
+    CLOUD="${CLOUD:-azure}"
+    case "$CLOUD" in
+        azure)
+            export AZURE_STORAGE_CONNECTION_STRING="DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:4577/devstoreaccount1"
+            export AZURE_ENDPOINT_URL="http://127.0.0.1:4577"
+            EMULATOR_LABEL="floci-az   → http://localhost:4577  (Azure emulator)"
+            ;;
+        aws)
+            export AWS_ENDPOINT_URL="http://127.0.0.1:4566"
+            export AWS_ACCESS_KEY_ID="test"
+            export AWS_SECRET_ACCESS_KEY="test"
+            export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-eu-central-1}"
+            EMULATOR_LABEL="floci-aws  → http://localhost:4566  (AWS emulator)"
+            ;;
+        gcp)
+            export STORAGE_EMULATOR_HOST="http://127.0.0.1:4588"
+            export PUBSUB_EMULATOR_HOST="127.0.0.1:4588"
+            export FIRESTORE_EMULATOR_HOST="127.0.0.1:4588"
+            export DATASTORE_EMULATOR_HOST="127.0.0.1:4588"
+            export SECRET_MANAGER_EMULATOR_HOST="127.0.0.1:4588"
+            export CLOUDSDK_CORE_PROJECT="${GCP_PROJECT_ID:-floci-local}"
+            EMULATOR_LABEL="floci-gcp  → http://localhost:4588  (GCP emulator)"
+            ;;
+        *)  echo "FAIL: Unknown CLOUD=${CLOUD}. Use: azure, aws, gcp" >&2; exit 1 ;;
+    esac
     just stack-info
-    source scripts/aws-env.sh
-    # Data-plane only — app services run locally with hot reload
     docker compose up -d db cache broker
     docker compose stop ingestor dashboard >/dev/null 2>&1 || true
     docker compose rm -f ingestor dashboard >/dev/null 2>&1 || true
     until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
     just migrate
-    # Streamlit hot-reloads .py files on save automatically
     uv run streamlit run services/dashboard/ui/streamlit/app.py \
         --server.port=8501 --server.address=0.0.0.0 --server.headless=true \
         --server.fileWatcherType=auto &
@@ -259,182 +241,69 @@ floci-dev:
     trap "kill $DASHBOARD_PID 2>/dev/null || true" EXIT INT TERM
     echo "dashboard  → http://localhost:8501  (pid $DASHBOARD_PID, hot-reload on)"
     echo "ingestor   → http://localhost:8000  (uvicorn --reload)"
+    echo "${EMULATOR_LABEL}"
     uv run uvicorn services.ingestor.main:app --reload --port 8000
 
-# Validate Floci sandbox health before promoting to real AWS.
-# Checks: Floci container running, _floci/health reachable, state bucket reachable, API /health OK.
-# Run independently before deploy-ecs: just floci-validate
-floci-validate:
+# Validate Floci sandbox health before promoting to real cloud.
+sandbox-validate:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "=== Floci sandbox validation ==="
-
-    # 1. Floci container must be running
-    if ! docker ps --filter 'name=api-obs-floci' --filter 'status=running' --format '{{{{.Names}}}}' | grep -q .; then
-        echo "FAIL: Floci container is not running." >&2
-        echo "  Start it with: just floci-up" >&2
+    CLOUD="${CLOUD:-azure}"
+    case "$CLOUD" in
+        azure) CONTAINER=api-obs-floci-az;  PORT=4577 ;;
+        aws)   CONTAINER=api-obs-floci-aws; PORT=4566 ;;
+        gcp)   CONTAINER=api-obs-floci-gcp; PORT=4588 ;;
+        *)     echo "FAIL: Unknown CLOUD=${CLOUD}. Use: azure, aws, gcp" >&2; exit 1 ;;
+    esac
+    echo "=== Sandbox validation (${CLOUD}) ==="
+    if ! docker ps --filter "name=${CONTAINER}" --filter 'status=running' --format '{{{{.Names}}}}' | grep -q .; then
+        echo "FAIL: ${CONTAINER} is not running." >&2
+        echo "  Start it with: CLOUD=${CLOUD} just sandbox-up" >&2
         exit 1
     fi
-    echo "  [ok] Floci container running"
-
-    # 2. Floci health endpoint
-    if ! curl -sf http://127.0.0.1:4566/_floci/health > /dev/null 2>&1; then
-        echo "FAIL: Floci health endpoint not responding at http://127.0.0.1:4566/_floci/health" >&2
-        echo "  Check Floci logs: docker compose logs floci" >&2
+    echo "  [ok] ${CONTAINER} running"
+    if ! curl -sf "http://127.0.0.1:${PORT}/health" > /dev/null 2>&1; then
+        echo "FAIL: Health endpoint not responding at http://127.0.0.1:${PORT}/health" >&2
         exit 1
     fi
-    echo "  [ok] Floci health endpoint OK"
-
-    # 3. Terraform state bucket reachable
-    source scripts/aws-env.sh floci
-    if ! aws s3 ls s3://s3-native-lock-setup > /dev/null 2>&1; then
-        echo "FAIL: Terraform state bucket 's3-native-lock-setup' not found." >&2
-        echo "  Run: TF_ENV=sandbox just tf init" >&2
-        exit 1
-    fi
-    echo "  [ok] Terraform state bucket reachable"
-
-    # 4. Application API health (soft-warn only — stack may not be running)
-    source scripts/daily/local-url.sh
-    if curl_local -sf "$(local_api_url /health)" > /dev/null 2>&1; then
+    echo "  [ok] Health endpoint OK"
+    if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
         echo "  [ok] Application API /health OK"
     else
         echo "  [warn] Application API not responding — Compose stack may not be running."
     fi
+    echo "=== Sandbox validated (${CLOUD}) ==="
 
-    echo "=== Floci sandbox validated ==="
-
-# Confirm real AWS credentials and required dev config files are in place.
-# Run independently before deploy-ecs: just dev-preflight
-dev-preflight:
+# Confirm real cloud credentials are in place before promoting from sandbox.
+cloud-preflight:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "=== AWS dev preflight ==="
+    CLOUD="${CLOUD:-azure}"
+    echo "=== ${CLOUD} preflight ==="
+    case "$CLOUD" in
+        azure)
+            command -v az &>/dev/null || { echo "FAIL: Azure CLI not found. Install: https://aka.ms/installazurecli" >&2; exit 1; }
+            echo "  [ok] Azure CLI installed"
+            az account show > /dev/null 2>&1 || { echo "FAIL: Not logged in. Run: az login" >&2; exit 1; }
+            echo "  [ok] Azure account: $(az account show --query name -o tsv)"
+            ;;
+        aws)
+            command -v aws &>/dev/null || { echo "FAIL: AWS CLI not found." >&2; exit 1; }
+            echo "  [ok] AWS CLI installed"
+            aws sts get-caller-identity > /dev/null 2>&1 || { echo "FAIL: No valid AWS credentials. Run: aws configure" >&2; exit 1; }
+            echo "  [ok] AWS account: $(aws sts get-caller-identity --query Account --output text)"
+            ;;
+        gcp)
+            command -v gcloud &>/dev/null || { echo "FAIL: gcloud CLI not found. Install: https://cloud.google.com/sdk/docs/install" >&2; exit 1; }
+            echo "  [ok] gcloud CLI installed"
+            gcloud auth list --filter=status:ACTIVE --format="value(account)" 2>/dev/null | grep -q . || { echo "FAIL: Not logged in. Run: gcloud auth login" >&2; exit 1; }
+            echo "  [ok] GCP account: $(gcloud config get-value account 2>/dev/null)"
+            echo "  [ok] GCP project: $(gcloud config get-value project 2>/dev/null)"
+            ;;
+        *)  echo "FAIL: Unknown CLOUD=${CLOUD}. Use: azure, aws, gcp" >&2; exit 1 ;;
+    esac
+    echo "=== ${CLOUD} preflight passed ==="
 
-    # 1. Must NOT be pointing at an emulator
-    if [ -n "${AWS_ENDPOINT_URL:-}" ]; then
-        echo "FAIL: AWS_ENDPOINT_URL is set to '${AWS_ENDPOINT_URL}'." >&2
-        echo "  Unset it before deploying to real AWS: unset AWS_ENDPOINT_URL" >&2
-        exit 1
-    fi
-    echo "  [ok] AWS_ENDPOINT_URL not set (real AWS mode)"
-
-    # 2. AWS identity must resolve (real credentials present)
-    if ! aws sts get-caller-identity > /dev/null 2>&1; then
-        echo "FAIL: Cannot resolve AWS identity. Check your credentials/profile." >&2
-        echo "  Hint: set AWS_PROFILE or run 'aws configure'" >&2
-        exit 1
-    fi
-    IDENTITY=$(aws sts get-caller-identity --query 'Arn' --output text 2>/dev/null)
-    echo "  [ok] AWS identity: ${IDENTITY}"
-
-    # 3. backend.aws.hcl must exist (contains real S3 state bucket)
-    if [ ! -f infra/terraform/environments/dev/backend.aws.hcl ]; then
-        echo "FAIL: infra/terraform/environments/dev/backend.aws.hcl not found." >&2
-        echo "  Copy from example: cp infra/terraform/environments/dev/backend.aws.hcl.example infra/terraform/environments/dev/backend.aws.hcl" >&2
-        exit 1
-    fi
-    echo "  [ok] backend.aws.hcl present"
-
-    # 4. terraform.aws.tfvars must exist (dev-specific variable overrides)
-    if [ ! -f infra/terraform/environments/dev/terraform.aws.tfvars ]; then
-        echo "FAIL: infra/terraform/environments/dev/terraform.aws.tfvars not found." >&2
-        echo "  Copy from example: cp infra/terraform/environments/dev/terraform.aws.tfvars.example infra/terraform/environments/dev/terraform.aws.tfvars" >&2
-        exit 1
-    fi
-    echo "  [ok] terraform.aws.tfvars present"
-
-    echo "=== AWS dev preflight passed ==="
-
-# Run Floci-specific E2E tests (AWS emulator required).
-floci-test:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    just _sandbox-infra
-    just _sandbox-seed
-    source scripts/aws-env.sh floci
-    uv run pytest tests/e2e/test_floci_integration.py -v -m aws --no-cov
-
-# Build + push to Floci ECR + ECS deploy.
-floci-deploy:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    source scripts/aws-env.sh floci
-    bash scripts/sandbox/deploy.sh
-
-# 2d) AWS Deploy (dev → ECS/Fargate)
-# ─────────────────────────────────────
-# Recommended manual loop before calling deploy-ecs:
-#   just floci-validate              # confirm Floci sandbox is healthy
-#   just dev-preflight               # confirm real AWS creds + config files
-#   docker build -t api-observatory:local . && just docker-scan-image  # build image + CVE scan
-#   just gitleaks-scan               # scan repo for leaked secrets
-#   just checkov-scan                # scan IaC for misconfigurations
-#   TF_ENV=dev just tf init          # init backend (first time or after provider change)
-#   TF_ENV=dev just tf validate      # check HCL syntax
-#   TF_ENV=dev just tf plan          # review the changeset
-#   TF_ENV=dev just tf-diagram       # optional: visualise new architecture
-#   # tweak tfvars / modules as needed, re-plan until satisfied
-#   just deploy-ecs                  # apply reviewed plan + ECS update
-
-# Apply the reviewed tfplan.aws, then trigger ECS rolling update + smoke test.
-# Assumes TF_ENV=dev just tf plan has already been run and tfplan.aws is current.
-# Usage:
-#   just deploy-ecs                          # cluster=data-zoo-dev, region from AWS config
-#   IMAGE_TAG=sha-abc1234 just deploy-ecs    # report a specific image tag in summary
-#   AWS_PROFILE=my-profile just deploy-ecs   # explicit AWS profile
-infra-dev:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    TF_ENV=dev just tf apply
-
-# Manual AWS ECS deploy wrapper; assumes reviewed tfplan.aws exists.
-deploy-ecs:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    IMAGE_TAG="${IMAGE_TAG:-$(git rev-parse HEAD^{tree} | cut -c1-7)}"
-    CLUSTER="${ECS_CLUSTER:-data-zoo-dev}"
-
-    just infra-dev
-
-    aws ecs update-service \
-        --cluster "${CLUSTER}" \
-        --service ingestor \
-        --force-new-deployment \
-        --output text --query 'service.serviceName'
-    echo "Waiting for ingestor to stabilize..."
-    aws ecs wait services-stable \
-        --cluster "${CLUSTER}" \
-        --services ingestor
-    echo "  [ok] ingestor stable"
-
-    aws ecs update-service \
-        --cluster "${CLUSTER}" \
-        --service dashboard \
-        --force-new-deployment \
-        --output text --query 'service.serviceName'
-    echo "Waiting for dashboard to stabilize..."
-    aws ecs wait services-stable \
-        --cluster "${CLUSTER}" \
-        --services dashboard
-    echo "  [ok] dashboard stable"
-
-    ALB_DNS=$(aws elbv2 describe-load-balancers \
-        --query 'LoadBalancers[?contains(LoadBalancerName, `data-zoo-dev`)].DNSName | [0]' \
-        --output text 2>/dev/null || true)
-    if [ -n "${ALB_DNS:-}" ] && [ "${ALB_DNS}" != "None" ]; then
-        echo "--- Smoke test via ALB: http://${ALB_DNS} ---"
-        bash scripts/smoke-test.sh "http://${ALB_DNS}" 60 || \
-            echo "WARNING: smoke test failed — inspect ALB and ECS tasks above" >&2
-    else
-        echo "WARNING: ALB DNS not found — skipping smoke test. Check ALB provisioning." >&2
-    fi
-
-    echo ""
-    echo "=== deploy-ecs complete ==="
-    echo "  Cluster : ${CLUSTER}"
-    echo "  Image   : api-observatory:${IMAGE_TAG}"
-    echo "  ALB     : ${ALB_DNS:-<not found>}"
 
 # ─── STACK AWARENESS ──────────────────────────────────────────────────────────
 
@@ -445,11 +314,19 @@ stack-info:
     PROJECT_ROOT="$(pwd)"
     set -a; source "${PROJECT_ROOT}/.env"; set +a
     source "${PROJECT_ROOT}/scripts/daily/local-url.sh"
-    TF="${TF_ENV:-sandbox}"
-    if [ -n "${AWS_PROFILE:-}" ] && [ "$AWS_PROFILE" != "sandbox" ]; then
-        CLOUD="AWS (profile=${AWS_PROFILE})"
+    TF="${TF_ENV:-azure-sandbox}"
+    if [ -n "${STORAGE_EMULATOR_HOST:-}" ]; then
+        CLOUD="Floci-gcp (${STORAGE_EMULATOR_HOST})"
     elif [ -n "${AWS_ENDPOINT_URL:-}" ]; then
-        CLOUD="Floci (${AWS_ENDPOINT_URL})"
+        CLOUD="Floci-aws (${AWS_ENDPOINT_URL})"
+    elif [ -n "${AZURE_ENDPOINT_URL:-}" ]; then
+        CLOUD="Floci-az (${AZURE_ENDPOINT_URL})"
+    elif gcloud config get-value project > /dev/null 2>&1 && [ -n "$(gcloud config get-value project 2>/dev/null)" ]; then
+        CLOUD="GCP ($(gcloud config get-value project 2>/dev/null))"
+    elif aws sts get-caller-identity > /dev/null 2>&1; then
+        CLOUD="AWS ($(aws sts get-caller-identity --query Account --output text 2>/dev/null))"
+    elif az account show > /dev/null 2>&1; then
+        CLOUD="Azure ($(az account show --query name -o tsv 2>/dev/null))"
     else
         CLOUD="Local-Docker"
     fi
@@ -478,43 +355,42 @@ stack-info:
 
 # ─── INFRASTRUCTURE & IMAGES ──────────────────────────────────────────────────
 #
-# 3a) Terraform (unified — sandbox or dev via TF_ENV)
+# 3a) Terraform (unified — environment via TF_ENV)
 # 3b) CVE scan
 
 # 3a) Terraform
 # ───────────────
 
-# Usage:
-#   just tf init                   # auto-detects env from TF_ENV or cwd
-#   just tf plan                   # same
-#   just tf apply                  # same
-#   TF_ENV=dev just tf plan        # force dev environment
-#   just tf fresh                  # init → plan → apply (sandbox by default)
+# Sandbox environments (emulators, $0):
+#   just tf init                          # defaults to azure-sandbox (floci-az)
+#   TF_ENV=aws-sandbox just tf init       # AWS sandbox (floci-aws)
+#   TF_ENV=gcp-sandbox just tf init       # GCP sandbox (floci-gcp)
+#
+# Cloud environments (real infra — see api-observatory-infra repo):
+#   TF_ENV=azure-dev just tf plan
+#   TF_ENV=aws-dev just tf plan
 
-# Unified Terraform runner for sandbox/dev.
+# Unified Terraform runner — resolves environment from TF_ENV.
 tf cmd:
     #!/usr/bin/env bash
     set -euo pipefail
-    ENV="${TF_ENV:-sandbox}"
+    ENV="${TF_ENV:-azure-sandbox}"
     CMD="{{cmd}}"
-    if [ "$ENV" = "dev" ]; then
-        DIR="infra/terraform/environments/dev"
-    else
-        DIR="infra/terraform/environments/sandbox"
-        source scripts/aws-env.sh floci
+    DIR="infra/terraform/environments/${ENV}"
+    if [ ! -d "$DIR" ]; then
+        echo "FAIL: Terraform environment directory not found: ${DIR}" >&2
+        echo "  Available: $(ls infra/terraform/environments/)" >&2
+        exit 1
     fi
     cd "$DIR"
 
     case "$CMD" in
         init)
-            if [ "$ENV" = "dev" ]; then
-                terraform init -reconfigure -upgrade -backend-config=backend.aws.hcl
+            BACKEND_CFG=$(ls backend.*.hcl 2>/dev/null | head -1)
+            if [ -n "${BACKEND_CFG:-}" ]; then
+                terraform init -reconfigure -upgrade -backend-config="$BACKEND_CFG"
             else
-                BACKEND_BUCKET=$(grep -E '^\s*bucket\s*=' backend.hcl | head -n1 | sed -E 's/^\s*bucket\s*=\s*"([^\"]+)".*/\1/')
-                if [ -n "$BACKEND_BUCKET" ]; then
-                    aws s3 ls "s3://$BACKEND_BUCKET" >/dev/null 2>&1 || aws s3 mb "s3://$BACKEND_BUCKET"
-                fi
-                terraform init -reconfigure -upgrade -backend-config=backend.hcl
+                terraform init -reconfigure -upgrade
             fi
             ;;
         validate)
@@ -522,43 +398,21 @@ tf cmd:
             ;;
         plan)
             export TF_IN_AUTOMATION=1
-            if [ "$ENV" = "dev" ]; then
-                terraform plan \
-                    -input=false \
-                    -lock-timeout=30m \
-                    -var-file=terraform.tfvars \
-                    -var-file=terraform.aws.tfvars \
-                    -out=tfplan.aws
-            else
-                terraform plan \
-                    -input=false \
-                    -var-file=terraform.tfvars \
-                    -out=tfplan
-            fi
+            terraform plan \
+                -input=false \
+                -var-file=terraform.tfvars \
+                -out=tfplan
             ;;
         apply)
-            if [ "$ENV" = "dev" ]; then
-                terraform apply -lock-timeout=30m tfplan.aws
-            else
-                terraform apply tfplan
-            fi
+            terraform apply tfplan
             ;;
         show)
             terraform show
             ;;
         destroy)
-            if [ "$ENV" = "dev" ]; then
-                terraform destroy \
-                    -auto-approve \
-                    -lock-timeout=30m \
-                    -var-file=terraform.tfvars \
-                    -var-file=terraform.aws.tfvars
-            else
-                terraform destroy \
-                    -auto-approve \
-                    -lock=false \
-                    -var-file=terraform.tfvars
-            fi
+            terraform destroy \
+                -auto-approve \
+                -var-file=terraform.tfvars
             ;;
         fresh)
             just tf init
@@ -570,16 +424,12 @@ tf cmd:
             ;;
     esac
 
-# Destroy Terraform-managed resources with confirmation.
+# Destroy Terraform-managed resources with confirmation prompt.
 tf-destroy:
     #!/usr/bin/env bash
     set -euo pipefail
-    ENV="${TF_ENV:-sandbox}"
-    if [ "$ENV" = "dev" ]; then
-        EXPECTED="yes-i-really-want-to-destroy-dev"
-    else
-        EXPECTED="yes-i-really-want-to-destroy-sandbox"
-    fi
+    ENV="${TF_ENV:-azure-sandbox}"
+    EXPECTED="yes-i-really-want-to-destroy-${ENV}"
     read -r -p "DANGER: Type '${EXPECTED}' to destroy ${ENV} infra: " CONFIRM
     if [ "$CONFIRM" != "$EXPECTED" ]; then
         echo "Aborted."
@@ -606,14 +456,10 @@ tf-diagram format="png":
     #!/usr/bin/env bash
     set -euo pipefail
     FORMAT="${format:-png}"
-    ENV="${TF_ENV:-sandbox}"
+    ENV="${TF_ENV:-azure-sandbox}"
     PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")"
     LOCAL_DEV="$PROJECT_ROOT/.local-dev"
-    if [ "$ENV" = "dev" ]; then
-        DIR="$PROJECT_ROOT/infra/terraform/environments/dev"
-    else
-        DIR="$PROJECT_ROOT/infra/terraform/environments/sandbox"
-    fi
+    DIR="$PROJECT_ROOT/infra/terraform/environments/${ENV}"
     mkdir -p "$LOCAL_DEV/diagrams"
     OUTFILE="$LOCAL_DEV/diagrams/data-zoo-${ENV}"
     PLANFILE="$LOCAL_DEV/tfplan-${ENV}.json"
@@ -715,8 +561,8 @@ psql-safe db-host="db":
     #!/usr/bin/env bash
     set -euo pipefail
     TARGET="${db-host}"
-    if [[ "$TARGET" =~ \.(rds|amazonaws\.com)$ ]]; then
-        echo "BLOCKED: psql-safe refuses to open an interactive shell against an AWS hostname." >&2
+    if [[ "$TARGET" =~ \.(rds|amazonaws\.com|database\.azure\.com|postgres\.database\.azure\.com)$ ]]; then
+        echo "BLOCKED: psql-safe refuses to open an interactive shell against a cloud-managed hostname." >&2
         echo "  Target: $TARGET" >&2
         echo "  If you really need this, use: psql \"\$DATABASE_URL\" directly." >&2
         exit 1
@@ -787,7 +633,7 @@ ops:
     # docker compose down
     docker compose --profile ingress down
     # docker compose up -d floci
-    # docker compose --profile aws down
+    # docker compose --profile azure down
     # docker compose logs -f ingestor
     # docker compose exec ingestor /bin/bash
     # docker compose restart ingestor
@@ -814,17 +660,17 @@ ops:
     # docker image inspect api-observatory:local --format='{{ "{{" }}.Size{{ "}}" }}'
     # docker compose --profile security run --rm trivy image --scanners vuln --severity CRITICAL --ignore-unfixed --timeout 15m --exit-code 1 api-observatory:local
     #
-    # ─── S3 (aws) ─────────────────────────────────────────────────
-    # aws s3 ls s3://api-observatory-local
-    # aws s3 cp s3://api-observatory-local .local-dev/dumps/ --recursive
-    # aws s3 cp .local-dev/dumps/ s3://api-observatory-local/ --recursive
-    # aws s3 mb s3://api-observatory-local
-    # aws sqs get-queue-url --queue-name pipeline-events
-    # aws sqs create-queue --queue-name pipeline-events
+    # ─── Blob / Queue Storage (az cli) ──────────────────────────
+    # az storage blob list --connection-string "$AZURE_STORAGE_CONNECTION_STRING" --container-name backups
+    # az storage blob upload --connection-string "$AZURE_STORAGE_CONNECTION_STRING" --container-name backups --name dump.sql.gz --file dump.sql.gz
+    # az storage blob download --connection-string "$AZURE_STORAGE_CONNECTION_STRING" --container-name backups --name dump.sql.gz --file dump.sql.gz
+    # az storage container create --connection-string "$AZURE_STORAGE_CONNECTION_STRING" --name backups
+    # az storage queue list --connection-string "$AZURE_STORAGE_CONNECTION_STRING"
+    # az storage queue create --connection-string "$AZURE_STORAGE_CONNECTION_STRING" --name drift-events
     #
     # ─── Health checks ────────────────────────────────────────────
     # curl -sf http://127.0.0.1:8000/readyz
-    # curl -sf http://127.0.0.1:4566/_floci/health
+    # curl -sf http://127.0.0.1:4577/health
     # curl -sf http://127.0.0.1:8000/health
     #
     # ─── Backup / Restore ─────────────────────────────────────────
@@ -838,10 +684,8 @@ ops:
     # cd infra/ansible && ansible-galaxy collection install -r requirements.yml
     # cd infra/ansible && ansible-playbook playbooks/bootstrap.yml -i inventory/hosts.yml --ask-vault-pass --limit dev
     # cd infra/ansible && ansible-playbook playbooks/drift-check.yml -i inventory/hosts.yml --ask-vault-pass --limit dev
-    # cd infra/ansible && ansible-playbook playbooks/provision-ec2.yml -i inventory/aws_ec2.yml --limit dev --ask-become-pass --ask-vault-pass
     # cd infra/ansible && ansible-playbook playbooks/sandbox-host.yml -i inventory/hosts.yml --limit dev --ask-become-pass
     # cd infra/ansible && ansible-playbook playbooks/local-dev.yml -i inventory/hosts.yml --limit dev --ask-become-pass
-    # cd infra/ansible && ansible-playbook playbooks/ecs-host.yml -i inventory/aws_ec2.yml --limit dev --ask-become-pass --ask-vault-pass
     #
     # ─── Terraform shortcuts ──────────────────────────────────────
     # just tf init
@@ -855,11 +699,11 @@ ops:
     # just tf-diagram html
     #
     # ─── Terraform destroy (with confirmation) ────────────────────
-    # cd infra/terraform/environments/sandbox && terraform destroy -auto-approve -lock=false -var-file=terraform.tfvars
+    # cd infra/terraform/environments/azure-sandbox && terraform destroy -auto-approve -var-file=terraform.tfvars
     #
     # ─── Terraform diagram prep ───────────────────────────────────
-    # cd infra/terraform/environments/sandbox && terraform show -json tfplan > "$(git rev-parse --show-toplevel)/.local-dev/tfplan-sandbox.json"
-    # cd infra/terraform/environments/sandbox && terraform graph > "$(git rev-parse --show-toplevel)/.local-dev/graph-sandbox.dot"
+    # cd infra/terraform/environments/azure-sandbox && terraform show -json tfplan > "$(git rev-parse --show-toplevel)/.local-dev/tfplan-azure-sandbox.json"
+    # cd infra/terraform/environments/azure-sandbox && terraform graph > "$(git rev-parse --show-toplevel)/.local-dev/graph-azure-sandbox.dot"
     #
     # ─── Full destroy ─────────────────────────────────────────────
     # TF_ENV=sandbox just tf destroy || true; docker compose down
@@ -876,11 +720,11 @@ _sandbox-seed:
     until curl_local -sf "$(local_api_url /health)" > /dev/null 2>&1; do sleep 1; done
     just _auto-init
 
-# Private: start Floci + Docker infra for sandbox workflows
+# Private: start emulator + Docker infra for sandbox workflows
 _sandbox-infra:
     #!/usr/bin/env bash
     set -euo pipefail
-    just floci-up
+    just floci-az-up
     docker compose up -d db cache broker ingestor dashboard
     until docker compose exec -T db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
 

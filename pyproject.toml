@@ -96,7 +96,8 @@ dev = [
   #   - or: https://k6.io/docs/getting-started/installation/
   "ty>=0.0.32",
   "pip-audit>=2.10.0",
-  "boto3>=1.28.0",                           # E2E tests against Floci S3/SQS
+  "azure-storage-blob>=12.20.0",              # E2E tests against floci-az Blob/Queue
+  "azure-storage-queue>=12.10.0",
 ]
 
 [tool.pytest.ini_options]
@@ -112,7 +113,7 @@ markers = [
   "unit: Fast, isolated unit tests (no I/O, no DB)",
   "integration: Tests that touch DB/ASGI client",
   "e2e: End-to-end or long-running tests (skipped by default)",
-  "aws: Floci/LocalStack AWS emulator dependent tests",
+  "azure: floci-az Azure emulator dependent tests",
   "browser: Browser-based tests using Playwright (may require system dependencies)",
   "mongo: MongoDB-dependent tests (skipped if MongoDB unavailable)",
 ]

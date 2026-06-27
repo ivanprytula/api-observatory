@@ -1,5 +1,5 @@
 # Minimal MVP stack: db, cache, broker, ingestor, dashboard
-# Network model: All services (including Floci AWS emulator) share `api-obs` network
+# Network model: All services (including cloud emulator) share `api-obs` network
 # for inter-service communication (e.g., ingestor → db, ingestor → cache).
 # Host access: All services expose ports to 127.0.0.1 or 0.0.0.0 for local development.
 
@@ -350,25 +350,97 @@ services:
     networks:
       - api-obs
 
-  # Floci Docker service (optional; started manually via: just floci-up)
-  # Docker-based Floci is more universal (works on older CPUs that lack x86-64-v3 support)
-  # To use docker-compose instead, uncomment and run: docker compose --profile aws up -d floci
-  floci:
-    image: floci/floci:latest
-    container_name: api-obs-floci
+  # ── Cloud Emulators (optional; started via: just sandbox-up CLOUD=azure|aws|gcp)
+
+  # Floci-gcp — GCP emulator (wire-compatible with Google Cloud SDKs and gcloud CLI).
+  # Emulates: Cloud Storage, Pub/Sub, Firestore, Datastore, Secret Manager, IAM,
+  # Managed Kafka, Cloud Tasks, Cloud Run, Cloud SQL, Cloud Functions, Cloud KMS,
+  # Cloud Logging, Cloud Monitoring, Cloud Scheduler, GKE, and Operations.
+  floci-gcp:
+    image: floci/floci-gcp:latest
+    container_name: api-obs-floci-gcp
+    profiles: [gcp]
+    ports:
+      - '127.0.0.1:4588:4588'
+    environment:
+      CLOUDSDK_CORE_PROJECT: ${GCP_PROJECT_ID:-floci-local}
+    volumes:
+      - ./.local-dev/tmp/floci-gcp-data:/tmp/floci-gcp
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:4588/health']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    security_opt: [no-new-privileges:true]
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        reservations:
+          cpus: '0.1'
+          memory: '128M'
+        limits:
+          cpus: '0.5'
+          memory: '512M'
+    networks:
+      - api-obs
+
+  # Floci-aws — AWS emulator (wire-compatible with AWS SDKs and CLI).
+  # Emulates: S3, EC2, IAM, STS, SQS, SNS, DynamoDB, Lambda, RDS, ECS,
+  # CloudWatch, Secrets Manager, SSM, CloudFormation, Route 53, and more.
+  floci-aws:
+    image: floci/floci-aws:latest
+    container_name: api-obs-floci-aws
     profiles: [aws]
     ports:
       - '127.0.0.1:4566:4566'
     environment:
-      FLOCI_DEFAULT_REGION: ${AWS_REGION:-us-east-1}
-      FLOCI_DEFAULT_ACCOUNT_ID: ${AWS_ACCOUNT_ID:-000000000000}
-      FLOCI_DEFAULT_AVAILABILITY_ZONE: ${AWS_AVAILABILITY_ZONE:-us-east-1a}
-      FLOCI_SERVICES_ECS_DOCKER_NETWORK: api-obs
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-eu-central-1}
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:rw
-      - ./.local-dev/tmp/floci-data:/tmp/floci
+      - ./.local-dev/tmp/floci-aws-data:/tmp/floci-aws
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:4566/_floci/health']
+      test: ['CMD', 'curl', '-f', 'http://localhost:4566/health']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    security_opt: [no-new-privileges:true]
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        reservations:
+          cpus: '0.1'
+          memory: '128M'
+        limits:
+          cpus: '0.5'
+          memory: '512M'
+    networks:
+      - api-obs
+
+  # Floci-az — Azure emulator (wire-compatible with Azure SDKs and Azurite).
+  # Emulates: Blob Storage, Queue Storage, Table Storage, Key Vault, Event Hubs,
+  # Service Bus, Cosmos DB, AKS, Azure SQL, Container Registry, Cache for Redis,
+  # App Configuration, Azure Monitor, Entra ID, Container Apps, and more.
+  floci-az:
+    image: floci/floci-az:latest
+    container_name: api-obs-floci-az
+    profiles: [azure]
+    ports:
+      - '127.0.0.1:4577:4577'
+      - '127.0.0.1:5672:5672'
+      - '127.0.0.1:5673:5673'
+    environment:
+      AZURE_REGION: ${AZURE_REGION:-polandcentral}
+    volumes:
+      - ./.local-dev/tmp/floci-az-data:/tmp/floci-az
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:4577/health']
       interval: 5s
       timeout: 3s
       retries: 10
@@ -389,21 +461,6 @@ services:
     networks:
       - api-obs
 
-  # Local Docker registry sidecar for Floci ECR emulation.
-  # Floci intercepts ECR API calls and proxies push/pull to this registry,
-  # so `docker push` to the local ECR endpoint actually pushes here.
-  # Started automatically with `just floci-up` (aws profile).
-  floci-ecr-registry:
-    image: registry:2
-    container_name: floci-ecr-registry
-    profiles: [aws]
-    ports:
-      - '127.0.0.1:5100:5000'
-    restart: unless-stopped
-    security_opt: [no-new-privileges:true]
-    networks:
-      - api-obs
-
 # ─── NETWORK ────────────────────────────────────────────────────────────────
 # All services (microservices + infrastructure emulators) share this network
 # for inter-container communication.
@@ -415,7 +472,9 @@ services:
 #   - ingestor (FastAPI microservice)
 #   - edge (HTTPS ingress proxy, started by default with `just up`)
 #   - prometheus, grafana, loki, promtail, alertmanager, mailpit (monitoring, optional via `just up-monitoring`)
-#   - floci (AWS emulator, optional via --profile aws)
+#   - floci-az (Azure emulator, optional via --profile azure)
+#   - floci-aws (AWS emulator, optional via --profile aws)
+#   - floci-gcp (GCP emulator, optional via --profile gcp)
 #
 # Host access:
 #   - edge:80, 443 → localhost:80, 443 — primary entrypoint (HTTPS via nginx)
@@ -424,7 +483,7 @@ services:
 #   - db:5432 → localhost:5432
 #   - cache:6379 → localhost:6379 (loopback only; ingestor connects via Docker network at redis://cache:6379)
 #   - broker:9092 (Kafka), 8082 (HTTP) → localhost:9092, 8082
-#   - floci:4566 → 127.0.0.1:4566 (local only)
+#   - floci-az:4577 → 127.0.0.1:4577 (local only)
 networks:
   api-obs:
     driver: bridge

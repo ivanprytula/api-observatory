@@ -20,13 +20,9 @@ REMOVED_RECIPES=(
   "tf-state-list"
   "tf-apply-local-fresh"
   "tf-destroy-local"
-  "up-aws"
   "sandbox-test"
   "sandbox-seed"
-  "test-aws-connectivity"
-  "deploy-dev"
   "floci-start"
-  "tf-plan-dev"
   "tf-apply-dev"
 )
 COMPATIBILITY_ALIASES=(

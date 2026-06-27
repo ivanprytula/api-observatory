@@ -1,265 +1,173 @@
-"""End-to-end tests for Floci (local AWS emulator) sandbox integration.
+"""End-to-end tests for floci-az (local Azure emulator) sandbox integration.
 
-Verifies that the Floci sandbox is running and that core AWS service operations work:
-1. Floci container is running and accessible at http://127.0.0.1:4566
-2. S3 bucket operations (create, list, upload, download)
-3. SQS queue operations (create, send, receive messages)
+Verifies that the floci-az sandbox is running and that core service operations work:
+1. floci-az container is running and accessible at http://127.0.0.1:4577
+2. Blob Storage operations (create container, upload, download, list)
+3. Queue Storage operations (create queue, send, receive messages)
 
 Prerequisites:
-    just floci-up       # starts Floci and provisions base resources
+    just floci-az-up    # starts floci-az and provisions base resources
 
 Run with:
-    just floci-test
-    uv run pytest tests/e2e/test_floci_integration.py -v -m aws
+    uv run pytest tests/e2e/test_floci_integration.py -v -m azure
 """
 
 import json
 import os
 import socket
-from typing import Any
 from urllib.parse import urlparse
 from uuid import uuid4
 
-import boto3
 import pytest
+from azure.storage.blob import BlobServiceClient
+from azure.storage.queue import QueueServiceClient
 
 
-# Markers: e2e + aws specific
-pytestmark = [pytest.mark.e2e, pytest.mark.aws]
+pytestmark = [pytest.mark.e2e, pytest.mark.azure]
+
+_AZURITE_CONN_STR = (
+    "DefaultEndpointsProtocol=http;"
+    "AccountName=devstoreaccount1;"
+    "AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/"
+    "K1SZFPTOtr/KBHBeksoGMGw==;"
+    "BlobEndpoint=http://127.0.0.1:4577/devstoreaccount1;"
+    "QueueEndpoint=http://127.0.0.1:4577/devstoreaccount1;"
+)
 
 
 def _unique_name(prefix: str) -> str:
-    """Generate a deterministic-safe unique resource name per test run."""
     return f"{prefix}-{uuid4().hex[:8]}"
 
 
 @pytest.fixture(scope="session")
-def aws_config() -> dict[str, str]:
-    """Get AWS configuration from environment.
-
-    LocalStack should be running:
-        just floci-up
-
-    Environment variables expected:
-        AWS_ENDPOINT_URL=http://127.0.0.1:4566
-        AWS_REGION=us-east-1
-        AWS_ACCESS_KEY_ID=test
-        AWS_SECRET_ACCESS_KEY=test
-        AWS_ACCOUNT_ID=000000000000
-    """
+def azure_config() -> dict[str, str]:
+    """Get Azure emulator configuration from environment."""
     return {
-        "endpoint_url": os.getenv("AWS_ENDPOINT_URL", "http://127.0.0.1:4566"),
-        "region_name": os.getenv("AWS_REGION", "us-east-1"),
-        "aws_access_key_id": os.getenv("AWS_ACCESS_KEY_ID", "test"),
-        "aws_secret_access_key": os.getenv("AWS_SECRET_ACCESS_KEY", "test"),
-        "account_id": os.getenv("AWS_ACCOUNT_ID", "000000000000"),
+        "connection_string": os.getenv(
+            "AZURE_STORAGE_CONNECTION_STRING", _AZURITE_CONN_STR
+        ),
+        "endpoint": os.getenv("AZURE_ENDPOINT_URL", "http://127.0.0.1:4577"),
     }
 
 
 @pytest.fixture(scope="session", autouse=True)
-def require_floci_endpoint(aws_config: dict[str, str]) -> None:
-    """Skip this module when Floci/LocalStack is not reachable.
-
-    Keeps local and CI runs deterministic by treating missing emulator
-    infrastructure as a skip, not a hard failure.
-    """
-    endpoint = aws_config["endpoint_url"]
+def require_floci_az_endpoint(azure_config: dict[str, str]) -> None:
+    """Skip this module when floci-az is not reachable."""
+    endpoint = azure_config["endpoint"]
     parsed = urlparse(endpoint)
     host = parsed.hostname or "localhost"
-    if parsed.port is not None:
-        port = parsed.port
-    elif parsed.scheme == "https":
-        port = 443
-    else:
-        port = 80
+    port = parsed.port or 4577
 
     try:
         with socket.create_connection((host, port), timeout=1.0):
             return
     except OSError:
         pytest.skip(
-            f"Floci/LocalStack endpoint is unreachable at {endpoint}. Run `just floci-up`.",
+            f"floci-az endpoint is unreachable at {endpoint}. Run `just floci-az-up`.",
             allow_module_level=True,
         )
 
 
 @pytest.fixture
-def s3_client(aws_config: dict[str, str]) -> Any:
-    """Create S3 client pointing to Floci."""
-    return boto3.client(
-        "s3",
-        endpoint_url=aws_config["endpoint_url"],
-        region_name=aws_config["region_name"],
-        aws_access_key_id=aws_config["aws_access_key_id"],
-        aws_secret_access_key=aws_config["aws_secret_access_key"],
-    )
+def blob_client(azure_config: dict[str, str]) -> BlobServiceClient:
+    return BlobServiceClient.from_connection_string(azure_config["connection_string"])
 
 
 @pytest.fixture
-def sqs_client(aws_config: dict[str, str]) -> Any:
-    """Create SQS client pointing to LocalStack."""
-    return boto3.client(
-        "sqs",
-        endpoint_url=aws_config["endpoint_url"],
-        region_name=aws_config["region_name"],
-        aws_access_key_id=aws_config["aws_access_key_id"],
-        aws_secret_access_key=aws_config["aws_secret_access_key"],
-    )
+def queue_client(azure_config: dict[str, str]) -> QueueServiceClient:
+    return QueueServiceClient.from_connection_string(azure_config["connection_string"])
 
 
 # ---------------------------------------------------------------------------
-# S3 Tests
+# Blob Storage Tests
 # ---------------------------------------------------------------------------
 
 
-def test_s3_bucket_creation(s3_client: Any) -> None:
-    """Test S3 bucket creation and listing.
+def test_blob_container_creation(blob_client: BlobServiceClient) -> None:
+    container_name = _unique_name("test-container")
 
-    Verifies:
-    - Can create a bucket
-    - Can list buckets
-    """
-    bucket_name = _unique_name("test-bucket-phase1")
+    blob_client.create_container(container_name)
 
-    # Create bucket
-    s3_client.create_bucket(Bucket=bucket_name)
-
-    # List buckets
-    response = s3_client.list_buckets()
-    bucket_names = [b["Name"] for b in response["Buckets"]]
-
-    assert bucket_name in bucket_names
+    containers = [c["name"] for c in blob_client.list_containers()]
+    assert container_name in containers
 
 
-def test_s3_object_operations(s3_client: Any) -> None:
-    """Test S3 object upload, download, and listing.
+def test_blob_upload_download(blob_client: BlobServiceClient) -> None:
+    container_name = _unique_name("test-blobs")
+    blob_client.create_container(container_name)
 
-    Verifies:
-    - Can upload objects to bucket
-    - Can download objects from bucket
-    - Can list objects in bucket
-    """
-    bucket_name = _unique_name("test-bucket-objects")
-    s3_client.create_bucket(Bucket=bucket_name)
+    test_data = json.dumps({"message": "Hello from floci-az", "phase": 1})
+    blob_name = "test-data.json"
 
-    # Upload object
-    test_key = "test-data.json"
-    test_content = json.dumps({"message": "Hello from LocalStack", "phase": 1})
-    s3_client.put_object(Bucket=bucket_name, Key=test_key, Body=test_content)
+    container = blob_client.get_container_client(container_name)
+    container.upload_blob(blob_name, test_data)
 
-    # List objects
-    response = s3_client.list_objects_v2(Bucket=bucket_name)
-    object_keys = [obj["Key"] for obj in response.get("Contents", [])]
-    assert test_key in object_keys
+    blobs = [b["name"] for b in container.list_blobs()]
+    assert blob_name in blobs
 
-    # Download object
-    response = s3_client.get_object(Bucket=bucket_name, Key=test_key)
-    downloaded_content = response["Body"].read().decode()
-    assert json.loads(downloaded_content) == json.loads(test_content)
+    downloaded = container.download_blob(blob_name).readall().decode()
+    assert json.loads(downloaded) == json.loads(test_data)
 
 
-def test_s3_multiple_objects(s3_client: Any) -> None:
-    """Test uploading and managing multiple objects.
+def test_blob_multiple_objects(blob_client: BlobServiceClient) -> None:
+    container_name = _unique_name("test-multi")
+    blob_client.create_container(container_name)
 
-    Verifies:
-    - Can upload multiple objects
-    - Objects are retrievable independently
-    """
-    bucket_name = _unique_name("test-bucket-multi")
-    s3_client.create_bucket(Bucket=bucket_name)
-
-    # Upload multiple objects
     objects = {
         "data/event-1.json": {"event_id": 1, "type": "order"},
         "data/event-2.json": {"event_id": 2, "type": "payment"},
         "metadata/schema.json": {"version": "1.0", "schema": "pipeline"},
     }
 
-    for key, content in objects.items():
-        s3_client.put_object(Bucket=bucket_name, Key=key, Body=json.dumps(content))
+    container = blob_client.get_container_client(container_name)
+    for name, content in objects.items():
+        container.upload_blob(name, json.dumps(content))
 
-    # Verify all objects exist
-    response = s3_client.list_objects_v2(Bucket=bucket_name)
-    uploaded_keys = sorted([obj["Key"] for obj in response["Contents"]])
-    assert uploaded_keys == sorted(objects.keys())
+    uploaded = sorted([b["name"] for b in container.list_blobs()])
+    assert uploaded == sorted(objects.keys())
 
 
 # ---------------------------------------------------------------------------
-# SQS Tests
+# Queue Storage Tests
 # ---------------------------------------------------------------------------
 
 
-def test_sqs_queue_creation(sqs_client: Any) -> None:
-    """Test SQS queue creation and listing.
+def test_queue_creation(queue_client: QueueServiceClient) -> None:
+    queue_name = _unique_name("test-queue")
 
-    Verifies:
-    - Can create queue
-    - Can list queues
-    """
-    queue_name = _unique_name("test-queue-phase1")
+    queue_client.create_queue(queue_name)
 
-    # Create queue
-    response = sqs_client.create_queue(QueueName=queue_name)
-    queue_url = response["QueueUrl"]
-    assert queue_url is not None
-
-    # List queues
-    response = sqs_client.list_queues()
-    queue_urls = response.get("QueueUrls", [])
-    assert any(queue_name in url for url in queue_urls)
+    queues = [q["name"] for q in queue_client.list_queues()]
+    assert queue_name in queues
 
 
-def test_sqs_message_operations(sqs_client: Any) -> None:
-    """Test SQS message send and receive.
+def test_queue_message_operations(queue_client: QueueServiceClient) -> None:
+    queue_name = _unique_name("test-messages")
+    queue = queue_client.create_queue(queue_name)
 
-    Verifies:
-    - Can send message to queue
-    - Can receive message from queue
-    - Message body is preserved
-    """
-    queue_name = _unique_name("test-queue-messages")
-    response = sqs_client.create_queue(QueueName=queue_name)
-    queue_url = response["QueueUrl"]
-
-    # Send message
     test_message = json.dumps({"order_id": 123, "status": "pending"})
-    sqs_client.send_message(QueueUrl=queue_url, MessageBody=test_message)
+    queue.send_message(test_message)
 
-    # Receive message
-    response = sqs_client.receive_message(QueueUrl=queue_url)
-    messages = response.get("Messages", [])
+    messages = queue.receive_messages()
+    received = [json.loads(m.content) for m in messages]
 
-    assert len(messages) == 1
-    received_body = json.loads(messages[0]["Body"])
-    assert received_body["order_id"] == 123
-    assert received_body["status"] == "pending"
+    assert len(received) == 1
+    assert received[0]["order_id"] == 123
+    assert received[0]["status"] == "pending"
 
 
-def test_sqs_batch_messages(sqs_client: Any) -> None:
-    """Test SQS batch message operations.
+def test_queue_batch_messages(queue_client: QueueServiceClient) -> None:
+    queue_name = _unique_name("test-batch")
+    queue = queue_client.create_queue(queue_name)
 
-    Verifies:
-    - Can send multiple messages
-    - Can receive multiple messages
-    """
-    queue_name = _unique_name("test-queue-batch")
-    response = sqs_client.create_queue(QueueName=queue_name)
-    queue_url = response["QueueUrl"]
+    payloads = [{"order_id": i, "customer": f"customer-{i}"} for i in range(1, 4)]
+    for msg in payloads:
+        queue.send_message(json.dumps(msg))
 
-    # Send batch of messages
-    messages = [{"order_id": i, "customer": f"customer-{i}"} for i in range(1, 4)]
-    for _, msg in enumerate(messages):
-        sqs_client.send_message(QueueUrl=queue_url, MessageBody=json.dumps(msg))
+    messages = queue.receive_messages(messages_per_page=10)
+    received_ids = {json.loads(m.content)["order_id"] for m in messages}
 
-    # Receive messages
-    response = sqs_client.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=10)
-    received_messages = response.get("Messages", [])
-
-    assert len(received_messages) == 3
-    received_order_ids = [
-        json.loads(msg["Body"])["order_id"] for msg in received_messages
-    ]
-    assert set(received_order_ids) == {1, 2, 3}
+    assert received_ids == {1, 2, 3}
 
 
 # ---------------------------------------------------------------------------
@@ -267,41 +175,28 @@ def test_sqs_batch_messages(sqs_client: Any) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_s3_and_sqs_integration(s3_client: Any, sqs_client: Any) -> None:
-    """Test S3 and SQS working together.
+def test_blob_and_queue_integration(
+    blob_client: BlobServiceClient, queue_client: QueueServiceClient
+) -> None:
+    """Upload data to Blob Storage, notify via Queue, verify both."""
+    container_name = _unique_name("integration")
+    blob_client.create_container(container_name)
 
-    Workflow:
-    1. Upload data to S3
-    2. Send notification to SQS with S3 reference
-    3. Retrieve and verify both
-    """
-    # Setup S3
-    bucket_name = _unique_name("integration-bucket")
-    s3_client.create_bucket(Bucket=bucket_name)
+    queue_name = _unique_name("integration-q")
+    queue = queue_client.create_queue(queue_name)
 
-    # Setup SQS
-    queue_name = _unique_name("integration-queue")
-    response = sqs_client.create_queue(QueueName=queue_name)
-    queue_url = response["QueueUrl"]
-
-    # Upload data to S3
-    data_key = "processed/data-001.json"
+    data_blob = "processed/data-001.json"
     data_content = {"observations": [{"id": 1}, {"id": 2}]}
-    s3_client.put_object(
-        Bucket=bucket_name, Key=data_key, Body=json.dumps(data_content)
-    )
+    container = blob_client.get_container_client(container_name)
+    container.upload_blob(data_blob, json.dumps(data_content))
 
-    # Send notification to SQS
-    notification = {"bucket": bucket_name, "key": data_key, "status": "ready"}
-    sqs_client.send_message(QueueUrl=queue_url, MessageBody=json.dumps(notification))
+    notification = {"container": container_name, "blob": data_blob, "status": "ready"}
+    queue.send_message(json.dumps(notification))
 
-    # Verify: Retrieve from SQS
-    response = sqs_client.receive_message(QueueUrl=queue_url)
-    message_body = json.loads(response["Messages"][0]["Body"])
-    assert message_body["bucket"] == bucket_name
-    assert message_body["key"] == data_key
+    messages = queue.receive_messages()
+    msg_body = json.loads(list(messages)[0].content)
+    assert msg_body["container"] == container_name
+    assert msg_body["blob"] == data_blob
 
-    # Verify: Retrieve from S3
-    s3_response = s3_client.get_object(Bucket=bucket_name, Key=data_key)
-    retrieved_data = json.loads(s3_response["Body"].read())
-    assert retrieved_data == data_content
+    retrieved = json.loads(container.download_blob(data_blob).readall())
+    assert retrieved == data_content

@@ -20,13 +20,12 @@ MONGO_HOST="${MONGO_HOST:-localhost}"
 MONGO_PORT="${MONGO_PORT:-27017}"
 MONGO_DB="${MONGO_DB:-data_zoo}"
 
-# S3 configuration
-# BACKUP_STORAGE: local | s3 | both  (default: local)
+# Cloud storage configuration
+# BACKUP_STORAGE: local | blob | both  (default: local)
 BACKUP_STORAGE="${BACKUP_STORAGE:-local}"
-BACKUP_S3_BUCKET="${BACKUP_S3_BUCKET:-}"
-BACKUP_S3_PREFIX="${BACKUP_S3_PREFIX:-backups/}"
-# AWS_ENDPOINT_URL: set to http://localhost:4566 for Floci; leave unset for real AWS
-AWS_ENDPOINT_URL="${AWS_ENDPOINT_URL:-}"
+BACKUP_BLOB_CONTAINER="${BACKUP_BLOB_CONTAINER:-backups}"
+BACKUP_BLOB_PREFIX="${BACKUP_BLOB_PREFIX:-}"
+# AZURE_STORAGE_CONNECTION_STRING: set for floci-az emulator or real Azure Storage
 
 # ─── Setup ─────────────────────────────────────────────────────────────────────
 mkdir -p "${BACKUP_DIR}/postgres" "${BACKUP_DIR}/mongodb"
@@ -34,25 +33,25 @@ mkdir -p "${BACKUP_DIR}/postgres" "${BACKUP_DIR}/mongodb"
 log() { echo "[$(date '+%H:%M:%S')] $*"; }
 error() { echo "[$(date '+%H:%M:%S')] ERROR: $*" >&2; }
 
-# ─── S3 upload helper ───────────────────────────────────────────────────────────
-upload_to_s3() {
+# ─── Blob Storage upload helper ─────────────────────────────────────────────────
+upload_to_blob() {
     local local_file="${1}"
-    local s3_key="${2}"
+    local blob_name="${2}"
 
-    if [[ -z "${BACKUP_S3_BUCKET}" ]]; then
-        error "BACKUP_S3_BUCKET is not set; cannot upload to S3"
+    if [[ -z "${AZURE_STORAGE_CONNECTION_STRING:-}" ]]; then
+        error "AZURE_STORAGE_CONNECTION_STRING is not set; cannot upload to Blob Storage"
         return 1
     fi
 
-    local aws_args=()
-    if [[ -n "${AWS_ENDPOINT_URL}" ]]; then
-        aws_args=(--endpoint-url "${AWS_ENDPOINT_URL}")
-    fi
-
-    local s3_uri="s3://${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}${s3_key}"
-    log "Uploading ${local_file} → ${s3_uri}"
-    aws "${aws_args[@]}" s3 cp "${local_file}" "${s3_uri}"
-    log "S3 upload complete: ${s3_uri}"
+    log "Uploading ${local_file} → ${BACKUP_BLOB_CONTAINER}/${BACKUP_BLOB_PREFIX}${blob_name}"
+    az storage blob upload \
+        --connection-string "${AZURE_STORAGE_CONNECTION_STRING}" \
+        --container-name "${BACKUP_BLOB_CONTAINER}" \
+        --name "${BACKUP_BLOB_PREFIX}${blob_name}" \
+        --file "${local_file}" \
+        --overwrite \
+        --output none
+    log "Blob upload complete: ${BACKUP_BLOB_CONTAINER}/${BACKUP_BLOB_PREFIX}${blob_name}"
 }
 
 # ─── PostgreSQL backup ──────────────────────────────────────────────────────────
@@ -74,8 +73,8 @@ backup_postgres() {
     size=$(du -sh "${out}" | cut -f1)
     log "PostgreSQL backup complete: ${out} (${size})"
 
-    if [[ "${BACKUP_STORAGE}" == "s3" || "${BACKUP_STORAGE}" == "both" ]]; then
-        upload_to_s3 "${out}" "postgres/$(basename "${out}")"
+    if [[ "${BACKUP_STORAGE}" == "blob" || "${BACKUP_STORAGE}" == "both" ]]; then
+        upload_to_blob "${out}" "postgres/$(basename "${out}")"
     fi
 
     echo "${out}"
@@ -102,8 +101,8 @@ backup_mongodb() {
     size=$(du -sh "${out}.archive.gz" | cut -f1)
     log "MongoDB backup complete: ${out}.archive.gz (${size})"
 
-    if [[ "${BACKUP_STORAGE}" == "s3" || "${BACKUP_STORAGE}" == "both" ]]; then
-        upload_to_s3 "${out}.archive.gz" "mongodb/$(basename "${out}.archive.gz")"
+    if [[ "${BACKUP_STORAGE}" == "blob" || "${BACKUP_STORAGE}" == "both" ]]; then
+        upload_to_blob "${out}.archive.gz" "mongodb/$(basename "${out}.archive.gz")"
     fi
 
     echo "${out}.archive.gz"

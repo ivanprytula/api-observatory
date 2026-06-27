@@ -182,7 +182,7 @@ jobs:
           upload: always
           category: /language:python
 
-  # DOCKER BUILD & SCAN (ECR only)
+  # DOCKER BUILD, PUSH & SCAN (Azure Container Registry)
   docker-build:
     name: "Build and push candidate image (ingestor)"
     runs-on: ubuntu-latest
@@ -190,19 +190,12 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
-      packages: read
     outputs:
       image_ingestor: ${{ steps.build-ingestor.outputs.image }}
       tree_sha: ${{ steps.resolve.outputs.tree_sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b #v6.2.0
-        with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN_DEV }}
-          aws-region: ${{ env.AWS_REGION }}
 
       - name: Resolve tree SHA
         id: resolve
@@ -212,8 +205,12 @@ jobs:
           TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
           echo "tree_sha=${TREE_SHA}" >> "$GITHUB_OUTPUT"
 
-      - name: Log in to ECR
-        run: aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ vars.DEV_ECR_REGISTRY }}
+      - name: Log in to ACR
+        uses: docker/login-action@553b6f090f15b58451081ce157ff1929a266131d # v3.3.0
+        with:
+          registry: ${{ vars.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
 
       - name: Build and push ingestor image
         id: build-ingestor
@@ -221,7 +218,7 @@ jobs:
           DOCKER_BUILDKIT: "1"
         run: |
           TREE_SHA="${{ steps.resolve.outputs.tree_sha }}"
-          IMAGE="${{ vars.DEV_ECR_REGISTRY }}/data-zoo-ingestor:tree-${TREE_SHA}"
+          IMAGE="${{ vars.ACR_LOGIN_SERVER }}/api-observatory/ingestor:tree-${TREE_SHA}"
           docker build -t "${IMAGE}" .
           docker push "${IMAGE}"
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
@@ -240,18 +237,11 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
-      packages: read
     outputs:
       image_dashboard: ${{ steps.build-dashboard.outputs.image }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b #v6.2.0
-        with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN_DEV }}
-          aws-region: ${{ env.AWS_REGION }}
 
       - name: Resolve tree SHA
         id: resolve
@@ -261,8 +251,12 @@ jobs:
           TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
           echo "tree_sha=${TREE_SHA}" >> "$GITHUB_OUTPUT"
 
-      - name: Log in to ECR
-        run: aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ vars.DEV_ECR_REGISTRY }}
+      - name: Log in to ACR
+        uses: docker/login-action@553b6f090f15b58451081ce157ff1929a266131d # v3.3.0
+        with:
+          registry: ${{ vars.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
 
       - name: Build and push dashboard image
         id: build-dashboard
@@ -270,7 +264,7 @@ jobs:
           DOCKER_BUILDKIT: "1"
         run: |
           TREE_SHA="${{ steps.resolve.outputs.tree_sha }}"
-          IMAGE="${{ vars.DEV_ECR_REGISTRY }}/data-zoo-dashboard:tree-${TREE_SHA}"
+          IMAGE="${{ vars.ACR_LOGIN_SERVER }}/api-observatory/dashboard:tree-${TREE_SHA}"
           docker build -t "${IMAGE}" -f services/dashboard/Dockerfile services/dashboard
           docker push "${IMAGE}"
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
@@ -281,24 +275,21 @@ jobs:
     needs: [docker-build, docker-build-dashboard]
     permissions:
       contents: read
-      packages: read
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b #v6.2.0
+      - name: Log in to ACR
+        uses: docker/login-action@553b6f090f15b58451081ce157ff1929a266131d # v3.3.0
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN_DEV }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Log in to ECR
-        run: aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ vars.DEV_ECR_REGISTRY }}
+          registry: ${{ vars.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
 
       - name: Pull and scan ingestor image
         run: |
-          docker pull "${{ vars.DEV_ECR_REGISTRY }}/data-zoo-ingestor:tree-${{ needs.docker-build.outputs.tree_sha }}"
-          docker tag "${{ vars.DEV_ECR_REGISTRY }}/data-zoo-ingestor:tree-${{ needs.docker-build.outputs.tree_sha }}" ingestor:scan
+          docker pull "${{ needs.docker-build.outputs.image_ingestor }}"
+          docker tag "${{ needs.docker-build.outputs.image_ingestor }}" ingestor:scan
 
       - name: Scan ingestor (Trivy advisory)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0

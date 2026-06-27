@@ -2,7 +2,7 @@
 
 Async FastAPI service for API reliability monitoring, contract drift detection, scorecard reporting, and LangGraph-powered observation enrichment.
 
-**MVP status**: All 13 commits complete. Core features + Terraform ECS + deploy docs shippable.
+**MVP status**: Core features complete. CI/CD targets Azure free tier (ACR + B1s VM). Local dev uses floci-az emulator.
 
 ## Quick Start
 
@@ -38,7 +38,7 @@ See the "Architecture Overview" for the full flow diagram.
 | [04-setup/](docs/04-setup/) | Environment bootstrap — system setup, first-time setup, local HTTPS |
 | [05-development/](docs/05-development/) | Daily dev workflow, commands reference, Bruno collections, testing |
 | [06-ci-cd/](docs/06-ci-cd/) | CI/CD workflow reference, prebuilt images, security hardening |
-| [07-deployment/](docs/07-deployment/) | AWS ECS deployment, cloud security checklist, runbooks |
+| [07-deployment/](docs/07-deployment/) | Cloud deployment guides, security checklist, runbooks |
 | [08-operations/](docs/08-operations/) | Observability, webhooks, incident runbooks |
 | [09-user-guides/](docs/09-user-guides/) | Dashboard, scorecards, WebSocket, Streamlit |
 | [services/ingestor/](services/ingestor/) | FastAPI service source — routes, schemas, repos, agent, tests |
@@ -53,4 +53,4 @@ See the "Architecture Overview" for the full flow diagram.
 - User Guide — purpose, functionality
 - Commands Reference — CLI catalog
 - Architecture Overview — visual flow diagram
-- AWS ECS Deployment — deployment sequence
+- Deployment Guide — cloud deployment sequence

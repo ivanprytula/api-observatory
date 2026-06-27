@@ -1,7 +1,6 @@
 ---
-# Low-level EC2 bootstrap — packages, Docker, users, sysctl.
+# Base OS bootstrap — packages, Docker, users, sysctl.
 # Run this BEFORE app deployment on a fresh VM.
-# For API Observatory containers, use playbooks/provision-ec2.yml instead.
 #
 # Usage:
 #   ansible-playbook playbooks/local-dev.yml -i inventory/hosts.yml \

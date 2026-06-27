@@ -1102,217 +1102,94 @@ See ADR 003 (HTMX vs React) for the dashboard UI decision rationale.
 
 ---
 
-## Phase 7: Infrastructure as Code — AWS ECS Fargate Deployment ✅
+## Phase 7: Cloud Deployment — Azure Free Tier
 
-**Status**: ✅ Complete — Terraform modules, CI/CD workflows, cloud deployment guide
-**Timeline**: Week 13–14 (April 2026)
-**Decision**: ECS Fargate (not EKS) — see Cloud Deployment Model for trade-off analysis
+**Status**: ✅ Complete — Terraform configs, CI/CD workflows, deployment guide
+**Decision**: Azure Free Tier VM + Docker Compose — see ADR 009
 
-### Architecture: Local → AWS
+### Architecture: Local → Cloud
 
 ```text
 ┌─────────────────────────────────────────────────────────┐
 │  Local Development (docker-compose.yml)                │
 │  ┌─ ingestor:8000                                      │
-│  ├─ processor (Kafka consumer)                         │
-│  ├─ inference:8001                                    │
-│  ├─ analytics:8002                                     │
-│  ├─ dashboard:8003                                     │
-│  ├─ broker:9092 (Kafka-compatible)                   │
+│  ├─ dashboard:8501                                     │
+│  ├─ broker:9092 (Kafka-compatible)                     │
 │  ├─ postgres:5432                                      │
-│  ├─ mongodb:27017                                      │
 │  ├─ cache:6379                                         │
-│  ├─ qdrant:6333                                        │
-│  └─ jaeger:16686 (tracing UI)                          │
+│  └─ floci-az:4577 (cloud emulator, optional)           │
 └─────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────┐
-│  AWS Production (Terraform)                            │
+│  Azure Free Tier (Terraform)                           │
 │                                                         │
-│  Route 53 (DNS) → ACM (TLS cert)                       │
-│         ↓                                               │
-│  Application Load Balancer (ALB)                       │
-│         │ Listeners: HTTP→HTTPS, HTTPS:443             │
-│         ↓ Target Group: /health (ECS tasks)            │
-│  ┌─────────────────────────────────────────┐           │
-│  │  ECS Cluster (Container Orchestration)  │           │
-│  │  ├─ ingestor task (1–2 replicas)        │           │
-│  │  ├─ processor task (1–2 replicas)       │           │
-│  │  ├─ inference task (1–2 replicas)      │           │
-│  │  ├─ analytics task (1–2 replicas)       │           │
-│  │  └─ dashboard task (1–2 replicas)       │           │
-│  │     (All: Fargate Spot for dev,         │           │
-│  │      Fargate for prod; rolling update)  │           │
-│  └─────────────────────────────────────────┘           │
-│  ├─ RDS PostgreSQL 17 (Multi-AZ in prod)  │           │
-│  ├─ ElastiCache Cache 7.1 (TLS + AUTH)    │           │
-│  ├─ MSK Serverless (Kafka, IAM auth)      │           │
-│  └─ CloudWatch (logging, metrics)         │           │
+│  B1s VM (Docker Compose)                               │
+│  ├─ ingestor:8000                                      │
+│  ├─ dashboard:8501                                     │
+│  ├─ postgres:5432 (in-VM container)                    │
+│  ├─ redis:6379                                         │
+│  └─ nginx:80/443                                       │
+│                                                         │
+│  ACR Standard (container image registry)               │
+│  PostgreSQL Flexible Server (B1ms, optional)           │
+│  Blob Storage (backups, archives)                      │
 └─────────────────────────────────────────────────────────┘
 ```
 
-### Terraform Module Structure
+### Terraform Structure
 
-Location: `infra/terraform/`
+Location: `infra/terraform/environments/`
 
-**Root modules** (`infra/terraform/`):
+| Environment      | Target                     | Backend        |
+| ---------------- | -------------------------- | -------------- |
+| `azure-sandbox`  | Local floci-az emulator    | Local state    |
+| `azure-dev`      | Real Azure (free tier)     | Azure Storage  |
 
-- `main.tf` — Provider config (AWS), backend template (S3 + lockfile)
-- `variables.tf` — Shared variables (AWS region, VPC CIDR, instance types)
-- `outputs.tf` — Exports (ALB DNS, ECR URLs, IAM role ARN)
+Resources managed by `azure-dev`:
 
-**Service modules** (`infra/terraform/modules/`):
+- Resource group, VNet, subnet, NSG (SSH + HTTP + HTTPS)
+- B1s Linux VM with public IP
+- PostgreSQL Flexible Server (B1ms, 32 GB)
+- Firewall rule (VM IP → PostgreSQL)
 
-| Module       | Responsibility                               | Key Resources                                                                       |
-| ------------ | -------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `network/`   | VPC, subnets, IGW, NAT, security groups      | 2 public + 2 private subnets (2 AZs), 5 security groups                             |
-| `ecr/`       | Container image registry                     | ECR repos for all 5 services                                                        |
-| `iam/`       | GitHub Actions OIDC provider, roles          | `github-actions-role` (OIDC trust), ECR push policy                                 |
-| `database/`  | RDS PostgreSQL 17                            | Encrypted gp3, managed password (Secrets Manager), Multi-AZ toggle                  |
-| `cache/`     | ElastiCache Cache 7.1                        | TLS + AUTH token, automatic failover (prod), snapshots                              |
-| `messaging/` | MSK Serverless (Kafka)                       | IAM auth (no passwords), private subnets                                            |
-| `compute/`   | ECS cluster, ALB, task definitions, services | ALB, target group, ingestor + 4 service task defs, ECS service with circuit breaker |
+### CI/CD Flow
 
-**Environment configurations** (`infra/terraform/environments/`):
-
-| Config           | Dev                        | Prod                             |
-| ---------------- | -------------------------- | -------------------------------- |
-| Fargate capacity | Spot (cost $10–20/mo)      | Reserved (reliability $30–50/mo) |
-| DB instance      | `db.t3.micro`              | `db.t3.medium` Multi-AZ          |
-| Cache instance   | `cache.t3.micro`           | `cache.t3.small` + replica       |
-| NAT Gateways     | 1 (shared, cost-optimized) | 3 (one per AZ, HA)               |
-| ECS replicas     | 1 task per service         | 2 tasks per service              |
-| Log retention    | 14 days                    | 90 days                          |
-
-### CI/CD: queued CI + manual promotion/deploy
+```text
+Push / PR → CI workflow
+    lint, unit tests, integration tests, CodeQL
+    Docker build → push to ACR
+    Trivy security scan
+    ↓
+CI passes → CD Dev (manual approval gate)
+    Resolve ACR image refs
+    SSH into VM → docker login ACR → pull → compose up
+    Health check + smoke test
+```
 
 Active workflows:
 
-- `.github/workflows/ci.yml`
-- `.github/workflows/docker-build.yml`
-- `.github/workflows/release-promote.yml`
-- `.github/workflows/cd-deploy.yml`
+- `.github/workflows/ci.yml` — build, test, push to ACR, scan
+- `.github/workflows/cd-dev.yml` — deploy to Azure VM via SSH
 
-```text
-Push / PR
-    ↓
-CI workflow
-    01 Quality
-    02 Unit
-    03 Migrations
-    04 Integration
-    05 E2E
-    06 Dependency Audit (PR only)
-    07 Build all service images on push
-    ↓
-Manual docker-build.yml
-    - select one service or all services
-    - optional ECR push
-    - optional cosign signing
-    ↓
-Manual release-promote.yml
-    - promote digest/tag for one service or all services
-  - apply target tag: dev / prod
-    ↓
-Manual cd-deploy.yml
-    - select environment
-    - select service
-    - update ECS service using environment-specific vars
-```
+### Cost
 
-Authentication: GitHub OIDC provider (no AWS access keys in GitHub Secrets)
+All within Azure Free Tier (12-month window):
 
-- Reduces credential rotation burden
-- Provides audit trail (role assumption logged in CloudTrail)
-- Role trust policy restricted to `main` and `develop` branches
+| Resource | Free Limit | Usage |
+|----------|-----------|-------|
+| B1s VM | 750 hrs/month | ~730 hrs (always-on) |
+| ACR Standard | 1 unit/day | Image pushes on deploy |
+| Blob Storage (Hot LRS) | 5 GB | Backups, archives |
+| Data Transfer Out | 15 GB/month | API + dashboard traffic |
 
-Current CD model:
+Estimated monthly cost: **$0** (within free tier limits).
 
-1. Enable ECS deploy permissions in IAM/Terraform
-2. Push and sign the desired image manually when needed
-3. Promote the digest to the environment tag manually
-4. Deploy the exact service to the exact environment manually
+### Related Documentation
 
-### Local Development → AWS: First Deploy
-
-Prerequisites:
-
-1. AWS named profile (`data-zoo-dev` / `data-zoo-prod`) or aws-vault
-2. S3 backend bucket (created once per AWS account, with lockfile enabled)
-3. GitHub Actions secrets: `AWS_ACCOUNT_ID`, `AWS_ROLE_ARN`, `DEV_ALB_URL` (post-apply)
-4. ACM certificate ARN (if using custom domain)
-
-Manual deployment example:
-
-```bash
-cd infra/terraform/environments/dev
-
-# Initialize backend
-terraform init \
-  -backend-config="bucket=data-zoo-terraform-state-dev" \
-  -backend-config="key=data-zoo/dev/terraform.tfstate" \
-  -backend-config="region=eu-central-1" \
-  -backend-config="use_lockfile=true"
-
-# Plan
-cp terraform.tfvars.example terraform.tfvars
-# Edit: fill in acm_certificate_arn, etc.
-terraform plan
-
-# Apply (using aws-vault for secure credential injection)
-aws-vault exec data-zoo-dev -- terraform apply
-
-# Outputs: ALB DNS, ECR URLs, role ARN
-terraform output
-
-# Test the ALB
-curl https://<alb-dns>/api/v1/observations  # 401 (unauthenticated for now)
-```
-
-### Phase 7 Design Patterns
-
-Infrastructure as Code (IaC)
-
-- Modules are reusable, parameterized
-- No hardcoded values; all via `variables.tf` and `terraform.tfvars`
-- State stored in S3 with lockfile locking (team-safe)
-
-Secrets Management
-
-- Sensitive values (`acm_certificate_arn`, `cache_auth_token`) via environment variables, never in code or state
-- RDS password managed by AWS Secrets Manager (auto-rotated)
-- ElastiCache AUTH token stored in SSM Parameter Store
-
-Resilience
-
-- ALB health check: `/health` endpoint (5s interval, 3 failures to mark unhealthy)
-- ECS circuit breaker: stops deployments if too many tasks fail to reach running state
-- Rolling update: 100% minimum healthy, 200% maximum → zero-downtime deploys
-- DLQ for Kafka failures: processor routes bad messages instead of crashing
-
-Cost Optimization (dev vs prod)
-
-| Resource    | Dev              | Prod                  | Savings                   |
-| ----------- | ---------------- | --------------------- | ------------------------- |
-| Fargate     | Spot ($0.009/hr) | On-Demand ($0.045/hr) | 80% cheaper on-demand     |
-| RDS         | db.t3.micro      | db.t3.medium Multi-AZ | Less compute, HA tradeoff |
-| NAT GW      | 1 (shared)       | 3 (HA)                | 1/3 of prod cost          |
-| **Monthly** | ~$85             | ~$280                 | 70% savings in dev        |
-
-Security by Default
-
-- VPC: all resources in private subnets (ALB in public, NAT for outbound)
-- Security groups: least-privilege (app ← ALB only, DB ← app only)
-- RDS: encryption at rest (gp3), encrypted backups (7–14 day retention)
-- ElastiCache: TLS in-transit + AUTH token (password)
-- Tasks: readonly root filesystem, non-root user (1000:1000), no hardcoded secrets
-
-### Related ADRs & Documentation
-
-- **Why Fargate?** See Cloud Deployment Model for ECS Fargate vs EKS trade-off analysis
-- **Terraform modules**: Each module has inline comments explaining purpose and parameters
-- **First-time setup**: Complete walkthrough in Cloud Deployment Model (AWS profiles, S3 backend, GitHub secrets)
-- **CD enablement**: Instructions in Cloud Deployment Model section "Enabling CD"
+- **Why Azure?** See ADR 009: Azure Free Tier Over AWS for MVP
+- **Deployment guide**: `docs/07-deployment/deployment-guide.md`
+- **GitHub secrets setup**: `docs/06-ci-cd/github-secrets-setup.md`
+- **Provisioning script**: `infra/scripts/azure-provision.sh`
 
 ---
 
