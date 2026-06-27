@@ -75,7 +75,7 @@ curl http://${VM_IP}:8501/_stcore/health
 ```bash
 VM_IP=$(az vm show --resource-group api-observatory-rg --name api-observatory-vm --show-details --query publicIps -o tsv)
 TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
-ACR="CHANGEME.azurecr.io"
+ACR="${ACR_LOGIN_SERVER:-CHANGEME.azurecr.io}"
 
 ssh azureuser@${VM_IP} bash -s <<EOF
 set -euo pipefail

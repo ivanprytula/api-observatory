@@ -44,7 +44,8 @@ See the "Architecture Overview" for the full flow diagram.
 | [services/ingestor/](services/ingestor/) | FastAPI service source — routes, schemas, repos, agent, tests |
 | [tests/](tests/) | Test suite — unit, integration, e2e, shared fixtures |
 | [libs/](libs/) | Shared Python libraries — contracts, resilience, platform |
-| [infra/](infra/) | Infrastructure — Terraform, Kubernetes, CI, Docker |
+| [infra/](infra/) | Local dev infra — Docker Compose, sandbox TF, k3d, Ansible (local) |
+| [api-observatory-infra](https://github.com/ivanprytula/api-observatory-infra) | Cloud infrastructure — Terraform (cloud envs), K8s, Helm, prod monitoring |
 | [scripts/](scripts/) | Shell scripts — setup, testing, daily dev, deployment |
 | [.github/hooks/](.github/hooks/) | Pre-commit hooks — secrets scanner, tool guardian, governance audit |
 
