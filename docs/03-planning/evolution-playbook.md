@@ -26,6 +26,22 @@ Use this when planning or implementing:
 6. Define business impact: pricing story, sponsorship narrative, GTM signal.
 7. Implement in small slices with measurable acceptance criteria.
 
+### Vertical-Slice Estimation
+
+When scoping a task or ticket, answer it as one cohesive vertical slice and give an honest range —
+not a single optimistic number. Trace the work end to end before estimating:
+
+- Does it need a database migration (forward-only, run before rollout)?
+- Does it bump a cross-service contract (`libs/contracts/VERSION` + changelog)?
+- Does it add or change tests (the three-test set per endpoint, integration coverage)?
+- Does it need a rollout step (feature flag, expand-contract, ordered deploy)?
+
+A ticket that looks small at the API layer can be a five-minute change or a five-hour change once
+the migration, contract bump, tests, and rollout are counted. Surface that hidden cost up front so
+the range is honest. This complements ACROSS — which already covers Python-first and
+YAGNI/anti-overengineering (see [CLAUDE.md](../../CLAUDE.md)) — and is not a new priority system; it
+is a habit applied while working the Decision Flow above.
+
 ## Change Types
 
 ### 1. Existing Service Feature Expansion

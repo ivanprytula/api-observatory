@@ -104,12 +104,15 @@ outbound requests (SSRF mitigation).
 
 ## CI Security Controls
 
-| Control                  | CI job               | Wave  | What it does                              |
-| ------------------------ | -------------------- | ----- | ----------------------------------------- |
-| `pip-audit`              | `dependency-audit`   | 5     | Checks all Python deps for known CVEs     |
-| Trivy image scan         | `build-images`       | 5     | Scans built container images for CVEs     |
-| SHA-pinned action refs   | all workflows        | —     | Supply chain security for Actions         |
-| `ruff` security rules    | `prechecks`          | 2     | Lints for security anti-patterns (S rules)|
+| Control                  | CI job                 | Trigger      | What it does                              |
+| ------------------------ | ---------------------- | ------------ | ----------------------------------------- |
+| `pip-audit`              | `python-deps`          | push / PR    | Checks all Python deps for known CVEs     |
+| CodeQL SAST              | `codeql`               | push / PR    | Deep static analysis for Python           |
+| Trivy image scan         | `docker-scan-security` | push / PR    | Scans built container images for CVEs     |
+| `gitleaks`               | `gitleaks-scan`        | PR           | Secret scan over the commit range         |
+| `ruff` security rules    | `lint`                 | push / PR    | Lints for security anti-patterns (S rules)|
+| SHA-pinned action refs   | all workflows          | —            | Supply chain security for Actions         |
+| Scheduled deep audit     | `security-audit`       | daily cron   | Full deps + SAST + image scan (security.yml) |
 
 All GitHub Actions refs in `.github/workflows/` are pinned to full commit SHAs.
 See GitHub Actions Security for the
@@ -117,6 +120,48 @@ pinning methodology and rotation process.
 
 See Docker Security Scanning Setup for Trivy
 configuration and severity thresholds.
+
+---
+
+## OWASP Top 10 Coverage & Review Cadence
+
+This maps OWASP themes (Web Top 10 and API Top 10) to the control that owns them in this repo.
+The coding rules behind these controls live in
+[security-and-owasp.instructions.md](../../.github/instructions/security-and-owasp.instructions.md);
+this table records *which enforcement* covers each theme so gaps are visible.
+
+| OWASP theme | Owned by | Where |
+| --- | --- | --- |
+| A01 Broken Access Control / API1 BOLA / API5 BFLA | Auth layers + RBAC role checks | [Auth Layers](#auth-layers), [RBAC Roles](#rbac-roles) |
+| A02 Cryptographic Failures | Startup guardrail (no default secrets), HS256 signing | [Production Guardrails](#production-guardrails) |
+| A03 Injection | Parameterized SQLAlchemy DSL + Pydantic v2 validation | [Input Validation](#input-validation) |
+| A04 Insecure Design | *Gap* — no automated control | trigger: yearly OWASP review |
+| A05 Security Misconfiguration | Security headers middleware + `bandit` (`B*` rules) | [Security Headers](#security-headers-middleware), `bandit` hook |
+| A06 Vulnerable & Outdated Components | `pip-audit` (`python-deps`) + Trivy (`docker-scan-security`) + Dependabot | [CI Security Controls](#ci-security-controls) |
+| A07 Identification & Authentication Failures | Auth layers, `HttpOnly` session cookie, basic rate limiting | [Auth Layers](#auth-layers) |
+| A08 Software & Data Integrity Failures | SHA-pinned action refs + frozen lockfile (`uv sync --frozen`) | [CI Security Controls](#ci-security-controls) |
+| A09 Logging & Monitoring Failures | *Partial* — OTel traces; no security alerting | trigger: yearly OWASP review |
+| A10 SSRF / API7 SSRF | Outbound URL allow-list | [Input Validation](#input-validation) |
+| API4 Unrestricted Resource Consumption | *Partial* — basic rate limit, not per-tenant | see [Planned](#planned--not-yet-implemented) |
+| (all categories — deep static analysis) | CodeQL (`codeql`) | [CI Security Controls](#ci-security-controls) |
+| (all categories — secret leakage) | `gitleaks` (`gitleaks-scan`) | [CI Security Controls](#ci-security-controls) |
+
+Acknowledged gaps carry an explicit trigger rather than being silent. A04 and A09 are design/process
+themes a scanner cannot fully own; they are reassessed at the yearly review. API4 is tracked as a
+Planned control below.
+
+### Yearly OWASP Review
+
+Every **June**, re-read the current OWASP Web Top 10 and API Security Top 10 and reconcile this table
+with them:
+
+1. Confirm each owned control still maps to a current category (categories are renumbered between
+   editions).
+2. Update the rows; for any newly relevant theme with no control, add a row marked *Gap* with a
+   trigger.
+3. File each real gap as an issue. Add a new scanner **only** to close a named gap — never
+   preemptively (this respects the [baseline-checklist](baseline-checklist.md) "new tooling only on
+   a named gap" rule).
 
 ---
 
