@@ -148,6 +148,25 @@ Never:
 - Keep commits atomic and grouped by logical change.
 - Use conventional commit prefixes: `feat:`, `fix:`, `test:`, `docs:`, `chore:`, `refactor:`.
 
+## Plan Maintenance
+
+The never-regress application baseline lives in `docs/02-architecture/baseline-checklist.md`. Keep it
+and its citations current — extend, do not recreate. Update triggers (apply in the same PR as the
+change):
+
+- **Adding a service** → update `docs/07-deployment/app-repo-contract.md` and add the per-service
+  test + observability rows to the baseline checklist.
+- **Adding a dependency** → no new tooling needed; it rides the existing `pip-audit`, Dependabot, and
+  Trivy controls. Justify the dependency per the evolution-playbook dependency-lifecycle checklist.
+- **Advancing a roadmap phase** → update `docs/03-planning/mvp-roadmap.md` and add a changelog line.
+- **Yearly (June)** → run the OWASP review in
+  `docs/02-architecture/security-architecture.md` (OWASP Top 10 Coverage & Review Cadence); file gaps
+  as issues.
+
+Design philosophy is owned by ACROSS (above) — this section is wiring, not doctrine. The platform
+half of the baseline lives in the sibling infra repo (`api-observatory-infra`); the shared boundary
+is `docs/07-deployment/app-repo-contract.md`.
+
 ## Safety & Editing Rules
 
 - Never delete code, constants, or services without explicit confirmation — the user often retains code for upcoming UI/feature work.
