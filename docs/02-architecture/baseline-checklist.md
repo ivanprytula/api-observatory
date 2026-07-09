@@ -109,9 +109,12 @@ New tooling is added to this baseline **only** to close a named gap (see
       builder/final split ([Dockerfile](../../Dockerfile); [ADR 004](adr/004-docker-buildkit-and-security-scanning.md)).
 - [ ] **Dependencies installed frozen, no dev deps in final** — `uv sync --no-dev --frozen`
       ([Dockerfile](../../Dockerfile)).
-- [ ] **Container runs non-root** — `USER appuser` ([Dockerfile](../../Dockerfile)). See the UID row
-      under [Flagged Gaps](#flagged-gaps) — the contract requires UID 10001, the Dockerfile currently
-      bakes 1001.
+- [x] **Container runs non-root as UID 10001** — `USER appuser` ([Dockerfile](../../Dockerfile),
+      [services/dashboard/Dockerfile](../../services/dashboard/Dockerfile)), matching
+      `runAsUser: 10001` in [app-repo-contract.md](../07-deployment/app-repo-contract.md).
+- [ ] **Secrets sourced via `secretKeyRef`, delivery mechanism owned by infra** — production Key
+      Vault sync pattern (CSI Secret Store driver or External Secrets Operator) documented in
+      [app-repo-contract.md](../07-deployment/app-repo-contract.md#secret-source-in-production).
 - [ ] **Image is scanned for CVEs** — Trivy via the `docker-scan-security` CI job
       ([.github/workflows/ci.yml](../../.github/workflows/ci.yml)) and the scheduled `docker-scan`
       job in [.github/workflows/security.yml](../../.github/workflows/security.yml).
@@ -131,8 +134,11 @@ testing.
 
 | Gap | Current state | Contract / expectation | Follow-up |
 | --- | --- | --- | --- |
-| Container UID | [Dockerfile](../../Dockerfile) bakes `useradd --uid 1001` (`USER appuser`) | [app-repo-contract.md](../07-deployment/app-repo-contract.md) requires `runAsUser: 10001` (and a `/etc/passwd` entry for UID 10001) | Open an issue: align the Dockerfile to UID 10001 **or** update the contract — do not leave them disagreeing. |
 | Stale CI job names in security doc | [security-architecture.md](security-architecture.md) "CI Security Controls" previously cited `dependency-audit` / `build-images` / `prechecks` | Real jobs are `python-deps` / `docker-build` + `docker-scan-security` / `lint` ([.github/workflows/ci.yml](../../.github/workflows/ci.yml)) | Corrected in-place in the PR that added this checklist; logged here so the drift cause (doc/CI rename skew) is tracked. |
+
+**Resolved:** Container UID mismatch (Dockerfile baked 1001 vs. contract's 10001) — fixed by aligning
+both [Dockerfile](../../Dockerfile) and [services/dashboard/Dockerfile](../../services/dashboard/Dockerfile)
+to `useradd --uid 10001`.
 
 ## Sibling Repo
 

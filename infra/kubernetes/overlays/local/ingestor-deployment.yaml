@@ -24,7 +24,7 @@ spec:
       serviceAccountName: data-zoo-app
       automountServiceAccountToken: false
       securityContext:
-        fsGroup: 1001
+        fsGroup: 10001
       containers:
         - name: ingestor
           image: data-zoo/ingestor:latest
@@ -73,8 +73,8 @@ spec:
               cpu: "500m"
               memory: "512Mi"
           securityContext:
-            runAsUser: 1001
-            runAsGroup: 1001
+            runAsUser: 10001
+            runAsGroup: 10001
             runAsNonRoot: true
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

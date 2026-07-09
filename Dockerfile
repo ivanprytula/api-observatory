@@ -9,8 +9,8 @@ COPY --from=ghcr.io/astral-sh/uv:0.11.21 /uv /usr/local/bin/uv
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get upgrade -y --no-install-recommends && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
+    build-essential=12.12 \
+    libpq-dev=17.10-0+deb13u1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -31,12 +31,12 @@ WORKDIR /app
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get upgrade -y --no-install-recommends && apt-get install -y --no-install-recommends \
-    libpq5 \
+    libpq5=17.10-0+deb13u1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security
-RUN groupadd --gid 1001 appgroup && \
-    useradd --uid 1001 --gid appgroup --shell /bin/false --no-create-home appuser
+RUN groupadd --gid 10001 appgroup && \
+    useradd --uid 10001 --gid appgroup --shell /bin/false --no-create-home appuser
 
 # Copy Python environment from builder (avoid extra layer from recursive chown)
 COPY --from=builder --chown=appuser:appgroup /app/.venv /app/.venv
