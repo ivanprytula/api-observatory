@@ -330,7 +330,7 @@ propcache==0.5.2 ; sys_platform == 'linux'
     # via
     #   aiohttp
     #   yarl
-protobuf==6.33.6 ; sys_platform == 'linux'
+protobuf==7.35.1 ; sys_platform == 'linux'
     # via
     #   googleapis-common-protos
     #   opentelemetry-proto
