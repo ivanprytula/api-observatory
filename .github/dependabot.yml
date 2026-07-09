@@ -5,39 +5,6 @@ version: 2
 # Keep this file in sync on the default branch to ensure target-branch rules apply.
 
 updates:
-  # Python package updates (pip)
-  - package-ecosystem: pip
-    directory: "/"
-    schedule:
-      interval: monthly
-    target-branch: develop
-    open-pull-requests-limit: 3
-    reviewers:
-      - ivanp
-    assignees:
-      - ivanp
-    labels:
-      - "dependencies"
-      - "type/dependency"
-      - "area/python-packages"
-    allow:
-      - dependency-type: "direct"
-      - dependency-type: "indirect"
-    commit-message:
-      prefix: "chore(deps)"
-      include: "scope"
-    pull-request-branch-name:
-      separator: "/"
-    rebase-strategy: auto
-    versioning-strategy: auto
-    groups:
-      python-minor-patch:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
-
   # Python package updates (uv)
   - package-ecosystem: uv
     directory: "/"
