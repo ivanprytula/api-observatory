@@ -11,11 +11,14 @@
 
 ## Pre-commit Workflow
 
-Before staging Python files, always run:
+`ruff format` and `ruff check` run automatically as pre-commit hooks on every `git commit`. Do **not** run them manually before staging — it is redundant.
+
+**Only run ruff manually when you need to know whether code is clean before committing**, e.g. to catch errors early during a multi-file edit session:
 ```bash
 uv run ruff format <files> && uv run ruff check --fix <files>
 ```
-Then `git add`. Never stage Python files without pre-formatting — the pre-commit hooks will stash/restore unstaged changes and silently revert your edits.
+
+**Never run ruff manually as a prerequisite to `git add`** — that was the old guidance and it is wrong. The hooks handle it. The one real hazard to avoid: if you have both staged *and* unstaged changes to the same files when you commit, pre-commit stashes the unstaged portion, runs hooks, then tries to restore the stash. If the hook auto-fixes the staged portion, the stash restore can conflict and pre-commit rolls back the fixes silently. The fix: before committing, explicitly stage every file that belongs in the commit by name — never use `git add .` or `git add -A`. Staging by filename forces you to account for each file intentionally and avoids accidentally including unrelated changes or sensitive files.
 
 ## Testing
 
