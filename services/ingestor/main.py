@@ -613,10 +613,10 @@ for _name in _ROUTER_MODULES:
         app.include_router(
             importlib.import_module(f"services.ingestor.routers.{_name}").router
         )
-    except ModuleNotFoundError:
+    except ModuleNotFoundError as exc:
         logger.warning(
             "router_unavailable",
-            extra={"router": _name},
+            extra={"router": _name, "missing_module": str(exc)},
         )
 
 if mongo_analytics is not None:
