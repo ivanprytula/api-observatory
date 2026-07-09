@@ -124,7 +124,7 @@ frozenlist==1.8.0 ; sys_platform == 'linux'
     # via
     #   aiohttp
     #   aiosignal
-gevent==25.9.1 ; sys_platform == 'linux'
+gevent==26.5.0 ; sys_platform == 'linux'
     # via
     #   geventhttpclient
     #   locust
