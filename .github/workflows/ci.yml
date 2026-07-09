@@ -206,7 +206,7 @@ jobs:
           echo "tree_sha=${TREE_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to ACR
-        uses: docker/login-action@553b6f090f15b58451081ce157ff1929a266131d # v3.3.0
+        uses: docker/login-action@17f7c1809f7467d4244b4ff01b0dbe0b8b9e3d43 # v3.3.0
         with:
           registry: ${{ vars.ACR_LOGIN_SERVER }}
           username: ${{ secrets.ACR_USERNAME }}
@@ -252,7 +252,7 @@ jobs:
           echo "tree_sha=${TREE_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to ACR
-        uses: docker/login-action@553b6f090f15b58451081ce157ff1929a266131d # v3.3.0
+        uses: docker/login-action@17f7c1809f7467d4244b4ff01b0dbe0b8b9e3d43 # v3.3.0
         with:
           registry: ${{ vars.ACR_LOGIN_SERVER }}
           username: ${{ secrets.ACR_USERNAME }}
@@ -280,7 +280,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Log in to ACR
-        uses: docker/login-action@553b6f090f15b58451081ce157ff1929a266131d # v3.3.0
+        uses: docker/login-action@17f7c1809f7467d4244b4ff01b0dbe0b8b9e3d43 # v3.3.0
         with:
           registry: ${{ vars.ACR_LOGIN_SERVER }}
           username: ${{ secrets.ACR_USERNAME }}
