@@ -19,8 +19,13 @@ import json
 import logging
 from typing import Any
 
-from aiokafka import AIOKafkaProducer
-from aiokafka.errors import KafkaError
+
+try:
+    from aiokafka import AIOKafkaProducer
+    from aiokafka.errors import KafkaError
+except ModuleNotFoundError:
+    AIOKafkaProducer = None  # ty:ignore[invalid-assignment]
+    KafkaError = Exception  # ty:ignore[invalid-assignment]
 
 from libs.contracts.events import (
     EVENT_DOC_SCRAPED,
