@@ -1216,7 +1216,7 @@ RUN uv sync --frozen  ← Reproducible deps from uv.lock
 
 # Final stage: runtime only (no build tools)
 FROM python:3.14-slim@sha256:bc389f7dfcb21413e72a28f491985326994795e34d2b86c8ae2f417b4e7818aa
-RUN useradd -m -u 1001 appuser  ← Non-root execution
+RUN useradd -m -u 10001 appuser  ← Non-root execution
 COPY --from=builder /app /app
 USER appuser
 CMD ["uvicorn", "ingestor.main:app"]
@@ -1231,7 +1231,7 @@ CMD ["uvicorn", "ingestor.main:app"]
 | **Digest pinning**              | `python:3.14-slim@sha256:...` ensures reproducible builds across all developers  |
 | **Multi-stage builder**         | Final image ~300MB (no build tools, compilers, git); builder stage discarded     |
 | **SHELL pipefail**              | `set -o pipefail` catches errors in piped commands (e.g., `apt-get ... \| grep`) |
-| **Non-root user**               | `USER 1001` (appuser) prevents container escape escalation                       |
+| **Non-root user**               | `USER 10001` (appuser) prevents container escape escalation                      |
 | **uv.lock pinning**             | `uv sync --frozen` guarantees identical dependencies in dev/CI/prod              |
 | **Health checks**               | `HEALTHCHECK` endpoints enable Kubernetes/ECS readiness probes                   |
 

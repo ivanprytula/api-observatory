@@ -82,7 +82,7 @@ See `docs/_archive/06-ci-cd/github-actions-security.md` for action SHA reference
 
 ### Docker / Deployment
 - Layer caching order: `pyproject.toml` + `uv.lock` before source code
-- Running as root in container — always use `USER appuser` (UID 1001)
+- Running as root in container — always use `USER appuser` (UID 10001)
 
 ### Testing
 - Test DB isolation: each test gets its own session, rollback after test

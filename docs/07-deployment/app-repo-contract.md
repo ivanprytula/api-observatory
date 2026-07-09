@@ -24,6 +24,21 @@ Each service image must satisfy these requirements for the infra manifests to fu
 - [ ] **No `root` required** — app must work with `runAsNonRoot: true`, `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`, and `capabilities.drop: [ALL]`
 - [ ] **No privileged ports** (<1024) — apps bind to ephemeral/high ports only
 
+#### Secret Source in Production
+
+- **Local dev**: `infra/kubernetes/overlays/local/secret.example.yaml` is a static, plaintext,
+  dummy-value `Secret` — never used outside `k3d` local sandboxes.
+- **Production**: the infra repo replaces the static `Secret` with one synced from Azure Key Vault,
+  via either the **Azure Key Vault Provider for Secrets Store CSI Driver** (mounts secrets as files
+  and can sync them into a native `Secret` via `secretObjects`) or **External Secrets Operator**
+  with an Azure Key Vault `SecretStore`/`ClusterSecretStore` (reconciles Key Vault entries into a
+  native `Secret` on a poll interval). Both land the same native `Secret` object that
+  `secretKeyRef` already consumes.
+- Either mechanism is infra-repo-owned. The app repo's obligation stays exactly what it is today:
+  read secrets from environment variables via `secretKeyRef`, never assume a specific delivery
+  mechanism. This mirrors the UID 10001 boundary above — the app repo declares the *contract*
+  (env var names, `secretKeyRef` usage), the infra repo owns the *delivery mechanism*.
+
 ### Observability
 
 - [ ] **OpenTelemetry-compatible** — services that emit traces expect `OTEL_EXPORTER_OTLP_ENDPOINT` env var (set via config map)

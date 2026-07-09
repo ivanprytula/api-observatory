@@ -21,8 +21,8 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /app
 
 # Create non-root user
-RUN groupadd --gid 1001 appgroup && \
-    useradd --uid 1001 --gid appgroup --shell /bin/false --no-create-home appuser
+RUN groupadd --gid 10001 appgroup && \
+    useradd --uid 10001 --gid appgroup --shell /bin/false --no-create-home appuser
 
 # Copy Python environment from builder
 COPY --from=builder --chown=appuser:appgroup /app/.venv /app/.venv
