@@ -205,7 +205,7 @@ async def lifespan(app: FastAPI):
     if settings.otel_enabled:
         setup_tracing(
             app,
-            endpoint=settings.otel_endpoint,
+            endpoint=settings.otel_exporter_otlp_endpoint,
             service_name=settings.otel_service_name,
         )
 

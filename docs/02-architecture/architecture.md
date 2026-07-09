@@ -987,14 +987,14 @@ services:
   ingestor:
     environment:
       - OTEL_ENABLED=true
-      - OTEL_ENDPOINT=http://jaeger:4317
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
       - OTEL_SERVICE_NAME=ingestor
 ```
 
 ```python
 # ingestor/config.py
 otel_enabled: bool = True
-otel_endpoint: str = "http://127.0.0.1:4317"
+otel_exporter_otlp_endpoint: str = "http://127.0.0.1:4317"
 otel_service_name: str = "ingestor"
 ```
 

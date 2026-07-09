@@ -155,6 +155,14 @@ class Settings(BaseSettings):
         ),
     )
 
+    admin_token: str | None = Field(
+        default=None,
+        description=(
+            "Privileged admin token for protected internal operations. "
+            "Injected by infra via secretKeyRef as ADMIN_TOKEN."
+        ),
+    )
+
     # ============ Cache Backend ============
     cache_url: str = Field(
         default="redis://localhost:6379/0",
@@ -207,9 +215,12 @@ class Settings(BaseSettings):
         description="Enable OpenTelemetry distributed tracing. Disabled by default.",
     )
 
-    otel_endpoint: str = Field(
+    otel_exporter_otlp_endpoint: str = Field(
         default="http://localhost:4317",
-        description="OTLP gRPC endpoint for trace export (e.g., http://jaeger:4317).",
+        description=(
+            "OTLP gRPC endpoint for trace export (e.g., http://jaeger:4317). "
+            "Matches the standard OTel SDK env var OTEL_EXPORTER_OTLP_ENDPOINT."
+        ),
     )
 
     otel_service_name: str = Field(
