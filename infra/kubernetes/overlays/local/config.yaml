@@ -4,3 +4,4 @@ metadata:
   name: data-zoo-app-config
 data:
   ingestor_url: "http://ingestor:8000"
+  service_version: "0.1.0"

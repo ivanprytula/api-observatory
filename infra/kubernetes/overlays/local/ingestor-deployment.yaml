@@ -43,6 +43,11 @@ spec:
                   key: database_url
             - name: ENVIRONMENT
               value: local
+            - name: SERVICE_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  name: data-zoo-app-config
+                  key: service_version
           startupProbe:
             httpGet:
               path: /health
