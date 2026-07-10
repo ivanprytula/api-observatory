@@ -5,6 +5,15 @@ on:
     workflows: ["CI"]
     branches: [develop]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      tree_sha:
+        description: >-
+          Tree SHA to deploy (7-char, e.g. from a prior CD run's summary or an
+          ACR tag). Leave empty to deploy current develop HEAD — same as the
+          automatic path. Use this to roll back to a known-good release.
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -20,7 +29,7 @@ jobs:
   environment-approval:
     name: "Require dev environment approval"
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     environment: dev
     concurrency:
       group: cd-dev-${{ github.run_id }}-approval
@@ -36,7 +45,7 @@ jobs:
     name: "Resolve ACR image refs"
     runs-on: ubuntu-latest
     needs: [environment-approval]
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     outputs:
       ingestor: ${{ steps.images.outputs.ingestor }}
       dashboard: ${{ steps.images.outputs.dashboard }}
@@ -45,12 +54,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
+      - name: Resolve tree SHA
+        id: resolve
+        if: ${{ inputs.tree_sha == '' || inputs.tree_sha == null }}
+        uses: ./.github/actions/resolve-tree-sha
+
       - name: Resolve image refs
         id: images
         shell: bash
         run: |
           set -euo pipefail
-          TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
+          TREE_SHA="${{ inputs.tree_sha || steps.resolve.outputs.tree_sha }}"
           INGESTOR="${{ vars.ACR_LOGIN_SERVER }}/api-observatory/ingestor:tree-${TREE_SHA}"
           DASHBOARD="${{ vars.ACR_LOGIN_SERVER }}/api-observatory/dashboard:tree-${TREE_SHA}"
           echo "tree_sha=${TREE_SHA}" >> "$GITHUB_OUTPUT"
@@ -101,6 +115,7 @@ jobs:
           VM_IP: ${{ steps.vm.outputs.ip }}
           INGESTOR_IMAGE: ${{ needs.resolve-images.outputs.ingestor }}
           DASHBOARD_IMAGE: ${{ needs.resolve-images.outputs.dashboard }}
+          TREE_SHA: ${{ needs.resolve-images.outputs.tree_sha }}
           ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
           ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
           ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
@@ -110,6 +125,7 @@ jobs:
           echo "Deploying to ${VM_IP}..."
           echo "  Ingestor: ${INGESTOR_IMAGE}"
           echo "  Dashboard: ${DASHBOARD_IMAGE}"
+          echo "  SERVICE_VERSION: tree-${TREE_SHA}"
 
           ssh "${{ env.VM_USER }}@${VM_IP}" bash -s <<DEPLOY_SCRIPT
           set -euo pipefail
@@ -127,6 +143,11 @@ jobs:
           docker tag "${INGESTOR_IMAGE}" api-observatory/ingestor:latest
           docker tag "${DASHBOARD_IMAGE}" api-observatory/dashboard:latest
 
+          # Record the exact deployed version so the running container's
+          # self-reported /version matches the image that was actually deployed.
+          sed -i '/^SERVICE_VERSION=/d' .env
+          echo "SERVICE_VERSION=tree-${TREE_SHA}" >> .env
+
           # Restart services
           echo "Restarting services..."
           docker compose down --timeout 30
@@ -142,6 +163,17 @@ jobs:
             sleep 2
           done
           curl -sf http://localhost:8000/health || { echo "Health check failed"; exit 1; }
+
+          # Verify the running container reports the version that was actually
+          # deployed — a deploy that "succeeds" but reports the wrong version
+          # should fail CD, not silently ship.
+          echo "Verifying deployed version..."
+          DEPLOYED_VERSION=\$(curl -sf http://localhost:8000/version | python3 -c 'import json,sys; print(json.load(sys.stdin)["service"])')
+          if [ "\${DEPLOYED_VERSION}" != "tree-${TREE_SHA}" ]; then
+            echo "Version mismatch: expected tree-${TREE_SHA}, got \${DEPLOYED_VERSION}"
+            exit 1
+          fi
+          echo "Version verified: \${DEPLOYED_VERSION}"
 
           # Prune old images
           docker image prune -f --filter "until=48h"
@@ -193,8 +225,10 @@ jobs:
       - name: Publish summary
         shell: bash
         env:
+          TRIGGER: ${{ github.event_name }}
           WORKFLOW_URL: ${{ github.event.workflow_run.html_url }}
-          COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          TREE_SHA: ${{ needs.resolve-images.outputs.tree_sha }}
           INGESTOR_IMG: ${{ needs.resolve-images.outputs.ingestor }}
           DASHBOARD_IMG: ${{ needs.resolve-images.outputs.dashboard }}
           DEPLOY_RESULT: ${{ needs.deploy-azure-vm.result }}
@@ -209,8 +243,13 @@ jobs:
           fi
           {
             echo "## CD Dev (Azure)"
-            echo "Triggered by CI run: ${WORKFLOW_URL}"
+            if [ "${TRIGGER}" = "workflow_dispatch" ]; then
+              echo "Triggered manually (rollback/redeploy) — tree_sha: ${TREE_SHA}"
+            else
+              echo "Triggered by CI run: ${WORKFLOW_URL}"
+            fi
             echo "Commit: ${COMMIT_SHA}"
+            echo "Deployed version: tree-${TREE_SHA}"
             echo "Ingestor: ${INGESTOR_IMG}"
             echo "Dashboard: ${DASHBOARD_IMG}"
             echo "Cloud: Azure VM (B1s free tier)"
