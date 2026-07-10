@@ -170,11 +170,7 @@ jobs:
 
       - name: Resolve tree SHA
         id: resolve
-        shell: bash
-        run: |
-          set -euo pipefail
-          TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
-          echo "tree_sha=${TREE_SHA}" >> "$GITHUB_OUTPUT"
+        uses: ./.github/actions/resolve-tree-sha
 
       - name: Log in to ACR
         uses: docker/login-action@17f7c1809f7467d4244b4ff01b0dbe0b8b9e3d43 # v3.3.0
@@ -216,11 +212,7 @@ jobs:
 
       - name: Resolve tree SHA
         id: resolve
-        shell: bash
-        run: |
-          set -euo pipefail
-          TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
-          echo "tree_sha=${TREE_SHA}" >> "$GITHUB_OUTPUT"
+        uses: ./.github/actions/resolve-tree-sha
 
       - name: Log in to ACR
         uses: docker/login-action@17f7c1809f7467d4244b4ff01b0dbe0b8b9e3d43 # v3.3.0

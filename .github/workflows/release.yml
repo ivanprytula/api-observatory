@@ -99,12 +99,16 @@ jobs:
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
 
+      - name: Resolve tree SHA
+        id: resolve
+        uses: ./.github/actions/resolve-tree-sha
+
       - name: Promote candidate to semver tag
         id: promote
         shell: bash
         run: |
           set -euo pipefail
-          TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
+          TREE_SHA="${{ steps.resolve.outputs.tree_sha }}"
           SRC="${{ env.IMAGE_NAME }}:tree-${TREE_SHA}"
           DST="${{ env.IMAGE_NAME }}:${GITHUB_REF_NAME}"
           echo "Promoting ${SRC} → ${DST}"
