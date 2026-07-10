@@ -849,8 +849,8 @@ k3s-load-images:
 k3s-deploy-infra:
     #!/usr/bin/env bash
     set -euo pipefail
-    helm repo add bitnami https://charts.bitnami.com/bitnami 2>/dev/null || true
-    helm repo add redpanda https://charts.vectorized.io 2>/dev/null || true
+    helm repo add --force-update bitnami https://charts.bitnami.com/bitnami
+    helm repo add --force-update redpanda https://charts.redpanda.com
     helm repo update
     kubectl create namespace data-zoo --dry-run=client -o yaml | kubectl apply -f -
     for chart in postgresql redis; do
