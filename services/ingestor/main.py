@@ -283,6 +283,12 @@ async def lifespan(app: FastAPI):
         from services.ingestor.routers import health_ingestion_jobs as health_router
 
         health_router.set_scheduler(_scheduler)
+
+        # Inject scheduler into source_registry so newly registered sources
+        # can get a probe job scheduled immediately (not just at next restart)
+        from services.ingestor.routers import source_registry as source_registry_router
+
+        source_registry_router.set_scheduler(_scheduler)
         logger.info(
             "scheduler_started",
             extra={"job_count": len(_scheduler._jobs)},
