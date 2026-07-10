@@ -157,11 +157,18 @@ The never-regress application baseline lives in `docs/02-architecture/baseline-c
 and its citations current — extend, do not recreate. Update triggers (apply in the same PR as the
 change):
 
-- **Adding a service** → update `docs/07-deployment/app-repo-contract.md` and add the per-service
-  test + observability rows to the baseline checklist.
+- **Adding a service** → update `docs/07-deployment/app-repo-contract.md`, add the per-service
+  test + observability rows to the baseline checklist, and add a container node + Router/Feature
+  Map row to `docs/02-architecture/application-architecture.md`.
 - **Adding a dependency** → no new tooling needed; it rides the existing `pip-audit`, Dependabot, and
   Trivy controls. Justify the dependency per the evolution-playbook dependency-lifecycle checklist.
-- **Advancing a roadmap phase** → update `docs/03-planning/mvp-roadmap.md` and add a changelog line.
+- **Advancing a roadmap phase** → update `docs/03-planning/mvp-roadmap.md` and add a changelog line;
+  flip the affected row's Status in `docs/02-architecture/application-architecture.md` if a
+  deferred feature became active.
+- **Changing infra topology** (new local emulator/sandbox env, new real-cloud environment, or
+  something moves between local/cloud ownership) → update
+  `docs/02-architecture/infrastructure-architecture.md` and, if ownership moved, the sibling
+  infra repo's `docs/.plans/repo-split-app-infra.md` ownership table, in the same change.
 - **Yearly (June)** → run the OWASP review in
   `docs/02-architecture/security-architecture.md` (OWASP Top 10 Coverage & Review Cadence); file gaps
   as issues.

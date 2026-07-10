@@ -225,6 +225,7 @@ Alert dispatch via Slack, Telegram, webhook (Jira), and email (Resend) for opera
 
 ## Related Documents
 
-- [Architecture](../02-architecture/architecture.md) — system design and data flows
+- [Application Architecture](../02-architecture/application-architecture.md) — service structure and data flows
+- [Infrastructure Architecture](../02-architecture/infrastructure-architecture.md) — deployment topology
 - [Deployment Guide](../07-deployment/deployment-guide.md) — cloud deploy and monitoring
 - [Observability](../08-operations/observability.md) — metrics, tracing, logging
