@@ -868,6 +868,12 @@ k3s-deploy-infra:
 k3s-secret:
     kubectl apply -n data-zoo -f infra/kubernetes/overlays/local/secret.example.yaml
 
+# Run alembic migrations as a one-off Job (schema is empty on a fresh cluster).
+k3s-migrate:
+    kubectl delete job/ingestor-migrate -n data-zoo --ignore-not-found
+    kubectl apply -f infra/kubernetes/overlays/local/migrate-job.yaml
+    kubectl -n data-zoo wait --for=condition=complete job/ingestor-migrate --timeout=60s
+
 # Deploy app services via kustomize overlay.
 k3s-deploy:
     kubectl apply -k infra/kubernetes/overlays/local
@@ -905,6 +911,7 @@ k3s-up:
     @just k3s-load-images
     @just k3s-deploy-infra
     @just k3s-secret
+    @just k3s-migrate
     @just k3s-deploy
     @echo ""
     @echo "=== k3s-up complete ==="

@@ -47,6 +47,9 @@ spec:
             httpGet:
               path: /health
               port: http
+              httpHeaders:
+                - name: Host
+                  value: ingestor
             initialDelaySeconds: 5
             periodSeconds: 10
             failureThreshold: 6
@@ -55,6 +58,9 @@ spec:
             httpGet:
               path: /health
               port: http
+              httpHeaders:
+                - name: Host
+                  value: ingestor
             initialDelaySeconds: 0
             periodSeconds: 20
             timeoutSeconds: 5
@@ -63,6 +69,9 @@ spec:
             httpGet:
               path: /readyz
               port: http
+              httpHeaders:
+                - name: Host
+                  value: ingestor
             initialDelaySeconds: 0
             periodSeconds: 10
             timeoutSeconds: 5
