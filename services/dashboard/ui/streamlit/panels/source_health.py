@@ -57,7 +57,11 @@ def use_freshness_heatmap(token: str = "") -> dict:
         sources = api.sources.list(token=token)
     except httpx.HTTPStatusError, DashboardApiError:
         sources = []
-    return {"sources": sources}
+    try:
+        jobs = api.health.scheduler_jobs().get("jobs", {})
+    except httpx.HTTPStatusError, DashboardApiError:
+        jobs = {}
+    return {"sources": sources, "jobs": jobs}
 
 
 # ---------------------------------------------------------------------------
@@ -124,6 +128,7 @@ def render_freshness_heatmap(
 ) -> None:
     data = use_freshness_heatmap(token=auth.access_token)
     sources = data["sources"]
+    jobs = data.get("jobs", {})
     if not sources:
         ui.show_info("No sources registered yet.")
         return
@@ -131,15 +136,20 @@ def render_freshness_heatmap(
     now_ts = datetime.now(UTC).timestamp()
     rows = []
     for src in sources:
-        last = src.updated_at or src.created_at
+        # Prefer the scheduler's actual last probe execution over the source
+        # profile's own updated_at, which only changes when the registration
+        # record itself is edited (name, interval, etc.) — not on each probe.
+        job = jobs.get(f"probe_source_{src.id}", {})
+        last = job.get("last_run_at") or src.updated_at or src.created_at
         drift_minutes = None
         if last:
             try:
                 if isinstance(last, str):
                     ts_raw = last.replace("Z", "+00:00")
-                    drift_minutes = (
-                        datetime.fromisoformat(ts_raw).timestamp() - now_ts
-                    ) / 60.0
+                    parsed = datetime.fromisoformat(ts_raw)
+                    if parsed.tzinfo is None:
+                        parsed = parsed.replace(tzinfo=UTC)
+                    drift_minutes = (now_ts - parsed.timestamp()) / 60.0
                 else:
                     drift_minutes = (now_ts - last.timestamp()) / 60.0
             except Exception:
