@@ -5,7 +5,7 @@ resources:
     cores: 500m
   memory:
     container:
-      max: 512Mi
+      max: 2Gi
 storage:
   persistentVolume:
     enabled: true
