@@ -10,12 +10,12 @@ post {
   auth: bearer
 }
 
-auth:bearer {
-  token: {{token}}
-}
-
 headers {
   Content-Type: application/json
+}
+
+auth:bearer {
+  token: {{access_token}}
 }
 
 body:json {

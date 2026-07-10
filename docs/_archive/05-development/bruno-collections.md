@@ -73,7 +73,7 @@ get {
 }
 
 auth:bearer {
-  token: {{token}}
+  token: {{access_token}}
 }
 ```
 

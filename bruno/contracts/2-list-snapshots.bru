@@ -10,11 +10,11 @@ get {
   auth: bearer
 }
 
-auth:bearer {
-  token: {{token}}
-}
-
-query {
+params:query {
   offset: 0
   limit: 20
+}
+
+auth:bearer {
+  token: {{access_token}}
 }

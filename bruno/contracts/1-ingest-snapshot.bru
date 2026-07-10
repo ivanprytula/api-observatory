@@ -10,24 +10,23 @@ post {
   auth: bearer
 }
 
-auth:bearer {
-  token: {{token}}
-}
-
 headers {
   Content-Type: application/json
+}
+
+auth:bearer {
+  token: {{access_token}}
 }
 
 body:json {
   {
     "source_id": {{source_id}},
     "payload_schema": {
-      "id": "integer",
-      "name": "string",
-      "email": "string",
-      "created_at": "datetime"
+      "args": {},
+      "headers": {},
+      "origin": "",
+      "url": ""
     },
-    "schema_version": "1.0.0",
-    "snapshot_note": "bruno manual snapshot"
+    "schema_version": "v1"
   }
 }
