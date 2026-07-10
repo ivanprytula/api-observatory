@@ -23,7 +23,7 @@ from starlette.responses import HTMLResponse, JSONResponse
 
 from libs.platform.auth import set_security_audit_emitter
 from libs.platform.tracing import setup_tracing
-from libs.version import get_version_payload
+from libs.version import get_contracts_version, get_version_payload
 from services.ingestor.auth import (
     connect_session_store,
     disconnect_session_store,
@@ -634,16 +634,12 @@ async def health(request: Request) -> dict[str, object]:
     """Liveness probe — process is alive (no DB check).
 
     Used by Kubernetes to decide whether to restart the container.
-    Should be lightweight and not depend on external services.
+    Lightweight and dependency-free by design: does not resolve version
+    metadata, since that can be legitimately unavailable (see /version)
+    without the process itself being unhealthy.
     Rate-limited to prevent health check DoS attacks.
     """
-    # Prefer an explicit SERVICE_VERSION from CI; fall back to application
-    # configured `settings.app_version` if present for deterministic service
-    # versioning in local/dev runs.
-    svc_version = os.getenv("SERVICE_VERSION") or settings.app_version
-    payload = get_version_payload()
-    payload["service"] = svc_version
-    return {"status": "healthy", "version": payload}
+    return {"status": "healthy"}
 
 
 @app.get("/readyz", tags=["ops"])
@@ -651,7 +647,10 @@ async def readyz(db: DbDep) -> dict[str, object]:
     """Readiness probe — DB and Cache reachable, pod can serve traffic.
 
     Used by Kubernetes to decide whether to route traffic to this pod.
-    Returns 503 if DB or Cache is unreachable.
+    Returns 503 if DB or Cache is unreachable. Version metadata is
+    best-effort context here, not a readiness criterion — a service with
+    unresolved version info can still safely serve traffic (see /version
+    for the strict, deliberate version-consensus check).
     """
     from services.ingestor.auth import _session_client as _cache
 
@@ -676,8 +675,12 @@ async def readyz(db: DbDep) -> dict[str, object]:
         failed.append(f"cache: {e}")
 
     svc_version = os.getenv("SERVICE_VERSION") or settings.app_version
-    payload = get_version_payload()
-    payload["service"] = svc_version
+    try:
+        contracts_version = get_contracts_version()
+    except RuntimeError as e:
+        logger.warning("contracts_version_unresolved", extra={"error": str(e)})
+        contracts_version = "unknown"
+    payload = {"contracts": contracts_version, "service": svc_version}
 
     if failed:
         logger.warning("readyz_failed", extra={"checks": checks, "failed": failed})
@@ -687,6 +690,25 @@ async def readyz(db: DbDep) -> dict[str, object]:
         )
 
     return {"status": "ready", **checks, "version": payload}
+
+
+@app.get("/version", tags=["ops"])
+@limiter.limit(HEALTH_RATE_LIMIT)
+async def version(request: Request) -> dict[str, object]:
+    """Strict version-consensus check — deliberate, not a liveness/readiness signal.
+
+    Resolves service + contracts version with no fallback. Intended for CI,
+    release tooling, or an operator to query across service instances before
+    declaring a coordinated rollout, or to detect version drift. Fails loudly
+    (500) when version provenance is missing or misconfigured — that failure
+    is the point, so it must never be silently swallowed here.
+    """
+    try:
+        return get_version_payload()
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        ) from e
 
 
 # ---------------------------------------------------------------------------

@@ -81,6 +81,46 @@ async def test_readyz_returns_503_when_db_unreachable() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Version (strict consensus check)
+# ---------------------------------------------------------------------------
+@pytest.mark.integration
+async def test_version_returns_200_with_contracts_and_service(
+    client: AsyncClient,
+) -> None:
+    """Version endpoint resolves both fields when provenance is available."""
+    # Act
+    r = await client.get("/version")
+
+    # Assert
+    assert r.status_code == 200
+    body = r.json()
+    assert body["contracts"]
+    assert body["service"]
+
+
+@pytest.mark.integration
+async def test_version_returns_500_when_unresolvable(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Version endpoint fails loudly — that's the point — when misconfigured."""
+    from services.ingestor import main as main_module
+
+    def _raise() -> dict[str, str]:
+        raise RuntimeError(
+            "SERVICE_VERSION not set and repo-level VERSION file not found."
+        )
+
+    monkeypatch.setattr(main_module, "get_version_payload", _raise)
+
+    # Act
+    r = await client.get("/version")
+
+    # Assert
+    assert r.status_code == 500
+    assert "VERSION" in r.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
 # Create single observation
 # ---------------------------------------------------------------------------
 @pytest.mark.integration
