@@ -25,6 +25,8 @@ spec:
       automountServiceAccountToken: false
       securityContext:
         fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: ingestor
           image: data-zoo/ingestor:latest
