@@ -29,17 +29,15 @@ GitHub Actions CI                    Azure Free Tier
 
 ### 1. Provision Infrastructure
 
+Real-cloud provisioning now lives in the sibling `api-observatory-infra` repo:
+
 ```bash
-bash infra/scripts/azure-provision.sh
+cd ../api-observatory-infra
+TF_ENV=azure-dev just tf apply         # resource group, VNet, NSG, VM, PostgreSQL Flexible Server
+just ansible-run provision-azure-vm    # Ubuntu 24.04 + Docker on the provisioned VM
 ```
 
-This creates:
-
-- Resource group (`api-observatory-rg`)
-- B1s VM with Ubuntu 24.04 + Docker
-- PostgreSQL Flexible Server (B1ms, optional)
-- Firewall rules (SSH, HTTP, HTTPS)
-- Credentials saved to `infra/scripts/.azure_credentials`
+See that repo's `README.md` and `ansible/playbooks/provision-azure-vm.yml` for details.
 
 ### 2. Configure GitHub Secrets
 
@@ -93,23 +91,22 @@ EOF
 ## Local Development (Emulator)
 
 ```bash
-just floci-az-up          # start emulator + data-plane
-just floci-az-dev         # hot-reload dev against emulator
-just floci-az-validate    # verify emulator health
-just azure-preflight      # verify real Azure credentials
+CLOUD=azure just sandbox-up          # start floci-az emulator + data-plane
+CLOUD=azure just sandbox-dev         # hot-reload dev against emulator
+CLOUD=azure just sandbox-validate    # verify emulator health
+just cloud-preflight                 # verify real Azure credentials
 ```
 
 ## Terraform
 
 ```bash
-TF_ENV=azure-sandbox just tf init    # local emulator
+TF_ENV=azure-sandbox just tf init    # local emulator (this repo)
 TF_ENV=azure-sandbox just tf plan
 TF_ENV=azure-sandbox just tf apply
-
-TF_ENV=azure-dev just tf init        # real Azure
-TF_ENV=azure-dev just tf plan
-TF_ENV=azure-dev just tf apply
 ```
+
+Real Azure provisioning (`azure-dev`) lives in the `api-observatory-infra` repo — see
+[Provision Infrastructure](#1-provision-infrastructure) above.
 
 ## Cost
 

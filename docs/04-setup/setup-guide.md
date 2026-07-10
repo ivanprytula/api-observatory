@@ -148,7 +148,13 @@ aws_secret_access_key = test
 region = eu-central-1
 ```
 
-Then source the environment: `source scripts/aws-env.sh` and verify with `aws sts get-caller-identity`.
+Then point the AWS CLI at the emulator and verify:
+
+```bash
+export AWS_PROFILE=sandbox
+export AWS_ENDPOINT_URL=http://localhost:4566   # floci-aws (docker-compose.yml `aws` profile)
+aws sts get-caller-identity
+```
 
 ---
 

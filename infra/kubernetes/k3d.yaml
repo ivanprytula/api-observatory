@@ -5,8 +5,12 @@ metadata:
 servers: 1
 agents: 0
 ports:
-  - port: 8080:80@loadbalancer
-  - port: 8443:443@loadbalancer
+  - port: 8080:80
+    nodeFilters:
+      - loadbalancer
+  - port: 8443:443
+    nodeFilters:
+      - loadbalancer
 options:
   k3d:
     wait: true
