@@ -21,6 +21,7 @@ class TestTabularETLEngine:
     """Polars-first tabular ETL behavior."""
 
     def test_polars_preview(self) -> None:
+        pytest.importorskip("polars")
         result = TabularETLEngine.preview(
             backend="polars",
             observations=_OBSERVATIONS,
@@ -36,6 +37,7 @@ class TestTabularETLEngine:
         assert result.observations[0]["p95_latency_ms"] == 190
 
     def test_pandas_preview(self) -> None:
+        pytest.importorskip("pandas")
         result = TabularETLEngine.preview(
             backend="pandas",
             observations=_OBSERVATIONS,

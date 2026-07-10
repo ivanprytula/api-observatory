@@ -55,6 +55,15 @@ def test_setup_sentry_initializes_when_enabled(monkeypatch: pytest.MonkeyPatch) 
 
     calls: list[dict[str, Any]] = []
     monkeypatch.setattr(sentry_module, "SENTRY_SDK_AVAILABLE", True)
+    # The real integration classes are only populated when the optional
+    # `sentry-sdk` extra is installed; stub them so this test doesn't
+    # silently depend on that extra being present in the environment.
+    monkeypatch.setattr(sentry_module, "fastapi_integration_cls", lambda **kwargs: None)
+    monkeypatch.setattr(
+        sentry_module, "sqlalchemy_integration_cls", lambda **kwargs: None
+    )
+    monkeypatch.setattr(sentry_module, "aiohttp_integration_cls", lambda **kwargs: None)
+    monkeypatch.setattr(sentry_module, "logging_integration_cls", lambda **kwargs: None)
     monkeypatch.setattr(
         sentry_module, "_sentry_init", lambda **kwargs: calls.append(kwargs)
     )
