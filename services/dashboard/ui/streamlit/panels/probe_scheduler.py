@@ -124,9 +124,10 @@ def render_probe_scheduler(ui: UIAdapter, auth: AuthManager) -> None:
             for jname, jinfo in jobs.get("jobs", {}).items():
                 c1, c2, c3 = ui.columns(3)
                 c1.markdown(f"`{jname}`")
+                success_count = jinfo.get("success_count", 0)
+                failure_count = jinfo.get("failure_count", 0)
                 c2.caption(
-                    f"runs: {jinfo.get('total_executions', 0)} "
-                    f"errors:{jinfo.get('error_count', 0)}"
+                    f"runs: {success_count + failure_count} errors:{failure_count}"
                 )
                 next_run = jinfo.get("next_run_time", "—")
                 next_str = str(next_run)[:19] if next_run else "—"
