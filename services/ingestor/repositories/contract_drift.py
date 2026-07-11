@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+import logging
 from typing import Any
 
 from sqlalchemy import func, select
@@ -29,6 +31,9 @@ from services.ingestor.models import (
     SourceProfile,
     _utcnow,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def _value_type(value: Any) -> str:
@@ -151,6 +156,23 @@ def _requires_incident_response(event_type: str, severity: str) -> bool:
     return severity == "critical" or event_type == "breaking"
 
 
+def _trigger_agent_run(agent_run_id: int) -> None:
+    """Fire-and-forget: kick off the LangGraph incident-triage agent
+    (Phase 3) for a newly created AgentRun. Best-effort — if the `ai` extra
+    isn't installed or the agent is disabled, drift detection still
+    succeeds; this is purely additive, matching Phase 1's fail-open
+    scheduler-registration pattern in routers/source_registry.py."""
+    try:
+        from services.ingestor.agent.runner import run_agent_for_observation
+
+        asyncio.create_task(run_agent_for_observation(agent_run_id))
+    except ImportError as exc:
+        logger.warning(
+            "agent_trigger_skipped",
+            extra={"agent_run_id": agent_run_id, "error": str(exc)},
+        )
+
+
 async def create_contract_snapshot(
     db: AsyncSession,
     payload: ContractSnapshotCreate,
@@ -218,6 +240,7 @@ async def create_contract_snapshot(
     await db.flush()
 
     drift_event: DriftEvent | None = None
+    agent_run: AgentRun | None = None
     if latest is not None:
         event_type = _event_type(added_fields, removed_fields, type_changed_fields)
         if event_type != "none":
@@ -260,7 +283,8 @@ async def create_contract_snapshot(
                 )
                 db.add(incident)
                 await db.flush()  # assign incident.id for the agent run FK
-                db.add(AgentRun(observation_id=incident.id, status="pending"))
+                agent_run = AgentRun(observation_id=incident.id, status="pending")
+                db.add(agent_run)
 
     await db.commit()
     await db.refresh(snapshot)
@@ -273,6 +297,9 @@ async def create_contract_snapshot(
             severity=drift_event.severity,
             compatibility_score=drift_event.compatibility_score,
         )
+
+    if agent_run is not None:
+        _trigger_agent_run(agent_run.id)
 
     return snapshot, drift_event
 

@@ -276,6 +276,17 @@ async def lifespan(app: FastAPI):
             "services.ingestor.routers.background_processing"
         ).set_worker_pool(None)
 
+    # Initialize the LangGraph incident-triage agent (Phase 3) — fail-open,
+    # same as everything else in this lifespan: if Anthropic isn't
+    # configured or the `ai` extra isn't installed, the agent stays
+    # disabled and drift detection works exactly as before.
+    try:
+        from services.ingestor.agent.runner import start_agent_checkpointer
+
+        await start_agent_checkpointer()
+    except Exception as e:
+        logger.warning("agent_checkpointer_startup_failed", extra={"error": str(e)})
+
     # Start scheduler (only if there are enabled jobs)
     try:
         await _scheduler.start(AsyncSessionLocal)
@@ -325,6 +336,14 @@ async def lifespan(app: FastAPI):
                 "background_workers_shutdown_error",
                 extra={"error": str(e)},
             )
+
+    # Stop the incident-triage agent's checkpointer pool
+    try:
+        from services.ingestor.agent.runner import stop_agent_checkpointer
+
+        await stop_agent_checkpointer()
+    except Exception as e:
+        logger.warning("agent_checkpointer_shutdown_error", extra={"error": str(e)})
 
     # Cleanup session store
     await disconnect_session_store()
@@ -465,6 +484,16 @@ _OPENAPI_TAGS: list[dict[str, str]] = [
             "and suspicious API key usage patterns with configurable severity thresholds."
         ),
     },
+    {
+        "name": "agent",
+        "description": (
+            "LangGraph incident-triage agent. Auto-triggered by critical/breaking "
+            "drift events (see contract-drift); classifies severity, retrieves "
+            "similar prior incidents via RAG, drafts a root-cause analysis, then "
+            "pauses for human review before notifying. Resume a paused run via "
+            "POST /runs/{run_id}/resume."
+        ),
+    },
 ]
 
 # If docs_username/docs_password are configured, disable default docs
@@ -596,6 +625,7 @@ app.add_middleware(CorrelationIdMiddleware)
 
 _ROUTER_MODULES = [
     "auth",
+    "agent",
     "observations",
     "observations_v2",
     "scraper",

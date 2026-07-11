@@ -1,0 +1,39 @@
+meta {
+  name: Create Source (agent flow)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/sources
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "agent-flow-source",
+    "base_url": "https://1.1.1.1",
+    "health_check_path": "/health",
+    "probe_interval_seconds": 60
+  }
+}
+
+assert {
+  res.status: in [200, 201]
+  res.body.id: isDefined
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setEnvVar("agent_source_id", res.body.id.toString());
+  }
+}

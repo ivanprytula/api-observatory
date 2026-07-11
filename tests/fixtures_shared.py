@@ -191,6 +191,12 @@ def _alembic_downgrade(sync_url: str) -> None:
     Drops and recreates the public schema to guarantee a clean slate,
     even when a prior session was interrupted before teardown ran (which
     leaves orphan tables/indexes that fool Alembic's downgrade logic).
+
+    Re-enables pgvector after the schema recreate: this test Postgres is
+    shared (session-scoped) with services/inference/tests/ when both suites
+    run in the same pytest invocation, and dropping "public" also drops any
+    extension created in it — without this, inference's tests fail with
+    'type "vector" does not exist' whenever they run after this fixture.
     """
     import sqlalchemy as sa
 
@@ -199,6 +205,7 @@ def _alembic_downgrade(sync_url: str) -> None:
         with engine.begin() as conn:
             conn.execute(sa.text("DROP SCHEMA public CASCADE"))
             conn.execute(sa.text("CREATE SCHEMA public"))
+            conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS vector"))
     finally:
         engine.dispose()
 

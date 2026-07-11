@@ -55,7 +55,20 @@ New tooling is added to this baseline **only** to close a named gap (see
       real pgvector-enabled Postgres (no SQLite fallback — `Vector` columns need the extension) via
       its own `conftest.py` reusing the shared testcontainers fixture; embeddings are mocked
       deterministically so tests don't depend on network/model download. Not yet wired into the
-      root `--cov` config (tracked as a gap, not measured today).
+      root `--cov` config (tracked as a gap, not measured today). Its downgrade fixture is scoped to
+      only its own tables (`command.downgrade(cfg, "base")`, not `DROP SCHEMA public CASCADE`) since
+      it shares the session-scoped test Postgres with the ingestor's own suite — the ingestor's
+      equivalent fixture (`tests/fixtures_shared.py::_alembic_downgrade`) re-enables the `vector`
+      extension after its own schema recreate for the same reason.
+- [x] **The LangGraph agent has a dedicated test suite** (closes gap 🟠#7 from
+      `docs/03-planning/audit-gaps.md` for node/graph-level coverage) —
+      `services/ingestor/tests/unit/agent/` (nodes + full graph pause/resume cycle via
+      `MemorySaver`, LLM/RAG/notification calls mocked) and
+      `services/ingestor/tests/integration/test_agent_router.py` (GET/resume HTTP contract). All
+      run with zero network dependency and zero API cost. The mechanics these tests exercise
+      (Postgres checkpointer, real Anthropic structured output, RAG retrieval finding a prior
+      indexed incident) were additionally verified live against the real stack — see
+      `docs/.plans/ai-augmented-observatory-agent-mcp.md` Phase 3 Status Log.
 - [ ] **Every endpoint has the three-test set** — happy path (2xx, full-shape assertion), not-found
       (404), validation error (422) — and uses the `AsyncClient` + `ASGITransport` pattern. See
       [fastapi-testing.instructions.md](../../.github/instructions/fastapi-testing.instructions.md).

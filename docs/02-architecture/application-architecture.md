@@ -33,11 +33,13 @@ flowchart TB
     subgraph App["Ingestor — services/ingestor/"]
       API["FastAPI routers"]
       Scheduler["APScheduler\nprobe jobs"]
+      Agent["LangGraph agent\nservices/ingestor/agent/\nclassify -> RAG -> draft -> human_review -> notify"]
     end
 
     Inference["Inference — services/inference/\nFastAPI, :8001\nfastembed (ONNX, CPU-only) + pgvector"]
+    Anthropic[["Anthropic API\nclaude-haiku-4-5, claude-sonnet-4-5"]]
 
-    Postgres[("PostgreSQL 17 — db\nsource profiles, observations,\ndrift events, agent runs, scorecards")]
+    Postgres[("PostgreSQL 17 — db\nsource profiles, observations,\ndrift events, agent runs, scorecards,\nagent checkpoints (langgraph-checkpoint-postgres)")]
     InferenceDB[("PostgreSQL 17 — inference-db\nindexed_documents (pgvector)\ndedicated instance, ADR-015")]
     Cache[("Redis\ncache, pub/sub, rate-limit\noptional — CACHE_ENABLED")]
     Broker[("Redpanda\nKafka-compatible\noptional — BROKER_ENABLED")]
@@ -51,6 +53,10 @@ flowchart TB
     API -.->|drift events| Broker
     API -->|POST /index, /search\nRAG for /analyze| Inference
     Inference --> InferenceDB
+    Scheduler -.->|critical/breaking drift\nfire-and-forget| Agent
+    Agent --> Postgres
+    Agent -->|RAG| Inference
+    Agent -->|classify, draft| Anthropic
 ```
 
 Core, always-on: Ingestor + PostgreSQL. Cache and Broker are optional and feature-flagged
@@ -60,6 +66,12 @@ Inference is real as of Phase 2 of the AI-augmented observatory plan; per
 instance (`inference-db`), not the ingestor's `db` — real per-service database ownership, not just
 schema-level separation. The ingestor never reads inference's tables directly, only via the
 `/index` and `/search` HTTP contract in `services/ingestor/vector_search.py`.
+The LangGraph incident-triage agent (Phase 3) runs *inside* the ingestor process (not a separate
+container) — fire-and-forget triggered by `contract_drift.py` on critical/breaking `DriftEvent`s,
+checkpointed to the same `db` Postgres via `langgraph-checkpoint-postgres` so the human-in-the-loop
+pause/resume survives process restarts. Fails open like everything else here: with no
+`ANTHROPIC_API_KEY` configured, drift detection and every other feature works exactly the same,
+the agent trigger just no-ops (`services/ingestor/agent/runner.py`).
 
 ## Router / Feature Map
 
@@ -70,6 +82,7 @@ auth applied.
 
 | Router | Domain | Status |
 |---|---|---|
+| `agent.py` | Incident-triage agent run status + HITL resume (`GET /runs/{id}`, `POST /runs/{id}/resume`) | Active — real as of Phase 3, no auth yet (Phase 4) |
 | `source_registry.py` | Register/manage probed API sources | Active |
 | `observations.py` / `observations_v2.py` | Probe results, ingestion | Active |
 | `scorecards.py` | Reliability scorecards (p95 latency, uptime) | Active |

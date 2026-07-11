@@ -1,0 +1,31 @@
+meta {
+  name: Resume Agent Run (approve)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/agent/runs/{{agent_run_id}}/resume
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "approve": true,
+    "reviewer_user_id": 1
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq approved
+}

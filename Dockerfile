@@ -19,11 +19,13 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
 
 # Install deps first (better layer caching)
+# --extra ai: the LangGraph incident-triage agent (Phase 3) and /analyze's RAG
+# path are core ingestor features, not optional demos — install their deps.
 COPY pyproject.toml uv.lock ./
-RUN uv sync --no-dev --frozen --no-install-project
+RUN uv sync --no-dev --frozen --no-install-project --extra ai
 
 # Stage 2: Final image — slim, no build tools, non-root user
-FROM python:3.14-slim@sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061
+FROM python:3.14-slim@sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061 AS runtime
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /app
 

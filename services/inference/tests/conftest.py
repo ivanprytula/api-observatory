@@ -45,18 +45,24 @@ def _alembic_upgrade(sync_url: str) -> None:
 
 
 def _alembic_downgrade(sync_url: str) -> None:
-    """Drop and recreate the public schema for a guaranteed clean slate,
-    then re-enable pgvector (its objects live in public too)."""
-    import sqlalchemy as sa
+    """Downgrade *only this service's own tables* to a clean slate.
 
-    engine = sa.create_engine(sync_url)
-    try:
-        with engine.begin() as conn:
-            conn.execute(sa.text("DROP SCHEMA public CASCADE"))
-            conn.execute(sa.text("CREATE SCHEMA public"))
-            conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS vector"))
-    finally:
-        engine.dispose()
+    Deliberately not `DROP SCHEMA public CASCADE` (unlike the ingestor's
+    equivalent in tests/fixtures_shared.py): this service's tests share the
+    session-scoped test Postgres with the ingestor's own test suite when
+    both run in the same pytest invocation. Nuking the whole schema here
+    would silently wipe the ingestor's tables mid-session — exactly the
+    kind of cross-service blast radius `include_object` in alembic/env.py
+    already guards against for autogenerate; this is the same guard for
+    the test teardown path.
+    """
+    from alembic.config import Config
+
+    from alembic import command
+
+    cfg = Config(str(_ALEMBIC_INI))
+    cfg.set_main_option("sqlalchemy.url", sync_url.replace("%", "%%"))
+    command.downgrade(cfg, "base")
 
 
 @pytest.fixture(scope="session")

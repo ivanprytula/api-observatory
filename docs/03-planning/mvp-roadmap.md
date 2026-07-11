@@ -63,7 +63,7 @@ Switch from MVP to MVP+ when all are true:
 | **Vector Store** | pgvector (dedicated `inference-db`) | pgvector (managed Postgres) | Real as of Phase 2 of the AI-augmented observatory plan; Qdrant deferred, see ADR-015 |
 | **Object Store** | MinIO (optional) | AWS S3 | Same S3 API via minio-py client |
 | **Frontend** | Streamlit (MVP) → HTMX+Jinja2 | HTMX+Jinja2 (dashboard service) | MVP uses Streamlit for quick UI; HTMX added for production dashboard |
-| **Agent/LLM** | LangGraph + OpenAI | LangGraph + OpenAI | Dual-model routing: gpt-4o-mini (classify), gpt-4o (deep analyze) |
+| **Agent/LLM** | LangGraph + Anthropic | LangGraph + Anthropic | Real as of Phase 3; dual-model: claude-haiku-4-5 (classify), claude-sonnet-4-5 (deep analyze). `/analyze`'s RAG path separately still uses OpenAI (unverified, no key available) |
 | **Auth** | JWT (PyJWT) | JWT (PyJWT) + OIDC optional | Stateless, multi-service; refresh tokens for long sessions |
 | **Observability** | structlog + Prometheus + Jaeger (local) | Same + CloudWatch + Sentry | All local tools work in cloud; add managed alternatives |
 | **Container Runtime** | Docker Compose | ECS Fargate | Same Docker images; Fargate eliminates node management |
@@ -91,8 +91,8 @@ Switch from MVP to MVP+ when all are true:
 | **OpenTelemetry Tracing** | ✅ | OTLP + Jaeger | Vendor-neutral; swap Jaeger for Tempo/Datadog without code changes | — |
 | **Kafka Event Streaming** | ✅ | Redpanda (aiokafka) | Redpanda = Kafka API, no Zookeeper; MSK Serverless in prod | ADR-001 |
 | **Kafka DLQ** | ✅ | Custom aiokafka routing | Poison pill isolation; retry 3x then forward to DLQ topic | ADR-004 |
-| **Agent Enrichment** | ❌ | LangGraph StateGraph | Dual-model: gpt-4o-mini (90% of calls, 10x cheaper), gpt-4o (deep analysis) | ADR-012 |
-| **Agent HITL Review** | ❌ | LangGraph checkpointer + Cache | Pause before publish node; human approves/rejects via resume API | ADR-012 |
+| **Agent Enrichment** | ✅ | LangGraph StateGraph | Real as of Phase 3. Dual-model: claude-haiku-4-5 (classify_severity), claude-sonnet-4-5 (draft_analysis) — always deep for draft, since Phase 1's trigger gate already pre-filters to critical/breaking only | ADR-012 |
+| **Agent HITL Review** | ✅ | LangGraph checkpointer + Postgres | Real as of Phase 3 (not Cache, as originally speculated — `langgraph-checkpoint-postgres` on the ingestor's own `db`). Pause at human_review; resume via `POST /api/v1/agent/runs/{run_id}/resume`, verified live including a resume call in a separate process | ADR-012 |
 | **Scraping (HTTP/HTML/Browser)** | ❌ | httpx + BeautifulSoup + Playwright | Factory pattern for 3 scraper types; Semaphore(5) for concurrency | — |
 | **MongoDB Document Store** | ❌ | Motor (async MongoDB) | Genuinely varied document shapes per source | — |
 | **Vector Search** | ✅ | pgvector (dedicated instance per service) | Real per-service DB ownership without a second engine to operate; Qdrant deferred, not rejected — see ADR-015 | ADR-015 |

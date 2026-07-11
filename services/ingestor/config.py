@@ -396,6 +396,26 @@ class Settings(BaseSettings):
         description="OpenAI model to use for deep analysis.",
     )
 
+    # ============ LangGraph Incident Agent (Phase 3) ============
+    anthropic_enabled: bool = Field(
+        default=False,
+        description="Enable the LangGraph incident-triage agent. Requires ANTHROPIC_API_KEY.",
+    )
+    anthropic_api_key: str | None = Field(
+        default=None,
+        description="Anthropic API key for the incident-triage agent.",
+    )
+    anthropic_model: str = Field(
+        default="claude-haiku-4-5",
+        description=(
+            "Anthropic model for classify_severity (cheap/fast — independent severity read)."
+        ),
+    )
+    anthropic_model_deep: str = Field(
+        default="claude-sonnet-4-5",
+        description="Anthropic model for draft_analysis (deeper root-cause reasoning).",
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",  # Load from .env (local dev)
         env_file_encoding="utf-8",

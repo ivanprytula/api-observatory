@@ -16,7 +16,7 @@ COPY services/dashboard/pyproject.toml .
 RUN uv sync --no-dev --no-install-project
 
 # Stage 2: slim production image
-FROM python:3.14-slim@sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061
+FROM python:3.14-slim@sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061 AS runtime
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /app
 
