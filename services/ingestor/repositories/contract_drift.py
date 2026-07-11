@@ -21,7 +21,14 @@ from services.ingestor.constants import (
     CONTRACT_PENALTY_REMOVED_FIELD,
     CONTRACT_PENALTY_TYPE_CHANGE,
 )
-from services.ingestor.models import ContractSnapshot, DriftEvent, SourceProfile
+from services.ingestor.models import (
+    AgentRun,
+    ContractSnapshot,
+    DriftEvent,
+    Observation,
+    SourceProfile,
+    _utcnow,
+)
 
 
 def _value_type(value: Any) -> str:
@@ -139,6 +146,11 @@ def _summary(
     return f"{event_type} drift detected ({', '.join(parts)})."
 
 
+def _requires_incident_response(event_type: str, severity: str) -> bool:
+    """Critical severity or a breaking contract change warrants agent triage."""
+    return severity == "critical" or event_type == "breaking"
+
+
 async def create_contract_snapshot(
     db: AsyncSession,
     payload: ContractSnapshotCreate,
@@ -209,12 +221,13 @@ async def create_contract_snapshot(
     if latest is not None:
         event_type = _event_type(added_fields, removed_fields, type_changed_fields)
         if event_type != "none":
+            severity = _severity(event_type, score)
             drift_event = DriftEvent(
                 source_id=payload.source_id,
                 previous_snapshot_id=latest.id,
                 current_snapshot_id=snapshot.id,
                 event_type=event_type,
-                severity=_severity(event_type, score),
+                severity=severity,
                 added_fields=added_fields,
                 removed_fields=removed_fields,
                 type_changed_fields=type_changed_fields,
@@ -227,6 +240,27 @@ async def create_contract_snapshot(
                 ),
             )
             db.add(drift_event)
+
+            if _requires_incident_response(event_type, severity):
+                await db.flush()  # assign drift_event.id for the incident payload
+                incident = Observation(
+                    source=source.name,
+                    timestamp=_utcnow(),
+                    raw_data={
+                        "drift_event_id": drift_event.id,
+                        "event_type": event_type,
+                        "severity": severity,
+                        "added_fields": added_fields,
+                        "removed_fields": removed_fields,
+                        "type_changed_fields": type_changed_fields,
+                        "compatibility_score": score,
+                        "summary": drift_event.summary,
+                    },
+                    tags=["incident", severity],
+                )
+                db.add(incident)
+                await db.flush()  # assign incident.id for the agent run FK
+                db.add(AgentRun(observation_id=incident.id, status="pending"))
 
     await db.commit()
     await db.refresh(snapshot)

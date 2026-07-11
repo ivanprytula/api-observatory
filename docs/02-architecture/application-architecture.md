@@ -35,7 +35,7 @@ flowchart TB
       Scheduler["APScheduler\nprobe jobs"]
     end
 
-    Postgres[("PostgreSQL 17\nsource profiles, observations,\ndrift events, scorecards")]
+    Postgres[("PostgreSQL 17\nsource profiles, observations,\ndrift events, agent runs, scorecards")]
     Cache[("Redis\ncache, pub/sub, rate-limit\noptional — CACHE_ENABLED")]
     Broker[("Redpanda\nKafka-compatible\noptional — BROKER_ENABLED")]
 

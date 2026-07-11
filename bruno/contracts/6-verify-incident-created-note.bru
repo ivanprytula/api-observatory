@@ -1,0 +1,42 @@
+meta {
+  name: Verify Incident Auto-Created (note)
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/health
+  body: none
+  auth: none
+}
+
+docs {
+  # Verifying the AgentRun incident trigger
+
+  Request 5 ("Ingest snapshot v2 — drift trigger") removes the `title` field,
+  which makes `event_type == "breaking"`. Per
+  `docs/.plans/ai-augmented-observatory-agent-mcp.md` Phase 1, that
+  auto-creates an `Observation` (`tags: ["incident", severity]`) + a
+  `pending` `AgentRun`, in the same transaction as the drift event.
+
+  There is no read endpoint for `AgentRun`/incident `Observation`s yet —
+  that lands in Phase 4/5 of the plan, at which point this note gets
+  replaced by a real Bruno request. Until then, verify directly:
+
+  ```bash
+  # tags is a plain `json` column (not `jsonb`) — cast explicitly for containment checks.
+  docker compose exec -T db psql -U postgres -d api_observatory -c \
+    "SELECT id, source, tags, raw_data->>'drift_event_id' AS drift_event_id
+     FROM observations WHERE tags::jsonb @> '[\"incident\"]' ORDER BY id DESC LIMIT 5;"
+
+  docker compose exec -T db psql -U postgres -d api_observatory -c \
+    "SELECT id, observation_id, status FROM agent_runs ORDER BY id DESC LIMIT 5;"
+  ```
+
+  Expect one new row in each table per breaking/critical drift event, with
+  `agent_runs.status = 'pending'` (no analysis runs until Phase 3's
+  LangGraph agent exists).
+
+  This GET /health request is included as a smoke check so `bru run` does
+  not skip this collection folder.
+}

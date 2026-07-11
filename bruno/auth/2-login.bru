@@ -23,7 +23,7 @@ assert {
 
 script:post-response {
   if (res.status === 200) {
-    bru.setEnvVar("token", res.body.access_token);
+    bru.setEnvVar("access_token", res.body.access_token);
     bru.setEnvVar("refresh_token", res.body.refresh_token);
   }
 }

@@ -5,6 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from services.ingestor.models import AgentRun, Observation
 
 
 _SCHEMA_V1: dict[str, Any] = {
@@ -161,6 +165,85 @@ class TestIngestContractSnapshot:
         body = response.json()
         assert body["drift_event"] is None
         assert body["snapshot"]["compatibility_score"] == 100.0
+
+
+class TestIncidentAutoCreationOnDrift:
+    """Breaking/critical drift events auto-create an Observation + pending AgentRun."""
+
+    async def test_breaking_change_creates_incident_observation_and_agent_run(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        source_name = "contract-test-source-incident-breaking"
+        source_id = await _create_source(client, name=source_name)
+
+        await client.post(
+            "/api/v1/contracts/snapshots",
+            json={
+                "source_id": source_id,
+                "schema_version": "v1",
+                "payload_schema": _SCHEMA_V1,
+            },
+        )
+        response = await client.post(
+            "/api/v1/contracts/snapshots",
+            json={
+                "source_id": source_id,
+                "schema_version": "v3",
+                "payload_schema": _SCHEMA_V3_BREAKING,
+            },
+        )
+
+        assert response.status_code == 201
+        drift_event = response.json()["drift_event"]
+        assert drift_event["event_type"] == "breaking"
+
+        incident = (
+            await db.execute(
+                select(Observation).where(Observation.source == source_name)
+            )
+        ).scalar_one()
+        assert incident.tags == ["incident", drift_event["severity"]]
+        assert incident.raw_data["drift_event_id"] == drift_event["id"]
+
+        agent_run = (
+            await db.execute(
+                select(AgentRun).where(AgentRun.observation_id == incident.id)
+            )
+        ).scalar_one()
+        assert agent_run.status == "pending"
+
+    async def test_non_breaking_change_does_not_create_incident(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        source_name = "contract-test-source-incident-non-breaking"
+        source_id = await _create_source(client, name=source_name)
+
+        await client.post(
+            "/api/v1/contracts/snapshots",
+            json={
+                "source_id": source_id,
+                "schema_version": "v1",
+                "payload_schema": _SCHEMA_V1,
+            },
+        )
+        response = await client.post(
+            "/api/v1/contracts/snapshots",
+            json={
+                "source_id": source_id,
+                "schema_version": "v2",
+                "payload_schema": _SCHEMA_V2_NON_BREAKING,
+            },
+        )
+
+        assert response.status_code == 201
+        assert response.json()["drift_event"]["event_type"] == "non_breaking"
+
+        incident = (
+            await db.execute(
+                select(Observation).where(Observation.source == source_name)
+            )
+        ).scalar_one_or_none()
+        assert incident is None
 
 
 class TestContractDriftReadEndpoints:

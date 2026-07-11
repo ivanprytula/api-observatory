@@ -6,13 +6,13 @@ meta {
 
 post {
   url: {{baseUrl}}/api/v1/contracts/snapshots
-  body: none
+  body: json
   auth: none
 }
 
 headers {
   Content-Type: application/json
-  Authorization: Bearer {{token}}
+  Authorization: Bearer {{access_token}}
 }
 
 body:json {
