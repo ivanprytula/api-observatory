@@ -26,13 +26,13 @@ For in-depth trade-off analysis ("why not X?"), open the linked ADR file.
 
 ---
 
-### 002: Qdrant vs pgvector — Vector Database
+### 015: `inference`'s Dedicated pgvector Postgres — Vector Database
 
-**Decision**: Qdrant primary (teaches dedicated vector DB ops); pgvector added in Phase 5 for comparison.
+**Decision**: pgvector on a Postgres instance dedicated to `inference` (not shared with the ingestor). No Qdrant today — deferred pending a concrete need, not rejected.
 
-**Rationale**: Qdrant teaches the dedicated vector DB model (collections, HNSW indexing, payload filtering). pgvector is simpler but slower at scale (>10M vectors).
+**Rationale**: Real per-service database ownership without taking on a second database *engine* to operate. Supersedes ADR 002, which was written for an earlier, larger design that predates the current MVP scope and was never archived when the project pivoted.
 
-[→ ADR 002](adr/002-qdrant-vs-pgvector.md)
+[→ ADR 015](adr/015-inference-dedicated-pgvector-postgres.md) (ADR 002, superseded: [stub](adr/002-qdrant-vs-pgvector.md))
 
 ---
 
@@ -62,7 +62,7 @@ For in-depth trade-off analysis ("why not X?"), open the linked ADR file.
 
 **Rationale**: OIDC generates short-lived credentials per workflow run. Compromised tokens expire in minutes. Full CloudTrail audit trail of every role assumption.
 
-[→ ADR 005](adr/005-github-oidc-vs-long-lived-keys.md)
+*(ADR 005 not yet written up — this entry predates the ADR file existing.)*
 
 ---
 
@@ -72,7 +72,7 @@ For in-depth trade-off analysis ("why not X?"), open the linked ADR file.
 
 **Rationale**: Remote state with versioning enables audit trail and team collaboration. Lockfile locking eliminates DynamoDB dependency.
 
-[→ ADR 006](adr/006-terraform-s3-backend-vs-local.md)
+*(ADR 006 not yet written up — this entry predates the ADR file existing.)*
 
 ---
 
@@ -92,7 +92,7 @@ For in-depth trade-off analysis ("why not X?"), open the linked ADR file.
 
 **Rationale**: ECS Fargate eliminates Kubernetes control-plane operations. Cost-optimized for small-to-medium service counts. Kubernetes is a separate learning path.
 
-[→ ADR 008](adr/008-ecs-fargate-vs-eks.md)
+*(ADR 008 not yet written up — this entry predates the ADR file existing.)*
 
 ---
 

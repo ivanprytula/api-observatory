@@ -23,6 +23,19 @@ services:
           cpus: '2.0'          # Generous for debugging
           memory: '2G'         # No memory pressure
 
+  inference-db:
+    volumes:
+      # Same rationale as db's postgres_data above — dev-only persistence.
+      - inference_postgres_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        reservations:
+          cpus: '0.1'
+          memory: '128M'
+        limits:
+          cpus: '1.0'          # Generous for debugging
+          memory: '512M'
+
   ingestor:
     command: >
       sh -c "alembic upgrade head && uvicorn services.ingestor.main:app
@@ -77,3 +90,4 @@ services:
 
 volumes:
   postgres_data:
+  inference_postgres_data:

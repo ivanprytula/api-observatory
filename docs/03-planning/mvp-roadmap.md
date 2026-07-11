@@ -19,6 +19,7 @@ Use during active feature stabilization. Favors speed and predictable local feed
 - Focus on source-registry, probe loop, scorecards, and drift slices.
 
 #### Test gate
+
 ```bash
 DATABASE_URL_TEST=sqlite+aiosqlite:///:memory: uv run pytest tests/ services/ingestor/tests/ -q -m "unit"
 DATABASE_URL_TEST=sqlite+aiosqlite:///:memory: uv run pytest services/ingestor/tests/integration/test_source_registry_api.py -q
@@ -35,6 +36,7 @@ Use after MVP is shipped and release hardening begins.
 - Require stronger release validation and operational checks.
 
 #### Test gate
+
 ```bash
 DATABASE_URL_TEST=sqlite+aiosqlite:///:memory: uv run pytest tests/ services/ingestor/tests/ -q -m "unit"
 env -u DATABASE_URL_TEST uv run pytest tests/ services/ingestor/tests/ -q -m "integration or e2e"
@@ -58,7 +60,7 @@ Switch from MVP to MVP+ when all are true:
 | **Database** | PostgreSQL 17 (Docker) | RDS PostgreSQL 17 | Same SQL; RDS adds managed backups, Multi-AZ, IAM auth |
 | **Cache** | Cache 7 (Docker) | ElastiCache Cache 7.1 | Same Cache protocol; ElastiCache adds TLS, AUTH, Multi-AZ |
 | **Message Broker** | Redpanda (Docker) | MSK Serverless | Kafka-compatible; `aiokafka` code unchanged; IAM auth |
-| **Vector Store** | None | Qdrant → pgvector | Deferred; standalone Qdrant teaches dedicated vector DB ops |
+| **Vector Store** | pgvector (dedicated `inference-db`) | pgvector (managed Postgres) | Real as of Phase 2 of the AI-augmented observatory plan; Qdrant deferred, see ADR-015 |
 | **Object Store** | MinIO (optional) | AWS S3 | Same S3 API via minio-py client |
 | **Frontend** | Streamlit (MVP) → HTMX+Jinja2 | HTMX+Jinja2 (dashboard service) | MVP uses Streamlit for quick UI; HTMX added for production dashboard |
 | **Agent/LLM** | LangGraph + OpenAI | LangGraph + OpenAI | Dual-model routing: gpt-4o-mini (classify), gpt-4o (deep analyze) |
@@ -93,7 +95,7 @@ Switch from MVP to MVP+ when all are true:
 | **Agent HITL Review** | ❌ | LangGraph checkpointer + Cache | Pause before publish node; human approves/rejects via resume API | ADR-012 |
 | **Scraping (HTTP/HTML/Browser)** | ❌ | httpx + BeautifulSoup + Playwright | Factory pattern for 3 scraper types; Semaphore(5) for concurrency | — |
 | **MongoDB Document Store** | ❌ | Motor (async MongoDB) | Genuinely varied document shapes per source | — |
-| **Vector Search** | ❌ | Qdrant (dedicated) → pgvector (comparison) | Qdrant teaches dedicated vector DB ops; pgvector simpler but slower at scale | ADR-002 |
+| **Vector Search** | ✅ | pgvector (dedicated instance per service) | Real per-service DB ownership without a second engine to operate; Qdrant deferred, not rejected — see ADR-015 | ADR-015 |
 | **HTMX Dashboard** | ❌ | HTMX + Jinja2 + SSE | No JS build pipeline; server-side rendering keeps source of truth in backend | ADR-003 |
 | **Notifications** | ❌ | Multi-channel (Slack, Telegram, webhook, email) | httpx-based; fail-open design | — |
 | **AWS Deployment** | ❌ | Terraform + ECS Fargate + RDS + ElastiCache + MSK | Fargate eliminates K8s ops; Terraform for IaC; OIDC for CI/CD auth | ADR-008 |

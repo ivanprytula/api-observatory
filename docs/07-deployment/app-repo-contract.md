@@ -19,7 +19,7 @@ Each service image must satisfy these requirements for the infra manifests to fu
 
 ### Security
 
-- [ ] **Application reads secrets from environment variables** — infra injects `DATABASE_URL`, `INTERNAL_JWT_SECRET`, `BROKER_URL`, `ADMIN_TOKEN` via `secretKeyRef` (not files). `QDRANT_URL` is injected only into the inference service, which owns Qdrant access post-MVP.
+- [ ] **Application reads secrets from environment variables** — infra injects `DATABASE_URL`, `INTERNAL_JWT_SECRET`, `BROKER_URL`, `ADMIN_TOKEN` via `secretKeyRef` (not files). The `inference` service (real as of the AI-augmented observatory Phase 2) uses pgvector on the shared `DATABASE_URL` Postgres instance — no separate `QDRANT_URL`/Qdrant deployment; see `docs/.plans/ai-augmented-observatory-agent-mcp.md` for why.
 - [ ] **No secrets in logs** — log scrubbing for env var values is the app's responsibility
 - [ ] **No `root` required** — app must work with `runAsNonRoot: true`, `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`, and `capabilities.drop: [ALL]`
 - [ ] **No privileged ports** (<1024) — apps bind to ephemeral/high ports only

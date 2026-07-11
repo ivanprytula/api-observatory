@@ -35,7 +35,10 @@ flowchart TB
       Scheduler["APScheduler\nprobe jobs"]
     end
 
-    Postgres[("PostgreSQL 17\nsource profiles, observations,\ndrift events, agent runs, scorecards")]
+    Inference["Inference — services/inference/\nFastAPI, :8001\nfastembed (ONNX, CPU-only) + pgvector"]
+
+    Postgres[("PostgreSQL 17 — db\nsource profiles, observations,\ndrift events, agent runs, scorecards")]
+    InferenceDB[("PostgreSQL 17 — inference-db\nindexed_documents (pgvector)\ndedicated instance, ADR-015")]
     Cache[("Redis\ncache, pub/sub, rate-limit\noptional — CACHE_ENABLED")]
     Broker[("Redpanda\nKafka-compatible\noptional — BROKER_ENABLED")]
 
@@ -46,10 +49,17 @@ flowchart TB
     Scheduler --> Postgres
     Scheduler -.-> Broker
     API -.->|drift events| Broker
+    API -->|POST /index, /search\nRAG for /analyze| Inference
+    Inference --> InferenceDB
 ```
 
 Core, always-on: Ingestor + PostgreSQL. Cache and Broker are optional and feature-flagged
 (`CACHE_ENABLED` / `BROKER_ENABLED`) — the ingestor fails open if either is unavailable.
+Inference is real as of Phase 2 of the AI-augmented observatory plan; per
+[ADR 015](adr/015-inference-dedicated-pgvector-postgres.md) it runs on its own dedicated Postgres
+instance (`inference-db`), not the ingestor's `db` — real per-service database ownership, not just
+schema-level separation. The ingestor never reads inference's tables directly, only via the
+`/index` and `/search` HTTP contract in `services/ingestor/vector_search.py`.
 
 ## Router / Feature Map
 
@@ -70,7 +80,8 @@ auth applied.
 | `ws.py` | WebSocket push (drift events) | Active |
 | `analytics.py`, `reporting.py`, `insights.py` | Analytics/reporting layer | Present, deferred (post-MVP) |
 | `subscriptions.py`, `notifications.py` | Alerting channels | Present, deferred (post-MVP) |
-| `vector_search.py`, `mongo_analytics.py` | Vector search, document store | Present, deferred — no Qdrant/MongoDB in `docker-compose.yml` |
+| `vector_search.py` | RAG bridge to the `inference` service (`/index`, `/search`) | Active — `inference` is real as of Phase 2 (pgvector, no Qdrant) |
+| `mongo_analytics.py` | Document store | Present, deferred — no MongoDB in `docker-compose.yml` |
 | `scraper.py` | HTTP/HTML/browser scraping | Present, deferred (post-MVP) |
 | `etl.py` | Tabular ETL preview (pandas/polars) | Present, optional extras only (`uv sync --extra etl`) |
 | `background_processing.py` | Async task queue prototype | Present, deferred (post-MVP) |
@@ -79,8 +90,7 @@ auth applied.
 
 - **New service** (e.g. a real `analytics` or `inference` service gets source code): add a
   container node to the Containers diagram, add a row to the Router/Feature Map if it exposes
-  routers, and follow the CLAUDE.md "Plan Maintenance" trigger (update `app-repo-contract.md`
-  + baseline checklist in the same PR).
+  routers, and follow the CLAUDE.md "Plan Maintenance" trigger (update `app-repo-contract.md` + baseline checklist in the same PR).
 - **New router**: add one row to the table above. No diagram edit needed unless it introduces
   a new external dependency (new datastore, new outbound integration).
 - **Feature moves from deferred → active** (roadmap phase advances): flip its Status cell and

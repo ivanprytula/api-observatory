@@ -71,7 +71,7 @@ environments = ["sys_platform == 'linux'"]
 constraint-dependencies = ["msgpack>=1.2.1"]
 
 [tool.uv.workspace]
-members = ["services/ingestor", "services/dashboard"]
+members = ["services/ingestor", "services/dashboard", "services/inference"]
 
 [dependency-groups]
 dev = [

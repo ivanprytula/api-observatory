@@ -51,6 +51,11 @@ New tooling is added to this baseline **only** to close a named gap (see
 - [ ] **Coverage is measured on the ingestor** — `[tool.coverage.run]`
       (`source = ["services.ingestor"]`, `branch = true`) in [pyproject.toml](../../pyproject.toml);
       reported via `--cov=services/ingestor`.
+- [ ] **`inference` has its own integration test suite** — `services/inference/tests/` runs against
+      real pgvector-enabled Postgres (no SQLite fallback — `Vector` columns need the extension) via
+      its own `conftest.py` reusing the shared testcontainers fixture; embeddings are mocked
+      deterministically so tests don't depend on network/model download. Not yet wired into the
+      root `--cov` config (tracked as a gap, not measured today).
 - [ ] **Every endpoint has the three-test set** — happy path (2xx, full-shape assertion), not-found
       (404), validation error (422) — and uses the `AsyncClient` + `ASGITransport` pattern. See
       [fastapi-testing.instructions.md](../../.github/instructions/fastapi-testing.instructions.md).
@@ -106,11 +111,14 @@ New tooling is added to this baseline **only** to close a named gap (see
 ## Runtime & Supply Chain
 
 - [ ] **Image is multi-stage with a pinned base digest** — `python:3.14-slim@sha256:…` and a
-      builder/final split ([Dockerfile](../../Dockerfile); [ADR 004](adr/004-docker-buildkit-and-security-scanning.md)).
+      builder/final split ([Dockerfile](../../Dockerfile),
+      [services/inference/Dockerfile](../../services/inference/Dockerfile);
+      [ADR 004](adr/004-docker-buildkit-and-security-scanning.md)).
 - [ ] **Dependencies installed frozen, no dev deps in final** — `uv sync --no-dev --frozen`
       ([Dockerfile](../../Dockerfile)).
 - [x] **Container runs non-root as UID 10001** — `USER appuser` ([Dockerfile](../../Dockerfile),
-      [services/dashboard/Dockerfile](../../services/dashboard/Dockerfile)), matching
+      [services/dashboard/Dockerfile](../../services/dashboard/Dockerfile),
+      [services/inference/Dockerfile](../../services/inference/Dockerfile)), matching
       `runAsUser: 10001` in [app-repo-contract.md](../07-deployment/app-repo-contract.md).
 - [ ] **Secrets sourced via `secretKeyRef`, delivery mechanism owned by infra** — production Key
       Vault sync pattern (CSI Secret Store driver or External Secrets Operator) documented in
