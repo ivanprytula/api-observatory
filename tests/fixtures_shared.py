@@ -77,8 +77,9 @@ os.environ["ENVIRONMENT"] = "testing"
 os.environ["CACHE_ENABLED"] = "false"
 os.environ.setdefault("SERVICE_VERSION", "test-service")
 os.environ.setdefault("CONTRACTS_VERSION", "test-contracts")
-os.environ.setdefault("DOCS_USERNAME", "")
-os.environ.setdefault("DOCS_PASSWORD", "")
+os.environ["DOCS_USERNAME"] = ""
+os.environ["DOCS_PASSWORD"] = ""
+os.environ["API_V1_BEARER_TOKEN"] = ""
 
 from services.ingestor.auth import verify_jwt_token  # noqa: E402
 from services.ingestor.config import Settings  # noqa: E402
