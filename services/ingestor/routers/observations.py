@@ -27,8 +27,10 @@ from services.ingestor.api_schemas.observations import (
 from services.ingestor.auth import (
     DEFAULT_ROLE,
     create_session,
+    jwt_role_guard,
     session_role_guard,
     verify_bearer_token,
+    verify_jwt_token,
     verify_session,
 )
 from services.ingestor.config import settings
@@ -123,6 +125,17 @@ type AdminSessionDep = Annotated[
     dict[str, Any], Depends(session_role_guard("admin", "tenant_admin"))
 ]
 
+# JWT-based auth for the primary (non-teaching) CRUD/analyze routes below —
+# same jwt_role_guard pattern already applied in contract_drift.py,
+# source_registry.py and scorecards.py (audit-gaps.md gap 🟠#6).
+type JwtDep = Annotated[dict[str, Any], Depends(verify_jwt_token)]
+type WriterJwtDep = Annotated[
+    dict[str, Any], Depends(jwt_role_guard("writer", "admin", "tenant_admin"))
+]
+type AdminJwtDep = Annotated[
+    dict[str, Any], Depends(jwt_role_guard("admin", "tenant_admin"))
+]
+
 
 # ---------------------------------------------------------------------------
 # Observations — single create
@@ -132,13 +145,14 @@ type AdminSessionDep = Annotated[
     summary="Create a observation",
     response_model=ObservationResponse,
     status_code=status.HTTP_201_CREATED,
-    responses={**_R422, **_R429},
+    responses={**_R401, **_R403, **_R422, **_R429},
 )
 @limiter.limit(V1_RATE_LIMIT)
 async def create_observation_endpoint(
     request: Request,
     body: ObservationRequest,
     db: DbDep,
+    _: WriterJwtDep,
 ) -> ObservationResponse:
     """Create a single observation.
 
@@ -161,7 +175,7 @@ async def create_observation_endpoint(
     summary="Batch-create observations",
     response_model=BatchCreateResponse,
     status_code=status.HTTP_201_CREATED,
-    responses={**_R422},
+    responses={**_R401, **_R403, **_R422},
     description=(
         "Bulk-create observations.\n\n"
         "**`?impl` query parameter** — internal implementation toggle:\n"
@@ -176,6 +190,7 @@ async def create_observation_endpoint(
 async def create_observations_batch_endpoint(
     body: BatchObservationsRequest,
     db: DbDep,
+    _: WriterJwtDep,
     impl: str = Query(
         default="optimized",
         pattern="^(optimized|naive)$",
@@ -207,10 +222,11 @@ async def create_observations_batch_endpoint(
     "",
     summary="List observations",
     response_model=ObservationListResponse,
-    responses={**_R422},
+    responses={**_R401, **_R422},
 )
 async def list_observations(
     db: DbDep,
+    _: JwtDep,
     skip: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
     source: str | None = None,
@@ -235,9 +251,11 @@ async def list_observations(
     "/{observation_id}",
     summary="Get a observation by ID",
     response_model=ObservationResponse,
-    responses={**_R404},
+    responses={**_R401, **_R404},
 )
-async def get_observation(observation_id: int, db: DbDep) -> ObservationResponse:
+async def get_observation(
+    observation_id: int, db: DbDep, _: JwtDep
+) -> ObservationResponse:
     """Retrieve a single observation by ID.
 
     Check cache first (Cache); on miss, fetch from DB and cache for 1 hour.
@@ -270,10 +288,10 @@ async def get_observation(observation_id: int, db: DbDep) -> ObservationResponse
     "/{observation_id}",
     summary="Partially update a observation",
     response_model=ObservationResponse,
-    responses={**_R404, **_R422},
+    responses={**_R401, **_R403, **_R404, **_R422},
 )
 async def update_observation_endpoint(
-    observation_id: int, body: UpdateObservationRequest, db: DbDep
+    observation_id: int, body: UpdateObservationRequest, db: DbDep, _: WriterJwtDep
 ) -> ObservationResponse:
     """Update a observation with provided fields (partial update).
 
@@ -300,9 +318,11 @@ async def update_observation_endpoint(
     "/{observation_id}/process",
     summary="Mark a observation as processed",
     response_model=ObservationResponse,
-    responses={**_R404},
+    responses={**_R401, **_R403, **_R404},
 )
-async def process_observation(observation_id: int, db: DbDep) -> ObservationResponse:
+async def process_observation(
+    observation_id: int, db: DbDep, _: WriterJwtDep
+) -> ObservationResponse:
     """Mark a observation as processed.
 
     Invalidates any cached version so next GET reflects updated state.
@@ -324,9 +344,11 @@ async def process_observation(observation_id: int, db: DbDep) -> ObservationResp
     "/{observation_id}/archive",
     summary="Archive (soft-delete) a observation",
     response_model=ObservationResponse,
-    responses={**_R404},
+    responses={**_R401, **_R403, **_R404},
 )
-async def archive_observation(observation_id: int, db: DbDep) -> ObservationResponse:
+async def archive_observation(
+    observation_id: int, db: DbDep, _: WriterJwtDep
+) -> ObservationResponse:
     """Soft-delete (archive) a observation.
 
     Logs are automatically tagged with request correlation ID (cid).
@@ -349,9 +371,9 @@ async def archive_observation(observation_id: int, db: DbDep) -> ObservationResp
     "/{observation_id}",
     summary="Hard-delete a observation",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={**_R404},
+    responses={**_R401, **_R403, **_R404},
 )
-async def delete_observation(observation_id: int, db: DbDep) -> None:
+async def delete_observation(observation_id: int, db: DbDep, _: AdminJwtDep) -> None:
     """Hard-delete a observation.
 
     Invalidates any cached version.
@@ -515,11 +537,12 @@ async def create_observations_batch_protected(
     "/{observation_id}/analyze",
     summary="Analyze a observation with AI (RAG + OpenAI)",
     response_model=ObservationClassification,
-    responses={**_R404},
+    responses={**_R401, **_R403, **_R404},
 )
 async def analyze_observation(
     observation_id: int,
     db: DbDep,
+    _: WriterJwtDep,
 ) -> ObservationClassification | None:
     """Analyze a observation using OpenAI and RAG context.
 
@@ -601,10 +624,14 @@ async def analyze_observation(
     return completion.choices[0].message.parsed
 
 
-@router.post("/{observation_id}/analyze/stream")
+@router.post(
+    "/{observation_id}/analyze/stream",
+    responses={**_R401, **_R403, **_R404},
+)
 async def analyze_observation_stream(
     observation_id: int,
     db: DbDep,
+    _: WriterJwtDep,
 ) -> StreamingResponse:
     """Stream observation analysis from OpenAI (Server-Sent Events)."""
     observation = await get_observation_op(db, observation_id)

@@ -13,6 +13,12 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.ingestor.api_schemas.observations import ObservationRequest
+from services.ingestor.auth import verify_jwt_token
+from services.ingestor.main import app
+
+
+async def _viewer_claims() -> dict[str, str]:
+    return {"sub": "viewer-user", "role": "viewer"}
 
 
 class TestSessionAuth:
@@ -238,6 +244,79 @@ class TestRateLimitHandler:
         # Slowapi may or may not set these headers depending on configuration
         # Just verify the endpoint works
         assert "id" in response.json()
+
+
+class TestJwtAuthOnCoreRoutes:
+    """Phase 4: the core (non-teaching) CRUD/analyze routes now require a
+    writer/admin JWT for writes and any authenticated JWT for reads. The
+    shared `client` fixture pre-authenticates every request as admin (see
+    tests/fixtures_shared.py), so these tests manipulate
+    `app.dependency_overrides` directly to exercise the real
+    unauthenticated/under-privileged paths."""
+
+    async def test_create_observation_requires_auth(self, client: AsyncClient) -> None:
+        saved = app.dependency_overrides.pop(verify_jwt_token, None)
+        try:
+            response = await client.post(
+                "/api/v1/observations",
+                json={"source": "test", "timestamp": "2024-01-01T00:00:00", "data": {}},
+            )
+        finally:
+            if saved is not None:
+                app.dependency_overrides[verify_jwt_token] = saved
+
+        assert response.status_code == 401
+
+    async def test_create_observation_denies_viewer_role(
+        self, client: AsyncClient
+    ) -> None:
+        saved = app.dependency_overrides.get(verify_jwt_token)
+        app.dependency_overrides[verify_jwt_token] = _viewer_claims
+        try:
+            response = await client.post(
+                "/api/v1/observations",
+                json={"source": "test", "timestamp": "2024-01-01T00:00:00", "data": {}},
+            )
+        finally:
+            if saved is not None:
+                app.dependency_overrides[verify_jwt_token] = saved
+
+        assert response.status_code == 403
+
+    async def test_list_observations_requires_auth(self, client: AsyncClient) -> None:
+        saved = app.dependency_overrides.pop(verify_jwt_token, None)
+        try:
+            response = await client.get("/api/v1/observations")
+        finally:
+            if saved is not None:
+                app.dependency_overrides[verify_jwt_token] = saved
+
+        assert response.status_code == 401
+
+    async def test_delete_observation_denies_writer_role(
+        self, client: AsyncClient, db: AsyncSession, observation_timestamp: datetime
+    ) -> None:
+        """Hard-delete is admin-only; a writer-role JWT is rejected with 403."""
+        from services.ingestor.repositories import observations as crud
+
+        observation = await crud.create_observation(
+            db,
+            ObservationRequest(source="test", timestamp=observation_timestamp, data={}),
+        )
+
+        saved = app.dependency_overrides.get(verify_jwt_token)
+
+        async def _writer_claims() -> dict[str, str]:
+            return {"sub": "writer-user", "role": "writer"}
+
+        app.dependency_overrides[verify_jwt_token] = _writer_claims
+        try:
+            response = await client.delete(f"/api/v1/observations/{observation.id}")
+        finally:
+            if saved is not None:
+                app.dependency_overrides[verify_jwt_token] = saved
+
+        assert response.status_code == 403
 
 
 class TestSecurityHeaders:

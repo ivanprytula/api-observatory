@@ -17,7 +17,26 @@ from unittest.mock import AsyncMock, patch
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.ingestor.models import AgentRun, Observation
+from services.ingestor.auth import verify_jwt_token
+from services.ingestor.main import app
+from services.ingestor.models import AgentRun, Observation, User
+
+
+async def _viewer_claims() -> dict[str, str]:
+    return {"sub": "viewer-user", "role": "viewer"}
+
+
+async def _create_user(db: AsyncSession, *, username: str) -> User:
+    user = User(
+        username=username,
+        email=f"{username}@example.com",
+        password_hash="not-a-real-hash",
+        role="admin",
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
 
 
 async def _create_agent_run(
@@ -79,12 +98,19 @@ class TestResumeAgentRun:
 
         assert response.status_code == 409
 
-    async def test_approve_delegates_to_runner_and_returns_updated_run(
+    async def test_approve_delegates_to_runner_and_derives_reviewer_from_jwt(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
+        """reviewer_user_id is resolved server-side from the JWT `sub` claim.
+
+        The shared `client` fixture mocks the JWT as {"sub": "testuser", ...}
+        (tests/fixtures_shared.py) — creating a matching User row here proves
+        the sub -> User.id lookup actually runs end-to-end through the router.
+        """
         agent_run = await _create_agent_run(db, status="awaiting_review")
+        reviewer = await _create_user(db, username="testuser")
         agent_run.status = "approved"
-        agent_run.reviewer_user_id = 7
+        agent_run.reviewer_user_id = reviewer.id
 
         with patch(
             "services.ingestor.agent.runner.resume_agent_run",
@@ -92,14 +118,62 @@ class TestResumeAgentRun:
         ) as resume_mock:
             response = await client.post(
                 f"/api/v1/agent/runs/{agent_run.id}/resume",
-                json={"approve": True, "reviewer_user_id": 7},
+                json={"approve": True},
             )
 
         assert response.status_code == 200
         assert response.json()["status"] == "approved"
-        assert response.json()["reviewer_user_id"] == 7
+        assert response.json()["reviewer_user_id"] == reviewer.id
         resume_mock.assert_awaited_once_with(
-            agent_run.id, approve=True, reviewer_user_id=7
+            agent_run.id, approve=True, reviewer_user_id=reviewer.id
+        )
+
+    async def test_resume_ignores_client_supplied_reviewer_user_id(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """Spoof-proofing: a body-supplied reviewer_user_id is ignored — the
+        reviewer is always derived from the authenticated caller's JWT, never
+        trusted from client input."""
+        agent_run = await _create_agent_run(db, status="awaiting_review")
+        reviewer = await _create_user(db, username="testuser")
+        agent_run.status = "approved"
+        agent_run.reviewer_user_id = reviewer.id
+
+        with patch(
+            "services.ingestor.agent.runner.resume_agent_run",
+            new=AsyncMock(return_value=agent_run),
+        ) as resume_mock:
+            response = await client.post(
+                f"/api/v1/agent/runs/{agent_run.id}/resume",
+                json={"approve": True, "reviewer_user_id": 999999},
+            )
+
+        assert response.status_code == 200
+        resume_mock.assert_awaited_once_with(
+            agent_run.id, approve=True, reviewer_user_id=reviewer.id
+        )
+
+    async def test_resume_reviewer_user_id_none_when_jwt_subject_unresolvable(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """No User row matches the JWT `sub` ("testuser") — the review is
+        recorded unattributed (None) rather than falling back to any
+        client-supplied value."""
+        agent_run = await _create_agent_run(db, status="awaiting_review")
+        agent_run.status = "approved"
+        agent_run.reviewer_user_id = None
+
+        with patch(
+            "services.ingestor.agent.runner.resume_agent_run",
+            new=AsyncMock(return_value=agent_run),
+        ) as resume_mock:
+            response = await client.post(
+                f"/api/v1/agent/runs/{agent_run.id}/resume", json={"approve": True}
+            )
+
+        assert response.status_code == 200
+        resume_mock.assert_awaited_once_with(
+            agent_run.id, approve=True, reviewer_user_id=None
         )
 
     async def test_returns_501_when_agent_disabled(
@@ -118,3 +192,58 @@ class TestResumeAgentRun:
             )
 
         assert response.status_code == 501
+
+
+class TestAgentRouterAuth:
+    """Phase 4: both routes require a JWT; resume additionally requires
+    writer/admin/tenant_admin. The shared `client` fixture pre-authenticates
+    every request as admin (see tests/fixtures_shared.py), so these tests
+    manipulate `app.dependency_overrides` directly to exercise the real
+    unauthenticated/under-privileged paths."""
+
+    async def test_get_agent_run_requires_auth(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        agent_run = await _create_agent_run(db, status="awaiting_review")
+
+        saved = app.dependency_overrides.pop(verify_jwt_token, None)
+        try:
+            response = await client.get(f"/api/v1/agent/runs/{agent_run.id}")
+        finally:
+            if saved is not None:
+                app.dependency_overrides[verify_jwt_token] = saved
+
+        assert response.status_code == 401
+
+    async def test_resume_agent_run_requires_auth(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        agent_run = await _create_agent_run(db, status="awaiting_review")
+
+        saved = app.dependency_overrides.pop(verify_jwt_token, None)
+        try:
+            response = await client.post(
+                f"/api/v1/agent/runs/{agent_run.id}/resume", json={"approve": True}
+            )
+        finally:
+            if saved is not None:
+                app.dependency_overrides[verify_jwt_token] = saved
+
+        assert response.status_code == 401
+
+    async def test_resume_agent_run_denies_viewer_role(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        agent_run = await _create_agent_run(db, status="awaiting_review")
+
+        saved = app.dependency_overrides.get(verify_jwt_token)
+        app.dependency_overrides[verify_jwt_token] = _viewer_claims
+        try:
+            response = await client.post(
+                f"/api/v1/agent/runs/{agent_run.id}/resume", json={"approve": True}
+            )
+        finally:
+            if saved is not None:
+                app.dependency_overrides[verify_jwt_token] = saved
+
+        assert response.status_code == 403

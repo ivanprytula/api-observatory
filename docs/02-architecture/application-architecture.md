@@ -82,9 +82,9 @@ auth applied.
 
 | Router | Domain | Status |
 |---|---|---|
-| `agent.py` | Incident-triage agent run status + HITL resume (`GET /runs/{id}`, `POST /runs/{id}/resume`) | Active — real as of Phase 3, no auth yet (Phase 4) |
+| `agent.py` | Incident-triage agent run status + HITL resume (`GET /runs/{id}`, `POST /runs/{id}/resume`) | Active — real as of Phase 3, JWT-auth-gated as of Phase 4 |
 | `source_registry.py` | Register/manage probed API sources | Active |
-| `observations.py` / `observations_v2.py` | Probe results, ingestion | Active |
+| `observations.py` / `observations_v2.py` | Probe results, ingestion | Active — core CRUD/analyze routes JWT-auth-gated as of Phase 4; the dedicated auth-mechanism teaching routes (`/secure/*`, `/auth/login`, `/batch/protected`, all of `observations_v2.py`) intentionally keep their own session/bearer/JWT auth side-by-side |
 | `scorecards.py` | Reliability scorecards (p95 latency, uptime) | Active |
 | `contract_drift.py` | Schema drift detection | Active |
 | `health_ingestion_jobs.py` | Scheduler/job health endpoints | Active |

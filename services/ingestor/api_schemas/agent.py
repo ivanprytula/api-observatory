@@ -25,7 +25,7 @@ class AgentRunResponse(BaseModel):
 
 class AgentRunResumeRequest(BaseModel):
     approve: bool
-    # No auth on this router yet (Phase 4 closes that gap) — until then,
-    # reviewer identity is optionally self-reported rather than derived from
-    # a JWT.
-    reviewer_user_id: int | None = None
+    # No reviewer_user_id field here on purpose: it's derived server-side from
+    # the caller's authenticated JWT (`sub` -> User.id lookup in the router),
+    # never taken from the request body — a client-supplied reviewer id would
+    # let any writer/admin token attribute an approval to an arbitrary user.
