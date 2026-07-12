@@ -18,10 +18,6 @@ _SESSION_DEFAULTS: dict[str, Any] = {
     "_ws_runtime": None,
     "probe_results": {},
     "last_refresh": 0.0,
-    "agent_run_id": "",
-    "agent_result": None,
-    "agent_hitl_paused": False,
-    "agent_stream_events": [],
 }
 
 
@@ -148,38 +144,6 @@ class StreamlitUIAdapter:
     @last_refresh.setter
     def last_refresh(self, value: float) -> None:
         self._session.last_refresh = value
-
-    @property
-    def agent_run_id(self) -> str:
-        return self._session.get("agent_run_id", "")
-
-    @agent_run_id.setter
-    def agent_run_id(self, value: str) -> None:
-        self._session.agent_run_id = value
-
-    @property
-    def agent_result(self) -> Any:
-        return self._session.get("agent_result")
-
-    @agent_result.setter
-    def agent_result(self, value: Any) -> None:
-        self._session.agent_result = value
-
-    @property
-    def agent_hitl_paused(self) -> bool:
-        return self._session.get("agent_hitl_paused", False)
-
-    @agent_hitl_paused.setter
-    def agent_hitl_paused(self, value: bool) -> None:
-        self._session.agent_hitl_paused = value
-
-    @property
-    def agent_stream_events(self) -> list[dict]:
-        return self._session.get("agent_stream_events", [])
-
-    @agent_stream_events.setter
-    def agent_stream_events(self, value: list[dict]) -> None:
-        self._session.agent_stream_events = value
 
     def empty(self) -> Any:
         return st.empty()

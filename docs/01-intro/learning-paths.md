@@ -23,13 +23,13 @@ Architecture Overview for the visual flow diagram and service justifications.
 3. **Background scheduling**: APScheduler in [services/ingestor/jobs.py](../../services/ingestor/jobs.py) and [jobs_registry.py](../../services/ingestor/jobs_registry.py).
 4. **Resilience**: circuit breaker in [libs/platform/circuit_breaker.py](../../libs/platform/circuit_breaker.py), rate limiting in [services/ingestor/rate_limiting.py](../../services/ingestor/rate_limiting.py).
 5. **Contract drift + scoring**: [routers/contract_drift.py](../../services/ingestor/routers/contract_drift.py) and [routers/scorecards.py](../../services/ingestor/routers/scorecards.py).
-6. **LangGraph agent**: StateGraph with 5 nodes, HITL interrupt, SSE streaming in [agent/graph.py](../../services/ingestor/agent/graph.py).
+6. **LangGraph agent**: StateGraph with 5 nodes, HITL interrupt (Postgres-checkpointed pause/resume, no SSE) in [agent/graph.py](../../services/ingestor/agent/graph.py).
 
 ---
 
 ## DevOps and Cloud Track
 
-1. Local orchestration: [docker-compose.yml](../../docker-compose.yml) — 4 services (db, cache, broker, ingestor).
+1. Local orchestration: [docker-compose.yml](../../docker-compose.yml) — 7 default services (db, cache, broker, ingestor, inference, inference-db, dashboard); `edge`/monitoring/security-scanning/cloud-deploy services sit behind compose profiles.
 2. Image hardening: [Dockerfile](../../Dockerfile) (multi-stage) and [infra/database/Dockerfile](../../infra/database/Dockerfile).
 3. Observability: Prometheus metrics in [services/ingestor/metrics.py](../../services/ingestor/metrics.py), OTEL in [main.py lifespan](../../services/ingestor/main.py), `/health` and `/readyz` probes.
 4. IaC: Terraform modules in [infra/terraform/](../../infra/terraform/).
@@ -42,6 +42,9 @@ Architecture Overview for the visual flow diagram and service justifications.
 
 1. Start with the ADR: ADR 012 (LangGraph Agent) — dual-model cost design.
 2. Trace state transitions in [agent/graph.py](../../services/ingestor/agent/graph.py) (`build_graph()` function).
-3. Review each node in [agent/nodes.py](../../services/ingestor/agent/nodes.py): RAG fetch → classify → deep analyze → publish.
-4. Test interactively with Bruno Desktop: open `bruno/` in Bruno, select `local` env, run the `z-agent` collection.
-5. See HITL approval flow in Streamlit: launch app → Agent Enrichment → HITL Review tab.
+3. Review each node in [agent/nodes.py](../../services/ingestor/agent/nodes.py): `classify_severity` → `retrieve_similar_incidents` (RAG via the `inference` service) → `draft_analysis` → `human_review` (interrupt) → `notify`.
+4. Test interactively with Bruno Desktop: open `bruno/` in Bruno, select `local` env, run the `agent` collection (create source → snapshot → breaking snapshot auto-triggers the agent → get run → resume).
+5. See the HITL approval flow via the API directly (no dedicated Streamlit tab exists yet):
+   trigger a breaking drift event, `GET /api/v1/agent/runs/{id}` until `status` is
+   `awaiting_review`, then `POST /api/v1/agent/runs/{id}/resume` — see the `agent` Bruno
+   collection (step 4 above) for the full worked flow.
