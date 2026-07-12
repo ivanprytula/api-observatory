@@ -96,6 +96,7 @@ Switch from MVP to MVP+ when all are true:
 | **Scraping (HTTP/HTML/Browser)** | ❌ | httpx + BeautifulSoup + Playwright | Factory pattern for 3 scraper types; Semaphore(5) for concurrency | — |
 | **MongoDB Document Store** | ❌ | Motor (async MongoDB) | Genuinely varied document shapes per source | — |
 | **Vector Search** | ✅ | pgvector (dedicated instance per service) | Real per-service DB ownership without a second engine to operate; Qdrant deferred, not rejected — see ADR-015 | ADR-015 |
+| **MCP Server** | ✅ | FastMCP (stdio) | Standalone `fastmcp` package chosen over the bundled `mcp.server.fastmcp.FastMCP` for multi-transport support (stdio now, `streamable-http` later with no rework); hand-written `@mcp.tool()` wrappers over the real ingestor HTTP API (own `mcp-service` JWT login), not in-process repository imports or OpenAPI auto-generation | — |
 | **HTMX Dashboard** | ❌ | HTMX + Jinja2 + SSE | No JS build pipeline; server-side rendering keeps source of truth in backend | ADR-003 |
 | **Notifications** | ❌ | Multi-channel (Slack, Telegram, webhook, email) | httpx-based; fail-open design | — |
 | **AWS Deployment** | ❌ | Terraform + ECS Fargate + RDS + ElastiCache + MSK | Fargate eliminates K8s ops; Terraform for IaC; OIDC for CI/CD auth | ADR-008 |

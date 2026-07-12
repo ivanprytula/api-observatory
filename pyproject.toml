@@ -81,13 +81,15 @@ environments = ["sys_platform == 'linux'"]
 constraint-dependencies = ["msgpack>=1.2.1"]
 
 [tool.uv.workspace]
-members = ["services/ingestor", "services/dashboard", "services/inference"]
+members = ["services/ingestor", "services/dashboard", "services/inference", "services/mcp"]
 
 [dependency-groups]
 dev = [
   "pytest>=9.1.1",
   "pytest-asyncio>=0.25.3",
   "pytest-cov>=6.1.0",
+  # respx: mocks httpx.AsyncClient at the transport level, used by services/mcp/tests/
+  "respx>=0.22.0",
   # testcontainers: auto-provision postgres:17-bookworm for local integration tests
   # (Docker must be running; CI uses GHA service container instead)
   "testcontainers[postgres,redis]>=4.14.2",

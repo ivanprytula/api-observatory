@@ -69,6 +69,14 @@ New tooling is added to this baseline **only** to close a named gap (see
       (Postgres checkpointer, real Anthropic structured output, RAG retrieval finding a prior
       indexed incident) were additionally verified live against the real stack — see
       `docs/.plans/ai-augmented-observatory-agent-mcp.md` Phase 3 Status Log.
+- [x] **`services/mcp` has its own unit test suite** (Phase 5 of
+      `docs/.plans/ai-augmented-observatory-agent-mcp.md`) — `services/mcp/tests/` mocks the
+      ingestor's HTTP responses via `respx` at the transport boundary; no DB, no testcontainers,
+      since this service holds no state of its own. Not in root `testpaths`/`--cov`, matching the
+      existing `services/inference/tests/` precedent above, not a new gap. No `/health`/`/metrics`
+      endpoint — it's a stdio process, not a long-running server (see `app-repo-contract.md`'s
+      Health & Probes section) — verified live against the real stack (real login, real reads,
+      real 409 on an invalid resume) in the same session, not just against mocks.
 - [ ] **Every endpoint has the three-test set** — happy path (2xx, full-shape assertion), not-found
       (404), validation error (422) — and uses the `AsyncClient` + `ASGITransport` pattern. See
       [fastapi-testing.instructions.md](../../.github/instructions/fastapi-testing.instructions.md).

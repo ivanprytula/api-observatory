@@ -14,6 +14,12 @@ Each service image must satisfy these requirements for the infra manifests to fu
 ### Health & Probes
 
 - [ ] **`GET /health` returns 200** on port 8000 (ingestor), 8001 (inference), 8002 (processor), 8003 (dashboard), 8004 (webhook), 8005 (analytics)
+- [ ] **`services/mcp` is stdio-only in v1, deliberately** — the MCP server (Phase 5 of
+      `docs/.plans/ai-augmented-observatory-agent-mcp.md`) is a locally-run CLI process an MCP
+      client (e.g. Claude Desktop) spawns directly; it has no HTTP surface, no port, no
+      docker-compose entry, no `/health`/`/readyz`. Port **8006** is reserved as the next-free
+      slot for if/when a `streamable-http` mode is added (a config flip, not a rewrite — see
+      `services/mcp/main.py`) — not a missing row here by oversight.
 - [ ] **`GET /readyz` returns 200** when the service is ready to receive traffic (distinct from /health — checks dependencies like DB, broker)
 - [ ] **Startup probe grace period** honoured: inference/failureThreshold: 30, webhook/processor/failureThreshold: 18, others: 6
 

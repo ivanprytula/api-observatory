@@ -38,6 +38,8 @@ flowchart TB
 
     Inference["Inference — services/inference/\nFastAPI, :8001\nfastembed (ONNX, CPU-only) + pgvector"]
     Anthropic[["Anthropic API\nclaude-haiku-4-5, claude-sonnet-4-5"]]
+    MCP["MCP server — services/mcp/\nFastMCP (stdio) — 11 tools\nsource/scorecard/drift/agent-run"]
+    LLMClient["MCP client\n(Claude Desktop, etc.)"]
 
     Postgres[("PostgreSQL 17 — db\nsource profiles, observations,\ndrift events, agent runs, scorecards,\nagent checkpoints (langgraph-checkpoint-postgres)")]
     InferenceDB[("PostgreSQL 17 — inference-db\nindexed_documents (pgvector)\ndedicated instance, ADR-015")]
@@ -57,6 +59,8 @@ flowchart TB
     Agent --> Postgres
     Agent -->|RAG| Inference
     Agent -->|classify, draft| Anthropic
+    LLMClient -.->|stdio, spawned per-session| MCP
+    MCP -.->|JWT — writer role\nreal /auth/token login| API
 ```
 
 Core, always-on: Ingestor + PostgreSQL. Cache and Broker are optional and feature-flagged
@@ -72,6 +76,13 @@ checkpointed to the same `db` Postgres via `langgraph-checkpoint-postgres` so th
 pause/resume survives process restarts. Fails open like everything else here: with no
 `ANTHROPIC_API_KEY` configured, drift detection and every other feature works exactly the same,
 the agent trigger just no-ops (`services/ingestor/agent/runner.py`).
+The MCP server (Phase 5) is deliberately *not* another always-on container: it's a local process
+an MCP client spawns per session over stdio, with no port and no docker-compose entry (see
+`docs/07-deployment/app-repo-contract.md`'s Health & Probes note). It never imports the ingestor's
+internals — every tool call is a real authenticated HTTP request, logged in as a dedicated
+`mcp-service` account via the actual `/api/v1/auth/token` flow (`services/mcp/auth_client.py`),
+the same way any other API client authenticates. This dogfoods Phase 4's JWT auth rather than
+bypassing it, and keeps the two processes independently deployable.
 
 ## Router / Feature Map
 
@@ -98,6 +109,10 @@ auth applied.
 | `scraper.py` | HTTP/HTML/browser scraping | Present, deferred (post-MVP) |
 | `etl.py` | Tabular ETL preview (pandas/polars) | Present, optional extras only (`uv sync --extra etl`) |
 | `background_processing.py` | Async task queue prototype | Present, deferred (post-MVP) |
+
+`services/mcp/` (Phase 5) has no FastAPI routers of its own — it's a separate process
+(`services/mcp/server.py`) exposing 11 MCP tools that each call the routers above over real HTTP,
+authenticated as a dedicated `mcp-service` account. See the Containers diagram above.
 
 ## How to Update
 
