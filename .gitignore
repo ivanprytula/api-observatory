@@ -135,6 +135,9 @@ celerybeat.pid
 # For per-environment overrides (e.g. .env.development.local, .env.production.local, etc.) that should not be shared
 .env.*.local
 
+# Output of scripts/tools/generate-secrets.py — NEVER commit this
+.generated.secrets.env
+
 .venv
 env/
 venv/

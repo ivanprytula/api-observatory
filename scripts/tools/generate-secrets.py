@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import secrets
 import string
+from pathlib import Path
 
 
 # ── alphabet definitions ──────────────────────────────────────────────────────
@@ -76,6 +77,23 @@ def url_safe_token(length: int = 40) -> str:
 def _bits_for(length: int) -> int:
     """Approximate entropy bits for the default alphabet."""
     return length * 6  # rough: ~6 bits/char for mixed alpha
+
+
+# ── output file ──────────────────────────────────────────────────────────────
+
+# Overwritten (not appended) on every run so it never accumulates secrets from
+# prior invocations. Must stay out of version control — see .gitignore.
+_OUTPUT_ENV_PATH = Path(".generated.secrets.env")
+_output_file_started = False
+
+
+def _write_secret_line(env_var: str, value: str) -> None:
+    global _output_file_started
+    mode = "w" if not _output_file_started else "a"
+    with _OUTPUT_ENV_PATH.open(mode, encoding="utf-8") as f:
+        f.write(f"{env_var}={value}\n")
+    _output_file_started = True
+    _OUTPUT_ENV_PATH.chmod(0o600)
 
 
 # ── display ───────────────────────────────────────────────────────────────────
@@ -142,7 +160,8 @@ _SECRET_SPECS: list[tuple[str, str, str, str]] = [
 def _print_secret(env_var: str, value: str, label: str, desc: str) -> None:
     print(f"# ── {label} ──")
     print(f"# {desc}")
-    print(f"{env_var}={value}")
+    _write_secret_line(env_var, value)
+    print(f"# Wrote {env_var} to {_OUTPUT_ENV_PATH}")
     print()
 
 
@@ -150,7 +169,8 @@ def _print_all() -> None:
     for env_var, value, label, desc in _SECRET_SPECS:
         _print_secret(env_var, value, label, desc)
 
-    print("# Copy the lines above into your .env and .env.example")
+    print(f"# Secrets were written to {_OUTPUT_ENV_PATH}")
+    print("# Copy values from that file into your .env and .env.example")
     print("# Regenerate any time before deploying to a new environment.")
     print("# Store a backup in your password manager / vault.")
 
