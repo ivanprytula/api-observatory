@@ -21,8 +21,10 @@ ENV UV_COMPILE_BYTECODE=1 \
 # Install deps first (better layer caching)
 # --extra ai: the LangGraph incident-triage agent (Phase 3) and /analyze's RAG
 # path are core ingestor features, not optional demos — install their deps.
+# --extra tracing: OTel SDK + OTLP exporter; without it setup_tracing() degrades
+# to a no-op and spans/trace_id correlation are silently lost (post-MVP Phase 0).
 COPY pyproject.toml uv.lock ./
-RUN uv sync --no-dev --frozen --no-install-project --extra ai
+RUN uv sync --no-dev --frozen --no-install-project --extra ai --extra tracing
 
 # Stage 2: Final image — slim, no build tools, non-root user
 FROM python:3.14-slim@sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061 AS runtime

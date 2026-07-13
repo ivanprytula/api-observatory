@@ -198,16 +198,11 @@ async def lifespan(app: FastAPI):
     # STARTUP
     # ========================================================================
 
-    # Init distributed tracing first (trace_id available for all subsequent logs)
     setup_sentry()
 
-    # Init distributed tracing (trace_id available for all subsequent logs)
-    if settings.otel_enabled:
-        setup_tracing(
-            app,
-            endpoint=settings.otel_exporter_otlp_endpoint,
-            service_name=settings.otel_service_name,
-        )
+    # NOTE: setup_tracing() runs at module level (after the add_middleware
+    # calls) — by lifespan time Starlette has already built the middleware
+    # stack, so FastAPIInstrumentor would never enter the request path.
 
     logger.info("startup", extra={"event": "application_started"})
     _validate_production_security_settings()
@@ -622,6 +617,17 @@ app.add_middleware(
 )
 app.add_middleware(TenantMiddleware)
 app.add_middleware(CorrelationIdMiddleware)
+
+# Init distributed tracing last so the OTel middleware wraps the whole stack:
+# CorrelationIdMiddleware's request_start/request_end logs then run inside the
+# server span and pick up trace_id. Must happen before the app starts serving
+# (middleware cannot be added once Starlette builds its stack).
+if settings.otel_enabled:
+    setup_tracing(
+        app,
+        endpoint=settings.otel_exporter_otlp_endpoint,
+        service_name=settings.otel_service_name,
+    )
 
 _ROUTER_MODULES = [
     "auth",

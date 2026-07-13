@@ -1,0 +1,22 @@
+apiVersion: 1
+
+datasources:
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      # Traces -> logs: from a span, jump to the Loki lines that carry the
+      # same trace_id (the ingestor injects it via services/ingestor/core/logging.py).
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: '-5m'
+        spanEndTimeShift: '5m'
+        # service.name (OTEL_SERVICE_NAME=api-obs-ingestor) maps onto the
+        # promtail-derived `container` label — the two are kept identical.
+        tags:
+          - key: 'service.name'
+            value: 'container'
+        filterByTraceID: true
+        filterBySpanID: false
