@@ -65,7 +65,7 @@ Switch from MVP to MVP+ when all are true:
 | **Frontend** | Streamlit (MVP) → HTMX+Jinja2 | HTMX+Jinja2 (dashboard service) | MVP uses Streamlit for quick UI; HTMX added for production dashboard |
 | **Agent/LLM** | LangGraph + Anthropic | LangGraph + Anthropic | Real as of Phase 3; dual-model: claude-haiku-4-5 (classify), claude-sonnet-4-5 (deep analyze). `/analyze`'s RAG path separately still uses OpenAI (unverified, no key available) |
 | **Auth** | JWT (PyJWT) | JWT (PyJWT) + OIDC optional | Stateless, multi-service; refresh tokens for long sessions |
-| **Observability** | structlog + Prometheus + Jaeger (local) | Same + CloudWatch + Sentry | All local tools work in cloud; add managed alternatives |
+| **Observability** | structlog + Prometheus + Tempo (planned, Phase 0) | Same + CloudWatch + Sentry | All local tools work in cloud; add managed alternatives |
 | **Container Runtime** | Docker Compose | ECS Fargate | Same Docker images; Fargate eliminates node management |
 | **Infra as Code** | None (local only) | Terraform | S3 backend + lockfile locking; OIDC for CI/CD |
 | **CI/CD** | GitHub Actions | GitHub Actions | Same workflows; OIDC instead of long-lived keys in prod |
@@ -88,7 +88,7 @@ Switch from MVP to MVP+ when all are true:
 | **Circuit Breaker** | ✅ | Custom asyncio impl | No lib match for async + custom state machine; 100 LOC vs heavy dependency | ADR-004 |
 | **Structured Logging** | ✅ | structlog + JSON | Machine-parseable, correlation IDs via ContextVar | — |
 | **Prometheus Metrics** | ✅ | prometheus-client | Standard; prometheus-fastapi-instrumentator for HTTP metrics | — |
-| **OpenTelemetry Tracing** | ✅ | OTLP + Jaeger | Vendor-neutral; swap Jaeger for Tempo/Datadog without code changes | — |
+| **OpenTelemetry Tracing** | 🚧 | OTLP + Tempo | Coded (`libs/platform/tracing.py`) but currently broken (Py2 `except` syntax bug) and has no collector wired; both fixed in post-mvp-nfr-roadmap.md Phase 0 | — |
 | **Kafka Event Streaming** | ✅ | Redpanda (aiokafka) | Redpanda = Kafka API, no Zookeeper; MSK Serverless in prod | ADR-001 |
 | **Kafka DLQ** | ✅ | Custom aiokafka routing | Poison pill isolation; retry 3x then forward to DLQ topic | ADR-004 |
 | **Agent Enrichment** | ✅ | LangGraph StateGraph | Real as of Phase 3. Dual-model: claude-haiku-4-5 (classify_severity), claude-sonnet-4-5 (draft_analysis) — always deep for draft, since Phase 1's trigger gate already pre-filters to critical/breaking only | ADR-012 |
@@ -107,3 +107,7 @@ Switch from MVP to MVP+ when all are true:
 ## Audit Gaps
 
 See [audit-gaps.md](audit-gaps.md) for known gaps between the planned MVP/post-MVP scope and actual implementation status.
+
+## Post-MVP Execution
+
+See [`docs/.plans/post-mvp-nfr-roadmap.md`](../.plans/post-mvp-nfr-roadmap.md) for the phased, NFR-first execution plan (tracing, resilience, retention, auth, RLS, quality gates, AI-native depth, cloud handoff) that this roadmap's "Post-MVP (MVP+) Mode" hands off to.
