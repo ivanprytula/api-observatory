@@ -17,7 +17,7 @@ annotated-doc==0.0.4 ; sys_platform == 'linux'
     # via fastapi
 annotated-types==0.7.0 ; sys_platform == 'linux'
     # via pydantic
-anyio==4.14.1 ; sys_platform == 'linux'
+anyio==4.14.2 ; sys_platform == 'linux'
     # via
     #   httpx
     #   openai
@@ -49,9 +49,9 @@ blinker==1.9.0 ; sys_platform == 'linux'
     #   streamlit
 boolean-py==5.0 ; sys_platform == 'linux'
     # via license-expression
-boto3==1.43.39 ; sys_platform == 'linux'
+boto3==1.43.46 ; sys_platform == 'linux'
     # via api-observatory
-botocore==1.43.39 ; sys_platform == 'linux'
+botocore==1.43.46 ; sys_platform == 'linux'
     # via
     #   boto3
     #   s3transfer
@@ -68,13 +68,13 @@ certifi==2026.6.17 ; sys_platform == 'linux'
     #   httpx
     #   requests
     #   sentry-sdk
-cffi==2.0.0 ; sys_platform == 'linux'
+cffi==2.1.0 ; sys_platform == 'linux'
     # via
     #   argon2-cffi-bindings
     #   pyzmq
 cfgv==3.5.0 ; sys_platform == 'linux'
     # via pre-commit
-charset-normalizer==3.4.7 ; sys_platform == 'linux'
+charset-normalizer==3.4.9 ; sys_platform == 'linux'
     # via requests
 click==8.4.2 ; sys_platform == 'linux'
     # via
@@ -83,7 +83,7 @@ click==8.4.2 ; sys_platform == 'linux'
     #   uvicorn
 configargparse==1.7.5 ; sys_platform == 'linux'
     # via locust
-coverage==7.14.3 ; sys_platform == 'linux'
+coverage==7.15.1 ; sys_platform == 'linux'
     # via pytest-cov
 cyclonedx-python-lib==11.11.0 ; sys_platform == 'linux'
     # via pip-audit
@@ -97,7 +97,7 @@ distro==1.9.0 ; sys_platform == 'linux'
     # via openai
 dnspython==2.8.0 ; sys_platform == 'linux'
     # via email-validator
-docker==7.1.0 ; sys_platform == 'linux'
+docker==7.2.0 ; sys_platform == 'linux'
     # via testcontainers
 email-validator==2.3.0 ; sys_platform == 'linux'
     # via pydantic
@@ -106,7 +106,7 @@ fastapi==0.139.0 ; sys_platform == 'linux'
     # via
     #   api-observatory
     #   sentry-sdk
-filelock==3.29.4 ; sys_platform == 'linux'
+filelock==3.29.7 ; sys_platform == 'linux'
     # via
     #   cachecontrol
     #   python-discovery
@@ -132,7 +132,7 @@ geventhttpclient==2.3.9 ; sys_platform == 'linux'
     # via locust
 gitdb==4.0.12 ; sys_platform == 'linux'
     # via gitpython
-gitpython==3.1.50 ; sys_platform == 'linux'
+gitpython==3.1.51 ; sys_platform == 'linux'
     # via streamlit
 googleapis-common-protos==1.75.0 ; sys_platform == 'linux'
     # via
@@ -142,7 +142,7 @@ greenlet==3.5.3 ; sys_platform == 'linux'
     # via
     #   gevent
     #   sqlalchemy
-grpcio==1.81.1 ; sys_platform == 'linux'
+grpcio==1.82.1 ; sys_platform == 'linux'
     # via opentelemetry-exporter-otlp-proto-grpc
 h11==0.16.0 ; sys_platform == 'linux'
     # via
@@ -194,7 +194,7 @@ license-expression==30.4.4 ; sys_platform == 'linux'
     # via cyclonedx-python-lib
 limits==5.8.0 ; sys_platform == 'linux'
     # via slowapi
-locust==2.44.4 ; sys_platform == 'linux'
+locust==2.45.0 ; sys_platform == 'linux'
 mako==1.3.12 ; sys_platform == 'linux'
     # via
     #   alembic
@@ -217,16 +217,16 @@ multidict==6.7.1 ; sys_platform == 'linux'
     # via
     #   aiohttp
     #   yarl
-narwhals==2.23.0 ; sys_platform == 'linux'
+narwhals==2.24.0 ; sys_platform == 'linux'
     # via altair
 nodeenv==1.10.0 ; sys_platform == 'linux'
     # via pre-commit
-numpy==2.5.0 ; sys_platform == 'linux'
+numpy==2.5.1 ; sys_platform == 'linux'
     # via
     #   pandas
     #   pydeck
     #   streamlit
-openai==2.44.0 ; sys_platform == 'linux'
+openai==2.45.0 ; sys_platform == 'linux'
     # via api-observatory
 opentelemetry-api==1.43.0 ; sys_platform == 'linux'
     # via
@@ -357,7 +357,7 @@ pydantic-core==2.47.0 ; sys_platform == 'linux'
     # via pydantic
 pydantic-settings==2.14.2 ; sys_platform == 'linux'
     # via api-observatory
-pydeck==0.9.2 ; sys_platform == 'linux'
+pydeck==0.9.3 ; sys_platform == 'linux'
     # via streamlit
 pygments==2.20.0 ; sys_platform == 'linux'
     # via
@@ -378,7 +378,7 @@ python-dateutil==2.9.0.post0 ; sys_platform == 'linux'
     # via
     #   botocore
     #   pandas
-python-discovery==1.4.2 ; sys_platform == 'linux'
+python-discovery==1.4.4 ; sys_platform == 'linux'
     # via virtualenv
 python-dotenv==1.2.2 ; sys_platform == 'linux'
     # via
@@ -428,8 +428,8 @@ rpds-py==2026.6.3 ; sys_platform == 'linux'
     # via
     #   jsonschema
     #   referencing
-ruff==0.15.20 ; sys_platform == 'linux'
-s3transfer==0.19.0 ; sys_platform == 'linux'
+ruff==0.15.21 ; sys_platform == 'linux'
+s3transfer==0.19.1 ; sys_platform == 'linux'
     # via boto3
 sentry-sdk==2.64.0 ; sys_platform == 'linux'
     # via api-observatory
@@ -456,7 +456,7 @@ starlette==1.3.1 ; sys_platform == 'linux'
     #   fastapi
     #   prometheus-fastapi-instrumentator
     #   streamlit
-streamlit==1.58.0 ; sys_platform == 'linux'
+streamlit==1.59.2 ; sys_platform == 'linux'
     # via api-observatory
 structlog==26.1.0 ; sys_platform == 'linux'
     # via api-observatory
@@ -471,10 +471,10 @@ tomli==2.4.1 ; sys_platform == 'linux'
     # via pip-audit
 tomli-w==1.2.0 ; sys_platform == 'linux'
     # via pip-audit
-tqdm==4.68.3 ; sys_platform == 'linux'
+tqdm==4.68.4 ; sys_platform == 'linux'
     # via openai
-ty==0.0.56 ; sys_platform == 'linux'
-typing-extensions==4.15.0 ; sys_platform == 'linux'
+ty==0.0.59 ; sys_platform == 'linux'
+typing-extensions==4.16.0 ; sys_platform == 'linux'
     # via
     #   aiokafka
     #   alembic
@@ -510,13 +510,13 @@ urllib3==2.7.0 ; sys_platform == 'linux'
     #   requests
     #   sentry-sdk
     #   testcontainers
-uvicorn==0.49.0 ; sys_platform == 'linux'
+uvicorn==0.51.0 ; sys_platform == 'linux'
     # via
     #   api-observatory
     #   streamlit
 uvloop==0.22.1 ; platform_python_implementation != 'PyPy' and sys_platform == 'linux'
     # via uvicorn
-virtualenv==21.5.1 ; sys_platform == 'linux'
+virtualenv==21.6.1 ; sys_platform == 'linux'
     # via pre-commit
 watchdog==6.0.0 ; sys_platform == 'linux'
     # via streamlit
@@ -524,7 +524,7 @@ watchfiles==1.2.0 ; sys_platform == 'linux'
     # via uvicorn
 websocket-client==1.9.0 ; sys_platform == 'linux'
     # via python-socketio
-websockets==16.0 ; sys_platform == 'linux'
+websockets==16.1 ; sys_platform == 'linux'
     # via
     #   api-observatory
     #   streamlit
