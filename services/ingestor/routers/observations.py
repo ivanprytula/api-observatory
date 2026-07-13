@@ -675,6 +675,6 @@ async def analyze_observation_stream(
                     yield f"data: {content}\n\n"
         except Exception as exc:
             logger.error("llm_stream_failed", extra={"error": str(exc)})
-            yield f"data: [ERROR] {exc}\n\n"
+            yield "data: [ERROR] LLM analysis failed — see server logs\n\n"
 
     return StreamingResponse(event_gen(), media_type="text/event-stream")
