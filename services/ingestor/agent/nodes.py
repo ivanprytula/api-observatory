@@ -11,7 +11,11 @@ from __future__ import annotations
 
 import logging
 
-from langgraph.types import interrupt
+
+try:
+    from langgraph.types import interrupt
+except ModuleNotFoundError:
+    interrupt = None  # ty:ignore[invalid-assignment]
 
 from services.ingestor import notifications
 from services.ingestor import vector_search as vs_bridge

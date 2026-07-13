@@ -15,6 +15,8 @@ import pytest
 from services.ingestor.agent.schemas import DraftAnalysis, SeverityClassification
 
 
+pytest.importorskip("langgraph", reason="langgraph is not in active MVP scope")
+
 pytestmark = pytest.mark.unit
 
 

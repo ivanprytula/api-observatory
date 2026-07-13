@@ -158,6 +158,7 @@ jobs:
     name: "Build and push candidate image (ingestor)"
     runs-on: ubuntu-latest
     needs: [lint, unit-tests, python-deps, action-ref-validation, codeql, integration-tests]
+    if: vars.ACR_LOGIN_SERVER != ''
     timeout-minutes: 20
     permissions:
       contents: read
@@ -201,6 +202,7 @@ jobs:
     name: "Build and push candidate image (dashboard)"
     runs-on: ubuntu-latest
     needs: [lint, unit-tests, python-deps, action-ref-validation, codeql, integration-tests]
+    if: vars.ACR_LOGIN_SERVER != ''
     timeout-minutes: 20
     permissions:
       contents: read
@@ -236,6 +238,7 @@ jobs:
     name: "Scan docker image (Trivy - strict)"
     runs-on: ubuntu-latest
     needs: [docker-build, docker-build-dashboard]
+    if: vars.ACR_LOGIN_SERVER != ''
     permissions:
       contents: read
     steps:
@@ -406,13 +409,15 @@ jobs:
           [[ "${{ needs.action-ref-validation.result }}" == "success" ]] || { echo "❌ Action refs"; failed=1; }
           [[ "${{ needs.unit-tests.result }}" == "success" ]] || { echo "❌ Unit tests"; failed=1; }
           [[ "${{ needs.python-deps.result }}" == "success" ]] || { echo "❌ Python deps"; failed=1; }
-          [[ "${{ needs.docker-build.result }}" == "success" ]] || { echo "❌ Docker build (ingestor)"; failed=1; }
-          [[ "${{ needs.docker-build-dashboard.result }}" == "success" ]] || { echo "❌ Docker build (dashboard)"; failed=1; }
-          [[ "${{ needs.docker-scan-security.result }}" == "success" ]] || { echo "❌ Docker scan"; failed=1; }
+          # Docker build/push/scan require ACR_LOGIN_SERVER; they report "skipped"
+          # (not failure) until Azure Container Registry credentials are provisioned.
+          [[ "${{ needs.docker-build.result }}" =~ ^(success|skipped)$ ]] || { echo "❌ Docker build (ingestor)"; failed=1; }
+          [[ "${{ needs.docker-build-dashboard.result }}" =~ ^(success|skipped)$ ]] || { echo "❌ Docker build (dashboard)"; failed=1; }
+          [[ "${{ needs.docker-scan-security.result }}" =~ ^(success|skipped)$ ]] || { echo "❌ Docker scan"; failed=1; }
           [[ "${{ needs.codeql.result }}" == "success" ]] || { echo "❌ CodeQL"; failed=1; }
           [[ "${{ needs.integration-tests.result }}" == "success" ]] || { echo "❌ Integration tests"; failed=1; }
           # Advisory scan: report status but do not block
-          [[ "${{ needs.docker-scan-security.result }}" == "success" ]] || echo "⚠️  Docker advisory scan: ${{ needs.docker-scan-security.result }}"
+          [[ "${{ needs.docker-scan-security.result }}" =~ ^(success|skipped)$ ]] || echo "⚠️  Docker advisory scan: ${{ needs.docker-scan-security.result }}"
           [ $failed -eq 0 ] && echo "✅ All CI checks passed"
           exit $failed
 
