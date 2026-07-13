@@ -5,7 +5,7 @@ description = "Embeddings indexing + semantic search service (pgvector-backed RA
 requires-python = ">=3.14"
 dependencies = [
   "fastapi>=0.139.0",
-  "uvicorn[standard]>=0.45.0",
+  "uvicorn[standard]>=0.51.0",
   "sqlalchemy[asyncio]>=2.0.50",
   "asyncpg>=0.30.0",
   "psycopg[binary]>=3.3.4",
