@@ -121,6 +121,14 @@ services:
       INFERENCE_URL: http://inference:8001
       LOG_FORMAT: json
       SERVICE_VERSION: ${SERVICE_VERSION:-0.1.0}
+      # Tracing on by default for the compose profile; spans export to the
+      # Tempo collector (monitoring profile). Export failures are non-fatal
+      # when monitoring is down. Override via .env.
+      OTEL_ENABLED: ${OTEL_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
+      # Matches container_name so Tempo's trace-to-logs tag mapping
+      # (service.name -> Loki `container` label) resolves.
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-api-obs-ingestor}
     ports:
       - '8000:8000'
     depends_on:
@@ -399,6 +407,22 @@ services:
     networks:
       - api-obs
 
+  tempo:
+    image: grafana/tempo:2.7.2
+    profiles: [monitoring]
+    container_name: api-obs-tempo
+    volumes:
+      - ./infra/monitoring/tempo.yml:/etc/tempo.yml:ro
+    ports:
+      # Tempo HTTP API (Grafana datasource queries; also handy for curl checks)
+      - '127.0.0.1:3200:3200'
+      # OTLP gRPC ingest — loopback-exposed so host-run services (uv run) can export too
+      - '127.0.0.1:4317:4317'
+    command: ['-config.file=/etc/tempo.yml']
+    security_opt: [no-new-privileges:true]
+    networks:
+      - api-obs
+
   alertmanager:
     image: prom/alertmanager:v0.28.1
     profiles: [monitoring]
@@ -545,7 +569,7 @@ services:
 #   - broker (message broker)
 #   - ingestor (FastAPI microservice)
 #   - edge (HTTPS ingress proxy, started by default with `just up`)
-#   - prometheus, grafana, loki, promtail, alertmanager, mailpit (monitoring, optional via `just up-monitoring`)
+#   - prometheus, grafana, loki, promtail, tempo, alertmanager, mailpit (monitoring, optional via `just up-monitoring`)
 #   - floci-az (Azure emulator, optional via --profile azure)
 #   - floci-aws (AWS emulator, optional via --profile aws)
 #   - floci-gcp (GCP emulator, optional via --profile gcp)

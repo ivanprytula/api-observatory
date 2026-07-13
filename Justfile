@@ -116,11 +116,11 @@ watch:
     echo ""
     docker compose -f docker-compose.yml -f docker-compose.dev.yml watch ingestor dashboard
 
-# Start monitoring stack (Prometheus, Grafana, Loki, Promtail, Alertmanager, Mailpit).
+# Start monitoring stack (Prometheus, Grafana, Loki, Promtail, Tempo, Alertmanager, Mailpit).
 up-monitoring:
     @just stack-info
-    docker compose --profile monitoring up -d prometheus grafana loki promtail alertmanager mailpit
-    echo "monitoring ready — Grafana http://127.0.0.1:3000, Prometheus http://127.0.0.1:9090"
+    docker compose --profile monitoring up -d prometheus grafana loki promtail tempo alertmanager mailpit
+    echo "monitoring ready — Grafana http://127.0.0.1:3000, Prometheus http://127.0.0.1:9090, Tempo http://127.0.0.1:3200"
 
 
 

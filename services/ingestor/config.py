@@ -218,14 +218,14 @@ class Settings(BaseSettings):
     otel_exporter_otlp_endpoint: str = Field(
         default="http://localhost:4317",
         description=(
-            "OTLP gRPC endpoint for trace export (e.g., http://jaeger:4317). "
+            "OTLP gRPC endpoint for trace export (e.g., http://tempo:4317). "
             "Matches the standard OTel SDK env var OTEL_EXPORTER_OTLP_ENDPOINT."
         ),
     )
 
     otel_service_name: str = Field(
         default="ingestor",
-        description="Service name shown in Jaeger / OTel collector UI.",
+        description="Service name shown in Grafana Tempo / OTel collector UI.",
     )
 
     # ============ Sentry (error tracking) ============
