@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: data-zoo-local
+  labels:
+    app.kubernetes.io/part-of: data-zoo
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: ingestor.127.0.0.1.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ingestor
+                port:
+                  number: 8000
+    - host: dashboard.127.0.0.1.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dashboard
+                port:
+                  number: 8003

@@ -1,0 +1,125 @@
+# Application Architecture — API Observatory
+
+**Scope**: Current MVP state (application repo only). For platform/infra topology, see
+[Infrastructure Architecture](infrastructure-architecture.md). For phase-by-phase feature
+status, see [MVP Roadmap](../03-planning/mvp-roadmap.md) and its
+[audit-gaps](../03-planning/audit-gaps.md) tracker — this document shows structure, those
+track status.
+
+> An earlier, larger 8-phase design (multi-service, AWS ECS, MongoDB, Qdrant) is archived at
+> `../_archive/02-architecture/architecture.md` — historical record, not current state.
+
+## System Context
+
+```mermaid
+flowchart LR
+    Client["API Client\n(HTTP, Bruno, browser)"]
+    Dashboard["Streamlit Dashboard\n:8501"]
+    Ingestor["Ingestor API\nFastAPI, :8000"]
+    SourceAPIs["External source APIs\n(probed by scheduler)"]
+
+    Client -->|REST, WebSocket| Ingestor
+    Dashboard -->|httpx / websockets| Ingestor
+    Ingestor -->|HTTP GET probe_url| SourceAPIs
+```
+
+## Containers
+
+```mermaid
+flowchart TB
+    Client["Client\nHTTP + WS"]
+    Dashboard["Dashboard\nStreamlit — services/dashboard/"]
+
+    subgraph App["Ingestor — services/ingestor/"]
+      API["FastAPI routers"]
+      Scheduler["APScheduler\nprobe jobs"]
+      Agent["LangGraph agent\nservices/ingestor/agent/\nclassify -> RAG -> draft -> human_review -> notify"]
+    end
+
+    Inference["Inference — services/inference/\nFastAPI, :8001\nfastembed (ONNX, CPU-only) + pgvector"]
+    Anthropic[["Anthropic API\nclaude-haiku-4-5, claude-sonnet-4-5"]]
+    MCP["MCP server — services/mcp/\nFastMCP (stdio) — 11 tools\nsource/scorecard/drift/agent-run"]
+    LLMClient["MCP client\n(Claude Desktop, etc.)"]
+
+    Postgres[("PostgreSQL 17 — db\nsource profiles, observations,\ndrift events, agent runs, scorecards,\nagent checkpoints (langgraph-checkpoint-postgres)")]
+    InferenceDB[("PostgreSQL 17 — inference-db\nindexed_documents (pgvector)\ndedicated instance, ADR-015")]
+    Cache[("Redis\ncache, pub/sub, rate-limit\noptional — CACHE_ENABLED")]
+    Broker[("Redpanda\nKafka-compatible\noptional — BROKER_ENABLED")]
+
+    Client --> API
+    Dashboard --> API
+    API --> Postgres
+    API -.-> Cache
+    Scheduler --> Postgres
+    Scheduler -.-> Broker
+    API -.->|drift events| Broker
+    API -->|POST /index, /search\nRAG for /analyze| Inference
+    Inference --> InferenceDB
+    Scheduler -.->|critical/breaking drift\nfire-and-forget| Agent
+    Agent --> Postgres
+    Agent -->|RAG| Inference
+    Agent -->|classify, draft| Anthropic
+    LLMClient -.->|stdio, spawned per-session| MCP
+    MCP -.->|JWT — writer role\nreal /auth/token login| API
+```
+
+Core, always-on: Ingestor + PostgreSQL. Cache and Broker are optional and feature-flagged
+(`CACHE_ENABLED` / `BROKER_ENABLED`) — the ingestor fails open if either is unavailable.
+Inference is real as of Phase 2 of the AI-augmented observatory plan; per
+[ADR 015](adr/015-inference-dedicated-pgvector-postgres.md) it runs on its own dedicated Postgres
+instance (`inference-db`), not the ingestor's `db` — real per-service database ownership, not just
+schema-level separation. The ingestor never reads inference's tables directly, only via the
+`/index` and `/search` HTTP contract in `services/ingestor/vector_search.py`.
+The LangGraph incident-triage agent (Phase 3) runs *inside* the ingestor process (not a separate
+container) — fire-and-forget triggered by `contract_drift.py` on critical/breaking `DriftEvent`s,
+checkpointed to the same `db` Postgres via `langgraph-checkpoint-postgres` so the human-in-the-loop
+pause/resume survives process restarts. Fails open like everything else here: with no
+`ANTHROPIC_API_KEY` configured, drift detection and every other feature works exactly the same,
+the agent trigger just no-ops (`services/ingestor/agent/runner.py`).
+The MCP server (Phase 5) is deliberately *not* another always-on container: it's a local process
+an MCP client spawns per session over stdio, with no port and no docker-compose entry (see
+`docs/07-deployment/app-repo-contract.md`'s Health & Probes note). It never imports the ingestor's
+internals — every tool call is a real authenticated HTTP request, logged in as a dedicated
+`mcp-service` account via the actual `/api/v1/auth/token` flow (`services/mcp/auth_client.py`),
+the same way any other API client authenticates. This dogfoods Phase 4's JWT auth rather than
+bypassing it, and keeps the two processes independently deployable.
+
+## Router / Feature Map
+
+Router files under `services/ingestor/routers/`, grouped by MVP status. "Active" = in MVP
+scope, tested, auth-gated where applicable. "Present, deferred" = code exists but the feature
+is explicitly out of MVP scope per the roadmap (`audit-gaps.md` gap 🟠#6) and currently has no
+auth applied.
+
+| Router | Domain | Status |
+|---|---|---|
+| `agent.py` | Incident-triage agent run status + HITL resume (`GET /runs/{id}`, `POST /runs/{id}/resume`) | Active — real as of Phase 3, JWT-auth-gated as of Phase 4 |
+| `source_registry.py` | Register/manage probed API sources | Active |
+| `observations.py` / `observations_v2.py` | Probe results, ingestion | Active — core CRUD/analyze routes JWT-auth-gated as of Phase 4; the dedicated auth-mechanism teaching routes (`/secure/*`, `/auth/login`, `/batch/protected`, all of `observations_v2.py`) intentionally keep their own session/bearer/JWT auth side-by-side |
+| `scorecards.py` | Reliability scorecards (p95 latency, uptime) | Active |
+| `contract_drift.py` | Schema drift detection | Active |
+| `health_ingestion_jobs.py` | Scheduler/job health endpoints | Active |
+| `auth.py` / `api_keys.py` | JWT auth, API key management | Active |
+| `abuse_detection.py` | Rate-limit/abuse heuristics | Active |
+| `ws.py` | WebSocket push (drift events) | Active |
+| `analytics.py`, `reporting.py`, `insights.py` | Analytics/reporting layer | Present, deferred (post-MVP) |
+| `subscriptions.py`, `notifications.py` | Alerting channels | Present, deferred (post-MVP) |
+| `vector_search.py` | RAG bridge to the `inference` service (`/index`, `/search`) | Active — `inference` is real as of Phase 2 (pgvector, no Qdrant) |
+| `mongo_analytics.py` | Document store | Present, deferred — no MongoDB in `docker-compose.yml` |
+| `scraper.py` | HTTP/HTML/browser scraping | Present, deferred (post-MVP) |
+| `etl.py` | Tabular ETL preview (pandas/polars) | Present, optional extras only (`uv sync --extra etl`) |
+| `background_processing.py` | Async task queue prototype | Present, deferred (post-MVP) |
+
+`services/mcp/` (Phase 5) has no FastAPI routers of its own — it's a separate process
+(`services/mcp/server.py`) exposing 11 MCP tools that each call the routers above over real HTTP,
+authenticated as a dedicated `mcp-service` account. See the Containers diagram above.
+
+## How to Update
+
+- **New service** (e.g. a real `analytics` or `inference` service gets source code): add a
+  container node to the Containers diagram, add a row to the Router/Feature Map if it exposes
+  routers, and follow the CLAUDE.md "Plan Maintenance" trigger (update `app-repo-contract.md` + baseline checklist in the same PR).
+- **New router**: add one row to the table above. No diagram edit needed unless it introduces
+  a new external dependency (new datastore, new outbound integration).
+- **Feature moves from deferred → active** (roadmap phase advances): flip its Status cell and
+  drop the "why deferred" note.

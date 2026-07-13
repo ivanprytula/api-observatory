@@ -16,27 +16,31 @@ MONGO_HOST="${MONGO_HOST:-localhost}"
 MONGO_PORT="${MONGO_PORT:-27017}"
 MONGO_DB="${MONGO_DB:-data_zoo}"
 
-# S3 configuration (mirrors backup.sh)
-AWS_ENDPOINT_URL="${AWS_ENDPOINT_URL:-}"
+# Blob Storage configuration (mirrors backup.sh)
+BACKUP_BLOB_CONTAINER="${BACKUP_BLOB_CONTAINER:-backups}"
 
 # ─── Helpers ───────────────────────────────────────────────────────────────────
 log() { echo "[$(date '+%H:%M:%S')] $*"; }
 error() { echo "[$(date '+%H:%M:%S')] ERROR: $*" >&2; }
 
-# Download a file from S3 to a temp path and print the local path
-download_from_s3() {
-    local s3_uri="${1}"
+download_from_blob() {
+    local blob_name="${1}"
     local tmp_file
-    tmp_file="$(mktemp /tmp/restore_XXXXXXXXXX.$(basename "${s3_uri}"))"
+    tmp_file="$(mktemp /tmp/restore_XXXXXXXXXX)"
 
-    local aws_args=()
-    if [[ -n "${AWS_ENDPOINT_URL}" ]]; then
-        aws_args=(--endpoint-url "${AWS_ENDPOINT_URL}")
+    if [[ -z "${AZURE_STORAGE_CONNECTION_STRING:-}" ]]; then
+        error "AZURE_STORAGE_CONNECTION_STRING is not set; cannot download from Blob Storage"
+        return 1
     fi
 
-    log "Downloading ${s3_uri} → ${tmp_file}"
-    aws "${aws_args[@]}" s3 cp "${s3_uri}" "${tmp_file}"
-    log "S3 download complete"
+    log "Downloading ${BACKUP_BLOB_CONTAINER}/${blob_name} → ${tmp_file}"
+    az storage blob download \
+        --connection-string "${AZURE_STORAGE_CONNECTION_STRING}" \
+        --container-name "${BACKUP_BLOB_CONTAINER}" \
+        --name "${blob_name}" \
+        --file "${tmp_file}" \
+        --output none
+    log "Blob download complete"
     echo "${tmp_file}"
 }
 
@@ -69,7 +73,6 @@ restore_postgres() {
     read -r -p "Type 'yes' to confirm: " confirm
     [[ "${confirm}" != "yes" ]] && { log "Aborted."; exit 0; }
 
-    # Drop and recreate the database
     PGPASSWORD="${PG_PASSWORD}" psql \
         --host="${PG_HOST}" \
         --port="${PG_PORT}" \
@@ -78,7 +81,6 @@ restore_postgres() {
         -c "DROP DATABASE IF EXISTS ${PG_DB};" \
         -c "CREATE DATABASE ${PG_DB};"
 
-    # Restore from backup (pg_restore reads custom format)
     zcat "${backup_file}" | PGPASSWORD="${PG_PASSWORD}" pg_restore \
         --host="${PG_HOST}" \
         --port="${PG_PORT}" \
@@ -129,26 +131,25 @@ restore_mongodb() {
 # ─── Main ───────────────────────────────────────────────────────────────────────
 usage() {
     echo "Usage: $0 <postgres|mongodb> [backup_file]"
-    echo "       $0 <postgres|mongodb> --from-s3 <s3://bucket/key>"
+    echo "       $0 <postgres|mongodb> --from-blob <blob-name>"
     echo ""
     echo "Examples:"
     echo "  $0 postgres                                   # interactive: lists backups, prompts"
     echo "  $0 postgres backups/postgres/pg_data_pipeline_20260101_120000.sql.gz"
-    echo "  $0 postgres --from-s3 s3://my-bucket/backups/postgres/pg_data_pipeline_20260101_120000.sql.gz"
+    echo "  $0 postgres --from-blob postgres/pg_data_pipeline_20260101_120000.sql.gz"
     echo "  $0 mongodb"
-    echo "  $0 mongodb backups/mongodb/mongo_data_zoo_20260101_120000.archive.gz"
-    echo "  $0 mongodb --from-s3 s3://my-bucket/backups/mongodb/mongo_data_zoo_20260101_120000.archive.gz"
+    echo "  $0 mongodb --from-blob mongodb/mongo_data_zoo_20260101_120000.archive.gz"
     echo ""
     echo "Environment:"
-    echo "  AWS_ENDPOINT_URL  Set to http://localhost:4566 for Floci (default: real AWS)"
+    echo "  AZURE_STORAGE_CONNECTION_STRING  Set for floci-az emulator or real Azure Storage"
     exit 1
 }
 
 case "${1:-}" in
     postgres)
-        if [[ "${2:-}" == "--from-s3" ]]; then
-            [[ -z "${3:-}" ]] && { error "Missing S3 URI after --from-s3"; usage; }
-            tmp=$(download_from_s3 "${3}")
+        if [[ "${2:-}" == "--from-blob" ]]; then
+            [[ -z "${3:-}" ]] && { error "Missing blob name after --from-blob"; usage; }
+            tmp=$(download_from_blob "${3}")
             restore_postgres "${tmp}"
             rm -f "${tmp}"
         else
@@ -156,9 +157,9 @@ case "${1:-}" in
         fi
         ;;
     mongodb)
-        if [[ "${2:-}" == "--from-s3" ]]; then
-            [[ -z "${3:-}" ]] && { error "Missing S3 URI after --from-s3"; usage; }
-            tmp=$(download_from_s3 "${3}")
+        if [[ "${2:-}" == "--from-blob" ]]; then
+            [[ -z "${3:-}" ]] && { error "Missing blob name after --from-blob"; usage; }
+            tmp=$(download_from_blob "${3}")
             restore_mongodb "${tmp}"
             rm -f "${tmp}"
         else

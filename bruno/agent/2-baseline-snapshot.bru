@@ -1,0 +1,36 @@
+meta {
+  name: Baseline Snapshot (agent flow)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/contracts/snapshots
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "source_id": {{agent_source_id}},
+    "schema_version": "v1",
+    "payload_schema": {
+      "id": 123,
+      "status": "ok",
+      "payload": {"temperature": 20.5, "region": "eu"}
+    }
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.drift_event: isNull
+}

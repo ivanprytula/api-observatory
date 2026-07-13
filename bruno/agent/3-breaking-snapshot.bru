@@ -1,0 +1,58 @@
+meta {
+  name: Breaking Snapshot — triggers the agent (agent flow)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/contracts/snapshots
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "source_id": {{agent_source_id}},
+    "schema_version": "v3",
+    "payload_schema": {
+      "id": 123,
+      "status": {"code": "ok"},
+      "payload": {"region": "eu"}
+    }
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.drift_event.event_type: eq breaking
+}
+
+docs {
+  # Auto-triggers the incident-triage agent
+
+  This breaking change fires `create_contract_snapshot`'s
+  `_requires_incident_response` check (Phase 1), which auto-creates an
+  `Observation` + a `pending` `AgentRun`, then fires-and-forgets the
+  LangGraph agent (Phase 3) — see `services/ingestor/repositories/contract_drift.py`
+  and `services/ingestor/agent/`.
+
+  The agent run takes a few seconds (two real LLM calls: classify_severity,
+  draft_analysis) before it reaches `awaiting_review`. There's no
+  "list agent runs" endpoint yet (Phase 4/5) — find the new run's ID via:
+
+  ```bash
+  docker compose exec -T db psql -U postgres -d api_observatory -c \
+    "SELECT id, status FROM agent_runs ORDER BY id DESC LIMIT 1;"
+  ```
+
+  Set that ID as the `agent_run_id` environment variable, then run request 5
+  (repeat until `status` is `awaiting_review`) and request 6.
+}

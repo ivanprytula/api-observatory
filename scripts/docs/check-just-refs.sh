@@ -11,10 +11,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCAN_DIRS=(
   "docs"
   ".github/prompts"
-  "setup"
   "infra/terraform/environments"
-  "learning_docs"
-  ".kilo/plans"
 )
 REMOVED_RECIPES=(
   "tf-plan-local"
@@ -23,13 +20,9 @@ REMOVED_RECIPES=(
   "tf-state-list"
   "tf-apply-local-fresh"
   "tf-destroy-local"
-  "up-aws"
   "sandbox-test"
   "sandbox-seed"
-  "test-aws-connectivity"
-  "deploy-dev"
   "floci-start"
-  "tf-plan-dev"
   "tf-apply-dev"
 )
 COMPATIBILITY_ALIASES=(
@@ -40,7 +33,7 @@ COMPATIBILITY_ALIASES=(
   "sandbox-dev"
 )
 ALLOWED_ALIAS_FILES=(
-  "docs/dev/commands.md"
+  "docs/05-development/commands.md"
 )
 
 errors=0

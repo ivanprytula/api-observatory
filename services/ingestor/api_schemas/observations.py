@@ -279,17 +279,6 @@ class EnrichResponse(BaseModel):
     results: list[EnrichedObservation]
 
 
-class AgentRunResponse(BaseModel):
-    model_config = {"from_attributes": True}
-
-    run_id: str
-    observation_id: int
-    classification: ObservationClassification | None = None
-    analysis: str
-    published: bool
-    hitl_paused: bool
-
-
 class ObservationClassification(BaseModel):
     """Pydantic structured output for observation analysis."""
 

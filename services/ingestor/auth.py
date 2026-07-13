@@ -296,8 +296,14 @@ async def create_session(
 
     if _session_client is not None:
         key = f"{_SESSION_KEY_PREFIX}{session_id}"
-        await _session_client.hset(key, mapping=fields)  # ty: ignore[invalid-await]
-        await _session_client.expire(key, ttl_seconds)
+        try:
+            await _session_client.hset(key, mapping=fields)  # ty: ignore[invalid-await]
+            await _session_client.expire(key, ttl_seconds)
+        except Exception:
+            logger.warning(
+                "session_store_write_failed",
+                extra={"user_id": user_id, "fallback": "no_persistence"},
+            )
     else:
         logger.warning(
             "session_store_unavailable",

@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-from-ingestor
+  namespace: data-zoo
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ingestor
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: inference
+      ports:
+        - port: 8001
+          protocol: TCP
+    - ports:
+        - port: 5432
+          protocol: TCP
+        - port: 6379
+          protocol: TCP
+        - port: 9092
+          protocol: TCP
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP

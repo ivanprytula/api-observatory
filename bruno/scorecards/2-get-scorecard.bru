@@ -10,10 +10,62 @@ get {
   auth: bearer
 }
 
-auth:bearer {
-  token: {{token}}
+params:query {
+  ~days: 1
 }
 
-query {
-  days: 1
+auth:bearer {
+  token: {{access_token}}
+}
+
+example {
+  name: example
+
+  request: {
+    url: {{baseUrl}}/api/v1/scorecards/{{source_id}}
+    method: GET
+    mode: none
+    params:query: {
+      ~days: 1
+    }
+  }
+
+  response: {
+    headers: {
+      date: Fri, 10 Jul 2026 21:27:37 GMT
+      server: uvicorn
+      content-length: 270
+      content-type: application/json
+      x-content-type-options: nosniff
+      x-frame-options: DENY
+      referrer-policy: no-referrer
+      permissions-policy: geolocation=(), camera=(), microphone=()
+      x-correlation-id: bc81af46-60ff-41d0-91d5-277b0d9c0e41
+    }
+
+    status: {
+      code: 200
+      text: OK
+    }
+
+    body: {
+      type: json
+      content: '''
+        {
+          "source_id": 1,
+          "source_name": "httpbin-demo",
+          "window_days": 7,
+          "sample_count": 0,
+          "error_count": 0,
+          "uptime_pct": 100.0,
+          "avg_latency_ms": 0.0,
+          "p50_latency_ms": 0.0,
+          "p95_latency_ms": 0.0,
+          "slo_target_pct": 99.9,
+          "error_budget_burn_rate": 0.0,
+          "generated_at": "2026-07-10T21:27:38.422767"
+        }
+      '''
+    }
+  }
 }

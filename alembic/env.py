@@ -5,7 +5,7 @@ This provides a SQLAlchemy `Connection` object (with `.dialect`) which
 Alembic expects. Running migrations via the Alembic CLI is a top-level
 process so creating a sync engine here is safe.
 
-See docs/gotchas.md for Python 3.14 notes and alternatives.
+See docs/05-development/gotchas.md for Python 3.14 notes and alternatives.
 """
 
 from logging.config import fileConfig

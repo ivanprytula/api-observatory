@@ -19,12 +19,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  security-audit:
-    name: "Security audit (dependencies + SAST + images)"
+  action-ref-validation:
+    name: "Validate action refs are immutable"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Validate action refs are immutable
         shell: bash
@@ -43,25 +43,26 @@ jobs:
           fi
           echo "✅ All action references are pinned to immutable SHAs."
 
-      - name: Install uv
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+  python-deps:
+    name: "Python dependencies (pip-audit)"
+    needs: [action-ref-validation]
+    uses: ./.github/workflows/pip-audit.yml
+    with:
+      ignore-vulns: |
+        PYSEC-2026-161
 
-      - name: Sync dependencies
-        run: uv sync --frozen
+  secrets-scan:
+    name: "Scan full repo for secrets (Gitleaks)"
+    runs-on: ubuntu-latest
+    needs: [action-ref-validation]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Export dependencies for audit
-        run: uv export --frozen --all-groups --no-hashes --format requirements-txt > requirements-audit.txt
-
-      - name: Run pip-audit for known vulnerabilities
-        uses: pypa/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266 # v1.1.0
+      - name: "Scan full repo for secrets (Gitleaks)"
+        uses: docker://ghcr.io/gitleaks/gitleaks:v8.21.2
         with:
-          inputs: requirements-audit.txt
-          ignore-vulns: |
-            PYSEC-2026-161
+          args: detect --source=/github/workspace --verbose --no-banner
 
   codeql-audit:
     name: "CodeQL SAST (Python)"
@@ -72,7 +73,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
@@ -96,7 +97,7 @@ jobs:
       packages: read
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Build ingestor image for scanning
         env:
@@ -159,7 +160,7 @@ jobs:
   audit-summary:
     name: Audit complete
     runs-on: ubuntu-latest
-    needs: [security-audit, codeql-audit, docker-scan]
+    needs: [action-ref-validation, python-deps, secrets-scan, codeql-audit, docker-scan]
     if: always()
     steps:
       - name: Report results
@@ -168,11 +169,13 @@ jobs:
           echo "## Security Audit Results" >> "$GITHUB_STEP_SUMMARY"
           echo "| Check | Result |" >> "$GITHUB_STEP_SUMMARY"
           echo "|-------|--------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Audit | ${{ needs.security-audit.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Action Refs | ${{ needs.action-ref-validation.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Python Deps | ${{ needs.python-deps.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Secrets Scan | ${{ needs.secrets-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| CodeQL | ${{ needs.codeql-audit.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Docker Scan | ${{ needs.docker-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "${{ needs.security-audit.result }}" != "success" ] || [ "${{ needs.codeql-audit.result }}" != "success" ] || [ "${{ needs.docker-scan.result }}" != "success" ]; then
+          if [ "${{ needs.action-ref-validation.result }}" != "success" ] || [ "${{ needs.python-deps.result }}" != "success" ] || [ "${{ needs.secrets-scan.result }}" != "success" ] || [ "${{ needs.codeql-audit.result }}" != "success" ] || [ "${{ needs.docker-scan.result }}" != "success" ]; then
             echo ""
             echo "⚠️  Security audit found issues. Review above for details."
             exit 1

@@ -7,7 +7,7 @@ from typing import Annotated, Any
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,6 +28,7 @@ from services.ingestor.auth import (
     verify_jwt_token,
     verify_refresh_token,
 )
+from services.ingestor.config import settings
 from services.ingestor.constants import API_V1_PREFIX, AUTH_LOGIN_RATE_LIMIT
 from services.ingestor.database import get_db
 from services.ingestor.rate_limiting import limiter
@@ -86,6 +87,7 @@ async def login(
     request: Request,
     form: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: DbDep,
+    response: Response,
 ) -> TokenResponse:
     """Authenticate and return a JWT access token.
 
@@ -126,9 +128,17 @@ async def login(
         custom_claims={"role": user.role, "tenant_id": user.tenant_id},
     )
 
-    # Also create a Cache session with tenant_id
-    await create_session(
+    # Also create a Cache session with tenant_id and set session cookie
+    session_id, _ = await create_session(
         user.username, {"role": user.role, "tenant_id": user.tenant_id}
+    )
+    response.set_cookie(
+        key="session_id",
+        value=session_id,
+        httponly=True,
+        secure=request.url.scheme == "https",
+        samesite="strict",
+        max_age=settings.token_expiry_hours * 3600,
     )
 
     logger.info("user_login", extra={"username": user.username})

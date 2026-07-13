@@ -5,11 +5,11 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/api/v1/sources/{{source_id}}
+  url: {{baseUrl}}/api/v1/sources/{{source_id}}/health
   body: none
   auth: bearer
 }
 
 auth:bearer {
-  token: {{token}}
+  token: {{access_token}}
 }

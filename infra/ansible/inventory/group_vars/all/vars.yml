@@ -41,7 +41,7 @@ compose_env:
   log_sqlalchemy_level: 'WARNING'
   openai_api_key: "{{ vault_openai_api_key }}"
   otel_enabled: 'false'
-  otel_endpoint: 'http://localhost:4317'
+  otel_exporter_otlp_endpoint: 'http://localhost:4317'
   otel_service_name: 'api-observatory-ingestor'
   cache_enabled: 'false'
   cache_url: 'redis://localhost:6379/0'

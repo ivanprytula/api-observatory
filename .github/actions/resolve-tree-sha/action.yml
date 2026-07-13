@@ -1,0 +1,17 @@
+name: "Resolve tree SHA"
+description: >-
+  Compute the deterministic per-commit tree SHA used for image tags
+  (tree-<sha>). Requires the repo to already be checked out.
+outputs:
+  tree_sha:
+    description: "7-character git tree SHA"
+    value: ${{ steps.resolve.outputs.tree_sha }}
+runs:
+  using: "composite"
+  steps:
+    - id: resolve
+      shell: bash
+      run: |
+        set -euo pipefail
+        TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
+        echo "tree_sha=${TREE_SHA}" >> "$GITHUB_OUTPUT"

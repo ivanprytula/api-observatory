@@ -1,0 +1,41 @@
+global:
+  resolve_timeout: 5m
+  smtp_require_tls: false
+
+route:
+  receiver: email-admin
+  group_by: ['alertname', 'service', 'severity']
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 1h
+
+  routes:
+    - matchers:
+        - severity = critical
+      receiver: email-admin
+      group_wait: 5s
+      repeat_interval: 15m
+
+    - matchers:
+        - severity = warning
+      receiver: email-admin
+      group_wait: 30s
+      repeat_interval: 1h
+
+receivers:
+  - name: email-admin
+    email_configs:
+      - to: 'admin@datazoo.local'
+        from: 'alertmanager@datazoo.local'
+        smarthost: 'mailpit:1025'
+        require_tls: false
+        send_resolved: true
+        headers:
+          subject: '[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }} - {{ .CommonAnnotations.summary }}'
+
+inhibit_rules:
+  - source_matchers:
+      - severity = critical
+    target_matchers:
+      - severity = warning
+    equal: ['alertname', 'service']

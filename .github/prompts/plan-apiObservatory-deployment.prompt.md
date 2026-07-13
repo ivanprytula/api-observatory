@@ -12,7 +12,7 @@ This is your north star. Follow this exactly; do not deviate into side topics.
 
 **Reference**: cloud-security-checklist.md **Step 0 & Step 1**
 
-- [ ] **Step 0** — AWS account hardening (7 items: MFA, billing alerts, CloudTrail, etc.)
+- [x] **Step 0** — AWS account hardening (7 items: MFA, billing alerts, CloudTrail, etc.)
 - [ ] **Step 1** — S3 state bucket + ECR repos (run exact `aws` CLI commands, copy bucket name)
 
 ### Phase B: Local Config & First Terraform Run (15 min, do once)

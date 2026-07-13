@@ -1,0 +1,131 @@
+groups:
+  - name: probe_slos
+    rules:
+      - alert: HealthCheckLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{job="ingestor", handler="/health"}[5m])) by (le)
+          ) > 0.2
+        for: 2m
+        labels:
+          severity: warning
+          service: ingestor
+        annotations:
+          summary: "Health probe P95 latency > 200ms"
+          description: "Liveness/health checks are slower than expected on ingestor."
+
+      - alert: ReadinessCheckLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{job="ingestor", handler="/readyz"}[5m])) by (le)
+          ) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+          service: ingestor
+        annotations:
+          summary: "Readiness probe P95 latency > 500ms"
+          description: "Readiness checks are slow enough to threaten rollout stability."
+
+      - alert: ReadinessProbeFailureRateHigh
+        expr: |
+          sum(rate(http_requests_total{job="ingestor", handler="/readyz", status=~"5.."}[5m]))
+          /
+          sum(rate(http_requests_total{job="ingestor", handler="/readyz"}[5m])) > 0.01
+        for: 2m
+        labels:
+          severity: critical
+          service: ingestor
+        annotations:
+          summary: "Readiness probe failure rate > 1%"
+          description: "Readiness is failing often enough to block safe traffic routing."
+
+  - name: latency
+    rules:
+      - alert: HighP95Latency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{job="ingestor"}[5m])) by (le, handler)
+          ) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+          service: ingestor
+        annotations:
+          summary: "P95 latency > 500ms on {{ $labels.handler }}"
+          description: "P95 latency is {{ $value | humanizeDuration }} for handler {{ $labels.handler }}"
+
+      - alert: CriticalP99Latency
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_request_duration_seconds_bucket{job="ingestor"}[5m])) by (le, handler)
+          ) > 2.0
+        for: 1m
+        labels:
+          severity: critical
+          service: ingestor
+        annotations:
+          summary: "P99 latency > 2s on {{ $labels.handler }}"
+          description: "P99 latency is {{ $value | humanizeDuration }} — investigate immediately"
+
+  - name: errors
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{job="ingestor", status=~"5.."}[5m])) by (job)
+          /
+          sum(rate(http_requests_total{job="ingestor"}[5m])) by (job) > 0.01
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Error rate > 1% on {{ $labels.job }}"
+          description: "Error rate is {{ $value | humanizePercentage }}"
+
+      - alert: CriticalErrorRate
+        expr: |
+          sum(rate(http_requests_total{job="ingestor", status=~"5.."}[5m])) by (job)
+          /
+          sum(rate(http_requests_total{job="ingestor"}[5m])) by (job) > 0.05
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Error rate > 5% on {{ $labels.job }} — SLO breach imminent"
+          description: "Error rate is {{ $value | humanizePercentage }} — check logs immediately"
+
+  - name: traffic
+    rules:
+      - alert: TrafficDropped
+        expr: |
+          sum(rate(http_requests_total{job="ingestor"}[5m])) < 0.01
+        for: 5m
+        labels:
+          severity: warning
+          service: ingestor
+        annotations:
+          summary: "Ingestor receiving near-zero traffic"
+          description: "Request rate is {{ $value }} req/s — service may be unreachable"
+
+  - name: saturation
+    rules:
+      - alert: ServiceDown
+        expr: up{job="ingestor"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ingestor is down"
+          description: "Service ingestor is not reachable"
+
+  - name: background_jobs
+    rules:
+      - alert: BackgroundJobQueueLagHigh
+        expr: pipeline_background_jobs_in_queue > 50
+        for: 5m
+        labels:
+          severity: warning
+          service: ingestor
+        annotations:
+          summary: "Background job queue lag > 50"
+          description: "Current queue depth is {{ $value }} — worker pool may be saturated"

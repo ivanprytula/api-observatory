@@ -1,0 +1,30 @@
+title = "api-observatory gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test and development credentials"
+regexes = [
+  "(?i)admin123",
+  "(?i)cache_secret",
+]
+paths = [
+  "bruno/",
+  ".env.example",
+  "tests/",
+  ".local-dev/",
+  "docs/",
+  ".github/prompts/",
+  ".github/hooks/secrets-scanner/",
+  ".secrets.baseline",
+  "scripts/testing/",
+  "setup/",
+  ".gitignore",
+  ".pre-commit-config.yaml",
+  "Justfile",
+  "docker-compose.yml",
+  # Historical files (refactored/removed, only exist in git history)
+  "services/ingestor/routers/records.py",
+  "app/routers/records.py",
+]

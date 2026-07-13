@@ -1,0 +1,39 @@
+meta {
+  name: Search With Metadata Filter
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{inferenceUrl}}/search
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "query": "schema change",
+    "top_k": 5,
+    "collection": "bruno-smoke-test",
+    "filters": {"severity": "low"}
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.results[0].id: eq 102
+}
+
+docs {
+  # Metadata filtering
+
+  Narrows results to documents whose `metadata` contains the given
+  key/values exactly (JSONB containment — see
+  `services/inference/search.py::search_documents`). Here only document 102
+  has `severity: "low"`, so it's the only match even though 101/103 might
+  otherwise rank first on text similarity alone.
+}

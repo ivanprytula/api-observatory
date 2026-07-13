@@ -2,42 +2,67 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+import queue
+import threading
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 import streamlit as st
 from services.dashboard.core.auth import AuthManager
 
 
+_SESSION_DEFAULTS: dict[str, Any] = {
+    "_auth_manager": None,
+    "ws_messages": [],
+    "ws_connected": False,
+    "_ws_runtime": None,
+    "probe_results": {},
+    "last_refresh": 0.0,
+}
+
+
+def _ensure_ws_runtime() -> dict:
+    if st.session_state.get("_ws_runtime") is None:
+        st.session_state._ws_runtime = {
+            "stop": threading.Event(),
+            "buf": queue.Queue(),
+            "thread": None,
+        }
+    return st.session_state._ws_runtime
+
+
 class StreamlitUIAdapter:
     """Implements UIAdapter using Streamlit API calls."""
 
     def __init__(self) -> None:
-        self._session: dict[str, Any] = st.session_state
-        if "ws_messages" not in self._session:
-            self._session.ws_messages = []  # type: ignore[attr-defined]
-        if "ws_connected" not in self._session:
-            self._session.ws_connected = False  # type: ignore[attr-defined]
-        if "_ws_stop" not in self._session:
-            self._session._ws_stop = __import__("threading").Event()  # type: ignore[attr-defined]
-        if "_ws_buf" not in self._session:
-            self._session._ws_buf = __import__("queue").Queue()  # type: ignore[attr-defined]
-        if "_ws_thread" not in self._session:
-            self._session._ws_thread = None  # type: ignore[attr-defined]
-        if "probe_results" not in self._session:
-            self._session.probe_results = {}  # type: ignore[attr-defined]
-        if "last_refresh" not in self._session:
-            self._session.last_refresh = 0.0  # type: ignore[attr-defined]
-        if "agent_run_id" not in self._session:
-            self._session.agent_run_id = ""  # type: ignore[attr-defined]
-        if "agent_result" not in self._session:
-            self._session.agent_result = None  # type: ignore[attr-defined]
-        if "agent_hitl_paused" not in self._session:
-            self._session.agent_hitl_paused = False  # type: ignore[attr-defined]
-        if "agent_stream_events" not in self._session:
-            self._session.agent_stream_events = []  # type: ignore[attr-defined]
+        self._session: Any = st.session_state
+        for key, default in _SESSION_DEFAULTS.items():
+            self._session.setdefault(key, default)
 
-    # -- UIAdapter primitives --
+    # -- Store protocol (Layer 3) --
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._session.get(key, default)
+
+    def set(self, key: str, value: Any) -> None:
+        self._session[key] = value
+
+    def has(self, key: str) -> bool:
+        return key in self._session
+
+    def delete(self, key: str) -> None:
+        self._session.pop(key, None)
+
+    def clear(self) -> None:
+        for k in list(self._session.keys()):
+            if not k.startswith("_"):
+                self._session.pop(k, None)
+
+    def setdefault(self, key: str, default: Any = None) -> Any:
+        return self._session.setdefault(key, default)
+
+    def subscribe(self, key: str, callback: Callable[[Any], None]) -> Callable:
+        return lambda: None
 
     def show_error(self, message: str) -> None:
         st.error(message)
@@ -65,28 +90,13 @@ class StreamlitUIAdapter:
     def clear_cache(self) -> None:
         st.cache_data.clear()
 
-    # -- Auth helpers specific to Streamlit ----
-
     def auth_manager_from_session(self) -> AuthManager:
-        if "_auth_manager" not in self._session:
-            manager = AuthManager()
-            manager.login(
-                access_token=self._session.get("access_token", ""),
-                refresh_token=self._session.get("refresh_token", ""),
-                username=self._session.get("auth_username", ""),
-            )
-            self._session._auth_manager = manager
+        if self._session.get("_auth_manager") is None:
+            self._session._auth_manager = AuthManager()
         return self._session._auth_manager
 
-    def sync_auth_to_session(self, manager: AuthManager) -> None:
-        self._session["access_token"] = manager.access_token
-        self._session["refresh_token"] = manager.state.refresh_token
-        self._session["logged_in"] = manager.state.logged_in
-        self._session["auth_username"] = manager.state.username
-        if "_auth_manager" in self._session:
-            del self._session._auth_manager
-
-    # -- WebSocket helpers ----
+    def sync_auth_from_logged_in(self, manager: AuthManager) -> None:
+        pass
 
     @property
     def ws_messages(self) -> list[dict]:
@@ -94,7 +104,7 @@ class StreamlitUIAdapter:
 
     @ws_messages.setter
     def ws_messages(self, value: list[dict]) -> None:
-        self._session.ws_messages = value  # type: ignore[attr-defined]
+        self._session.ws_messages = value
 
     @property
     def ws_connected(self) -> bool:
@@ -102,56 +112,22 @@ class StreamlitUIAdapter:
 
     @ws_connected.setter
     def ws_connected(self, value: bool) -> None:
-        self._session.ws_connected = value  # type: ignore[attr-defined]
+        self._session.ws_connected = value
 
     @property
-    def ws_stop_event(self) -> Any:
-        return self._session.get("_ws_stop")
+    def ws_stop_event(self) -> threading.Event:
+        return _ensure_ws_runtime()["stop"]
 
     @property
-    def ws_buffer(self) -> Any:
-        return self._session.get("_ws_buf")
+    def ws_buffer(self) -> queue.Queue:
+        return _ensure_ws_runtime()["buf"]
 
     @property
-    def ws_thread(self) -> Any:
-        return self._session.get("_ws_thread")
+    def ws_thread(self) -> threading.Thread | None:
+        return _ensure_ws_runtime()["thread"]
 
-    def set_ws_thread(self, thread: Any) -> None:
-        self._session._ws_thread = thread  # type: ignore[attr-defined]
-
-    # -- Agent state helpers ----
-
-    @property
-    def agent_run_id(self) -> str:
-        return self._session.get("agent_run_id", "")
-
-    @agent_run_id.setter
-    def agent_run_id(self, value: str) -> None:
-        self._session.agent_run_id = value  # type: ignore[attr-defined]
-
-    @property
-    def agent_result(self) -> Any:
-        return self._session.get("agent_result")
-
-    @agent_result.setter
-    def agent_result(self, value: Any) -> None:
-        self._session.agent_result = value  # type: ignore[attr-defined]
-
-    @property
-    def agent_hitl_paused(self) -> bool:
-        return self._session.get("agent_hitl_paused", False)
-
-    @agent_hitl_paused.setter
-    def agent_hitl_paused(self, value: bool) -> None:
-        self._session.agent_hitl_paused = value  # type: ignore[attr-defined]
-
-    @property
-    def agent_stream_events(self) -> list[dict]:
-        return self._session.get("agent_stream_events", [])
-
-    @agent_stream_events.setter
-    def agent_stream_events(self, value: list[dict]) -> None:
-        self._session.agent_stream_events = value  # type: ignore[attr-defined]
+    def set_ws_thread(self, thread: threading.Thread | None) -> None:
+        _ensure_ws_runtime()["thread"] = thread
 
     @property
     def probe_results(self) -> dict:
@@ -159,7 +135,7 @@ class StreamlitUIAdapter:
 
     @probe_results.setter
     def probe_results(self, value: dict) -> None:
-        self._session.probe_results = value  # type: ignore[attr-defined]
+        self._session.probe_results = value
 
     @property
     def last_refresh(self) -> float:
@@ -167,39 +143,61 @@ class StreamlitUIAdapter:
 
     @last_refresh.setter
     def last_refresh(self, value: float) -> None:
-        self._session.last_refresh = value  # type: ignore[attr-defined]
-
-    # -- Additional rendering helpers ----
+        self._session.last_refresh = value
 
     def empty(self) -> Any:
         return st.empty()
 
-    def columns(self, spec: list[int] | int) -> Any:
+    def columns(self, spec: int | Sequence[int | float]) -> Any:
         return st.columns(spec)
 
-    def form(self, key: str) -> Any:
-        return st.form(key)
-
-    def text_input(self, label: str, key: str | None = None) -> Any:
-        return st.text_input(label, key=key)
+    def text_input(
+        self,
+        label: str,
+        value: str = "",
+        placeholder: str = "",
+        key: str | None = None,
+    ) -> Any:
+        return st.text_input(label, value=value, placeholder=placeholder, key=key)
 
     def number_input(
         self,
         label: str,
-        min_value: int | None = None,
-        value: int = 1,
-        step: int = 1,
+        min_value: int | float | None = None,
+        max_value: int | float | None = None,
+        value: int | float = 0,
+        step: int | float = 1,
         key: str | None = None,
-    ) -> Any:
+    ) -> int | float:
         return st.number_input(
-            label=label, min_value=min_value, value=value, step=step, key=key
+            label=label,
+            min_value=min_value,
+            max_value=max_value,
+            value=value,
+            step=step,
+            key=key,
         )
 
-    def button(self, label: str, key: str | None = None, **kwargs: Any) -> Any:
+    def button(self, label: str, key: str | None = None, **kwargs: Any) -> bool:
         return st.button(label, key=key, **kwargs)
 
     def expander(self, label: str, expanded: bool = False) -> Any:
         return st.expander(label, expanded=expanded)
+
+    def divider(self) -> None:
+        st.divider()
+
+    def checkbox(self, label: str, value: bool = False, key: str | None = None) -> bool:
+        return st.checkbox(label, value=value, key=key)
+
+    def form(self, key: str) -> Any:
+        return st.form(key)
+
+    def form_submit_button(self, label: str, key: str | None = None) -> bool:
+        return st.form_submit_button(label, key=key)
+
+    def container(self) -> Any:
+        return st.container()
 
     def tabs(self, labels: list[str]) -> Any:
         return st.tabs(labels)
@@ -213,17 +211,17 @@ class StreamlitUIAdapter:
     def header(self, text: str) -> None:
         st.header(text)
 
+    def subheader(self, text: str) -> None:
+        st.subheader(text)
+
     def markdown(self, text: str) -> None:
         st.markdown(text)
 
     def json(self, data: Any, expanded: bool = True) -> None:
         st.json(data, expanded=expanded)
 
-    def write(self, data: Any) -> None:
-        st.write(data)
-
-    def divider(self) -> None:
-        st.divider()
+    def write(self, text: Any) -> None:
+        st.write(text)
 
     def selectbox(
         self, label: str, options: Sequence[Any], key: str | None = None

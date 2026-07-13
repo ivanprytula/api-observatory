@@ -23,6 +23,7 @@ from services.ingestor.constants import (
     MAX_PAGE_SIZE,
 )
 from services.ingestor.database import get_db
+from services.ingestor.jobs_registry import register_source_probe_jobs
 from services.ingestor.repositories.source_registry import (
     create_source_profile,
     deactivate_source_profile,
@@ -38,6 +39,17 @@ from services.ingestor.repositories.source_registry import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix=f"{API_V1_PREFIX}/sources", tags=["source-registry"])
+
+# Injected at startup via set_scheduler() (see main.py lifespan) so newly
+# registered sources can get a probe job scheduled immediately instead of
+# only picking one up on the next app restart.
+_scheduler: Any = None
+
+
+def set_scheduler(scheduler: Any) -> None:
+    global _scheduler
+    _scheduler = scheduler
+
 
 type DbDep = Annotated[AsyncSession, Depends(get_db)]
 type JwtDep = Annotated[dict[str, Any], Depends(verify_jwt_token)]
@@ -111,6 +123,16 @@ async def register_source(
         "source_registered",
         extra={"source_id": profile.id, "source_name": profile.name},
     )
+
+    if _scheduler is not None:
+        try:
+            await register_source_probe_jobs(_scheduler, db)
+        except Exception as exc:
+            logger.warning(
+                "source_probe_job_registration_failed",
+                extra={"source_id": profile.id, "error": str(exc)},
+            )
+
     return SourceProfileResponse.model_validate(profile)
 
 

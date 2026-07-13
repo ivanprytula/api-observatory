@@ -14,18 +14,33 @@ from __future__ import annotations
 import logging
 from importlib import import_module
 
-from services.ingestor import cache, events, pubsub
 from services.ingestor.config import settings
 
 
 logger = logging.getLogger(__name__)
 
 
-def _get_mongo_module():
+def _get_module(name: str):
     try:
-        return import_module("services.ingestor.storage.mongo")
+        return import_module(name)
     except ImportError:
         return None
+
+
+def _get_mongo_module():
+    return _get_module("services.ingestor.storage.mongo")
+
+
+def _cache():
+    return _get_module("services.ingestor.cache")
+
+
+def _events():
+    return _get_module("services.ingestor.events")
+
+
+def _pubsub():
+    return _get_module("services.ingestor.pubsub")
 
 
 async def initialize_external_services() -> None:
@@ -42,13 +57,15 @@ async def initialize_external_services() -> None:
     # Initialize cache backend (optional)
     if settings.cache_enabled:
         try:
-            await cache.connect_cache(settings.cache_url)
-            logger.info(
-                "cache_connected",
-                extra={"service": "cache", "url": settings.cache_url},
-            )
-            # Phase 13.4: Warm list cache for top N sources
-            await _warm_list_cache()
+            cache = _cache()
+            if cache is not None:
+                await cache.connect_cache(settings.cache_url)
+                logger.info(
+                    "cache_connected",
+                    extra={"service": "cache", "url": settings.cache_url},
+                )
+                # Phase 13.4: Warm list cache for top N sources
+                await _warm_list_cache()
         except Exception as e:
             logger.warning(
                 "cache_connection_failed",
@@ -59,11 +76,13 @@ async def initialize_external_services() -> None:
     # Initialize Cache Pub/Sub (separate connection from cache, optional)
     if settings.cache_enabled:
         try:
-            await pubsub.connect_pubsub(settings.cache_url)
-            logger.info(
-                "pubsub_connected",
-                extra={"service": "cache-pubsub", "url": settings.cache_url},
-            )
+            pubsub = _pubsub()
+            if pubsub is not None:
+                await pubsub.connect_pubsub(settings.cache_url)
+                logger.info(
+                    "pubsub_connected",
+                    extra={"service": "cache-pubsub", "url": settings.cache_url},
+                )
         except Exception as e:
             logger.warning(
                 "pubsub_connection_failed",
@@ -73,11 +92,13 @@ async def initialize_external_services() -> None:
     # Initialize event broker producer (optional)
     if settings.broker_enabled:
         try:
-            await events.connect_producer(settings.broker_url)
-            logger.info(
-                "events_producer_connected",
-                extra={"service": "broker", "broker": settings.broker_url},
-            )
+            events = _events()
+            if events is not None:
+                await events.connect_producer(settings.broker_url)
+                logger.info(
+                    "events_producer_connected",
+                    extra={"service": "broker", "broker": settings.broker_url},
+                )
         except Exception as e:
             logger.warning(
                 "events_producer_connection_failed",
@@ -183,8 +204,10 @@ async def cleanup_external_services() -> None:
 
     # Cleanup Kafka (safe even if not connected)
     try:
-        await events.disconnect_producer()
-        logger.info("events_producer_disconnected")
+        events = _events()
+        if events is not None:
+            await events.disconnect_producer()
+            logger.info("events_producer_disconnected")
     except Exception as e:
         logger.warning(
             "events_producer_cleanup_error",
@@ -193,8 +216,10 @@ async def cleanup_external_services() -> None:
 
     # Cleanup Cache (safe even if not connected)
     try:
-        await cache.disconnect_cache()
-        logger.info("cache_disconnected")
+        cache = _cache()
+        if cache is not None:
+            await cache.disconnect_cache()
+            logger.info("cache_disconnected")
     except Exception as e:
         logger.warning(
             "cache_cleanup_error",
@@ -203,8 +228,10 @@ async def cleanup_external_services() -> None:
 
     # Cleanup Cache Pub/Sub
     try:
-        await pubsub.disconnect_pubsub()
-        logger.info("pubsub_disconnected")
+        pubsub = _pubsub()
+        if pubsub is not None:
+            await pubsub.disconnect_pubsub()
+            logger.info("pubsub_disconnected")
     except Exception as e:
         logger.warning(
             "pubsub_cleanup_error",

@@ -10,9 +10,10 @@ import asyncio
 import logging
 from unittest.mock import AsyncMock, patch
 
-import aiohttp
 import pytest
 
+
+aiohttp = pytest.importorskip("aiohttp", reason="aiohttp is not in active MVP scope")
 
 _fetch_aiohttp = pytest.importorskip(
     "services.ingestor.fetch_aiohttp",

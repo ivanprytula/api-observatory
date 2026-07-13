@@ -1,19 +1,6 @@
-"""Route modules for each resource."""
+"""Route modules for each resource.
 
-from . import (  # noqa: F401
-    analytics,
-    api_keys,
-    auth,
-    background_processing,
-    contract_drift,
-    etl,
-    health_ingestion_jobs,
-    insights,
-    notifications,
-    observations,
-    observations_v2,
-    reporting,
-    scraper,
-    subscriptions,
-    vector_search,
-)
+Modules are imported on demand by ``services.ingestor.main`` rather
+than eagerly at package-import time, so that optional third-party
+dependencies (openai, pandas, …) don't block unit-test bootstrapping.
+"""

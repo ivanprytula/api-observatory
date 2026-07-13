@@ -79,5 +79,5 @@ docker compose down ingestor
 
 ## Further Reading
 
-- [Architecture Overview](../../docs/04-architecture-overview.md)
-- [Backend Concepts and Patterns](../../docs/09-backend-concepts-and-patterns.md)
+- Architecture Overview
+- Backend Concepts and Patterns

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import logging
 import os
 import time
@@ -22,7 +23,7 @@ from starlette.responses import HTMLResponse, JSONResponse
 
 from libs.platform.auth import set_security_audit_emitter
 from libs.platform.tracing import setup_tracing
-from libs.version import get_version_payload
+from libs.version import get_contracts_version, get_version_payload
 from services.ingestor.auth import (
     connect_session_store,
     disconnect_session_store,
@@ -54,30 +55,7 @@ from services.ingestor.metrics import (  # noqa: F401 — imported to register m
 )
 from services.ingestor.notifications import notify_background_task_failed
 from services.ingestor.rate_limiting import limiter
-from services.ingestor.routers import (
-    abuse_detection,
-    agent,
-    analytics,
-    api_keys,
-    auth,
-    background_processing,
-    contract_drift,
-    etl,
-    health_ingestion_jobs,
-    insights,
-    notifications,
-    observations,
-    observations_v2,
-    reporting,
-    scorecards,
-    scraper,
-    source_registry,
-    subscriptions,
-    vector_search,
-)
-from services.ingestor.routers import (
-    ws as ws_router,
-)
+from services.ingestor.routers import ws as ws_router
 
 
 try:
@@ -227,7 +205,7 @@ async def lifespan(app: FastAPI):
     if settings.otel_enabled:
         setup_tracing(
             app,
-            endpoint=settings.otel_endpoint,
+            endpoint=settings.otel_exporter_otlp_endpoint,
             service_name=settings.otel_service_name,
         )
 
@@ -278,7 +256,9 @@ async def lifespan(app: FastAPI):
                 ),
             )
             await _background_workers.start()
-            background_processing.set_worker_pool(_background_workers)
+            importlib.import_module(
+                "services.ingestor.routers.background_processing"
+            ).set_worker_pool(_background_workers)
             logger.info(
                 "background_workers_started",
                 extra={
@@ -292,7 +272,20 @@ async def lifespan(app: FastAPI):
                 extra={"error": str(e)},
             )
     else:
-        background_processing.set_worker_pool(None)
+        importlib.import_module(
+            "services.ingestor.routers.background_processing"
+        ).set_worker_pool(None)
+
+    # Initialize the LangGraph incident-triage agent (Phase 3) — fail-open,
+    # same as everything else in this lifespan: if Anthropic isn't
+    # configured or the `ai` extra isn't installed, the agent stays
+    # disabled and drift detection works exactly as before.
+    try:
+        from services.ingestor.agent.runner import start_agent_checkpointer
+
+        await start_agent_checkpointer()
+    except Exception as e:
+        logger.warning("agent_checkpointer_startup_failed", extra={"error": str(e)})
 
     # Start scheduler (only if there are enabled jobs)
     try:
@@ -301,6 +294,12 @@ async def lifespan(app: FastAPI):
         from services.ingestor.routers import health_ingestion_jobs as health_router
 
         health_router.set_scheduler(_scheduler)
+
+        # Inject scheduler into source_registry so newly registered sources
+        # can get a probe job scheduled immediately (not just at next restart)
+        from services.ingestor.routers import source_registry as source_registry_router
+
+        source_registry_router.set_scheduler(_scheduler)
         logger.info(
             "scheduler_started",
             extra={"job_count": len(_scheduler._jobs)},
@@ -337,6 +336,14 @@ async def lifespan(app: FastAPI):
                 "background_workers_shutdown_error",
                 extra={"error": str(e)},
             )
+
+    # Stop the incident-triage agent's checkpointer pool
+    try:
+        from services.ingestor.agent.runner import stop_agent_checkpointer
+
+        await stop_agent_checkpointer()
+    except Exception as e:
+        logger.warning("agent_checkpointer_shutdown_error", extra={"error": str(e)})
 
     # Cleanup session store
     await disconnect_session_store()
@@ -420,13 +427,6 @@ _OPENAPI_TAGS: list[dict[str, str]] = [
         "description": "Analytics endpoints backed by MongoDB aggregation pipelines.",
     },
     {
-        "name": "agent",
-        "description": (
-            "AI agent orchestration endpoints for asynchronous observation "
-            "analysis workflows."
-        ),
-    },
-    {
         "name": "source-registry",
         "description": (
             "CRUD management for external API source profiles. "
@@ -484,6 +484,16 @@ _OPENAPI_TAGS: list[dict[str, str]] = [
             "and suspicious API key usage patterns with configurable severity thresholds."
         ),
     },
+    {
+        "name": "agent",
+        "description": (
+            "LangGraph incident-triage agent. Auto-triggered by critical/breaking "
+            "drift events (see contract-drift); classifies severity, retrieves "
+            "similar prior incidents via RAG, drafts a root-cause analysis, then "
+            "pauses for human review before notifying. Resume a paused run via "
+            "POST /runs/{run_id}/resume."
+        ),
+    },
 ]
 
 # If docs_username/docs_password are configured, disable default docs
@@ -491,6 +501,11 @@ _OPENAPI_TAGS: list[dict[str, str]] = [
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
+    servers=[
+        {"url": url.strip()}
+        for url in settings.openapi_servers.split(",")
+        if url.strip()
+    ],
     description=(
         "Async data pipeline platform built on FastAPI, SQLAlchemy 2.0, and asyncpg.\n\n"
         "The API now spans authenticated observation ingestion, advanced rate-limiting demos, "
@@ -608,30 +623,42 @@ app.add_middleware(
 app.add_middleware(TenantMiddleware)
 app.add_middleware(CorrelationIdMiddleware)
 
-app.include_router(auth.router)
-app.include_router(observations.router)
-app.include_router(observations_v2.router)
-app.include_router(scraper.router)
-app.include_router(analytics.router)
-app.include_router(agent.router, prefix="/api/v1/agent", tags=["agent"])
-app.include_router(background_processing.router)
-app.include_router(notifications.router)
-app.include_router(vector_search.router)
+_ROUTER_MODULES = [
+    "auth",
+    "agent",
+    "observations",
+    "observations_v2",
+    "scraper",
+    "analytics",
+    "background_processing",
+    "notifications",
+    "vector_search",
+    "health_ingestion_jobs",
+    "source_registry",
+    "contract_drift",
+    "insights",
+    "subscriptions",
+    "reporting",
+    "scorecards",
+    "etl",
+    "api_keys",
+    "abuse_detection",
+]
+for _name in _ROUTER_MODULES:
+    try:
+        app.include_router(
+            importlib.import_module(f"services.ingestor.routers.{_name}").router
+        )
+    except ModuleNotFoundError as exc:
+        logger.warning(
+            "router_unavailable",
+            extra={"router": _name, "missing_module": str(exc)},
+        )
+
 if mongo_analytics is not None:
     app.include_router(mongo_analytics.router)
 
-
-app.include_router(health_ingestion_jobs.router)
 app.include_router(ws_router.router)
-app.include_router(source_registry.router)
-app.include_router(contract_drift.router)
-app.include_router(insights.router)
-app.include_router(subscriptions.router)
-app.include_router(reporting.router)
-app.include_router(scorecards.router)
-app.include_router(etl.router)
-app.include_router(api_keys.router)
-app.include_router(abuse_detection.router)
 
 
 # ---------------------------------------------------------------------------
@@ -643,16 +670,12 @@ async def health(request: Request) -> dict[str, object]:
     """Liveness probe — process is alive (no DB check).
 
     Used by Kubernetes to decide whether to restart the container.
-    Should be lightweight and not depend on external services.
+    Lightweight and dependency-free by design: does not resolve version
+    metadata, since that can be legitimately unavailable (see /version)
+    without the process itself being unhealthy.
     Rate-limited to prevent health check DoS attacks.
     """
-    # Prefer an explicit SERVICE_VERSION from CI; fall back to application
-    # configured `settings.app_version` if present for deterministic service
-    # versioning in local/dev runs.
-    svc_version = os.getenv("SERVICE_VERSION") or settings.app_version
-    payload = get_version_payload()
-    payload["service"] = svc_version
-    return {"status": "healthy", "version": payload}
+    return {"status": "healthy"}
 
 
 @app.get("/readyz", tags=["ops"])
@@ -660,7 +683,10 @@ async def readyz(db: DbDep) -> dict[str, object]:
     """Readiness probe — DB and Cache reachable, pod can serve traffic.
 
     Used by Kubernetes to decide whether to route traffic to this pod.
-    Returns 503 if DB or Cache is unreachable.
+    Returns 503 if DB or Cache is unreachable. Version metadata is
+    best-effort context here, not a readiness criterion — a service with
+    unresolved version info can still safely serve traffic (see /version
+    for the strict, deliberate version-consensus check).
     """
     from services.ingestor.auth import _session_client as _cache
 
@@ -685,8 +711,12 @@ async def readyz(db: DbDep) -> dict[str, object]:
         failed.append(f"cache: {e}")
 
     svc_version = os.getenv("SERVICE_VERSION") or settings.app_version
-    payload = get_version_payload()
-    payload["service"] = svc_version
+    try:
+        contracts_version = get_contracts_version()
+    except RuntimeError as e:
+        logger.warning("contracts_version_unresolved", extra={"error": str(e)})
+        contracts_version = "unknown"
+    payload = {"contracts": contracts_version, "service": svc_version}
 
     if failed:
         logger.warning("readyz_failed", extra={"checks": checks, "failed": failed})
@@ -696,6 +726,25 @@ async def readyz(db: DbDep) -> dict[str, object]:
         )
 
     return {"status": "ready", **checks, "version": payload}
+
+
+@app.get("/version", tags=["ops"])
+@limiter.limit(HEALTH_RATE_LIMIT)
+async def version(request: Request) -> dict[str, object]:
+    """Strict version-consensus check — deliberate, not a liveness/readiness signal.
+
+    Resolves service + contracts version with no fallback. Intended for CI,
+    release tooling, or an operator to query across service instances before
+    declaring a coordinated rollout, or to detect version drift. Fails loudly
+    (500) when version provenance is missing or misconfigured — that failure
+    is the point, so it must never be silently swallowed here.
+    """
+    try:
+        return get_version_payload()
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        ) from e
 
 
 # ---------------------------------------------------------------------------

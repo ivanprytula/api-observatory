@@ -1,0 +1,45 @@
+# Run once via `just k3s-migrate` (not part of `kubectl apply -k` — Jobs are
+# run-to-completion, not continuously reconciled resources).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ingestor-migrate
+  namespace: data-zoo
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      serviceAccountName: data-zoo-app
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: data-zoo/ingestor:latest
+          imagePullPolicy: IfNotPresent
+          command: ["alembic", "upgrade", "head"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: data-zoo-app-secrets
+                  key: database_url
+          securityContext:
+            runAsUser: 10001
+            runAsGroup: 10001
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

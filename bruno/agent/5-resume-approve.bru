@@ -1,0 +1,38 @@
+meta {
+  name: Resume Agent Run (approve)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/agent/runs/{{agent_run_id}}/resume
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "approve": true
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq approved
+}
+
+docs {
+  `reviewer_user_id` on the response is derived server-side from the
+  caller's JWT `sub` claim (resolved to a `User.id` via a DB lookup) — it is
+  not settable in the request body. Run the `auth` collection's
+  register/login requests first so `{{access_token}}` belongs to a real user;
+  otherwise the reviewer is recorded as unattributed (`null`).
+}

@@ -416,3 +416,26 @@ class TestSchedulerIntegration:
         job = scheduler._jobs["disabled_job"]
         # Job is registered but with trigger=None (disabled)
         assert job.trigger is None
+
+    @pytest.mark.asyncio
+    async def test_job_registered_after_start_is_wired_into_live_engine(self) -> None:
+        """A job registered via the decorator after start() must actually run,
+        not just be tracked in self._jobs — e.g. a source registered through
+        the API after the app has already booted.
+        """
+        scheduler = JobScheduler()
+        mock_session_factory = AsyncMock()
+        mock_session_factory.return_value = AsyncMock(spec=AsyncSession)
+
+        await scheduler.start(mock_session_factory)
+        try:
+            assert scheduler._scheduler.get_job("late_job") is None
+
+            @scheduler.job(name="late_job", trigger=IntervalTrigger(hours=1))
+            async def late_handler(db: AsyncSession) -> dict:
+                return {"status": "ok"}
+
+            assert "late_job" in scheduler._jobs
+            assert scheduler._scheduler.get_job("late_job") is not None
+        finally:
+            await scheduler.stop()

@@ -77,8 +77,9 @@ os.environ["ENVIRONMENT"] = "testing"
 os.environ["CACHE_ENABLED"] = "false"
 os.environ.setdefault("SERVICE_VERSION", "test-service")
 os.environ.setdefault("CONTRACTS_VERSION", "test-contracts")
-os.environ.setdefault("DOCS_USERNAME", "")
-os.environ.setdefault("DOCS_PASSWORD", "")
+os.environ["DOCS_USERNAME"] = ""
+os.environ["DOCS_PASSWORD"] = ""
+os.environ["API_V1_BEARER_TOKEN"] = ""
 
 from services.ingestor.auth import verify_jwt_token  # noqa: E402
 from services.ingestor.config import Settings  # noqa: E402
@@ -178,7 +179,10 @@ def _alembic_upgrade(sync_url: str) -> None:
     from alembic import command
 
     cfg = Config(str(_ALEMBIC_INI))
-    cfg.set_main_option("sqlalchemy.url", sync_url)
+    # Escape bare % signs — configparser.BasicInterpolation treats them as
+    # interpolation syntax, but testcontainers passwords often contain
+    # URL-encoded characters like %23.
+    cfg.set_main_option("sqlalchemy.url", sync_url.replace("%", "%%"))
     command.upgrade(cfg, "head")
 
 
@@ -188,6 +192,12 @@ def _alembic_downgrade(sync_url: str) -> None:
     Drops and recreates the public schema to guarantee a clean slate,
     even when a prior session was interrupted before teardown ran (which
     leaves orphan tables/indexes that fool Alembic's downgrade logic).
+
+    Re-enables pgvector after the schema recreate: this test Postgres is
+    shared (session-scoped) with services/inference/tests/ when both suites
+    run in the same pytest invocation, and dropping "public" also drops any
+    extension created in it — without this, inference's tests fail with
+    'type "vector" does not exist' whenever they run after this fixture.
     """
     import sqlalchemy as sa
 
@@ -196,6 +206,7 @@ def _alembic_downgrade(sync_url: str) -> None:
         with engine.begin() as conn:
             conn.execute(sa.text("DROP SCHEMA public CASCADE"))
             conn.execute(sa.text("CREATE SCHEMA public"))
+            conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS vector"))
     finally:
         engine.dispose()
 

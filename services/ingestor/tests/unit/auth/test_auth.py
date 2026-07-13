@@ -195,6 +195,19 @@ class TestSessionCookie:
             assert kwargs["mapping"]["user_id"] == "user-123"
             assert kwargs["mapping"]["role"] == "admin"
 
+    async def test_create_session_fails_open_when_cache_write_raises(self) -> None:
+        """create_session still returns a session_id if Cache is merely
+        unreachable (not just unconfigured) — a live client whose write raises
+        must degrade the same way an absent (`None`) client does, otherwise
+        login() 500s on any transient Cache outage instead of failing open
+        like the rest of this module (see create_refresh_token)."""
+        with patch(
+            "services.ingestor.auth._session_client", new_callable=AsyncMock
+        ) as mock_cache:
+            mock_cache.hset.side_effect = ConnectionError("cache unreachable")
+            session_id, _ = await create_session("user-123", {"role": "admin"})
+        assert session_id  # session_id issued despite the Cache write failing
+
 
 # ---------------------------------------------------------------------------
 # Layer 3: JWT

@@ -1,12 +1,29 @@
-"""Panel 5: Service Health checks."""
+"""Panel: Service Health checks.
+
+Split into:
+  - ``use_*`` — data-fetching hooks
+  - ``render_*`` — pure display from pre-fetched data
+"""
 
 from __future__ import annotations
 
-from services.dashboard.core.api_client import (
-    fetch_health_status,
-)
+from services.dashboard.core.api_client import api
 from services.dashboard.core.auth import AuthManager
 from services.dashboard.ui.protocols import UIAdapter
+
+
+# ---------------------------------------------------------------------------
+# Hooks
+# ---------------------------------------------------------------------------
+
+
+def use_service_health() -> dict:
+    return {"health_data": api.health.probes()}
+
+
+# ---------------------------------------------------------------------------
+# Renderers
+# ---------------------------------------------------------------------------
 
 
 def render_service_health(ui: UIAdapter, auth: AuthManager) -> None:
@@ -20,7 +37,8 @@ def render_service_health(ui: UIAdapter, auth: AuthManager) -> None:
     if col_refresh_probe.button("🔄 Re-check", key="health_recheck"):
         ui.clear_cache()
 
-    health_data = fetch_health_status()
+    data = use_service_health()
+    health_data = data["health_data"]
     probe_cols = ui.columns(len(health_data))
 
     for col, (label, info) in zip(probe_cols, health_data.items(), strict=False):

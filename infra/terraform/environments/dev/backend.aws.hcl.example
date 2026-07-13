@@ -1,9 +1,0 @@
-# Real AWS backend config example (copy to backend.aws.hcl; gitignored)
-bucket         = "your-terraform-state-bucket"
-key            = "dev/platform/terraform.tfstate"
-region         = "eu-central-1"
-encrypt        = true
-use_lockfile   = true
-
-# Optional hardening (recommended in regulated/shared accounts):
-# kms_key_id    = "arn:aws:kms:eu-central-1:123456789012:key/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"

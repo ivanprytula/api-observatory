@@ -134,9 +134,51 @@ class JobScheduler:
                 tags=tags or set(),
             )
             self._jobs[name] = job_obj
+            # If the scheduler is already running (e.g. a job registered
+            # dynamically after startup, not just during initial boot),
+            # wire it into the live APScheduler engine immediately —
+            # otherwise it would only ever be bookkeeping in self._jobs
+            # until the next process restart.
+            if self._scheduler.running:
+                self._activate_job(name, job_obj)
             return handler
 
         return decorator
+
+    def _activate_job(self, job_name: str, job_obj: Job) -> None:
+        """Wire a single job into the live APScheduler engine."""
+        if job_obj.trigger is None:
+            logger.info(
+                "job_registration_skipped",
+                extra={"job_name": job_name, "reason": "trigger_disabled"},
+            )
+            return
+
+        # Wrap handler to inject session and track metrics. session_factory is
+        # only unset before the initial start() call, and _activate_job is only
+        # ever reached after that (either from within start()'s own loop, or
+        # from the job() decorator once self._scheduler.running is True).
+        assert self._session_factory is not None, (
+            "_activate_job called before scheduler.start()"
+        )
+        wrapped_handler = wrap_job_handler(job_obj, self._session_factory)
+
+        self._scheduler.add_job(
+            wrapped_handler,
+            trigger=job_obj.trigger,
+            id=job_name,
+            name=job_name,
+            replace_existing=True,
+        )
+
+        logger.info(
+            "job_registered",
+            extra={
+                "job_name": job_name,
+                "trigger": str(job_obj.trigger),
+                "tags": list(job_obj.tags),
+            },
+        )
 
     async def start(self, session_factory: Callable[[], Any]) -> AsyncIOScheduler:
         """Start the scheduler and register all jobs.
@@ -154,32 +196,7 @@ class JobScheduler:
         self._session_factory = session_factory
 
         for job_name, job_obj in self._jobs.items():
-            if job_obj.trigger is None:
-                logger.info(
-                    "job_registration_skipped",
-                    extra={"job_name": job_name, "reason": "trigger_disabled"},
-                )
-                continue
-
-            # Wrap handler to inject session and track metrics
-            wrapped_handler = wrap_job_handler(job_obj, session_factory)
-
-            self._scheduler.add_job(
-                wrapped_handler,
-                trigger=job_obj.trigger,
-                id=job_name,
-                name=job_name,
-                replace_existing=True,
-            )
-
-            logger.info(
-                "job_registered",
-                extra={
-                    "job_name": job_name,
-                    "trigger": str(job_obj.trigger),
-                    "tags": list(job_obj.tags),
-                },
-            )
+            self._activate_job(job_name, job_obj)
 
         self._scheduler.start()
         logger.info("scheduler_started", extra={"job_count": len(self._jobs)})

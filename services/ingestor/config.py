@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     # REQUIRED: Must be set via DATABASE_URL environment variable
     # ============ Database ============
     database_url: str = Field(
-        default="postgresql+asyncpg://localhost:5432/data_pipeline",
+        default="postgresql+asyncpg://localhost:5432/api_observatory",
         description="PostgreSQL connection string (asyncpg driver)",
     )
 
@@ -47,7 +47,7 @@ class Settings(BaseSettings):
 
     # ============ App ============
     app_name: str = Field(
-        default="Data Pipeline API (async)",
+        default="api-observatory",
         description="Application name",
     )
     app_version: str = Field(
@@ -155,6 +155,14 @@ class Settings(BaseSettings):
         ),
     )
 
+    admin_token: str | None = Field(
+        default=None,
+        description=(
+            "Privileged admin token for protected internal operations. "
+            "Injected by infra via secretKeyRef as ADMIN_TOKEN."
+        ),
+    )
+
     # ============ Cache Backend ============
     cache_url: str = Field(
         default="redis://localhost:6379/0",
@@ -192,7 +200,7 @@ class Settings(BaseSettings):
     )
 
     mongo_db_name: str = Field(
-        default="datazoo",
+        default="api_observatory",
         description="MongoDB database name",
     )
 
@@ -207,9 +215,12 @@ class Settings(BaseSettings):
         description="Enable OpenTelemetry distributed tracing. Disabled by default.",
     )
 
-    otel_endpoint: str = Field(
+    otel_exporter_otlp_endpoint: str = Field(
         default="http://localhost:4317",
-        description="OTLP gRPC endpoint for trace export (e.g., http://jaeger:4317).",
+        description=(
+            "OTLP gRPC endpoint for trace export (e.g., http://jaeger:4317). "
+            "Matches the standard OTel SDK env var OTEL_EXPORTER_OTLP_ENDPOINT."
+        ),
     )
 
     otel_service_name: str = Field(
@@ -356,6 +367,17 @@ class Settings(BaseSettings):
         description="Timeout (seconds) for HTTP scrapers.",
     )
 
+    # ============ OpenAPI / Swagger ============
+    openapi_servers: str = Field(
+        default="http://127.0.0.1:8000,https://127.0.0.1/api",
+        description=(
+            "Comma-separated OpenAPI server URLs for Swagger UI. "
+            "Set OPENAPI_SERVERS to override. "
+            "Default: http://127.0.0.1:8000 (direct HTTP) and "
+            "https://127.0.0.1/api (edge proxy HTTPS)."
+        ),
+    )
+
     # ============ LLM Integration (Phase 2) ============
     openai_enabled: bool = Field(
         default=False,
@@ -372,6 +394,26 @@ class Settings(BaseSettings):
     openai_model_deep: str = Field(
         default="gpt-4o",
         description="OpenAI model to use for deep analysis.",
+    )
+
+    # ============ LangGraph Incident Agent (Phase 3) ============
+    anthropic_enabled: bool = Field(
+        default=False,
+        description="Enable the LangGraph incident-triage agent. Requires ANTHROPIC_API_KEY.",
+    )
+    anthropic_api_key: str | None = Field(
+        default=None,
+        description="Anthropic API key for the incident-triage agent.",
+    )
+    anthropic_model: str = Field(
+        default="claude-haiku-4-5",
+        description=(
+            "Anthropic model for classify_severity (cheap/fast — independent severity read)."
+        ),
+    )
+    anthropic_model_deep: str = Field(
+        default="claude-sonnet-4-5",
+        description="Anthropic model for draft_analysis (deeper root-cause reasoning).",
     )
 
     model_config = SettingsConfigDict(

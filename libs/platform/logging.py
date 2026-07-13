@@ -38,7 +38,7 @@ class _ServiceJsonFormatter(JsonFormatter):
         log_data: dict[str, Any],
         observation: logging.LogObservation,
         message_dict: dict[str, Any],
-    ) -> None:
+    ) -> None:  # ty:ignore[invalid-method-override]
         super().add_fields(log_data, observation, message_dict)
         log_data["service"] = self._service_name
         # Promote `level` to a top-level field for log aggregator filters

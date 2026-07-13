@@ -1,129 +1,180 @@
-import json
+"""LangGraph node functions for the incident-triage agent.
+
+Each node is `async def node(state: AgentState) -> dict` — LangGraph merges
+the returned dict into state. Nodes are thin: LLM calls go through
+`agent.llm.get_chat_model`, RAG through the existing
+`services.ingestor.vector_search` bridge (Phase 2), notifications through
+the existing `services.ingestor.notifications` module — no new mechanisms.
+"""
+
+from __future__ import annotations
+
 import logging
-from typing import Any
-
-from openai import AsyncOpenAI
-from tenacity import retry, stop_after_attempt, wait_exponential
-
-from services.ingestor.agent.state import AgentState
-from services.ingestor.api_schemas.observations import ObservationClassification
-from services.ingestor.config import settings
-from services.ingestor.events import publish_observation_created
-from services.ingestor.vector_search import search_observation_documents
 
 
 try:
-    from services.ingestor.storage.mongo import insert_scraped_doc
-except ImportError:
+    from langgraph.types import interrupt
+except ModuleNotFoundError:
+    interrupt = None  # ty:ignore[invalid-assignment]
 
-    async def insert_scraped_doc(*args, **kwargs):  # type: ignore[no-redef]
-        raise RuntimeError("Mongo storage module is not available")
+from services.ingestor import notifications
+from services.ingestor import vector_search as vs_bridge
+from services.ingestor.agent.llm import get_chat_model
+from services.ingestor.agent.schemas import DraftAnalysis, SeverityClassification
+from services.ingestor.agent.state import AgentState
+from services.ingestor.constants import NOTIFICATION_SEVERITY_WARNING
 
 
 logger = logging.getLogger(__name__)
 
-
-async def fetch_context_node(state: AgentState) -> dict[str, Any]:
-    source = state["observation"].get("source")
-    raw_data = state["observation"].get("raw_data", {})
-    query_text = f"Source: {source}, Data: {json.dumps(raw_data)}"
-    try:
-        context_results = await search_observation_documents(query=query_text, top_k=3)
-        context_docs = [r.get("text", "") for r in context_results.get("results", [])]
-        context_text = "\n---\n".join(context_docs)
-    except Exception as exc:
-        logger.warning("fetch_context_failed", extra={"error": str(exc)})
-        context_text = "No additional context available."
-
-    return {"rag_context": context_text}
+_INCIDENT_COLLECTION = "incidents"
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
-async def classify_node(state: AgentState) -> dict[str, Any]:
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
-
-    system_prompt = (
-        "You are a senior data analyst. Analyze the following observation. "
-        "Return the analysis as a structured JSON object matching the requested schema."
+async def classify_severity(state: AgentState) -> dict:
+    """The LLM's independent severity read — a trust-calibration signal
+    against the rule-based `DriftEvent.severity` that triggered this run."""
+    model = get_chat_model(deep=False).with_structured_output(SeverityClassification)
+    result: SeverityClassification = await model.ainvoke(
+        [
+            {
+                "role": "system",
+                "content": (
+                    "You are an SRE triaging an API contract-drift incident. "
+                    "Assess its severity independently, then note whether you "
+                    "agree with the rule-based classifier's severity."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Incident: {state['incident_summary']}\n"
+                    f"Rule-based severity: {state['rule_based_severity']}\n"
+                    f"Event type: {state['event_type']}"
+                ),
+            },
+        ]
     )
-    user_prompt = (
-        f"Context from similar observations:\n{state.get('rag_context', '')}\n\n"
-        f"Observation to analyze:\n"
-        f"Source: {state['observation'].get('source')}\n"
-        f"Data: {json.dumps(state['observation'].get('raw_data', {}))}\n"
-    )
-
-    try:
-        completion = await client.beta.chat.completions.parse(
-            model=settings.openai_model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            response_format=ObservationClassification,
-        )
-        parsed = completion.choices[0].message.parsed
-        return {"classification": parsed}
-    except Exception as exc:
-        logger.error("llm_classify_failed", extra={"error": str(exc)})
-        return {"error": str(exc)}
-
-
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
-async def deep_analyze_node(state: AgentState) -> dict[str, Any]:
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
-
-    c = state.get("classification")
-    classification_str = c.model_dump_json() if c else "None"
-
-    system_prompt = (
-        "Perform a deep, comprehensive analysis of the observation, considering"
-        " the classification and context."
-    )
-    user_prompt = (
-        f"Context:\n{state.get('rag_context', '')}\n\n"
-        f"Classification:\n{classification_str}\n\n"
-        f"Observation:\n{json.dumps(state['observation'])}\n"
-    )
-
-    try:
-        completion = await client.chat.completions.create(
-            model=settings.openai_model_deep,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-        )
-        result = completion.choices[0].message.content
-        return {"analysis_depth": "deep", "result": result or ""}
-    except Exception as exc:
-        logger.error("llm_deep_analyze_failed", extra={"error": str(exc)})
-        return {"error": str(exc)}
-
-
-async def format_result_node(state: AgentState) -> dict[str, Any]:
-    c = state.get("classification")
-    category = c.category if c else "none"
     return {
-        "analysis_depth": "standard",
-        "result": f"Standard classification: {category}",
+        "llm_severity": result.severity,
+        "llm_severity_reasoning": result.reasoning,
+        "llm_agrees_with_rule": result.agrees_with_rule_based,
     }
 
 
-async def publish_node(state: AgentState) -> dict[str, Any]:
-    observation_id = state.get("observation_id")
-    result = state.get("result", "")
-
-    await publish_observation_created(observation_id, {"analysis_result": result})
+async def retrieve_similar_incidents(state: AgentState) -> dict:
+    """RAG via the Phase 2 inference service: find prior similar incidents,
+    then index this one so future runs can find it in turn."""
+    retrieved: list[dict] = []
+    try:
+        results = await vs_bridge.search_observation_documents(
+            query=state["incident_summary"],
+            top_k=3,
+            collection=_INCIDENT_COLLECTION,
+        )
+        retrieved = results.get("results", [])
+    except Exception as exc:
+        logger.warning("agent_rag_retrieval_failed", extra={"error": str(exc)})
 
     try:
-        await insert_scraped_doc(
-            source="agent",
-            url=f"agent://observation/{observation_id}",
-            title=f"Analysis for {observation_id}",
-            content=result,
-        )
+        await _index_this_incident(state["observation_id"])
     except Exception as exc:
-        logger.warning("insert_scraped_doc_failed", extra={"error": str(exc)})
+        logger.warning("agent_rag_indexing_failed", extra={"error": str(exc)})
 
+    return {"retrieved_context": retrieved}
+
+
+async def _index_this_incident(observation_id: int) -> None:
+    """Index the triggering Observation so future runs' RAG search can find
+    it as a prior similar incident. Own DB session — nodes run out-of-band,
+    not on a request-scoped session."""
+    from services.ingestor.database import AsyncSessionLocal
+    from services.ingestor.repositories.observations import get_observation
+
+    async with AsyncSessionLocal() as session:
+        observation = await get_observation(session, observation_id)
+        if observation is not None:
+            await vs_bridge.index_observation_documents(
+                [observation], collection=_INCIDENT_COLLECTION
+            )
+
+
+async def draft_analysis(state: AgentState) -> dict:
+    """Root cause / recommended action / confidence, informed by the
+    classify_severity read and any retrieved similar incidents."""
+    context_text = (
+        "\n---\n".join(item.get("text", "") for item in state["retrieved_context"])
+        or "No similar prior incidents found."
+    )
+    model = get_chat_model(deep=True).with_structured_output(DraftAnalysis)
+    result: DraftAnalysis = await model.ainvoke(
+        [
+            {
+                "role": "system",
+                "content": (
+                    "You are a senior SRE writing an incident analysis for a "
+                    "human reviewer. Use the LLM severity read and similar "
+                    "prior incidents if relevant. Be concrete and actionable."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Incident: {state['incident_summary']}\n"
+                    f"LLM severity: {state['llm_severity']} "
+                    f"({state['llm_severity_reasoning']})\n"
+                    f"Similar prior incidents:\n{context_text}"
+                ),
+            },
+        ]
+    )
+    return {
+        "root_cause_hypothesis": result.root_cause_hypothesis,
+        "recommended_action": result.recommended_action,
+        "confidence_score": result.confidence_score,
+    }
+
+
+async def human_review(state: AgentState) -> dict:
+    """Pause for human approval — LangGraph `interrupt()`, checkpointed to
+    Postgres. Resumes with `{"approve": bool, "reviewer_user_id": int | None}`
+    via `POST /api/v1/agent/runs/{run_id}/resume`."""
+    decision = interrupt(
+        {
+            "agent_run_id": state["agent_run_id"],
+            "root_cause_hypothesis": state["root_cause_hypothesis"],
+            "recommended_action": state["recommended_action"],
+            "confidence_score": state["confidence_score"],
+            "llm_severity": state["llm_severity"],
+            "message": "Approve or reject this incident analysis.",
+        }
+    )
+    return {
+        "review_decision": bool(decision.get("approve", False)),
+        "reviewer_user_id": decision.get("reviewer_user_id"),
+    }
+
+
+async def notify(state: AgentState) -> dict:
+    """On approval, dispatch through the existing notification channels.
+    Rejections are logged, not notified — nothing to alert on-call about."""
+    if not state["review_decision"]:
+        logger.info(
+            "agent_run_rejected",
+            extra={"agent_run_id": state["agent_run_id"]},
+        )
+        return {}
+
+    await notifications.dispatch_notification_event(
+        event="incident_analysis_approved",
+        message=(
+            f"Incident on {state['source']}: {state['root_cause_hypothesis']}\n"
+            f"Recommended action: {state['recommended_action']}"
+        ),
+        severity=NOTIFICATION_SEVERITY_WARNING,
+        context={
+            "agent_run_id": state["agent_run_id"],
+            "observation_id": state["observation_id"],
+            "confidence_score": state["confidence_score"],
+        },
+    )
     return {}

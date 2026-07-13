@@ -277,7 +277,7 @@ This reduces per-job setup time and guarantees Python 3.14 parity for cp314 whee
 
 ### Week 1: Docker + Lint/Test CI
 
-- [ ] Dockerfile: multi-stage, slim base, <150MB final image
+- [ ] Dockerfile: multi-stage, slim base, efficient caching (proper layers ordering)
 - [ ] .dockerignore: exclude unnecessary files
 - [ ] ci.yml: lint job (Ruff check + format)
 - [ ] ci.yml: test job with matrix (Python 3.10/3.11/3.12)

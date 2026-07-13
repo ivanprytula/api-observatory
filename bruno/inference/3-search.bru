@@ -1,0 +1,28 @@
+meta {
+  name: Search
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{inferenceUrl}}/search
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "query": "breaking schema change removing a required field",
+    "top_k": 3,
+    "collection": "bruno-smoke-test"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.results[0].id: eq 103
+}

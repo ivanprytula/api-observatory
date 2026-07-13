@@ -1,0 +1,18 @@
+auth:
+  postgresPassword: postgres
+  database: data_pipeline
+primary:
+  persistence:
+    enabled: true
+    size: 1Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+readReplicas:
+  replicaCount: 0
+metrics:
+  enabled: false

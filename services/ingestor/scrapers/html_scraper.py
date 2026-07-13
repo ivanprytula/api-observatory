@@ -50,7 +50,7 @@ class HtmlScraper:
             try:
                 async with httpx.AsyncClient(
                     timeout=15.0,
-                    headers={"User-Agent": "data-zoo-scraper/1.0 (educational)"},
+                    headers={"User-Agent": "api-observatory-scraper/1.0 (educational)"},
                     follow_redirects=True,
                 ) as client:
                     response = await client.get(_HN_URL)

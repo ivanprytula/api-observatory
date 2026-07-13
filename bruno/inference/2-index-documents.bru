@@ -1,0 +1,43 @@
+meta {
+  name: Index Documents
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{inferenceUrl}}/index
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "collection": "bruno-smoke-test",
+    "documents": [
+      {
+        "id": 101,
+        "text": "source: payments-api\ntags: incident, critical\ndata: schema drift detected, field amount changed from integer to string",
+        "metadata": {"severity": "critical"}
+      },
+      {
+        "id": 102,
+        "text": "source: weather-api\ntags: incident, low\ndata: added optional field humidity, non-breaking change",
+        "metadata": {"severity": "low"}
+      },
+      {
+        "id": 103,
+        "text": "source: inventory-api\ntags: incident, critical\ndata: removed required field sku, breaking change detected",
+        "metadata": {"severity": "critical"}
+      }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.indexed: eq 3
+}

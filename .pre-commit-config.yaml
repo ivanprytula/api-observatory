@@ -13,40 +13,14 @@ repos:
       - id: check-executables-have-shebangs
       - id: check-docstring-first
       - id: debug-statements
-      - id: detect-private-key
-        exclude: >
-          (?x)^(
-            .github/hooks/secrets-scanner/.*|
-          )$
       - id: mixed-line-ending
         args: [--fix=lf]
       - id: destroyed-symlinks
-      - id: detect-aws-credentials
-        args: [--allow-missing-credentials]
-        exclude: >
-          (?x)^(
-            scripts/testing/.*|
-            tests/.*|
-            requirements-audit\.txt|
-            \.gitignore|
-            \.pre-commit-config\.yaml|
-            Justfile|
-            docker-compose\.yml|
-            docs/dev/commands\.md|
-            docs/dev/bruno-collections\.md|
-            docs/dev/streamlit-dashboard\.md|
-            docs/user/dashboard\.md|
-            docs/user/overview\.md|
-            docs/learning-paths\.md|
-            setup/environment-setup\.md|
-            bruno/websocket/.*\.bru
-          )$
       - id: fix-byte-order-marker
       - id: name-tests-test
         args: [--pytest-test-first]
         exclude: >-
           (?x)^(
-            tests/__init__\.py|
             tests/fixtures_shared\.py|
             tests/unit/__init__\.py|
             tests/integration/__init__\.py|
@@ -55,7 +29,7 @@ repos:
       - id: requirements-txt-fixer
         files: ^requirements-audit\.txt$
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.16
+    rev: v0.15.17
     hooks:
       - id: ruff-check
         args: [--fix, --config=pyproject.toml]
@@ -68,7 +42,7 @@ repos:
         args: ["-c", "pyproject.toml", "-r", "src"]
         additional_dependencies: ["bandit[toml]"]
   - repo: https://github.com/pypa/pip-audit
-    rev: v2.10.0
+    rev: v2.10.1
     hooks:
         - id: pip-audit
           name: pip-audit (wrapper)
@@ -76,6 +50,19 @@ repos:
           language: system
           files: 'pyproject\\.toml|uv\\.lock|requirements-audit\\.txt'
           pass_filenames: false
+
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint
+        name: hadolint dockerfile lint
+        args: [--failure-threshold, warning]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+        name: gitleaks secrets scan
 
   - repo: local
     hooks:
@@ -111,5 +98,5 @@ repos:
   #     stages: [manual]
 
 ci:
-  # pre-commit.ci does not allow network calls
+  # pre-commit.ci does not allow network calls — pip-audit runs as a GitHub Actions job instead
   skip: [pip-audit]

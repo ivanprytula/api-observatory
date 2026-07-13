@@ -1,203 +1,86 @@
-import json
-import logging
-import uuid
-from collections.abc import AsyncGenerator
+"""Incident-triage agent router (Phase 3).
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+JWT-authenticated (Phase 4, `docs/03-planning/audit-gaps.md` gap 🟠#6) — same
+jwt_role_guard pattern already used in contract_drift.py/source_registry.py.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Annotated, Any
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.ingestor.agent.graph import (
-    get_agent,
-    get_agent_hitl,
-)
-from services.ingestor.api_schemas.observations import AgentRunResponse
+from services.ingestor.api_schemas.agent import AgentRunResponse, AgentRunResumeRequest
+from services.ingestor.auth import jwt_role_guard, verify_jwt_token
+from services.ingestor.constants import API_V1_PREFIX
 from services.ingestor.database import get_db
-from services.ingestor.repositories.observations import (
-    get_observation as get_observation_op,
-)
+from services.ingestor.models import AgentRun
+from services.ingestor.repositories.observations import get_user_by_username
 
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(prefix=f"{API_V1_PREFIX}/agent", tags=["agent"])
+
+DbDep = Annotated[AsyncSession, Depends(get_db)]
+JwtDep = Annotated[dict[str, Any], Depends(verify_jwt_token)]
+# writer: can approve/reject a paused run; admin/tenant_admin: full access
+ReviewerJwtDep = Annotated[
+    dict[str, Any], Depends(jwt_role_guard("writer", "admin", "tenant_admin"))
+]
 
 
-class ResumeRequest(BaseModel):
-    approve: bool
-
-
-@router.post("/enrich/{observation_id}", response_model=AgentRunResponse)
-async def enrich_observation(observation_id: int, db: AsyncSession = Depends(get_db)):
-    observation = await get_observation_op(db, observation_id)
-    if not observation:
-        raise HTTPException(status_code=404, detail="Observation not found")
-
-    run_id = str(uuid.uuid4())
-    initial_state = {
-        "observation_id": observation_id,
-        "observation": {
-            "source": observation.source,
-            "raw_data": observation.raw_data,
-            "tags": observation.tags,
-            "timestamp": observation.timestamp.isoformat()
-            if observation.timestamp
-            else None,
-        },
-    }
-
-    config = {"configurable": {"thread_id": run_id}}
-    agent = get_agent()
-    final_state = await agent.ainvoke(initial_state, config=config)
-
-    return AgentRunResponse(
-        run_id=run_id,
-        observation_id=observation_id,
-        classification=final_state.get("classification"),
-        analysis=final_state.get("result", ""),
-        published=True,
-        hitl_paused=False,
-    )
-
-
-@router.post("/enrich/{observation_id}/review", response_model=AgentRunResponse)
-async def enrich_observation_review(
-    observation_id: int, db: AsyncSession = Depends(get_db)
-):
-    observation = await get_observation_op(db, observation_id)
-    if not observation:
-        raise HTTPException(status_code=404, detail="Observation not found")
-
-    run_id = str(uuid.uuid4())
-    initial_state = {
-        "observation_id": observation_id,
-        "observation": {
-            "source": observation.source,
-            "raw_data": observation.raw_data,
-            "tags": observation.tags,
-            "timestamp": observation.timestamp.isoformat()
-            if observation.timestamp
-            else None,
-        },
-    }
-
-    config = {"configurable": {"thread_id": run_id}}
-    agent_hitl = get_agent_hitl()
-    final_state = await agent_hitl.ainvoke(initial_state, config=config)
-
-    return AgentRunResponse(
-        run_id=run_id,
-        observation_id=observation_id,
-        classification=final_state.get("classification"),
-        analysis=final_state.get("result", ""),
-        published=False,
-        hitl_paused=True,
-    )
+@router.get("/runs/{run_id}", response_model=AgentRunResponse)
+async def get_agent_run(run_id: int, db: DbDep, _: JwtDep) -> AgentRun:
+    agent_run = await db.get(AgentRun, run_id)
+    if agent_run is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Agent run not found"
+        )
+    return agent_run
 
 
 @router.post("/runs/{run_id}/resume", response_model=AgentRunResponse)
-async def resume_run(run_id: str, body: ResumeRequest):
-    config = {"configurable": {"thread_id": run_id}}
-    agent_hitl = get_agent_hitl()
+async def resume_agent_run_endpoint(
+    run_id: int, body: AgentRunResumeRequest, db: DbDep, claims: ReviewerJwtDep
+) -> AgentRun:
+    agent_run = await db.get(AgentRun, run_id)
+    if agent_run is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Agent run not found"
+        )
+    if agent_run.status != "awaiting_review":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Agent run is '{agent_run.status}', not awaiting review",
+        )
 
-    # get state
-    state_snapshot = await agent_hitl.aget_state(config)
-    if not state_snapshot:
-        raise HTTPException(status_code=404, detail="Run not found or not resumable")
+    # Spoof-proofing: reviewer_user_id always comes from the authenticated
+    # caller's JWT, never from the request body — resolve the `sub` username
+    # claim to the User row it identifies. Unresolvable (e.g. a token whose
+    # subject has no matching active user) degrades to an unattributed
+    # review rather than trusting a client-supplied id.
+    reviewer = await get_user_by_username(db, str(claims.get("sub", "")))
+    reviewer_user_id = reviewer.id if reviewer is not None else None
 
-    if body.approve:
-        final_state = await agent_hitl.ainvoke(None, config=config)
-        published = True
-    else:
-        # update state
-        await agent_hitl.aupdate_state(config, {"error": "rejected_by_human"})
-        final_state = await agent_hitl.aget_state(config)
-        final_state = final_state.values
-        published = False
+    from services.ingestor.agent.runner import resume_agent_run
 
-    return AgentRunResponse(
-        run_id=run_id,
-        observation_id=final_state.get("observation_id"),
-        classification=final_state.get("classification"),
-        analysis=final_state.get("result", ""),
-        published=published,
-        hitl_paused=False,
-    )
+    try:
+        updated = await resume_agent_run(
+            run_id,
+            approve=body.approve,
+            reviewer_user_id=reviewer_user_id,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc)
+        ) from exc
 
-
-@router.get("/enrich/{observation_id}/stream")
-async def stream_enrich_observation(
-    observation_id: int, db: AsyncSession = Depends(get_db)
-):
-    observation = await get_observation_op(db, observation_id)
-    if not observation:
-        raise HTTPException(status_code=404, detail="Observation not found")
-
-    run_id = str(uuid.uuid4())
-    initial_state = {
-        "observation_id": observation_id,
-        "observation": {
-            "source": observation.source,
-            "raw_data": observation.raw_data,
-            "tags": observation.tags,
-            "timestamp": observation.timestamp.isoformat()
-            if observation.timestamp
-            else None,
-        },
-    }
-
-    config = {"configurable": {"thread_id": run_id}}
-    agent = get_agent()
-
-    async def event_gen() -> AsyncGenerator[str]:
-        try:
-            async for event in agent.astream_events(
-                initial_state, config=config, version="v1"
-            ):
-                if event["event"] == "on_chain_end":
-                    # skip root chain end if needed
-                    pass
-                elif (
-                    event["event"] == "on_chain_stream"
-                    or event["event"] == "on_chat_model_stream"
-                ):
-                    pass
-
-                # actually LangGraph provides node outputs nicely via stream
-
-            # Stream node outputs via astream(stream_mode="updates")
-            # Each node completion emits an update event with node name and state
-            async for event in agent.astream(
-                initial_state, config=config, stream_mode="updates"
-            ):
-                for node_name, node_state in event.items():
-                    data = {
-                        "node": node_name,
-                        "classification": node_state.get("classification").model_dump()
-                        if node_state.get("classification")
-                        else None,
-                        "analysis": node_state.get("result", ""),
-                    }
-                    yield f"event: node_complete\ndata: {json.dumps(data)}\n\n"
-
-            # We don't get the FULL state via updates, we only get the deltas. Let's merge it:
-            final_state_snapshot = await agent.aget_state(config)
-            final_state_vals = final_state_snapshot.values
-
-            done_data = {
-                "run_id": run_id,
-                "observation_id": observation_id,
-                "classification": final_state_vals.get("classification").model_dump()
-                if final_state_vals.get("classification")
-                else None,
-                "analysis": final_state_vals.get("result", ""),
-                "published": True,
-                "hitl_paused": False,
-            }
-            yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
-        except Exception as exc:
-            logger.error("agent_stream_failed", extra={"error": str(exc)})
-            yield f"event: error\ndata: {json.dumps({'error': str(exc)})}\n\n"
-
-    return StreamingResponse(event_gen(), media_type="text/event-stream")
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Agent run resume failed — see server logs",
+        )
+    return updated
