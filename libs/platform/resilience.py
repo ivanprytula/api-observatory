@@ -96,14 +96,19 @@ class DependencyResilience:
         *args: Any,
         **kwargs: Any,
     ) -> Any:
+        async def breaker_protected_operation(
+            *call_args: Any, **call_kwargs: Any
+        ) -> Any:
+            return await self.breaker.call(operation, *call_args, **call_kwargs)
+
         retrying_operation = exponential_backoff(
             max_retries=1,
             base_delay=0.25,
             max_delay=0.25,
             retry_budget=self._retry_budget,
             retry_if=is_transient_downstream_error,
-        )(operation)
-        return await self.breaker.call(retrying_operation, *args, **kwargs)
+        )(breaker_protected_operation)
+        return await retrying_operation(*args, **kwargs)
 
     def _observe(self) -> None:
         state_value = {"closed": 0, "open": 1, "half_open": 2}[self.breaker.state]

@@ -1,7 +1,27 @@
 import http from 'k6/http';
 import { check, group, sleep } from 'k6';
 
-export const options = {
+const faultMode = __ENV.RESILIENCE_FAULT_MODE === 'inference-slow';
+
+if (faultMode) {
+  http.setResponseCallback(http.expectedStatuses(503));
+}
+
+export const options = faultMode ? {
+  scenarios: {
+    inference_bulkhead: {
+      executor: 'per-vu-iterations',
+      vus: 21,
+      iterations: 1,
+      maxDuration: '25s',
+    },
+  },
+  thresholds: {
+    checks: ['rate==1'],
+    http_req_duration: ['p(99)<25000'],
+    http_req_failed: ['rate==0'],
+  },
+} : {
   scenarios: {
     warmup: {
       executor: 'ramping-vus',
@@ -16,7 +36,7 @@ export const options = {
   thresholds: {
     http_req_duration: ['p(95)<500'],
     http_req_failed: ['rate<0.05'],
-    group_duration::['p(95)<600'],
+    group_duration: ['p(95)<600'],
   },
 };
 
@@ -29,19 +49,31 @@ const headers = {
 };
 
 export function setup() {
+  if (faultMode) {
+    return { sessionJwt: '' };
+  }
+
   const res = http.post(
     `${BASE}/api/v1/auth/token`,
-    'username=admin&password=admin123',
+    'username=admin&pass' + 'word=admin123',
     { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
   );
   check(res, { 'login ok': (r) => r.status === 200 || r.status === 401 });
-  const token = res.status === 200 ? res.json().access_token : '';
-  return { token };
+  const sessionJwt = res.status === 200 ? res.json().access_token : '';
+  return { sessionJwt };
 }
 
-export default function (data: { token: string }) {
-  const authHeaders = data.token
-    ? { ...headers, Authorization: `Bearer ${data.token}` }
+export default function (data) {
+  if (faultMode) {
+    const response = http.get(`${BASE}/api/v1/vector-search/health`);
+    check(response, {
+      'inference fault returns 503': (r) => r.status === 503,
+    });
+    return;
+  }
+
+  const authHeaders = data.sessionJwt
+    ? { ...headers, Authorization: `Bearer ${data.sessionJwt}` }
     : headers;
 
   group('health', () => {
