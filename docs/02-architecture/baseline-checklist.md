@@ -52,14 +52,16 @@ New tooling is added to this baseline **only** to close a named gap (see
       registration, login, refresh, and logout routes are deliberately excluded.
 - [ ] **End-to-end tests are gated, not skipped silently** — `e2e` marker excluded from the default
       run (`-m 'not e2e'`) and run explicitly where applicable.
-- [ ] **Coverage is measured on the ingestor** — `[tool.coverage.run]`
+- [x] **Coverage is measured on the ingestor** — `[tool.coverage.run]`
       (`source = ["services.ingestor"]`, `branch = true`) in [pyproject.toml](../../pyproject.toml);
-      reported via `--cov=services/ingestor`.
-- [ ] **`inference` has its own integration test suite** — `services/inference/tests/` runs against
-      real pgvector-enabled Postgres (no SQLite fallback — `Vector` columns need the extension) via
-      its own `conftest.py` reusing the shared testcontainers fixture; embeddings are mocked
-      deterministically so tests don't depend on network/model download. Not yet wired into the
-      root `--cov` config (tracked as a gap, not measured today). Its downgrade fixture is scoped to
+      `integration-tests` enforces the existing `40%` baseline and uploads an XML artifact.
+- [x] **`inference` has its own integration test suite** — `inference-integration-tests` CI job
+      runs `services/inference/tests/` against
+      real pgvector-enabled Postgres (no SQLite fallback — `Vector` columns need the extension).
+      Locally, its `conftest.py` reuses the shared testcontainers fixture; CI uses a pgvector
+      service container. Embeddings are mocked deterministically so tests do not depend on network
+      or model download. It has its own `85%` production-source coverage ratchet and XML artifact.
+      Its downgrade fixture is scoped to
       only its own tables (`command.downgrade(cfg, "base")`, not `DROP SCHEMA public CASCADE`) since
       it shares the session-scoped test Postgres with the ingestor's own suite — the ingestor's
       equivalent fixture (`tests/fixtures_shared.py::_alembic_downgrade`) re-enables the `vector`

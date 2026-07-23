@@ -114,6 +114,10 @@ See [`docs/.plans/post-mvp-nfr-roadmap.md`](../.plans/post-mvp-nfr-roadmap.md) f
 
 ## Changelog
 
+- 2026-07-24: Phase 6B quality ratchet adds separate ingestor and inference coverage artifacts
+  to CI. The dedicated inference integration job runs against pgvector Postgres with deterministic
+  embeddings and enforces an 85% production-source baseline; the existing ingestor integration
+  threshold remains 40%.
 - 2026-07-23: Phase 3A retention implemented as a disabled-by-default, manually invoked
   archive lifecycle. Observations older than 30 days by event timestamp are copied and verified
   in `observations_archive` before their bounded hot-table batch is deleted. Native partitioning,
