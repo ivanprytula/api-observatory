@@ -8,9 +8,15 @@ Tests:
   - Custom upsert conflict counter increments on duplicate
 """
 
-import pytest
-from httpx import AsyncClient
+from collections.abc import AsyncGenerator
 
+import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from services.ingestor.database import get_db
+from services.ingestor.routers import observations_v2
 from tests.shared.payloads import OBSERVATION_API
 
 
@@ -168,8 +174,14 @@ async def test_batch_size_histogram_has_sample_after_batch_insert(
 @pytest.mark.integration
 async def test_upsert_conflict_counter_increments_on_idempotent_duplicate(
     client: AsyncClient,
+    db: AsyncSession,
 ) -> None:
-    """pipeline_observations_upsert_conflicts_total{mode="idempotent"} increments on duplicate."""
+    """The opt-in v2 upsert route increments its conflict metric on a duplicate.
+
+    The production-default app deliberately does not mount v2 learning routes.
+    Mount only the v2 router here so this proof remains independent of the
+    default-route inventory asserted by the Phase 4 tests.
+    """
 
     def _get_conflict_count(body: str, mode: str) -> float:
         for line in body.splitlines():
@@ -190,10 +202,25 @@ async def test_upsert_conflict_counter_increments_on_idempotent_duplicate(
     r_before = await client.get(_METRICS_URL)
     count_before = _get_conflict_count(r_before.text, "idempotent")
 
-    # First call — creates
-    await client.post("/api/v2/observations/upsert", json=upsert_payload)
-    # Second call — conflict
-    await client.post("/api/v2/observations/upsert", json=upsert_payload)
+    lab_app = FastAPI()
+    lab_app.include_router(observations_v2.router)
+
+    async def _override_db() -> AsyncGenerator[AsyncSession]:
+        yield db
+
+    lab_app.dependency_overrides[get_db] = _override_db
+    async with AsyncClient(
+        transport=ASGITransport(app=lab_app), base_url="http://v2-lab"
+    ) as lab_client:
+        created = await lab_client.post(
+            "/api/v2/observations/upsert", json=upsert_payload
+        )
+        conflict = await lab_client.post(
+            "/api/v2/observations/upsert", json=upsert_payload
+        )
+
+    assert created.status_code == 201, created.text
+    assert conflict.status_code == 200, conflict.text
 
     r_after = await client.get(_METRICS_URL)
     count_after = _get_conflict_count(r_after.text, "idempotent")
