@@ -219,3 +219,6 @@ async def test_metrics_contains_job_execution_metric_names(
     assert "pipeline_job_duration_seconds" in body, (
         "Expected pipeline_job_duration_seconds in /metrics"
     )
+    assert "pipeline_retention_runs_total" in body, (
+        "Expected pipeline_retention_runs_total in /metrics"
+    )

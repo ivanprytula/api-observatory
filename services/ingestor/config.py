@@ -10,6 +10,9 @@ from services.ingestor.constants import (
     BACKGROUND_WORKER_COUNT_DEFAULT,
     BACKGROUND_WORKER_QUEUE_SIZE_DEFAULT,
     NOTIFICATION_HTTP_TIMEOUT_SECONDS_DEFAULT,
+    RETENTION_BATCH_SIZE_DEFAULT,
+    RETENTION_BATCH_SIZE_MAX,
+    RETENTION_DAYS_DEFAULT,
     SCRAPER_HTTP_TIMEOUT_SECONDS_DEFAULT,
     VECTOR_SEARCH_DEFAULT_COLLECTION,
     VECTOR_SEARCH_HTTP_TIMEOUT_SECONDS_DEFAULT,
@@ -69,6 +72,22 @@ class Settings(BaseSettings):
         ge=1,
         le=300,
         description="Maximum total duration for one HTTP request.",
+    )
+
+    retention_enabled: bool = Field(
+        default=False,
+        description="Permit destructive observation archival when explicitly requested.",
+    )
+    retention_days: int = Field(
+        default=RETENTION_DAYS_DEFAULT,
+        ge=1,
+        description="Archive observations older than this event-age window.",
+    )
+    retention_batch_size: int = Field(
+        default=RETENTION_BATCH_SIZE_DEFAULT,
+        ge=1,
+        le=RETENTION_BATCH_SIZE_MAX,
+        description="Maximum observations moved by one retention invocation.",
     )
 
     trusted_hosts: str = Field(

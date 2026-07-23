@@ -177,6 +177,13 @@ VECTOR_SEARCH_DEFAULT_TOP_K: int = 5
 VECTOR_SEARCH_MAX_TOP_K: int = 25
 VECTOR_SEARCH_HTTP_TIMEOUT_SECONDS_DEFAULT: int = 10
 VECTOR_SEARCH_DEFAULT_COLLECTION: str = "observations"
+
+# ---------------------------------------------------------------------------
+# Retention (Phase 3A)
+# ---------------------------------------------------------------------------
+RETENTION_DAYS_DEFAULT: int = 30
+RETENTION_BATCH_SIZE_DEFAULT: int = 1000
+RETENTION_BATCH_SIZE_MAX: int = 10_000
 # ---------------------------------------------------------------------------
 # Scrapers (Phase 3)
 # ---------------------------------------------------------------------------

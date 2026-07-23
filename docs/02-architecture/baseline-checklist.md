@@ -128,6 +128,11 @@ New tooling is added to this baseline **only** to close a named gap (see
 - [ ] **Eventing is idempotent** — Redpanda/Kafka topics ([ADR 001](adr/001-kafka-vs-rabbitmq.md));
       consumers dedupe via `ProcessedEvent` / `InboxConsumption` and publish via the transactional
       `OutboxEvent` (`services/ingestor/models.py`).
+- [x] **Observation retention is bounded and operator-controlled** — one verified batch copies
+      eligible observations to `observations_archive` before deleting them from the hot table;
+      archival is disabled by default and requires both `RETENTION_ENABLED=true` and the CLI
+      `--apply` flag ([jobs.py](../../services/ingestor/jobs.py),
+      [run-retention.py](../../scripts/run-retention.py)).
 
 ## Runtime & Supply Chain
 

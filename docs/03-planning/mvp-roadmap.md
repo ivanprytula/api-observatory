@@ -111,3 +111,10 @@ See [audit-gaps.md](audit-gaps.md) for known gaps between the planned MVP/post-M
 ## Post-MVP Execution
 
 See [`docs/.plans/post-mvp-nfr-roadmap.md`](../.plans/post-mvp-nfr-roadmap.md) for the phased, NFR-first execution plan (tracing, resilience, retention, auth, RLS, quality gates, AI-native depth, cloud handoff) that this roadmap's "Post-MVP (MVP+) Mode" hands off to.
+
+## Changelog
+
+- 2026-07-23: Phase 3A retention implemented as a disabled-by-default, manually invoked
+  archive lifecycle. Observations older than 30 days by event timestamp are copied and verified
+  in `observations_archive` before their bounded hot-table batch is deleted. Native partitioning,
+  object storage, and retention for other records remain deferred to later phases.

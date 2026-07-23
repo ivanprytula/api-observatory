@@ -330,10 +330,10 @@ class TestMaterializedViews:
 
 
 @pytest.mark.postgresonly
-class TestPartitionedTables:
-    """Verify partitioned tables and partitions exist."""
+class TestObservationArchive:
+    """Verify the Phase 3A relational observation archive exists."""
 
-    async def test_observations_archive_partitioned_table_exists(
+    async def test_observations_archive_table_exists(
         self, postgresql_async_session: AsyncSession
     ):
         """Verify observations_archive partitioned table exists."""
@@ -346,51 +346,21 @@ class TestPartitionedTables:
             """)
         )
         exists = result.scalar()
-        assert exists, "Partitioned table observations_archive not found"
+        assert exists, "Archive table observations_archive not found"
 
-    async def test_observations_archive_has_partitions(
+    async def test_observations_archive_has_retention_columns(
         self, postgresql_async_session: AsyncSession
     ):
-        """Verify observations_archive has at least one partition."""
+        """Verify the archive preserves lifecycle and retention metadata."""
         result = await postgresql_async_session.execute(
             text("""
-                SELECT COUNT(*)
-                FROM pg_inherits
-                JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
-                JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-                WHERE parent.relname = 'observations_archive'
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'observations_archive'
             """)
         )
-        partition_count = result.scalar() or 0
-        assert partition_count > 0, (
-            f"No partitions found for observations_archive (count: {partition_count})"
-        )
-
-    async def test_observations_archive_partition_names(
-        self, postgresql_async_session: AsyncSession
-    ):
-        """Verify partitions follow naming convention (observations_archive_YYYYMM)."""
-        result = await postgresql_async_session.execute(
-            text("""
-                SELECT child.relname
-                FROM pg_inherits
-                JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
-                JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-                WHERE parent.relname = 'observations_archive'
-                ORDER BY child.relname
-                LIMIT 5
-            """)
-        )
-        partition_names = [row[0] for row in result.fetchall()]
-        for name in partition_names:
-            assert name.startswith("observations_archive_"), (
-                f"Partition name '{name}' does not follow naming convention"
-            )
-            # Verify YYYYMM format in name
-            parts = name.replace("observations_archive_", "")
-            assert len(parts) == 6 and parts.isdigit(), (
-                f"Partition name '{name}' YYYYMM component invalid"
-            )
+        columns = {row[0] for row in result.fetchall()}
+        assert {"id", "timestamp", "deleted_at", "archived_at"} <= columns
 
 
 @pytest.mark.postgresonly
