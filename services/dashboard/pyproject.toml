@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Streamlit UI dashboard for API Observatory"
 requires-python = ">=3.14"
 dependencies = [
-  "streamlit>=1.45.0",
+  "streamlit>=1.60.0",
   "httpx>=0.28.1",
   "pydantic>=2.13.3",
 ]
