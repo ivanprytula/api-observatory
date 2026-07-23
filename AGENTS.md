@@ -34,6 +34,28 @@ Use tools immediately when the user asks to change files. Use `apply_patch` for 
 
 Default shape: result, key validation, next step if needed. Keep explanations short and technical. Prefer prose over lists unless the content is inherently list-shaped. For simple tasks, one short paragraph is enough.
 
+## Working preferences
+
+- Prefer small, reviewable patches over broad refactors.
+- Offer one recommended approach; mention alternatives only when their tradeoffs are material.
+- Preserve backward compatibility unless the user explicitly authorizes a breaking change.
+- Keep runtime dependencies minimal and explain why each new dependency is needed.
+- When a product decision is ambiguous, present concrete options and wait for direction rather than making an irreversible assumption.
+- Favor operationally simple solutions with explicit failure modes and useful observability.
+
+## Project direction
+
+Keep this section current as the project evolves. It is the source of truth for product and architectural tradeoffs; do not infer missing decisions from it.
+
+- **Primary users:** _Document intended users and their technical level._
+- **Near-term goals:** _List 2–4 outcomes for the next 3–6 months._
+- **Non-goals:** _List explicitly out-of-scope work._
+- **Architecture trajectory:** _For example, modular monolith first; extract services only for demonstrated operational needs._
+- **Data posture:** _Document PII sensitivity, retention expectations, tenant isolation, and anticipated scale._
+- **Integration policy:** _Document preferred external systems, API-versioning, and webhook/retry expectations._
+- **Deployment target:** _Document supported environments and hosting direction._
+- **Quality bar:** _Document required tests, compatibility, performance, and observability expectations._
+
 ---
 
 ## Privacy and file access
