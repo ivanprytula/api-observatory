@@ -79,6 +79,11 @@ class Settings(BaseSettings):
         description="Mount the non-production v2 and credential-issuer learning routes.",
     )
 
+    rls_enabled: bool = Field(
+        default=False,
+        description="Enforce PostgreSQL tenant row-level security for observations.",
+    )
+
     retention_enabled: bool = Field(
         default=False,
         description="Permit destructive observation archival when explicitly requested.",

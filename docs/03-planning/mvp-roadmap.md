@@ -57,7 +57,7 @@ Switch from MVP to MVP+ when all are true:
 | Component | MVP (local Docker) | Post-MVP (AWS) | Rationale |
 |-----------|-------------------|----------------|-----------|
 | **API Framework** | FastAPI (Uvicorn) | FastAPI (Uvicorn) | Same codebase; async-first, auto-OpenAPI, Pydantic v2 |
-| **Database** | PostgreSQL 17 (Docker) | RDS PostgreSQL 17 | Same SQL; RDS adds managed backups, Multi-AZ, IAM auth |
+| **Database** | PostgreSQL 17 (Docker) | RDS PostgreSQL 17 | Same SQL; opt-in observations RLS verifies tenant isolation locally; RDS adds managed backups, Multi-AZ, IAM auth |
 | **Cache** | Cache 7 (Docker) | ElastiCache Cache 7.1 | Same Cache protocol; ElastiCache adds TLS, AUTH, Multi-AZ |
 | **Message Broker** | Redpanda (Docker) | MSK Serverless | Kafka-compatible; `aiokafka` code unchanged; IAM auth |
 | **Vector Store** | pgvector (dedicated `inference-db`) | pgvector (managed Postgres) | Real as of Phase 2 of the AI-augmented observatory plan; Qdrant deferred, see ADR-015 |
