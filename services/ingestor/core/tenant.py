@@ -38,8 +38,8 @@ class TenantMiddleware:
     async boundaries and event loop boundaries.
 
     Priority for tenant_id extraction:
-    1. X-Tenant-ID header (direct numeric ID)
-    2. Authorization: Bearer JWT (decode to extract tenant_id claim)
+    1. Authorization: Bearer JWT (verified tenant claim)
+    2. X-Tenant-ID header for unauthenticated local/demo routes only
     3. None (no tenant context, public/global scope)
     """
 
@@ -56,41 +56,31 @@ class TenantMiddleware:
         tenant_id: int | None = None
         user_role: str | None = None
 
-        # 1. Try X-Tenant-ID header first
-        tenant_id_raw = request.headers.get("X-Tenant-ID")
-        if tenant_id_raw:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.lower().startswith("bearer "):
+            token_str = auth_header[7:].strip()
             try:
-                tenant_id = int(tenant_id_raw)
-            except ValueError, TypeError:
-                logger.warning(f"Invalid X-Tenant-ID header: {tenant_id_raw!r}")
+                from services.ingestor.auth import decode_jwt_claims
 
-        # 2. If no X-Tenant-ID, try to extract from JWT Bearer token
-        if not tenant_id:
-            auth_header = request.headers.get("Authorization")
-            if auth_header and auth_header.lower().startswith("bearer "):
-                token_str = auth_header[7:].strip()
+                payload = decode_jwt_claims(token_str)
+                tenant_id = payload.get("tenant_id")
+                roles = payload.get("roles", [])
+                user_role = "admin" if "admin" in roles else payload.get("role")
+                if tenant_id is not None and not isinstance(tenant_id, int):
+                    tenant_id = int(tenant_id)
+            except Exception as exc:
+                logger.debug(
+                    "jwt_tenant_context_unavailable", extra={"error": str(exc)}
+                )
+        else:
+            tenant_id_raw = request.headers.get("X-Tenant-ID")
+            if tenant_id_raw:
                 try:
-                    import jwt
-
-                    from services.ingestor.config import settings
-
-                    # Decode JWT to extract tenant_id and role claims
-                    # Verification ensures token is authentic (not tampered)
-                    payload = jwt.decode(
-                        token_str,
-                        settings.jwt_secret,
-                        algorithms=[settings.jwt_algorithm],
+                    tenant_id = int(tenant_id_raw)
+                except TypeError, ValueError:
+                    logger.warning(
+                        "invalid_tenant_header", extra={"value": tenant_id_raw}
                     )
-                    tenant_id = payload.get("tenant_id")
-                    user_role = payload.get("role")
-                    if tenant_id is not None and not isinstance(tenant_id, int):
-                        tenant_id = int(tenant_id)
-                except (jwt.InvalidTokenError, jwt.DecodeError, ValueError) as e:
-                    # Log at debug level — auth errors are expected during normal operation
-                    logger.debug(f"Failed to decode JWT bearer token: {e}")
-                except Exception as e:
-                    # Catch unexpected errors (import failures, etc.)
-                    logger.debug(f"Unexpected error extracting tenant from JWT: {e}")
 
         # Store in context variables for the request
         t_token = tenant_context.set(tenant_id)

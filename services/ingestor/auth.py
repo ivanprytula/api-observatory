@@ -58,6 +58,20 @@ def _jwt_verification_secrets() -> list[str]:
     return secrets_ordered
 
 
+def decode_jwt_claims(token: str) -> dict[str, Any]:
+    """Decode a JWT using the active rotation window without emitting audit events."""
+    saw_invalid_signature = False
+    for secret in _jwt_verification_secrets():
+        try:
+            return jwt.decode(token, secret, algorithms=[settings.jwt_algorithm])
+        except jwt.InvalidSignatureError:
+            saw_invalid_signature = True
+
+    if saw_invalid_signature:
+        raise jwt.InvalidSignatureError("Invalid token signature")
+    raise jwt.DecodeError("Invalid token")
+
+
 async def connect_session_store(cache_url: str) -> None:
     """Initialize the Cache session store.
 

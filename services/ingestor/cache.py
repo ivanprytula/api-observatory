@@ -46,6 +46,11 @@ _client: Redis | None = None
 logger = logging.getLogger(__name__)
 
 
+def get_redis_client() -> Redis | None:
+    """Return the connected Cache client for atomic operational primitives."""
+    return _client
+
+
 async def connect_cache(cache_url: str) -> None:
     """Initialize Redis connection.
 

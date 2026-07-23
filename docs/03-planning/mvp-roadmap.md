@@ -84,7 +84,7 @@ Switch from MVP to MVP+ when all are true:
 | **WebSocket Real-Time** | ✅ | Cache pub/sub | Kafka too heavy for fan-out to N clients; Cache pub/sub is fire-and-forget | — |
 | **Streamlit Dashboard** | ✅ | Streamlit | Fastest path to visual UI for MVP; replaced by HTMX dashboard post-MVP | — |
 | **JWT Auth + RBAC** | ✅ | PyJWT + FastAPI Depends | Stateless, no session store; refresh tokens mitigate JWT revocation gap | — |
-| **Rate Limiting** | ✅ | slowapi + Cache | In-memory fallback (no Cache needed); Cache backend scales to multi-instance | — |
+| **Rate Limiting** | ✅ | Redis-backed token bucket | Production v1 is keyed by tenant and subject; Cache-disabled local runs use an in-process fallback. Fixed-window examples are opt-in learning-lab routes. | — |
 | **Circuit Breaker** | ✅ | Custom asyncio impl | No lib match for async + custom state machine; 100 LOC vs heavy dependency | ADR-004 |
 | **Structured Logging** | ✅ | structlog + JSON | Machine-parseable, correlation IDs via ContextVar | — |
 | **Prometheus Metrics** | ✅ | prometheus-client | Standard; prometheus-fastapi-instrumentator for HTTP metrics | — |

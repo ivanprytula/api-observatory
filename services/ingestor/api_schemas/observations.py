@@ -449,9 +449,12 @@ class UserCreate(BaseModel):
     role: str = Field(
         "viewer",
         pattern="^(viewer|writer|operator|tenant_admin|admin)$",
-        description="Role assigned at creation. Defaults to viewer.",
+        description="Ignored on public registration; an administrator assigns roles.",
     )
-    tenant_id: int | None = Field(None, description="Assigned tenant ID")
+    tenant_id: int | None = Field(
+        None,
+        description="Ignored on public registration; an administrator assigns tenants.",
+    )
 
 
 class UserResponse(BaseModel):

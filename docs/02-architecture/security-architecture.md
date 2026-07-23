@@ -9,13 +9,14 @@ For learning context on the auth patterns, see Pillar 5 Security (design).
 
 ## Auth Layers
 
-The ingestor service runs four authentication mechanisms in parallel — each scoped to a different API surface.
+Production v1 uses signed JWTs, role guards, and tenant claims. The older authentication
+mechanisms remain available only in the opt-in learning lab.
 
 | Layer          | Scope                              | Mechanism                         |
 | -------------- | ---------------------------------- | --------------------------------- |
 | HTTP Basic     | `/docs`, `/redoc`, `/openapi.json` | Username + password, env-sourced  |
-| Bearer token   | `/api/v1/*`                        | Opaque token, stateless           |
-| JWT HS256      | `/api/v2/*`                        | Signed token with role claims     |
+| JWT HS256      | `/api/v1/*` production routes      | Signed token with role and tenant claims |
+| Learning lab   | `/api/v2/*` and `/api/v1/observations/secure/*` | Fixed-window/session/bearer/JWT comparison; disabled by default |
 | Session cookie | Dashboard / admin UI               | Stateful session, `HttpOnly`      |
 
 Environment variables that control auth:
@@ -23,9 +24,9 @@ Environment variables that control auth:
 ```bash
 DOCS_USERNAME=<value>          # HTTP Basic — username for OpenAPI UI
 DOCS_PASSWORD=<value>          # HTTP Basic — password for OpenAPI UI
-API_TOKEN=<value>              # Bearer token for v1 routes
-JWT_SECRET=<value>             # Signing key for v2 JWT tokens
+JWT_SECRET=<value>             # Signing key for v1 production JWTs
 SESSION_SECRET=<value>         # Session cookie signing key
+AUTH_DEMO_ROUTES_ENABLED=false # Mount the opt-in authentication learning lab
 ```
 
 None of these have safe defaults. The service fails fast at startup if any secret is still the
@@ -35,7 +36,7 @@ default placeholder value (see [Production Guardrails](#production-guardrails)).
 
 ## RBAC Roles
 
-Role-based access control applies to v1 and v2 secured endpoints.
+Role-based access control applies to production v1 routes.
 
 Roles (from lowest to highest privilege): `viewer` → `writer` → `admin`
 
@@ -43,12 +44,13 @@ Roles (from lowest to highest privilege): `viewer` → `writer` → `admin`
 
 | Endpoint                                         | Minimum role      | Auth mechanism    |
 | ------------------------------------------------ | ----------------- | ----------------- |
-| `PATCH /api/v1/observations/{observation_id}/secure/archive` | `writer`        | Bearer token      |
-| `DELETE /api/v1/observations/{observation_id}/secure/delete` | `admin`         | Bearer token      |
-| `POST /api/v2/observations/jwt`                       | `writer`          | JWT claim (`role`) |
+| Production v1 reads and normal writes | authenticated / `writer` | JWT claim (`role`) |
+| Administrative v1 operations | `admin` | JWT role claim |
+| `POST /api/v2/observations/jwt` (learning lab) | `writer` | JWT claim (`role`) |
 
-For the JWT layer, the role is embedded as the `role` claim in the signed token.
-Tokens are verified on every request — no server-side state required.
+The signed JWT carries both role and tenant claims. Tenant middleware accepts the verified
+claim in preference to `X-Tenant-ID`, so a request header cannot override tenant context.
+Tokens are verified on every request — no server-side state is required for access checks.
 
 For the Bearer token layer, role resolution is stateless and tied to the token value
 (role stored in the in-memory token registry; not persisted between restarts in the current implementation).
@@ -142,7 +144,7 @@ this table records *which enforcement* covers each theme so gaps are visible.
 | A08 Software & Data Integrity Failures | SHA-pinned action refs + frozen lockfile (`uv sync --frozen`) | [CI Security Controls](#ci-security-controls) |
 | A09 Logging & Monitoring Failures | *Partial* — OTel traces; no security alerting | trigger: yearly OWASP review |
 | A10 SSRF / API7 SSRF | Outbound URL allow-list | [Input Validation](#input-validation) |
-| API4 Unrestricted Resource Consumption | *Partial* — basic rate limit, not per-tenant | see [Planned](#planned--not-yet-implemented) |
+| API4 Unrestricted Resource Consumption | Token bucket keyed by tenant and subject | [Auth Layers](#auth-layers) |
 | (all categories — deep static analysis) | CodeQL (`codeql`) | [CI Security Controls](#ci-security-controls) |
 | (all categories — secret leakage) | `gitleaks` (`gitleaks-scan`) | [CI Security Controls](#ci-security-controls) |
 
@@ -169,10 +171,10 @@ with them:
 
 | Control                           | Status  | Notes                                  |
 | --------------------------------- | ------- | -------------------------------------- |
-| Cache-backed session store        | Planned | Currently in-process; lost on restart  |
-| Full persisted auth flows         | Planned | Registration, refresh tokens           |
-| Broader RBAC coverage             | Planned | Extend role checks to more endpoints   |
-| Rate limiting per tenant          | Planned | Basic rate limit exists; not per-user  |
+| Cache-backed session store        | Implemented | Cache is used when enabled; startup fails closed for the rate limiter if unavailable |
+| Full persisted auth flows         | Implemented | Registration and refresh-token rotation are available |
+| Broader RBAC coverage             | Implemented | Default mounted v1 routers have JWT and role dependencies |
+| Rate limiting per tenant          | Implemented | Atomic Redis token bucket, keyed by tenant and subject |
 | mTLS between services             | Planned | Service-to-service auth                |
 
 ---

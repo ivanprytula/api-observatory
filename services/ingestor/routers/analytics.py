@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from services.ingestor.auth import jwt_role_guard
 from services.ingestor.constants import API_V1_PREFIX
 from services.ingestor.core.tenant import get_tenant_id
 from services.ingestor.database import get_db
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix=f"{API_V1_PREFIX}/analytics", tags=["analytics"])
 
 type DbDep = Annotated[AsyncSession, Depends(get_db)]
+type AdminJwtDep = Annotated[dict[str, Any], Depends(jwt_role_guard("admin"))]
 
 # ---------------------------------------------------------------------------
 # GET /api/v1/analytics/summary
@@ -211,7 +213,7 @@ async def get_top_by_source(
 
 
 @router.post("/refresh-materialized-view")
-async def refresh_materialized_view(db: DbDep) -> dict[str, str]:
+async def refresh_materialized_view(db: DbDep, _: AdminJwtDep) -> dict[str, str]:
     """Refresh the observations_hourly_stats materialized view.
 
     On PostgreSQL with the view created: executes REFRESH MATERIALIZED VIEW.

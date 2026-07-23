@@ -38,11 +38,13 @@ SOURCE_MIN_LENGTH: int = 1
 TAGS_MAX_COUNT: int = 10
 
 # ---------------------------------------------------------------------------
-# Rate limiting — v1 fixed-window (slowapi)
+# Rate limiting — v1 production token bucket and learning-lab fixed window
 # ---------------------------------------------------------------------------
 V1_RATE_LIMIT: str = "1000/minute"
 HEALTH_RATE_LIMIT: str = "100/minute"
-AUTH_LOGIN_RATE_LIMIT: str = "10/minute"  # brute-force protection for /auth/token
+AUTH_LOGIN_RATE_LIMIT: str = "10/minute"  # learning-lab fixed-window comparison
+V1_TOKEN_BUCKET_CAPACITY: int = 1000
+V1_TOKEN_BUCKET_REFILL_PER_SEC: float = 1000 / 60
 
 # ---------------------------------------------------------------------------
 # Rate limiting — v2 token bucket

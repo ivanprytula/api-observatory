@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +18,7 @@ from services.ingestor.api_schemas.reporting import (
     FreshnessSLAResponse,
     MetricSeriesListResponse,
 )
+from services.ingestor.auth import jwt_role_guard
 from services.ingestor.constants import (
     API_V1_PREFIX,
     MAX_PAGE_SIZE,
@@ -48,6 +49,9 @@ from services.ingestor.repositories.reporting import (
 router = APIRouter(prefix=f"{API_V1_PREFIX}/reporting", tags=["reporting"])
 
 type DbDep = Annotated[AsyncSession, Depends(get_db)]
+type WriterJwtDep = Annotated[
+    dict[str, Any], Depends(jwt_role_guard("writer", "tenant_admin", "admin"))
+]
 
 _R422 = {
     "422": {
@@ -129,6 +133,7 @@ async def get_dashboard_presets() -> DashboardPresetListResponse:
 )
 async def create_reporting_export(
     payload: ExportJobRequest,
+    _: WriterJwtDep,
 ) -> ExportJob:
     """Create an export job from selected BI dashboard preset."""
     return create_export_job(payload)

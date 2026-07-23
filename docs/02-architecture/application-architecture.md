@@ -86,29 +86,28 @@ bypassing it, and keeps the two processes independently deployable.
 
 ## Router / Feature Map
 
-Router files under `services/ingestor/routers/`, grouped by MVP status. "Active" = in MVP
-scope, tested, auth-gated where applicable. "Present, deferred" = code exists but the feature
-is explicitly out of MVP scope per the roadmap (`audit-gaps.md` gap 🟠#6) and currently has no
-auth applied.
+Router files under `services/ingestor/routers/`, grouped by MVP status. "Active" = mounted by
+default and JWT-authenticated. The opt-in learning lab is mounted only when
+`AUTH_DEMO_ROUTES_ENABLED=true`; unavailable dependencies remain unmounted.
 
 | Router | Domain | Status |
 |---|---|---|
 | `agent.py` | Incident-triage agent run status + HITL resume (`GET /runs/{id}`, `POST /runs/{id}/resume`) | Active — real as of Phase 3, JWT-auth-gated as of Phase 4 |
 | `source_registry.py` | Register/manage probed API sources | Active |
-| `observations.py` / `observations_v2.py` | Probe results, ingestion | Active — core CRUD/analyze routes JWT-auth-gated as of Phase 4; the dedicated auth-mechanism teaching routes (`/secure/*`, `/auth/login`, `/batch/protected`, all of `observations_v2.py`) intentionally keep their own session/bearer/JWT auth side-by-side |
+| `observations.py` / `observations_v2.py` | Probe results, ingestion | Active — core v1 CRUD/analyze routes use JWT plus a tenant/subject token bucket. The v2 and legacy v1 auth examples are opt-in learning routes. |
 | `scorecards.py` | Reliability scorecards (p95 latency, uptime) | Active |
 | `contract_drift.py` | Schema drift detection | Active |
 | `health_ingestion_jobs.py` | Scheduler/job health endpoints | Active |
 | `auth.py` / `api_keys.py` | JWT auth, API key management | Active |
 | `abuse_detection.py` | Rate-limit/abuse heuristics | Active |
 | `ws.py` | WebSocket push (drift events) | Active |
-| `analytics.py`, `reporting.py`, `insights.py` | Analytics/reporting layer | Present, deferred (post-MVP) |
-| `subscriptions.py`, `notifications.py` | Alerting channels | Present, deferred (post-MVP) |
+| `analytics.py`, `reporting.py`, `insights.py` | Analytics/reporting layer | Active — JWT-authenticated; state-changing operations have role guards |
+| `subscriptions.py`, `notifications.py` | Alerting channels | Active — JWT-authenticated; administrative operations have role guards |
 | `vector_search.py` | RAG bridge to the `inference` service (`/index`, `/search`) | Active — `inference` is real as of Phase 2 (pgvector, no Qdrant) |
-| `mongo_analytics.py` | Document store | Present, deferred — no MongoDB in `docker-compose.yml` |
-| `scraper.py` | HTTP/HTML/browser scraping | Present, deferred (post-MVP) |
-| `etl.py` | Tabular ETL preview (pandas/polars) | Present, optional extras only (`uv sync --extra etl`) |
-| `background_processing.py` | Async task queue prototype | Present, deferred (post-MVP) |
+| `mongo_analytics.py` | Document store | Unmounted unless Mongo is explicitly enabled and available |
+| `scraper.py` | HTTP/HTML/browser scraping | Unmounted unless Mongo is explicitly enabled and available |
+| `etl.py` | Tabular ETL preview (pandas/polars) | Active with writer-or-higher JWT role; requires `uv sync --extra etl` |
+| `background_processing.py` | Async task queue prototype | Active with administrative JWT role |
 
 `services/mcp/` (Phase 5) has no FastAPI routers of its own — it's a separate process
 (`services/mcp/server.py`) exposing 11 MCP tools that each call the routers above over real HTTP,

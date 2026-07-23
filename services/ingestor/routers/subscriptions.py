@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,7 @@ from services.ingestor.api_schemas.subscriptions import (
     EscalationPreviewRequest,
     TestDeliveryRequest,
 )
+from services.ingestor.auth import jwt_role_guard
 from services.ingestor.constants import API_V1_PREFIX, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from services.ingestor.database import get_db
 from services.ingestor.notifications import dispatch_notification_event
@@ -31,6 +32,7 @@ from services.ingestor.repositories.subscriptions import (
 router = APIRouter(prefix=f"{API_V1_PREFIX}/subscriptions", tags=["subscriptions"])
 
 type DbDep = Annotated[AsyncSession, Depends(get_db)]
+type AdminJwtDep = Annotated[dict[str, Any], Depends(jwt_role_guard("admin"))]
 
 _R404 = {"404": {"description": "Requested source profile was not found."}}
 _R422 = {"422": {"description": "Validation error in query parameters or payload."}}
@@ -123,6 +125,7 @@ async def preview_escalation(
 )
 async def test_delivery(
     payload: TestDeliveryRequest,
+    _: AdminJwtDep,
 ) -> DeliveryLog:
     """Send a test notification through configured channels."""
     result = await dispatch_notification_event(

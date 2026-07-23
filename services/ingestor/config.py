@@ -74,6 +74,11 @@ class Settings(BaseSettings):
         description="Maximum total duration for one HTTP request.",
     )
 
+    auth_demo_routes_enabled: bool = Field(
+        default=False,
+        description="Mount the non-production v2 and credential-issuer learning routes.",
+    )
+
     retention_enabled: bool = Field(
         default=False,
         description="Permit destructive observation archival when explicitly requested.",
