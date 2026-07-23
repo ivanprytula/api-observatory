@@ -12,6 +12,10 @@ dependencies = [
   "pgvector>=0.3.6",
   "pydantic>=2.13.3",
   "pydantic-settings>=2.14.2",
+  "opentelemetry-sdk>=1.43.0",
+  "opentelemetry-instrumentation-fastapi>=0.64b0",
+  "opentelemetry-instrumentation-sqlalchemy>=0.64b0",
+  "opentelemetry-exporter-otlp>=1.43.0",
   # ONNX Runtime-based, CPU-only by design, no torch/CUDA — fits a free-tier VM.
   "fastembed>=0.5.1",
   "alembic>=1.18.5",

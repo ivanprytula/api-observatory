@@ -206,6 +206,9 @@ services:
     container_name: api-obs-inference
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:${INFERENCE_DB_PASSWORD:-postgres}@inference-db:5432/inference
+      OTEL_ENABLED: ${OTEL_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
+      OTEL_SERVICE_NAME: ${INFERENCE_OTEL_SERVICE_NAME:-api-obs-inference}
     ports:
       - '8001:8001'
     depends_on:

@@ -19,7 +19,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libpq-dev=17.10-0+deb13u1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install inference-specific deps (fastapi + sqlalchemy + pgvector + fastembed)
+# Install inference-specific deps, including the shared tracing helper's OTel dependencies.
 COPY services/inference/pyproject.toml .
 RUN uv sync --no-dev --no-install-project
 
@@ -56,6 +56,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     HF_HUB_DISABLE_XET=1
 
 COPY --chown=appuser:appgroup services/__init__.py ./services/
+COPY --chown=appuser:appgroup libs/ ./libs/
 COPY --chown=appuser:appgroup services/inference/alembic.ini ./alembic.ini
 COPY --chown=appuser:appgroup services/inference/alembic/ ./alembic/
 COPY --chown=appuser:appgroup services/inference/ ./services/inference/

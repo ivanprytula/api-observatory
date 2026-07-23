@@ -14,9 +14,11 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import Depends, FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from libs.platform.tracing import setup_tracing
 from services.inference.api_schemas import (
     IndexRequest,
     IndexResponse,
@@ -44,6 +46,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 
 app = FastAPI(title="API Observatory — Inference", lifespan=lifespan)
+Instrumentator().instrument(app).expose(app, include_in_schema=False, tags=["ops"])
+
+if settings.otel_enabled:
+    setup_tracing(
+        app,
+        endpoint=settings.otel_exporter_otlp_endpoint,
+        service_name=settings.otel_service_name,
+    )
 
 
 @app.get("/health")

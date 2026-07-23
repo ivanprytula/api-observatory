@@ -8,6 +8,7 @@ this runs with no network dependency and no API cost.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -45,21 +46,36 @@ def _fake_chat_model(*, deep: bool):
     model = MagicMock()
     if deep:
         model.with_structured_output.return_value.ainvoke = AsyncMock(
-            return_value=DraftAnalysis(
-                root_cause_hypothesis="Upstream schema change.",
-                recommended_action="Roll back the deploy.",
-                confidence_score=0.75,
+            return_value=_structured_response(
+                DraftAnalysis(
+                    root_cause_hypothesis="Upstream schema change.",
+                    recommended_action="Roll back the deploy.",
+                    confidence_score=0.75,
+                )
             )
         )
     else:
         model.with_structured_output.return_value.ainvoke = AsyncMock(
-            return_value=SeverityClassification(
-                severity="critical",
-                reasoning="Field removed and type changed.",
-                agrees_with_rule_based=True,
+            return_value=_structured_response(
+                SeverityClassification(
+                    severity="critical",
+                    reasoning="Field removed and type changed.",
+                    agrees_with_rule_based=True,
+                )
             )
         )
     return model
+
+
+def _structured_response(
+    parsed: SeverityClassification | DraftAnalysis,
+) -> dict[str, object]:
+    """Mirror LangChain's include_raw=True structured-output response."""
+    return {
+        "raw": SimpleNamespace(usage_metadata=None),
+        "parsed": parsed,
+        "parsing_error": None,
+    }
 
 
 class TestGraphPauseResume:

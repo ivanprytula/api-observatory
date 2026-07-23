@@ -166,18 +166,41 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "sum(rate(llm_tokens_total{job=\"ingestor\",type=\"prompt\"}[1m]))",
-          "legendFormat": "Prompt tokens/s",
+          "expr": "sum by (model) (increase(llm_tokens_total{job=\"ingestor\",type=\"prompt\"}[24h]))",
+          "legendFormat": "{{model}} prompt",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "sum(rate(llm_tokens_total{job=\"ingestor\",type=\"completion\"}[1m]))",
-          "legendFormat": "Completion tokens/s",
+          "expr": "sum by (model) (increase(llm_tokens_total{job=\"ingestor\",type=\"completion\"}[24h]))",
+          "legendFormat": "{{model}} completion",
           "refId": "B"
         }
       ],
-      "title": "LLM Token Consumption Rate",
+      "title": "LLM Tokens Used in the Last 24 Hours",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2 },
+          "unit": "currencyUSD"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 19 },
+      "id": 7,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "sum by (model) (increase(llm_estimated_cost_usd_total{job=\"ingestor\"}[24h]))",
+          "legendFormat": "{{model}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Estimated LLM Spend in the Last 24 Hours",
       "type": "timeseries"
     },
     {
@@ -189,7 +212,7 @@
           "unit": "s"
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 19 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 27 },
       "id": 6,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [

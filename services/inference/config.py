@@ -31,5 +31,9 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
+    otel_enabled: bool = False
+    otel_exporter_otlp_endpoint: str = "http://localhost:4317"
+    otel_service_name: str = "api-obs-inference"
+
 
 settings = Settings()
