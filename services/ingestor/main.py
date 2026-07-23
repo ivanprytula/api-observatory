@@ -22,6 +22,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import HTMLResponse, JSONResponse
 
 from libs.platform.auth import set_security_audit_emitter
+from libs.platform.http_timeout import RequestTimeoutMiddleware
 from libs.platform.tracing import setup_tracing
 from libs.version import get_contracts_version, get_version_payload
 from services.ingestor.auth import (
@@ -617,6 +618,9 @@ app.add_middleware(
 )
 app.add_middleware(TenantMiddleware)
 app.add_middleware(CorrelationIdMiddleware)
+app.add_middleware(
+    RequestTimeoutMiddleware, timeout_seconds=settings.request_timeout_seconds
+)
 
 # Init distributed tracing last so the OTel middleware wraps the whole stack:
 # CorrelationIdMiddleware's request_start/request_end logs then run inside the

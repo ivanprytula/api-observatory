@@ -64,6 +64,13 @@ class Settings(BaseSettings):
         description="Global logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL",
     )
 
+    request_timeout_seconds: int = Field(
+        default=30,
+        ge=1,
+        le=300,
+        description="Maximum total duration for one HTTP request.",
+    )
+
     trusted_hosts: str = Field(
         default="localhost,127.0.0.1,[::1],test,ingestor,ingestor:8000",
         description=(

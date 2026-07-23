@@ -7,6 +7,7 @@ from typing import Any, Literal
 
 import httpx
 
+from libs.platform.resilience import DependencyResilience
 from services.ingestor.config import settings
 from services.ingestor.constants import (
     NOTIFICATION_SEVERITY_INFO,
@@ -17,6 +18,12 @@ from services.ingestor.constants import (
 logger = logging.getLogger(__name__)
 
 NotificationChannel = Literal["slack", "telegram", "webhook", "email"]
+
+_notification_resilience = DependencyResilience(
+    "notifications",
+    max_concurrency=10,
+    max_queue=10,
+)
 
 
 def _parse_channels(raw: str) -> list[NotificationChannel]:
@@ -127,6 +134,24 @@ async def notify_background_task_failed(
 
 
 async def _dispatch_to_channel(
+    *,
+    channel: NotificationChannel,
+    event: str,
+    message: str,
+    severity: str,
+    context: dict[str, Any],
+) -> str:
+    return await _notification_resilience.call(
+        _dispatch_to_channel_unprotected,
+        channel=channel,
+        event=event,
+        message=message,
+        severity=severity,
+        context=context,
+    )
+
+
+async def _dispatch_to_channel_unprotected(
     *,
     channel: NotificationChannel,
     event: str,

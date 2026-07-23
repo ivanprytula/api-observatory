@@ -10,15 +10,18 @@ the existing `services.ingestor.notifications` module — no new mechanisms.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any
 
 
 try:
-    from langgraph.types import interrupt
+    from langgraph.types import interrupt as langgraph_interrupt
 except ModuleNotFoundError:
-    interrupt = None
+    langgraph_interrupt: Callable[[Any], Any] | None = None
 
 from libs.platform.llm_metrics import record_llm_usage
+from libs.platform.resilience import DependencyResilience
+from libs.platform.retry import RetryBudget
 from services.ingestor import notifications
 from services.ingestor import vector_search as vs_bridge
 from services.ingestor.agent.llm import get_chat_model
@@ -31,6 +34,12 @@ from services.ingestor.constants import NOTIFICATION_SEVERITY_WARNING
 logger = logging.getLogger(__name__)
 
 _INCIDENT_COLLECTION = "incidents"
+_llm_resilience = DependencyResilience(
+    "llm",
+    max_concurrency=4,
+    max_queue=4,
+    retry_budget=RetryBudget(max_retry_tokens=10, window_seconds=60),
+)
 
 
 async def classify_severity(state: AgentState) -> dict:
@@ -75,7 +84,7 @@ async def _invoke_structured_model(
 ) -> SeverityClassification | DraftAnalysis:
     """Invoke a structured model while retaining raw provider metadata."""
     structured_model = model.with_structured_output(schema, include_raw=True)
-    response = await structured_model.ainvoke(messages)
+    response = await _llm_resilience.call(structured_model.ainvoke, messages)
     parsing_error = response["parsing_error"]
     if parsing_error is not None:
         raise parsing_error
@@ -166,9 +175,9 @@ async def human_review(state: AgentState) -> dict:
     """Pause for human approval — LangGraph `interrupt()`, checkpointed to
     Postgres. Resumes with `{"approve": bool, "reviewer_user_id": int | None}`
     via `POST /api/v1/agent/runs/{run_id}/resume`."""
-    if interrupt is None:
+    if langgraph_interrupt is None:
         raise RuntimeError("LangGraph is not installed; human review is unavailable.")
-    decision = interrupt(
+    decision = langgraph_interrupt(
         {
             "agent_run_id": state["agent_run_id"],
             "root_cause_hypothesis": state["root_cause_hypothesis"],

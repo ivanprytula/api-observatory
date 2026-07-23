@@ -101,6 +101,7 @@ def exponential_backoff(
     max_delay: float = 60.0,
     jitter: bool = True,
     retry_budget: RetryBudget | None = None,
+    retry_if: Callable[[BaseException], bool] | None = None,
 ) -> Callable[[F], F]:
     """Decorator for exponential backoff with optional jitter on async functions.
 
@@ -134,7 +135,7 @@ def exponential_backoff(
                 except Exception as e:
                     last_exception = e
 
-                    if attempt < max_retries:
+                    if attempt < max_retries and (retry_if is None or retry_if(e)):
                         if retry_budget is not None:
                             budget_allowed = await retry_budget.consume_retry()
                             if not budget_allowed:
@@ -171,10 +172,11 @@ def exponential_backoff(
                             "retry_exhausted",
                             extra={
                                 "function": func.__name__,
-                                "total_attempts": max_retries + 1,
+                                "total_attempts": attempt + 1,
                                 "error": str(last_exception),
                             },
                         )
+                        raise
 
             assert last_exception is not None
             raise last_exception

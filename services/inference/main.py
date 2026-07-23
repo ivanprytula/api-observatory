@@ -18,6 +18,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from libs.platform.http_timeout import RequestTimeoutMiddleware
 from libs.platform.tracing import setup_tracing
 from services.inference.api_schemas import (
     IndexRequest,
@@ -47,6 +48,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 app = FastAPI(title="API Observatory — Inference", lifespan=lifespan)
 Instrumentator().instrument(app).expose(app, include_in_schema=False, tags=["ops"])
+app.add_middleware(
+    RequestTimeoutMiddleware, timeout_seconds=settings.request_timeout_seconds
+)
 
 if settings.otel_enabled:
     setup_tracing(
