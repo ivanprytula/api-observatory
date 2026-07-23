@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "breaking-contract-release",
+      "incident_summary": "A deployed API release removed a required response field used by existing clients.",
+      "expected": {
+        "severity": "high",
+        "minimum_confidence": 0.7,
+        "required_hypothesis_terms": ["contract", "breaking"],
+        "required_action_terms": ["roll back", "compatibility"]
+      },
+      "actual": {
+        "severity": {
+          "severity": "high",
+          "reasoning": "Removing a required response field is a breaking API contract change for existing clients.",
+          "agrees_with_rule_based": true
+        },
+        "analysis": {
+          "root_cause_hypothesis": "A contract-breaking release removed a required response field without preserving backward compatibility.",
+          "recommended_action": "Roll back the incompatible release, restore compatibility, and add contract checks before redeploying.",
+          "confidence_score": 0.9
+        }
+      }
+    },
+    {
+      "id": "authentication-failure-spike",
+      "incident_summary": "Authentication failures increased after an identity-provider configuration change.",
+      "expected": {
+        "severity": "critical",
+        "minimum_confidence": 0.75,
+        "required_hypothesis_terms": ["identity", "configuration"],
+        "required_action_terms": ["roll back", "authentication"]
+      },
+      "actual": {
+        "severity": {
+          "severity": "critical",
+          "reasoning": "A sustained authentication failure spike blocks customer access and requires urgent mitigation.",
+          "agrees_with_rule_based": true
+        },
+        "analysis": {
+          "root_cause_hypothesis": "An identity-provider configuration change likely invalidated the authentication flow for production clients.",
+          "recommended_action": "Roll back the identity-provider configuration, verify authentication recovery, and document the safe rollout procedure.",
+          "confidence_score": 0.86
+        }
+      }
+    }
+  ]
+}

@@ -501,6 +501,47 @@ jobs:
           path: coverage/inference.xml
           if-no-files-found: error
 
+  agent-eval-baseline:
+    name: "Agent evaluation baseline (advisory)"
+    runs-on: ubuntu-latest
+    needs: [lint, action-ref-validation]
+    continue-on-error: true
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Cache uv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
+
+      - name: Install uv
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Sync dependencies
+        run: uv sync --frozen
+
+      - name: Run deterministic agent evaluation
+        run: |
+          uv run python scripts/eval/run-agent-eval.py \
+            --output "${RUNNER_TEMP}/agent-eval/agent-eval-report.json"
+
+      - name: Upload agent evaluation report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: agent-eval-report
+          path: ${{ runner.temp }}/agent-eval/agent-eval-report.json
+          if-no-files-found: warn
+          retention-days: 14
+
   # GATE: ALL CHECKS MUST PASS
   ci-gate:
     name: "CI gate (all checks passed)"

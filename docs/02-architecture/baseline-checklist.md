@@ -75,6 +75,10 @@ New tooling is added to this baseline **only** to close a named gap (see
       (Postgres checkpointer, real Anthropic structured output, RAG retrieval finding a prior
       indexed incident) were additionally verified live against the real stack — see
       `docs/.plans/ai-augmented-observatory-agent-mcp.md` Phase 3 Status Log.
+- [x] **Agent quality has an offline baseline** — versioned golden incidents and recorded
+      structured outputs in `services/ingestor/agent/evals/fixtures/` are checked by the
+      pure evaluator in `services/ingestor/agent/evals/`. The advisory `agent-eval-baseline`
+      CI job uploads a JSON report without requiring provider access or LLM spend.
 - [x] **`services/mcp` has its own unit test suite** (Phase 5 of
       `docs/.plans/ai-augmented-observatory-agent-mcp.md`) — `services/mcp/tests/` mocks the
       ingestor's HTTP responses via `respx` at the transport boundary; no DB, no testcontainers,

@@ -114,6 +114,9 @@ See [`docs/.plans/post-mvp-nfr-roadmap.md`](../.plans/post-mvp-nfr-roadmap.md) f
 
 ## Changelog
 
+- 2026-07-24: Phase 7A adds a deterministic, offline agent-evaluation baseline. Versioned
+  golden incidents and recorded structured outputs are checked without provider access; an
+  advisory CI job uploads the JSON report while later semantic and LLM-as-judge work remains deferred.
 - 2026-07-24: Phase 6C adds a weekly/manual, isolated k6 smoke workflow. It exercises
   registration, JWT login, health, and a protected source read against ephemeral Postgres,
   while retaining JSON summaries as baselines before a latency SLO is made blocking.
