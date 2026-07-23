@@ -114,6 +114,9 @@ See [`docs/.plans/post-mvp-nfr-roadmap.md`](../.plans/post-mvp-nfr-roadmap.md) f
 
 ## Changelog
 
+- 2026-07-24: Phase 6C adds a weekly/manual, isolated k6 smoke workflow. It exercises
+  registration, JWT login, health, and a protected source read against ephemeral Postgres,
+  while retaining JSON summaries as baselines before a latency SLO is made blocking.
 - 2026-07-24: Phase 6B quality ratchet adds separate ingestor and inference coverage artifacts
   to CI. The dedicated inference integration job runs against pgvector Postgres with deterministic
   embeddings and enforces an 85% production-source baseline; the existing ingestor integration

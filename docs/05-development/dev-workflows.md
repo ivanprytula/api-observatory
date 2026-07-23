@@ -82,6 +82,25 @@ npm install -g @usebruno/cli # install Bruno CLI first
 Collections live in `bruno/`: auth, sources, contracts, scorecards, ops, websocket.
 Use Bruno Desktop (`just bruno`) for interactive work. WebSocket testing requires `wscat` or the Streamlit dashboard.
 
+### Authenticated k6 Smoke
+
+Start the local stack first with `just up`. The smoke test creates its own disposable
+viewer account, checks `/health`, and reads the protected source list. It records a
+local baseline but deliberately does not enforce a latency threshold yet.
+
+```bash
+export K6_USERNAME="k6local$(date +%s)"
+read -rsp 'k6 password: ' K6_PASSWORD
+export K6_PASSWORD
+k6 run --summary-export=/tmp/api-observatory-k6-summary.json \
+  scripts/load/k6-ci-smoke.js
+```
+
+The same test runs weekly and on demand in GitHub Actions as
+[`performance-smoke.yml`](../../.github/workflows/performance-smoke.yml). Download
+its `performance-smoke-*` artifact to compare JSON summaries before setting a
+latency SLO gate.
+
 ### Database Ops
 
 | Action | Command |

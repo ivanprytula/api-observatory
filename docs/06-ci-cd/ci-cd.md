@@ -89,6 +89,7 @@ See `.github/workflows/ci.yml` for the canonical workflow definition. Key workfl
 | File | Purpose |
 |------|---------|
 | `ci.yml` | Full CI: lint, test, security, build |
+| `performance-smoke.yml` | Weekly/manual k6 authentication and protected-read smoke; uploads a JSON baseline |
 | `docker-build.yml` | Manual build + optional ECR push + Cosign signing |
 | `release-promote.yml` | Promote image digest to environment tag |
 | `cd-deploy.yml` | Deploy to ECS (environment-scoped) |
