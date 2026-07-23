@@ -8,7 +8,8 @@ import os
 import time
 import uuid
 from contextlib import asynccontextmanager
-from typing import Annotated
+from copy import deepcopy
+from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
@@ -596,16 +597,7 @@ if settings.docs_username and settings.docs_password:
     )
     async def get_openapi_schema() -> dict:
         """Protected OpenAPI schema endpoint."""
-        if app.openapi_schema:
-            return app.openapi_schema
-        openapi_schema = get_openapi(
-            title=settings.app_name,
-            version=settings.app_version,
-            description=app.description,
-            routes=app.routes,
-        )
-        app.openapi_schema = openapi_schema
-        return app.openapi_schema
+        return app.openapi()
 
     logger.info(
         "docs_auth_enabled",
@@ -702,6 +694,74 @@ if settings.auth_demo_routes_enabled:
     app.include_router(observations_v2.router)
 
 app.include_router(ws_router.router)
+
+
+# ---------------------------------------------------------------------------
+# OpenAPI authentication contract
+# ---------------------------------------------------------------------------
+_PUBLIC_V1_AUTH_PATHS = frozenset(
+    {
+        "/api/v1/auth/register",
+        "/api/v1/auth/token",
+        "/api/v1/auth/refresh",
+        "/api/v1/auth/logout",
+    }
+)
+_AUTH_ERROR_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "required": ["detail"],
+    "properties": {"detail": {}},
+}
+_UNAUTHORIZED_RESPONSE: dict[str, Any] = {
+    "description": "Missing, expired, or invalid bearer token.",
+    "content": {"application/json": {"schema": _AUTH_ERROR_SCHEMA}},
+}
+_FORBIDDEN_RESPONSE: dict[str, Any] = {
+    "description": "Authenticated caller lacks permission for this operation.",
+    "content": {"application/json": {"schema": _AUTH_ERROR_SCHEMA}},
+}
+
+
+def _is_protected_v1_path(path: str) -> bool:
+    """Return whether an OpenAPI path is protected by the production v1 boundary."""
+    return path.startswith("/api/v1/") and path not in _PUBLIC_V1_AUTH_PATHS
+
+
+def _openapi_with_auth_contract() -> dict[str, Any]:
+    """Generate OpenAPI with the runtime v1 JWT boundary documented uniformly."""
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=settings.app_name,
+        version=settings.app_version,
+        description=app.description,
+        routes=app.routes,
+    )
+    components = openapi_schema.setdefault("components", {})
+    security_schemes = components.setdefault("securitySchemes", {})
+    security_schemes["BearerAuth"] = {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+    }
+
+    for path, path_item in openapi_schema["paths"].items():
+        if not _is_protected_v1_path(path):
+            continue
+        for operation in path_item.values():
+            if not isinstance(operation, dict):
+                continue
+            operation["security"] = [{"BearerAuth": []}]
+            responses = operation.setdefault("responses", {})
+            responses["401"] = deepcopy(_UNAUTHORIZED_RESPONSE)
+            responses["403"] = deepcopy(_FORBIDDEN_RESPONSE)
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = _openapi_with_auth_contract  # ty: ignore[invalid-assignment]
 
 
 # ---------------------------------------------------------------------------

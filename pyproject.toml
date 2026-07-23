@@ -111,6 +111,7 @@ dev = [
   "pip-audit>=2.10.1",
   "azure-storage-blob>=12.20.0",              # E2E tests against floci-az Blob/Queue
   "azure-storage-queue>=12.10.0",
+  "schemathesis>=4.0,<5",
 ]
 
 [tool.pytest.ini_options]
@@ -125,6 +126,7 @@ filterwarnings = [
 markers = [
   "unit: Fast, isolated unit tests (no I/O, no DB)",
   "integration: Tests that touch DB/ASGI client",
+  "contract: In-process OpenAPI contract tests (no external services)",
   "e2e: End-to-end or long-running tests (skipped by default)",
   "azure: floci-az Azure emulator dependent tests",
   "browser: Browser-based tests using Playwright (may require system dependencies)",

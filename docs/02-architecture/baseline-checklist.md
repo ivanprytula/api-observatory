@@ -46,6 +46,10 @@ New tooling is added to this baseline **only** to close a named gap (see
       [pyproject.toml](../../pyproject.toml).
 - [ ] **Integration tests pass on real PostgreSQL + Redis** — `integration-tests` CI job using
       testcontainers for ephemeral PG/Redis (not mocks).
+- [x] **Protected v1 OpenAPI contract is gated** — `contract-tests` runs Schemathesis against the
+      in-process ASGI application, requiring every documented protected `/api/v1/*` operation to
+      reject an anonymous generated request with its documented JSON `401` response. The public
+      registration, login, refresh, and logout routes are deliberately excluded.
 - [ ] **End-to-end tests are gated, not skipped silently** — `e2e` marker excluded from the default
       run (`-m 'not e2e'`) and run explicitly where applicable.
 - [ ] **Coverage is measured on the ingestor** — `[tool.coverage.run]`
