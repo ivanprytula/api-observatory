@@ -66,7 +66,7 @@ Switch from MVP to MVP+ when all are true:
 | **Agent/LLM** | LangGraph + Anthropic | LangGraph + Anthropic | Real as of Phase 3; dual-model: claude-haiku-4-5 (classify), claude-sonnet-4-5 (deep analyze). `/analyze`'s RAG path separately still uses OpenAI (unverified, no key available) |
 | **Auth** | JWT (PyJWT) | JWT (PyJWT) + OIDC optional | Stateless, multi-service; refresh tokens for long sessions |
 | **Observability** | structlog + Prometheus + Tempo | Same + CloudWatch + Sentry | OTel tracing and Tempo are wired locally; add managed alternatives in cloud |
-| **Container Runtime** | Docker Compose | ECS Fargate | Same Docker images; Fargate eliminates node management |
+| **Container Runtime** | Docker Compose | EC2 + Docker Compose (Stage 0) → ECS Fargate (Stage 2) | Preserves the current operational model first; Fargate follows a demonstrated extraction need |
 | **Infra as Code** | None (local only) | Terraform | S3 backend + lockfile locking; OIDC for CI/CD |
 | **CI/CD** | GitHub Actions | GitHub Actions | Same workflows; OIDC instead of long-lived keys in prod |
 | **Notifications** | None | Slack, Telegram, webhook, email | Deferred; multi-channel alerting via ingestor/notifications.py |
@@ -99,7 +99,7 @@ Switch from MVP to MVP+ when all are true:
 | **MCP Server** | ✅ | FastMCP (stdio) | Standalone `fastmcp` package chosen over the bundled `mcp.server.fastmcp.FastMCP` for multi-transport support (stdio now, `streamable-http` later with no rework); hand-written `@mcp.tool()` wrappers over the real ingestor HTTP API (own `mcp-service` JWT login), not in-process repository imports or OpenAPI auto-generation | — |
 | **HTMX Dashboard** | ❌ | HTMX + Jinja2 + SSE | No JS build pipeline; server-side rendering keeps source of truth in backend | ADR-003 |
 | **Notifications** | ❌ | Multi-channel (Slack, Telegram, webhook, email) | httpx-based; fail-open design | — |
-| **AWS Deployment** | ❌ | Terraform + ECS Fargate + RDS + ElastiCache + MSK | Fargate eliminates K8s ops; Terraform for IaC; OIDC for CI/CD auth | ADR-008 |
+| **AWS Deployment** | ❌ | Terraform + EC2 + RDS + ECR (Stage 0) → ECS Fargate + managed services | Start with the existing low-complexity AWS foundation; use Terraform and OIDC throughout | ADR-008 |
 | **Production Monitoring** | ❌ | Grafana + Alertmanager + GlitchTip | Prometheus data → Grafana dashboards; SLO-based alerting | — |
 
 ---

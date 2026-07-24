@@ -1,0 +1,45 @@
+{
+  "deployment_target": "aws-stage0-ec2-compose",
+  "registry_variable": "AWS_ECR_REGISTRY",
+  "region_variable": "AWS_REGION",
+  "image_tag_template": "tree-{tree_sha}",
+  "environment_ownership": {
+    "application": "Declares environment-variable names, defaults, and health contracts.",
+    "infrastructure": "Supplies runtime values and secrets through EC2/Compose; no values are stored in this repository."
+  },
+  "services": [
+    {
+      "name": "ingestor",
+      "image_repository": "api-observatory/ingestor",
+      "dockerfile": "Dockerfile",
+      "build_context": ".",
+      "port": 8000,
+      "health_path": "/health",
+      "readiness_path": "/readyz"
+    },
+    {
+      "name": "inference",
+      "image_repository": "api-observatory/inference",
+      "dockerfile": "services/inference/Dockerfile",
+      "build_context": ".",
+      "port": 8001,
+      "health_path": "/health",
+      "readiness_path": "/readyz"
+    },
+    {
+      "name": "dashboard",
+      "image_repository": "api-observatory/dashboard",
+      "dockerfile": "services/dashboard/Dockerfile",
+      "build_context": ".",
+      "port": 8501,
+      "health_path": "/_stcore/health",
+      "readiness_path": "/_stcore/health"
+    }
+  ],
+  "non_deployable_services": [
+    {
+      "name": "mcp",
+      "reason": "Local stdio process launched by an MCP client; no HTTP listener or container deployment in Stage 0."
+    }
+  ]
+}

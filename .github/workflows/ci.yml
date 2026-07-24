@@ -187,15 +187,27 @@ jobs:
           upload: always
           category: /language:python
 
-  # DOCKER BUILD, PUSH & SCAN (Azure Container Registry)
-  docker-build:
+  aws-deployment-contract:
+    name: "Validate AWS deployment contract"
+    runs-on: ubuntu-latest
+    needs: [lint, action-ref-validation]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Validate deployable services and immutable image tags
+        run: python3 scripts/validate_aws_deployment_contract.py
+
+  # DOCKER BUILD, PUSH & SCAN (AWS ECR)
+  docker-build-ingestor:
     name: "Build and push candidate image (ingestor)"
     runs-on: ubuntu-latest
     needs: [lint, unit-tests, python-deps, action-ref-validation, codeql, integration-tests]
-    if: vars.ACR_LOGIN_SERVER != ''
+    if: vars.AWS_ECR_REGISTRY != '' && vars.AWS_ROLE_ARN_CI != '' && vars.AWS_REGION != ''
     timeout-minutes: 20
     permissions:
       contents: read
+      id-token: write
     outputs:
       image_ingestor: ${{ steps.build-ingestor.outputs.image }}
       tree_sha: ${{ steps.resolve.outputs.tree_sha }}
@@ -207,12 +219,15 @@ jobs:
         id: resolve
         uses: ./.github/actions/resolve-tree-sha
 
-      - name: Log in to ACR
-        uses: docker/login-action@c66a8fcb2472d4283042d726b2a061b43b3f49ab # v3.3.0
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
         with:
-          registry: ${{ vars.ACR_LOGIN_SERVER }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_CI }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: api-observatory-ci
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@1629cc33a9521f764a4704d4d0387513918873b9 # v2.1.4
 
       - name: Build and push ingestor image
         id: build-ingestor
@@ -220,7 +235,7 @@ jobs:
           DOCKER_BUILDKIT: "1"
         run: |
           TREE_SHA="${{ steps.resolve.outputs.tree_sha }}"
-          IMAGE="${{ vars.ACR_LOGIN_SERVER }}/api-observatory/ingestor:tree-${TREE_SHA}"
+          IMAGE="${{ vars.AWS_ECR_REGISTRY }}/api-observatory/ingestor:tree-${TREE_SHA}"
           docker build -t "${IMAGE}" .
           docker push "${IMAGE}"
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
@@ -236,10 +251,11 @@ jobs:
     name: "Build and push candidate image (dashboard)"
     runs-on: ubuntu-latest
     needs: [lint, unit-tests, python-deps, action-ref-validation, codeql, integration-tests]
-    if: vars.ACR_LOGIN_SERVER != ''
+    if: vars.AWS_ECR_REGISTRY != '' && vars.AWS_ROLE_ARN_CI != '' && vars.AWS_REGION != ''
     timeout-minutes: 20
     permissions:
       contents: read
+      id-token: write
     outputs:
       image_dashboard: ${{ steps.build-dashboard.outputs.image }}
     steps:
@@ -250,12 +266,15 @@ jobs:
         id: resolve
         uses: ./.github/actions/resolve-tree-sha
 
-      - name: Log in to ACR
-        uses: docker/login-action@c66a8fcb2472d4283042d726b2a061b43b3f49ab # v3.3.0
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
         with:
-          registry: ${{ vars.ACR_LOGIN_SERVER }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_CI }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: api-observatory-ci
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@1629cc33a9521f764a4704d4d0387513918873b9 # v2.1.4
 
       - name: Build and push dashboard image
         id: build-dashboard
@@ -263,33 +282,79 @@ jobs:
           DOCKER_BUILDKIT: "1"
         run: |
           TREE_SHA="${{ steps.resolve.outputs.tree_sha }}"
-          IMAGE="${{ vars.ACR_LOGIN_SERVER }}/api-observatory/dashboard:tree-${TREE_SHA}"
-          docker build -t "${IMAGE}" -f services/dashboard/Dockerfile services/dashboard
+          IMAGE="${{ vars.AWS_ECR_REGISTRY }}/api-observatory/dashboard:tree-${TREE_SHA}"
+          docker build -t "${IMAGE}" -f services/dashboard/Dockerfile .
+          docker push "${IMAGE}"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+
+  docker-build-inference:
+    name: "Build and push candidate image (inference)"
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests, python-deps, action-ref-validation, codeql, integration-tests]
+    if: vars.AWS_ECR_REGISTRY != '' && vars.AWS_ROLE_ARN_CI != '' && vars.AWS_REGION != ''
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image_inference: ${{ steps.build-inference.outputs.image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Resolve tree SHA
+        id: resolve
+        uses: ./.github/actions/resolve-tree-sha
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_CI }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: api-observatory-ci
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@1629cc33a9521f764a4704d4d0387513918873b9 # v2.1.4
+
+      - name: Build and push inference image
+        id: build-inference
+        env:
+          DOCKER_BUILDKIT: "1"
+        shell: bash
+        run: |
+          set -euo pipefail
+          TREE_SHA="${{ steps.resolve.outputs.tree_sha }}"
+          IMAGE="${{ vars.AWS_ECR_REGISTRY }}/api-observatory/inference:tree-${TREE_SHA}"
+          docker build -t "${IMAGE}" -f services/inference/Dockerfile .
           docker push "${IMAGE}"
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
 
   docker-scan-security:
     name: "Scan docker image (Trivy - strict)"
     runs-on: ubuntu-latest
-    needs: [docker-build, docker-build-dashboard]
-    if: vars.ACR_LOGIN_SERVER != ''
+    needs: [docker-build-ingestor, docker-build-inference, docker-build-dashboard]
+    if: vars.AWS_ECR_REGISTRY != '' && vars.AWS_ROLE_ARN_CI != '' && vars.AWS_REGION != ''
     permissions:
       contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Log in to ACR
-        uses: docker/login-action@c66a8fcb2472d4283042d726b2a061b43b3f49ab # v3.3.0
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
         with:
-          registry: ${{ vars.ACR_LOGIN_SERVER }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_CI }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: api-observatory-ci
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@1629cc33a9521f764a4704d4d0387513918873b9 # v2.1.4
 
       - name: Pull and scan ingestor image
         run: |
-          docker pull "${{ needs.docker-build.outputs.image_ingestor }}"
-          docker tag "${{ needs.docker-build.outputs.image_ingestor }}" ingestor:scan
+          docker pull "${{ needs.docker-build-ingestor.outputs.image_ingestor }}"
+          docker tag "${{ needs.docker-build-ingestor.outputs.image_ingestor }}" ingestor:scan
 
       - name: Scan ingestor (Trivy advisory)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -311,6 +376,22 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: dashboard:scan
+          format: table
+          ignore-unfixed: true
+          scanners: vuln
+          vuln-type: os,library
+          severity: MEDIUM,HIGH,CRITICAL
+          exit-code: "0"
+
+      - name: Pull and scan inference image
+        run: |
+          docker pull "${{ needs.docker-build-inference.outputs.image_inference }}"
+          docker tag "${{ needs.docker-build-inference.outputs.image_inference }}" inference:scan
+
+      - name: Scan inference (Trivy advisory)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: inference:scan
           format: table
           ignore-unfixed: true
           scanners: vuln
@@ -552,8 +633,10 @@ jobs:
       - unit-tests
       - contract-tests
       - python-deps
-      - docker-build
+      - aws-deployment-contract
+      - docker-build-ingestor
       - docker-build-dashboard
+      - docker-build-inference
       - docker-scan-security
       - codeql
       - integration-tests
@@ -570,10 +653,12 @@ jobs:
           [[ "${{ needs.unit-tests.result }}" == "success" ]] || { echo "❌ Unit tests"; failed=1; }
           [[ "${{ needs.contract-tests.result }}" == "success" ]] || { echo "❌ Contract tests"; failed=1; }
           [[ "${{ needs.python-deps.result }}" == "success" ]] || { echo "❌ Python deps"; failed=1; }
-          # Docker build/push/scan require ACR_LOGIN_SERVER; they report "skipped"
-          # (not failure) until Azure Container Registry credentials are provisioned.
-          [[ "${{ needs.docker-build.result }}" =~ ^(success|skipped)$ ]] || { echo "❌ Docker build (ingestor)"; failed=1; }
+          [[ "${{ needs.aws-deployment-contract.result }}" == "success" ]] || { echo "❌ AWS deployment contract"; failed=1; }
+          # ECR publish/scan requires repository variables plus an AWS OIDC role. These
+          # jobs remain skipped until the AWS foundation is provisioned.
+          [[ "${{ needs.docker-build-ingestor.result }}" =~ ^(success|skipped)$ ]] || { echo "❌ Docker build (ingestor)"; failed=1; }
           [[ "${{ needs.docker-build-dashboard.result }}" =~ ^(success|skipped)$ ]] || { echo "❌ Docker build (dashboard)"; failed=1; }
+          [[ "${{ needs.docker-build-inference.result }}" =~ ^(success|skipped)$ ]] || { echo "❌ Docker build (inference)"; failed=1; }
           [[ "${{ needs.docker-scan-security.result }}" =~ ^(success|skipped)$ ]] || { echo "❌ Docker scan"; failed=1; }
           [[ "${{ needs.codeql.result }}" == "success" ]] || { echo "❌ CodeQL"; failed=1; }
           [[ "${{ needs.integration-tests.result }}" == "success" ]] || { echo "❌ Integration tests"; failed=1; }
@@ -596,8 +681,10 @@ jobs:
           | Unit Tests | ${{ needs.unit-tests.result }} |
           | Contract Tests | ${{ needs.contract-tests.result }} |
           | Python Deps | ${{ needs.python-deps.result }} |
-          | Docker Build (ingestor) | ${{ needs.docker-build.result }} |
+          | AWS Deployment Contract | ${{ needs.aws-deployment-contract.result }} |
+          | Docker Build (ingestor) | ${{ needs.docker-build-ingestor.result }} |
           | Docker Build (dashboard) | ${{ needs.docker-build-dashboard.result }} |
+          | Docker Build (inference) | ${{ needs.docker-build-inference.result }} |
           | Docker Security | ${{ needs.docker-scan-security.result }} |
           | Docker Advisory | ${{ needs.docker-scan-security.result }} |
           | CodeQL | ${{ needs.codeql.result }} |

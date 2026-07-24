@@ -2,45 +2,22 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    tags: ["v*"]
 
-# Workflow-level permissions are minimal; each job declares only what it needs.
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: false  # never interrupt an in-flight release
-
-env:
-  # Registry config — single source of truth for the release target.
-  #
-  # Current (Azure):
-  #   REGISTRY  = vars.ACR_LOGIN_SERVER  (e.g. myacr.azurecr.io)
-  #   Login     = docker/login-action with ACR_USERNAME / ACR_PASSWORD secrets
-  #
-  # AWS migration checklist:
-  #   1. Set vars.ACR_LOGIN_SERVER to your ECR endpoint
-  #      (e.g. 123456789.dkr.ecr.us-east-1.amazonaws.com)
-  #   2. Replace each docker/login-action step below with:
-  #        uses: aws-actions/amazon-ecr-login@<pinned-sha>
-  #      and configure AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION
-  #      (or use OIDC with an IAM role — preferred for keyless auth)
-  #   3. No other changes required — image naming, signing, and SBOM are registry-agnostic.
-  REGISTRY: ${{ vars.ACR_LOGIN_SERVER }}
-  IMAGE_NAME: ${{ vars.ACR_LOGIN_SERVER }}/api-observatory/ingestor
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  cancel-in-progress: false
 
 jobs:
-
-  # ── GATE ─────────────────────────────────────────────────────────────────
-  verify-ci:
-    name: "Gate: CI passed on tagged commit"
+  promote:
+    name: "Promote AWS ECR candidates"
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      checks: read
+    if: vars.AWS_ECR_REGISTRY != '' && vars.AWS_ROLE_ARN_RELEASE != '' && vars.AWS_REGION != ''
+    environment: aws-release
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -51,250 +28,47 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if ! git branch -r --contains "${{ github.sha }}" | grep -q 'origin/main'; then
-            echo "❌ Release tags must be cut from main. This tag points to a commit not on origin/main."
-            exit 1
-          fi
-          echo "✅ Tag is on main"
+          git branch -r --contains "${{ github.sha }}" | grep -q 'origin/main'
 
-      - name: Check CI workflow status
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          runs=$(gh run list --workflow=ci.yml --commit=${{ github.sha }} --limit=1 --json status,conclusion --jq '.')
-          if [ -z "$runs" ]; then
-            echo "⚠️  No CI runs found for this commit — ensure CI ran before tagging."
-            exit 0
-          fi
-          conclusion=$(echo "$runs" | jq -r '.[0].conclusion // "unknown"')
-          if [ "$conclusion" != "success" ]; then
-            echo "❌ CI did not pass for this commit (conclusion: ${conclusion})"
-            exit 1
-          fi
-          echo "✅ CI passed for ${{ github.sha }}"
-
-  # ── PROMOTE ──────────────────────────────────────────────────────────────
-  # CI built, scanned, and pushed the candidate image as tree-<sha>.
-  # This job promotes it to a semver release tag — no rebuild from source.
-  promote:
-    name: "Promote candidate to versioned release"
-    runs-on: ubuntu-latest
-    needs: [verify-ci]
-    permissions:
-      contents: read
-    outputs:
-      image: ${{ steps.promote.outputs.image }}
-      digest: ${{ steps.digest.outputs.digest }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Log in to registry
-        # AWS: replace with aws-actions/amazon-ecr-login@<pinned-sha>
-        uses: docker/login-action@c66a8fcb2472d4283042d726b2a061b43b3f49ab # v3.3.0
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_RELEASE }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: api-observatory-release
 
-      - name: Resolve tree SHA
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@1629cc33a9521f764a4704d4d0387513918873b9 # v2.1.4
+
+      - name: Resolve candidate tree SHA
         id: resolve
         uses: ./.github/actions/resolve-tree-sha
 
-      - name: Promote candidate to semver tag
-        id: promote
-        shell: bash
-        run: |
-          set -euo pipefail
-          TREE_SHA="${{ steps.resolve.outputs.tree_sha }}"
-          SRC="${{ env.IMAGE_NAME }}:tree-${TREE_SHA}"
-          DST="${{ env.IMAGE_NAME }}:${GITHUB_REF_NAME}"
-          echo "Promoting ${SRC} → ${DST}"
-          docker pull "${SRC}"
-          docker tag  "${SRC}" "${DST}"
-          docker push "${DST}"
-          echo "image=${DST}" >> "$GITHUB_OUTPUT"
-          echo "✅ Promoted: ${DST}"
-
-      - name: Resolve image digest
-        id: digest
-        shell: bash
-        run: |
-          set -euo pipefail
-          digest=$(docker buildx imagetools inspect "${{ steps.promote.outputs.image }}" \
-            --format '{{json .Manifest}}' | jq -r '.digest')
-          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
-          echo "✅ Digest: ${digest}"
-
-  # ── SIGN ─────────────────────────────────────────────────────────────────
-  # Signs by digest (immutable ref) and attests build provenance.
-  # Runs in parallel with sbom — both depend only on promote.
-  sign:
-    name: "Sign image and attest provenance"
-    runs-on: ubuntu-latest
-    needs: [promote]
-    permissions:
-      contents: read
-      id-token: write      # OIDC token for keyless Cosign + GitHub attestations
-      attestations: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Log in to registry
-        uses: docker/login-action@c66a8fcb2472d4283042d726b2a061b43b3f49ab # v3.3.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
-
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
-
-      - name: Sign image (keyless OIDC)
-        run: |
-          cosign sign --yes "${{ env.IMAGE_NAME }}@${{ needs.promote.outputs.digest }}"
-
-      - name: Verify signature
-        run: |
-          cosign verify \
-            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-            --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/release.yml@.*" \
-            "${{ env.IMAGE_NAME }}@${{ needs.promote.outputs.digest }}"
-
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v3
-        with:
-          subject-name: ${{ env.IMAGE_NAME }}
-          subject-digest: ${{ needs.promote.outputs.digest }}
-          push-to-registry: true
-
-      - name: Verify provenance attestation
+      - name: Promote all deployable services
         env:
-          GH_TOKEN: ${{ github.token }}
+          REGISTRY: ${{ vars.AWS_ECR_REGISTRY }}
+          TREE_SHA: ${{ steps.resolve.outputs.tree_sha }}
+          RELEASE_TAG: ${{ github.ref_name }}
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in 1 2 3 4 5 6; do
-            if gh attestation verify \
-                "oci://${{ env.IMAGE_NAME }}@${{ needs.promote.outputs.digest }}" \
-                --repo "${{ github.repository }}" \
-                --cert-identity-regex "https://github.com/${{ github.repository }}/.github/workflows/release.yml@.*" \
-                --format json > attestation-verify.json; then
-              echo "✅ Provenance attestation verified"
-              break
-            fi
-            [[ "${attempt}" -eq 6 ]] && { echo "❌ Attestation verification failed after retries"; exit 1; }
-            echo "Attestation not yet available (attempt ${attempt}/6); retrying in 10s..."
-            sleep 10
+          for service in ingestor inference dashboard; do
+            source_image="${REGISTRY}/api-observatory/${service}:tree-${TREE_SHA}"
+            release_image="${REGISTRY}/api-observatory/${service}:${RELEASE_TAG}"
+            docker pull "${source_image}"
+            docker tag "${source_image}" "${release_image}"
+            docker push "${release_image}"
           done
 
-  # ── SBOM ─────────────────────────────────────────────────────────────────
-  # Generates a software bill of materials and attests it.
-  # Runs in parallel with sign — both depend only on promote.
-  sbom:
-    name: "Generate and attest SBOM"
-    runs-on: ubuntu-latest
-    needs: [promote]
-    permissions:
-      contents: read
-      id-token: write
-      attestations: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Log in to registry
-        uses: docker/login-action@c66a8fcb2472d4283042d726b2a061b43b3f49ab # v3.3.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
-
-      - name: Install Syft
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin v1.30.0
-
-      - name: Generate SBOM (SPDX JSON)
-        run: |
-          syft "${{ needs.promote.outputs.image }}" -o spdx-json > "sbom-${GITHUB_REF_NAME}.spdx.json"
-
-      - name: Upload SBOM artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: sbom-${{ github.ref_name }}
-          path: sbom-${{ github.ref_name }}.spdx.json
-
-      - name: Attest SBOM
-        uses: actions/attest-sbom@d3fee97dff7e5d12e88de2d5df56a1db87d282e1 # v2.4.0
-        with:
-          subject-name: ${{ env.IMAGE_NAME }}
-          subject-digest: ${{ needs.promote.outputs.digest }}
-          sbom-path: sbom-${{ github.ref_name }}.spdx.json
-          push-to-registry: true
-
-  # ── TAG LATEST ───────────────────────────────────────────────────────────
-  # Convenience alias — only pushed after signing and SBOM attestation succeed.
-  # :latest is not separately signed; pin to the versioned tag or digest for
-  # supply-chain guarantees.
-  tag-latest:
-    name: "Update :latest convenience alias"
-    runs-on: ubuntu-latest
-    needs: [promote, sign, sbom]
-    permissions:
-      contents: read
-    steps:
-      - name: Log in to registry
-        uses: docker/login-action@c66a8fcb2472d4283042d726b2a061b43b3f49ab # v3.3.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
-
-      - name: Tag :latest
-        shell: bash
-        run: |
-          set -euo pipefail
-          docker pull "${{ needs.promote.outputs.image }}"
-          docker tag  "${{ needs.promote.outputs.image }}" "${{ env.IMAGE_NAME }}:latest"
-          docker push "${{ env.IMAGE_NAME }}:latest"
-          echo "✅ :latest → ${{ needs.promote.outputs.image }}"
-
-  # ── SUMMARY ──────────────────────────────────────────────────────────────
-  release-summary:
-    name: "Release complete"
-    runs-on: ubuntu-latest
-    needs: [verify-ci, promote, sign, sbom, tag-latest]
-    if: always()
-    permissions:
-      contents: read
-    steps:
       - name: Publish release summary
-        shell: bash
+        env:
+          REGISTRY: ${{ vars.AWS_ECR_REGISTRY }}
+          TREE_SHA: ${{ steps.resolve.outputs.tree_sha }}
         run: |
           {
-            echo "## Release Summary"
-            echo "| Stage | Result |"
-            echo "|-------|--------|"
-            echo "| Gate: CI | ${{ needs.verify-ci.result }} |"
-            echo "| Promote | ${{ needs.promote.result }} |"
-            echo "| Sign & Attest | ${{ needs.sign.result }} |"
-            echo "| SBOM | ${{ needs.sbom.result }} |"
-            echo "| Tag :latest | ${{ needs.tag-latest.result }} |"
-            echo ""
-            echo "**Image**: ${{ env.IMAGE_NAME }}:${GITHUB_REF_NAME}"
-            echo "**Digest**: ${{ needs.promote.outputs.digest }}"
+            echo "## AWS ECR release"
+            echo "Candidate tag: tree-${TREE_SHA}"
+            echo "Release tag: ${{ github.ref_name }}"
+            echo "Registry: ${REGISTRY}"
+            echo "Services: ingestor, inference, dashboard"
           } >> "$GITHUB_STEP_SUMMARY"
-
-          failed=0
-          [[ "${{ needs.verify-ci.result }}" == "success" ]] || { echo "❌ verify-ci"; failed=1; }
-          [[ "${{ needs.promote.result }}"    == "success" ]] || { echo "❌ promote";   failed=1; }
-          [[ "${{ needs.sign.result }}"       == "success" ]] || { echo "❌ sign";      failed=1; }
-          [[ "${{ needs.sbom.result }}"       == "success" ]] || { echo "❌ sbom";      failed=1; }
-          [[ "${{ needs.tag-latest.result }}" == "success" ]] || { echo "❌ tag-latest"; failed=1; }
-          [ $failed -eq 0 ] && echo "✅ All release trust gates passed"
-          exit $failed

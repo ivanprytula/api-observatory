@@ -47,7 +47,7 @@ Developer push/PR
   → GitHub Actions CI (lint, test, security, image build + SBOM + signing)
   → Artifact Registry (immutable SHA tags)
   → IaC pipeline (Terraform plan/apply via OIDC)
-  → ECS Fargate (near-term) or EKS + Argo CD (future)
+  → EC2 + Docker Compose (AWS Stage 0) → ECS Fargate (Stage 2) → EKS + Argo CD (future)
 ```
 
 ### Supply Chain Security
@@ -90,9 +90,9 @@ See `.github/workflows/ci.yml` for the canonical workflow definition. Key workfl
 |------|---------|
 | `ci.yml` | Full CI: lint, test, security, build, and an advisory deterministic agent-quality report |
 | `performance-smoke.yml` | Weekly/manual k6 authentication and protected-read smoke; uploads a JSON baseline |
-| `docker-build.yml` | Manual build + optional ECR push + Cosign signing |
-| `release-promote.yml` | Promote image digest to environment tag |
-| `cd-deploy.yml` | Deploy to ECS (environment-scoped) |
+| `ci.yml` | Candidate builds/scans for ingestor, inference, and dashboard when AWS OIDC is configured |
+| `release.yml` | Promote all three immutable ECR candidates to a semver tag |
+| `cd-dev.yml` | Approved Stage-0 EC2 deployment through AWS Systems Manager |
 
 ---
 

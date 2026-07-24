@@ -1,5 +1,25 @@
 # App Repository — Infrastructure Contract Checklist
 
+## Primary Deployment Target
+
+AWS is the primary portfolio deployment direction. Stage 0 runs Docker Compose on
+EC2 with RDS PostgreSQL and private ECR images; ECS/Fargate remains a Stage 2
+option after a demonstrated service-extraction need. Azure assets remain secondary
+reference material and are not removed by this decision.
+
+The machine-readable Stage-0 service contract is
+[`infra/deployment/aws-stage0-services.json`](../../infra/deployment/aws-stage0-services.json).
+It defines the three deployable HTTP services: `ingestor`, `inference`, and
+`dashboard`. `mcp` is deliberately excluded because it is a locally spawned
+stdio process, not an HTTP deployment.
+
+### Environment Ownership
+
+- **App repository:** environment-variable names, safe defaults, Dockerfiles, ports,
+  and health/readiness behavior.
+- **Infra repository:** ECR repositories, EC2/Compose runtime values, RDS endpoints,
+  IAM, and secret delivery. No value belongs in either repository's workflow files.
+
 ## Container Image Contract
 
 Each service image must satisfy these requirements for the infra manifests to function correctly.
@@ -34,12 +54,9 @@ Each service image must satisfy these requirements for the infra manifests to fu
 
 - **Local dev**: `infra/kubernetes/overlays/local/secret.example.yaml` is a static, plaintext,
   dummy-value `Secret` — never used outside `k3d` local sandboxes.
-- **Production**: the infra repo replaces the static `Secret` with one synced from Azure Key Vault,
-  via either the **Azure Key Vault Provider for Secrets Store CSI Driver** (mounts secrets as files
-  and can sync them into a native `Secret` via `secretObjects`) or **External Secrets Operator**
-  with an Azure Key Vault `SecretStore`/`ClusterSecretStore` (reconciles Key Vault entries into a
-  native `Secret` on a poll interval). Both land the same native `Secret` object that
-  `secretKeyRef` already consumes.
+- **AWS Stage 0 production:** the infra repo supplies values to the EC2 Compose runtime.
+  A later ECS/Kubernetes stage should use AWS Secrets Manager with task-role or external-secret
+  delivery. The app continues to read environment variables and must not assume a delivery mechanism.
 - Either mechanism is infra-repo-owned. The app repo's obligation stays exactly what it is today:
   read secrets from environment variables via `secretKeyRef`, never assume a specific delivery
   mechanism. This mirrors the UID 10001 boundary above — the app repo declares the *contract*
@@ -55,7 +72,8 @@ Each service image must satisfy these requirements for the infra manifests to fu
 - [ ] **Tags follow `tree-<SHA>` format** — CI in the app repo builds and pushes images tagged with the short commit SHA prefixed by `tree-`
 - [ ] **`latest` is never pushed** to production registries — `latest` is used only for local `k3d import`
 - [ ] **Image pull policy is `Always`** in production — guaranteed fresh pods on rollout
-- [ ] **Container registry matches target cloud** — `acr.azure.io/*` for Azure, `*.dkr.ecr.*.amazonaws.com/*` for AWS
+- [ ] **Primary registry is ECR** — `${AWS_ECR_REGISTRY}/api-observatory/{ingestor,inference,dashboard}:tree-<SHA>`.
+  Azure ACR remains a secondary/reference target only.
 
 ## Communication Contract
 
