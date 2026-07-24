@@ -28,7 +28,7 @@ Read this file first. Read only instruction files that match the files you touch
 
 ## Execution rules
 
-Use tools immediately when the user asks to change files. Use `apply_patch` for manual edits. Use `uv run` for Python commands, tests, scripts, Alembic, Ruff, and Uvicorn. Do not commit, amend, or create branches unless explicitly asked. Do not revert user changes unless explicitly asked.
+Use tools immediately when the user asks to change files. Use `apply_patch` for manual edits. Use `uv run` for Python commands, tests, scripts, Alembic, Ruff, and Uvicorn. After image or container testing/verification, remove unneeded test images, containers, and volumes to prevent host-disk growth; inspect targets first and never remove user or persistent data without explicit approval. Do not commit, amend, or create branches unless explicitly asked. Do not revert user changes unless explicitly asked.
 
 ## Response style
 
