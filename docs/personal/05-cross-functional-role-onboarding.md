@@ -175,7 +175,7 @@ Day 1 / Week 1 / Month 1 milestones per role. Check off each milestone as it is 
 | **Product Manager**              | Read `00-project-overview.md`, roadmap, and phase status             | Map user outcomes to current API surface                      | Backlog prioritised with measurable acceptance criteria      |
 | **Product Owner**                | Read `00-project-overview.md` and `02-architecture/application-architecture.md`  | Define sprint goal with 3 measurable acceptance criteria      | First sprint delivered; retrospective findings logged        |
 | **Security Specialist**          | Review auth flow, secrets management, and OWASP checklist            | Run dependency audit (`pip-audit`) and triage findings        | Security findings resolved or risk-accepted with ADR         |
-| **Cloud-Native Engineer**        | Read `07-deployment/deployment-guide.md`; validate Docker Compose stack | Review Kubernetes manifests and CI pipeline                   | Infrastructure-as-code change or hardening PR merged         |
+| **Cloud-Native Engineer**        | Read the infra repository deployment guide; validate Docker Compose stack | Review Kubernetes manifests and CI pipeline                   | Infrastructure-as-code change or hardening PR merged         |
 | **SRE**                          | Locate metrics, alerting config, and healthcheck endpoints           | Validate SLO targets, error budget, and incident runbook      | Post-incident review cycle established; runbook updated      |
 | **System/Application Architect** | Read all ADRs and `02-architecture/{application,infrastructure}-architecture.md`  | Map service boundaries and identify coupling hotspots         | Architecture decision logged in `adr/`; backlog aligned      |
 
