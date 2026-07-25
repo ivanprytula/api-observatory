@@ -204,4 +204,4 @@ Pre-commit hook runs automatically. CI-side auto-bump is deferred (pre-commit ho
 - [Setup Guide](../04-setup/setup-guide.md) — first-time bootstrap
 - [Policies & Gotchas](policies.md) — CI policy, common pitfalls, dependency management
 - [CI/CD Reference](../06-ci-cd/ci-cd.md) — workflow semantics and governance
-- [Deployment Guide](../07-deployment/deployment-guide.md) — deploy runbook
+- [Infrastructure Deployment Guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md) — canonical cloud deploy runbook

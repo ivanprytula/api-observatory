@@ -1,88 +1,37 @@
-# Webhooks
+# Webhook Boundaries
 
-Track: C — Architecture and Platform Strategy
+API Observatory does not run a standalone inbound webhook gateway. Earlier designs
+reserved port `8004` for one, but no current service, route, database table, or deployment
+manifest implements that design.
 
----
+## Current Behavior
 
-## Integration Guide
+The implemented webhook capability is an **outbound notification channel**. Operational
+events are dispatched from the ingestor through
+[`services/ingestor/notifications.py`](../../services/ingestor/notifications.py). Provider
+configuration is optional, dispatch is bounded by timeouts and resilience controls, and a
+provider failure does not roll back the application event that caused the notification.
 
-The webhook gateway runs on port 8004. External sources send events to `POST /api/v1/webhooks/{source}`.
+The notification API and subscription API are registered in:
 
-### Flow
+- [`services/ingestor/routers/notifications.py`](../../services/ingestor/routers/notifications.py)
+- [`services/ingestor/routers/subscriptions.py`](../../services/ingestor/routers/subscriptions.py)
 
-```text
-External source → POST /api/v1/webhooks/{source}
-  → Signature validation (HMAC-SHA256)
-  → Idempotency check (delivery_id)
-  → Audit log (webhook_events table, regardless of outcome)
-  → Publish to Kafka topic webhook.events.{source}
-```
-
-### Quick Start
-
-1. Register a webhook source via admin API.
-2. Set `WEBHOOK_SIGNING_KEY_{SOURCE_UPPER}` environment variable.
-3. Send webhook with headers: `X-Delivery-Id`, `X-Webhook-Signature`, `Content-Type`.
-
-### Response Codes
-
-| Code | Meaning |
-|------|---------|
-| 202 | Accepted |
-| 400 | Bad request |
-| 401 | Signature mismatch |
-| 409 | Duplicate delivery ID |
-| 413 | Payload too large (>10 MB) |
-| 503 | Source not registered |
-
-### Signature Support
-
-- Plain hex format
-- Stripe-compatible signature format (v1, v2)
-
-### Signing Key Resolution
-
-1. In-memory cache (5-min TTL)
-2. Environment variable
-3. AWS Secrets Manager
-4. Fallback default
-
----
-
-## Debugging
-
-### Audit Log
-
-Every inbound attempt is stored in `webhook_events` table regardless of outcome:
-
-```sql
--- Recent events
-SELECT * FROM webhook_events ORDER BY created_at DESC LIMIT 20;
-
--- Only failures
-SELECT * FROM webhook_events WHERE status = 'failed' ORDER BY created_at DESC;
-
--- Duplicate delivery IDs
-SELECT delivery_id, COUNT(*) FROM webhook_events GROUP BY delivery_id HAVING COUNT(*) > 1;
-```
-
-### Common Failures
-
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| 401 Signature mismatch | Wrong key, re-serialization difference, algorithm mismatch | Manually verify HMAC: `echo -n "<payload>" | openssl dgst -sha256 -hmac "<key>"` |
-| 409 Duplicate | Idempotency guard working correctly | If first delivery failed, use replay |
-| 413 Payload too large | Exceeds 10 MB limit | Reduce payload size |
-| No matching source | Source not registered in admin API | Register source first |
-
-### Key Rotation
-
-No dual-key validation period — brief maintenance window. Update `WEBHOOK_SIGNING_KEY_{SOURCE}` env var and restart the service.
-
-### Log Correlation
-
-Use the `delivery_id` to correlate events across logs:
+Focused proof:
 
 ```bash
-grep "<delivery-id>" /var/log/webhook/*.log
+uv run pytest services/ingestor/tests/unit/core/test_notifications.py \
+  services/ingestor/tests/unit/test_notifications_resilience.py \
+  services/ingestor/tests/integration/test_notifications_api.py -q
 ```
+
+## Deferred Inbound Gateway
+
+An inbound webhook gateway would need signature verification, replay protection,
+payload limits, tenant ownership, audit retention, and idempotent broker publication. It
+should remain a **Decision** topic until a real integration requires push delivery instead
+of scheduled probing. A port reservation or an old design document is not evidence that
+the gateway exists.
+
+The adoption trigger is a dependency whose polling interval cannot meet its freshness or
+cost requirement and which offers signed webhooks with documented retry semantics.

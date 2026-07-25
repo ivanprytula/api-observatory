@@ -93,7 +93,7 @@ For an interactive demo, run `just init` and follow the printed `curl` commands 
 |----------|--------|
 | `CACHE_ENABLED=true` | Enable Cache: scorecard cache, pub/sub, rate limiting, agent checkpointer |
 | `BROKER_ENABLED=true` | Enable Redpanda/Kafka for drift event streaming |
-| `OTEL_ENABLED=true` | Enable OpenTelemetry tracing export to Jaeger |
+| `OTEL_ENABLED=true` | Enable OpenTelemetry tracing export to the configured OTLP backend (Tempo locally) |
 | `SENTRY_ENABLED=true` | Enable Sentry/GlitchTip exception tracking |
 | `OPENAI_ENABLED=true` | Enable LangGraph agent (requires `OPENAI_API_KEY`) |
 | `NOTIFICATIONS_ENABLED=true` | Enable multi-channel alert dispatch |

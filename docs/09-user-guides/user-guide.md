@@ -2,11 +2,12 @@
 
 Monitor, analyze, and maintain reliable API integrations with real-time visibility into performance, contract changes, and automated insights.
 
-> **Legend:** `[MVP]` = available now, `[Post-MVP]` = coming in a future phase
+> **Evidence note:** sections marked `[Core]` are implemented and tested. Provider-backed
+> behavior remains opt-in and must not be presented as exercised unless its proof was captured.
 
 ---
 
-## What is API Observatory? [MVP]
+## What is API Observatory? [Core]
 
 API Observatory continuously checks the health and reliability of your external API dependencies:
 
@@ -17,7 +18,7 @@ API Observatory continuously checks the health and reliability of your external 
 
 ---
 
-## Quick Start [MVP]
+## Quick Start [Core]
 
 ### Prerequisites
 - Docker and Docker Compose
@@ -52,7 +53,7 @@ Open `http://127.0.0.1:8501` to access the dashboard.
 
 ---
 
-## Source Registration [MVP]
+## Source Registration [Core]
 
 Register any HTTP API you depend on for monitoring:
 
@@ -69,7 +70,7 @@ Each source is probed at your configured interval to collect health samples.
 
 ---
 
-## Reliability Scorecards [MVP]
+## Reliability Scorecards [Core]
 
 Get rolling-window reliability metrics for any API:
 
@@ -93,7 +94,7 @@ Scorecards use a single PostgreSQL `PERCENTILE_CONT` query — no materializatio
 
 ---
 
-## Contract Drift Detection [MVP]
+## Contract Drift Detection [Core]
 
 When APIs change their response structure, the system detects and classifies the impact:
 
@@ -111,7 +112,7 @@ Drift events stream to your dashboard in real-time via WebSocket.
 
 ---
 
-## Live Stream (WebSocket) [MVP]
+## Live Stream (WebSocket) [Core]
 
 Real-time event stream at `WS /ws/observations/stream?token=<bearer_token>`.
 
@@ -148,7 +149,7 @@ Close codes: 4001 (missing token), 4003 (invalid token).
 
 ---
 
-## Streamlit Dashboard [MVP]
+## Streamlit Dashboard [Core]
 
 Access at `http://127.0.0.1:8501` (or via `uv run streamlit run services/dashboard/streamlit_app.py`).
 
@@ -166,8 +167,9 @@ Access at `http://127.0.0.1:8501` (or via `uv run streamlit run services/dashboa
 | **Source Health** | Uptime %, p95 latency, error budget burn (red/yellow/green) |
 | **Probe Scheduler** | Manual probes per source or all; scheduler status |
 | **Drift Events** | Recent contract drift with type, severity, score |
+| **Dependency Incidents** | Availability, latency, and drift incidents with lifecycle state |
 | **Live Stream** | WebSocket events: observation.created, drift.detected, job.progress, ping |
-| **Agent Enrichment** | Full-run auto, HITL review with approve/reject, SSE streaming |
+| **Agent Enrichment** | Run status and Postgres-checkpointed HITL approve/reject flow |
 
 ### Configuration
 
@@ -178,30 +180,42 @@ Access at `http://127.0.0.1:8501` (or via `uv run streamlit run services/dashboa
 
 ---
 
-## Post-MVP Features (Coming)
+## Additional Implemented Capabilities
 
-### Agent Enrichment (LangGraph) [Post-MVP]
+### Agent Enrichment (LangGraph) [Core]
 
 AI-powered analysis of observations via LangGraph StateGraph:
 
 - **Classification**: Automatic categorization (incident, performance, schema change)
 - **Priority Scoring**: Criticality assessment (1-5 scale)
 - **Sentiment Analysis**: Health trend detection
-- **Deep Analysis**: GPT-4 escalation for high-priority items
+- **Draft Analysis**: optional provider-backed analysis after deterministic classification
 
-Choose between fully-automated, human-in-the-loop review, or streaming via SSE.
+Runs support a human-in-the-loop pause and explicit approve/reject resume. The current agent
+flow does not expose an SSE stream.
 
-### HTMX Operations Dashboard [Post-MVP]
+### Operations UI Direction [Decision]
 
-A server-rendered UI with Jinja2 templates and SSE live metrics, replacing the Streamlit dashboard for production use. Panels: Worker Health, Task Lookup, Manual Rerun, Session Bootstrap. Access at `http://127.0.0.1:8003/admin`.
+Streamlit is the current dashboard. An HTMX/Jinja2 operations UI was explored in an ADR but
+is not a running service; it should be adopted only if Streamlit prevents a required workflow.
 
-### Vector Search [Post-MVP]
+### Vector Search [Core]
 
-Semantic search across observations using Qdrant vector database, with pgvector comparison.
+The inference service uses pgvector and supports deterministic embeddings in tests. Qdrant
+is deferred rather than part of the current runtime.
 
-### Multi-Channel Notifications [Post-MVP]
+### Multi-Channel Notifications [Core, Provider-Optional]
 
-Alert dispatch via Slack, Telegram, webhook (Jira), and email (Resend) for operational events.
+The ingestor dispatches Slack, Telegram, outbound webhook, and email notifications. Unit and
+integration tests exercise dispatch behavior without claiming that external providers are
+configured in a deployed environment.
+
+### Dependency Incident Lifecycle [Core]
+
+Repeated availability failures, configured latency breaches, and breaking drift create one
+tenant-scoped incident instead of one alert per event. Operators can acknowledge and resolve
+incidents through `/api/v1/incidents`; successful health probes automatically resolve availability
+and latency incidents. See the [operations guide](../08-operations/dependency-incidents.md).
 
 ---
 
@@ -227,5 +241,5 @@ Alert dispatch via Slack, Telegram, webhook (Jira), and email (Resend) for opera
 
 - [Application Architecture](../02-architecture/application-architecture.md) — service structure and data flows
 - [Infrastructure Architecture](../02-architecture/infrastructure-architecture.md) — deployment topology
-- [Deployment Guide](../07-deployment/deployment-guide.md) — cloud deploy and monitoring
+- [Infrastructure Deployment Guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md) — canonical cloud deploy and monitoring guide
 - [Observability](../08-operations/observability.md) — metrics, tracing, logging

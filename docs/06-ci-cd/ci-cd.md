@@ -98,6 +98,6 @@ See `.github/workflows/ci.yml` for the canonical workflow definition. Key workfl
 
 ## Related Documents
 
-- [Deployment Guide](../07-deployment/deployment-guide.md) — deploy runbook and cloud security checklist
+- [Infrastructure Deployment Guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md) — canonical deploy runbook and cloud security checklist
 - [Dev Workflows](../05-development/dev-workflows.md) — local testing commands
 - [Policies](../05-development/policies.md) — merge/release gates
