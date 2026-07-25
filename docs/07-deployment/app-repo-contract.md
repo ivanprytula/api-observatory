@@ -33,7 +33,8 @@ Each service image must satisfy these requirements for the infra manifests to fu
 
 ### Health & Probes
 
-- [ ] **`GET /health` returns 200** on port 8000 (ingestor), 8001 (inference), 8002 (processor), 8003 (dashboard), 8004 (webhook), 8005 (analytics)
+- [ ] **`GET /health` returns 200** on port 8000 (ingestor) and 8001 (inference)
+- [ ] **Dashboard responds on port 8501** — Streamlit does not expose the same FastAPI probe contract
 - [ ] **`services/mcp` is stdio-only in v1, deliberately** — the MCP server (Phase 5 of
       `docs/.plans/ai-augmented-observatory-agent-mcp.md`) is a locally-run CLI process an MCP
       client (e.g. Claude Desktop) spawns directly; it has no HTTP surface, no port, no
@@ -41,7 +42,7 @@ Each service image must satisfy these requirements for the infra manifests to fu
       slot for if/when a `streamable-http` mode is added (a config flip, not a rewrite — see
       `services/mcp/main.py`) — not a missing row here by oversight.
 - [ ] **`GET /readyz` returns 200** when the service is ready to receive traffic (distinct from /health — checks dependencies like DB, broker)
-- [ ] **Startup probe grace period** honoured: inference/failureThreshold: 30, webhook/processor/failureThreshold: 18, others: 6
+- [ ] **Startup probe grace period** matches the current infra manifest for each deployed service
 
 ### Security
 
@@ -78,7 +79,7 @@ Each service image must satisfy these requirements for the infra manifests to fu
 ## Communication Contract
 
 - [ ] **Services discover each other via DNS** — Kubernetes service names (e.g. `http://ingestor:8000`), not external URLs
-- [ ] **Ingestor is the public entry point** for external webhook data; dashboard is the public UI; webhook is an internal gateway
+- [ ] **Ingestor is the public API entry point** and dashboard is the public UI; no standalone webhook gateway exists
 - [ ] **Broker (Redpanda/Kafka) and database URLs** are injected at deploy time — never hardcoded
 
 ## Deviations from Ideal (Known Gaps)
