@@ -4,7 +4,8 @@
 [Infrastructure Architecture](infrastructure-architecture.md). For phase-by-phase feature
 status, see [MVP Roadmap](../03-planning/mvp-roadmap.md) and its
 [audit-gaps](../03-planning/audit-gaps.md) tracker — this document shows structure, those
-track status.
+track status. For concept lookup and evidence strength, use
+[Evergreen Engineering Topics](engineering-topics.md).
 
 > An earlier, larger 8-phase design (multi-service, AWS ECS, MongoDB, Qdrant) is archived at
 > `../_archive/02-architecture/architecture.md` — historical record, not current state.
@@ -33,6 +34,7 @@ flowchart TB
     subgraph App["Ingestor — services/ingestor/"]
       API["FastAPI routers"]
       Scheduler["APScheduler\nprobe jobs"]
+      Incidents["Dependency incidents\navailability + latency + drift"]
       Agent["LangGraph agent\nservices/ingestor/agent/\nclassify -> RAG -> draft -> human_review -> notify"]
     end
 
@@ -51,6 +53,9 @@ flowchart TB
     API --> Postgres
     API -.-> Cache
     Scheduler --> Postgres
+    Scheduler --> Incidents
+    API --> Incidents
+    Incidents --> Postgres
     Scheduler -.-> Broker
     API -.->|drift events| Broker
     API -->|POST /index, /search\nRAG for /analyze| Inference
@@ -97,6 +102,7 @@ default and JWT-authenticated. The opt-in learning lab is mounted only when
 | `observations.py` / `observations_v2.py` | Probe results, ingestion | Active — core v1 CRUD/analyze routes use JWT plus a tenant/subject token bucket. The v2 and legacy v1 auth examples are opt-in learning routes. |
 | `scorecards.py` | Reliability scorecards (p95 latency, uptime) | Active |
 | `contract_drift.py` | Schema drift detection | Active |
+| `incidents.py` | Tenant-scoped dependency incident lifecycle | Active — availability, latency, and breaking-drift triggers; operator acknowledge/resolve |
 | `health_ingestion_jobs.py` | Scheduler/job health endpoints | Active |
 | `auth.py` / `api_keys.py` | JWT auth, API key management | Active |
 | `abuse_detection.py` | Rate-limit/abuse heuristics | Active |

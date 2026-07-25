@@ -2,15 +2,19 @@
 
 Track: C — Architecture and Platform Strategy
 
-**Status:** Accepted
+**Status:** Superseded by the implemented Streamlit dashboard
 **Date:** 2026-04-21
-**Context:** Phase 6 — Data Zoo dashboard UI
+**Context:** Historical dashboard design exercise
+
+> This ADR records a rejected implementation direction. The described FastAPI/Jinja2/SSE files
+> and port `8003` do not exist in the current runtime. Streamlit on port `8501` is the implemented
+> dashboard. Reconsider HTMX only when a measured workflow limitation justifies replacing it.
 
 ---
 
 ## Context
 
-The Data Zoo platform needs a monitoring and data-exploration dashboard with three views:
+The earlier platform design proposed a monitoring and data-exploration dashboard with three views:
 
 1. **Records Explorer** — paginated table with filtering and infinite scroll
 2. **Semantic Search** — form-driven search against the AI gateway

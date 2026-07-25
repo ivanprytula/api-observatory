@@ -1,80 +1,100 @@
 # Infrastructure Architecture — API Observatory
 
-**Scope**: Deployment and platform topology across both repos. For application/service
-structure, see [Application Architecture](application-architecture.md).
+This document maps local learning infrastructure to the sibling repository that owns real-cloud
+delivery. For application/service behavior, see
+[Application Architecture](application-architecture.md); for topic status, see
+[Evergreen Engineering Topics](engineering-topics.md).
 
-This project runs two infrastructure zones, split by a simple rule (from
-`api-observatory-infra/docs/.plans/repo-split-app-infra.md`): **if it runs without
-credentials and costs $0, it's local playground → this repo. If it touches a real cloud
-account, it's infrastructure → `api-observatory-infra`.**
+## Ownership Rule
+
+- `api-observatory` owns application behavior, contracts, service Dockerfiles, local Compose/k3d,
+  zero-cost emulators, sandbox Terraform, tests, and developer bootstrap.
+- `api-observatory-infra` owns real-cloud Terraform/state, IAM, networking, DNS/TLS, runtime secret
+  delivery, cloud deployment workflows, and production-oriented monitoring assets.
+
+The app repository publishes the machine-readable AWS Stage 0 service contract at
+`infra/deployment/aws-stage0-services.json`; infrastructure consumes that interface.
+
+## Topology
 
 ```mermaid
 flowchart TB
-    subgraph Local["Local Playground — this repo (api-observatory)"]
-      direction TB
-      Compose["docker-compose.yml\ndb, cache, broker, ingestor, dashboard, edge"]
-      K3d["k3d cluster (data-zoo)\ninfra/kubernetes/"]
-      Floci["floci-gcp / floci-aws / floci-az\nemulators — docker-compose profiles"]
-      SandboxTF["Terraform sandbox envs\ninfra/terraform/environments/\n{aws,azure,gcp}-sandbox — target Floci"]
+    subgraph Local["Local learning environments — app repo"]
+      Compose["Docker Compose\ncanonical runtime"]
+      Monitoring["Prometheus / Grafana / Loki / Tempo\nopt-in profile"]
+      Edge["nginx ingress\nopt-in lab"]
+      K3d["k3d + Helm/Kustomize\nopt-in lab"]
+      Emulators["floci cloud emulators\nzero-cost sandboxes"]
+      SandboxTF["Sandbox Terraform\nno real credentials"]
     end
 
-    subgraph Cloud["Real Cloud — api-observatory-infra repo"]
-      direction TB
-      DevTF["Terraform: aws-dev, azure-dev\nreal AWS/Azure accounts"]
-      Ansible["Ansible provisioning\nprovision-azure-vm.yml, provision-aws-ec2.yml"]
-      AzureVM["Azure B1s VM\nDocker Compose runtime"]
-      ACR["Azure Container Registry"]
-      K8sScaffold["kubernetes/charts, manifests\nscaffolding for a future real-cloud K8s target\nno source yet for analytics/inference/processor/webhook"]
+    Contract["AWS Stage 0 service contract\n3 HTTP images + ports + health"]
+
+    subgraph Cloud["Real cloud — infra repo"]
+      TF["Terraform aws-dev\nECR + EC2 + RDS + IAM"]
+      Ansible["Ansible\nhost provisioning"]
+      Runtime["EC2 + Docker Compose\nStage 0 target"]
+      CI["Infrastructure validation CI"]
+      Future["ECS/Kubernetes/GitOps\ndeferred stages"]
     end
 
-    CI["GitHub Actions CI\nthis repo"] -->|build, scan, push| ACR
-    CI -->|manual approval gate| CD["CD: SSH deploy"]
-    CD --> AzureVM
-    DevTF -->|provisions| AzureVM
-    Ansible -->|configures| AzureVM
-    SandboxTF -.->|targets| Floci
-    K3d -.->|deploys via kustomize| Compose
+    SandboxTF --> Emulators
+    Compose --> Monitoring
+    Compose --> Edge
+    K3d -.-> Compose
+    Contract --> TF
+    TF --> Runtime
+    Ansible --> Runtime
+    CI --> TF
+    Runtime -.-> Future
 ```
 
-## Zones
+## Evidence Status
 
-### Local Playground (this repo)
+| Environment/capability | Status | Meaning |
+| --- | --- | --- |
+| Docker Compose application/data plane | **Core** | Canonical local runtime and test target |
+| Local monitoring profile | **Lab** | Executable local observability stack, not managed operations |
+| nginx edge, k3d, replicas, and HPA | **Lab** | Learning configuration; no production scale claim |
+| AWS/Azure/GCP emulators and sandbox Terraform | **Lab** | Zero-cost API/IaC exercises, not real cloud behavior |
+| AWS Stage 0 ECR + EC2 + RDS | **Decision** | Primary portfolio deployment direction; not yet verified live |
+| Azure cloud assets | **Historical/reference** | Retained as secondary comparison, not the primary target |
+| ECS, EKS/Kubernetes, GitOps, multi-region | **Deferred** | Require explicit scale, availability, or deployment triggers |
 
-- **Docker Compose** (`docker-compose.yml`) — the default local stack: Postgres, Redis,
-  Redpanda, ingestor, dashboard, plus opt-in profiles for `monitoring`
-  (Prometheus/Grafana/Loki/Alertmanager), `security` (Trivy/Checkov/gitleaks/hadolint),
-  `ingress` (nginx edge), and per-cloud emulator profiles (`gcp`/`aws`/`azure` → floci-*).
-- **k3d local Kubernetes** (`infra/kubernetes/`) — a single-node k3d cluster (`just k3s-up`)
-  running the same ingestor/dashboard images against Bitnami Postgres/Redis + Redpanda Helm
-  charts, fully self-contained (no dependency on the infra repo).
-- **Sandbox Terraform** (`infra/terraform/environments/{aws,azure,gcp}-sandbox/`) — targets
-  local emulators (floci-aws, floci-az, floci-gcp), zero cost, zero real credentials.
+## AWS Stage 0 Contract
 
-### Real Cloud (`api-observatory-infra` repo)
+The intended first live proof uses three HTTP services:
 
-- **Dev Terraform** (`terraform/environments/{aws-dev,azure-dev}/`) — real AWS/Azure
-  accounts; `azure-dev` is the active deploy target today (Azure Free Tier: B1s VM +
-  PostgreSQL Flexible Server).
-- **Ansible** — provisions the VM (Docker install, hardening) after Terraform creates it.
-- **Kubernetes scaffolding** (`kubernetes/{charts,manifests}`) — Helm charts/manifests for a
-  future real-cloud K8s deployment target; not active today since only `ingestor`/`dashboard`
-  have source code (see [Application Architecture](application-architecture.md)'s
-  Router/Feature Map for what's actually built).
+- ingestor on port `8000`;
+- inference on port `8001`;
+- dashboard on port `8501`.
 
-### CI/CD
+The MCP server remains a local stdio process and is not deployed. Images use immutable
+`tree-<SHA>` tags. The app owns environment-variable names, ports, images, and health behavior; the
+infra repo owns ECR, EC2, RDS, IAM, and secret delivery.
 
-- This repo's `.github/workflows/ci.yml` builds/tests/scans and pushes images to ACR;
-  `cd-dev.yml` deploys to the Azure VM via SSH behind a manual approval gate.
-- `api-observatory-infra`'s `.github/workflows/ci.yml` validates Terraform
-  (`fmt`/`validate`/`tflint`/`checkov`) and lints Helm charts — no CD/apply-on-merge workflow
-  exists there yet (open gap, tracked separately).
+This is a documented and statically tested contract. A Terraform configuration, workflow, or plan
+must not be described as a completed deployment. Real provisioning requires separate cost and
+mutation approval, redacted evidence, rollback verification, and teardown.
 
-## How to Update
+## Evolution Triggers
 
-- **New local emulator or sandbox env**: add a node under the `Local` subgraph.
-- **New real-cloud environment or resource**: add a node under the `Cloud` subgraph, and
-  cross-check `api-observatory-infra`'s `TERRAFORM_CHECKS.md` tracked-decisions table for
-  anything that gates it (e.g. Stage 2/3 triggers).
-- **Repo boundary changes** (something moves between local/cloud ownership): update this
-  diagram AND `api-observatory-infra/docs/.plans/repo-split-app-infra.md`'s ownership table
-  in the same change — they must stay in sync.
+| Change | Evidence required first |
+| --- | --- |
+| Multiple API replicas | Saturation or availability target, stateless request path, scheduler ownership plan |
+| Dedicated scheduler/worker | Duplicate-job risk or independent job scaling/SLO requirement |
+| ECS or Kubernetes | Repeated Compose deployment friction or independent workload scaling |
+| Managed gateway | Multiple public services, consumer-specific policy, or edge-auth requirements |
+| Read replicas/sharding | Measured single-node database limit after query, index, retention, and partition work |
+| Multi-region | Explicit recovery objective that single-region backup/restore cannot meet |
+
+## Change Checklist
+
+Before changing ports, images, environment names, health endpoints, IAM, ingress, secret delivery,
+or observability:
+
+1. Update the machine-readable service contract when its interface changes.
+2. Update the app's [contract checklist](../07-deployment/app-repo-contract.md).
+3. Update the consuming Terraform/Ansible/workflow source in `api-observatory-infra`.
+4. Verify local contract tests before any real-cloud plan.
+5. Record evidence status honestly in the evergreen topic index.

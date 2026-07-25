@@ -69,7 +69,7 @@ Switch from MVP to MVP+ when all are true:
 | **Container Runtime** | Docker Compose | EC2 + Docker Compose (Stage 0) → ECS Fargate (Stage 2) | Preserves the current operational model first; Fargate follows a demonstrated extraction need |
 | **Infra as Code** | None (local only) | Terraform | S3 backend + lockfile locking; OIDC for CI/CD |
 | **CI/CD** | GitHub Actions | GitHub Actions | Same workflows; OIDC instead of long-lived keys in prod |
-| **Notifications** | None | Slack, Telegram, webhook, email | Deferred; multi-channel alerting via ingestor/notifications.py |
+| **Notifications** | Tested, disabled by default | Same implementation with explicitly configured providers | Multi-channel dispatch exists; external delivery is not claimed without provider evidence |
 
 ---
 
@@ -98,7 +98,7 @@ Switch from MVP to MVP+ when all are true:
 | **Vector Search** | ✅ | pgvector (dedicated instance per service) | Real per-service DB ownership without a second engine to operate; Qdrant deferred, not rejected — see ADR-015 | ADR-015 |
 | **MCP Server** | ✅ | FastMCP (stdio) | Standalone `fastmcp` package chosen over the bundled `mcp.server.fastmcp.FastMCP` for multi-transport support (stdio now, `streamable-http` later with no rework); hand-written `@mcp.tool()` wrappers over the real ingestor HTTP API (own `mcp-service` JWT login), not in-process repository imports or OpenAPI auto-generation | — |
 | **HTMX Dashboard** | ❌ | HTMX + Jinja2 + SSE | No JS build pipeline; server-side rendering keeps source of truth in backend | ADR-003 |
-| **Notifications** | ❌ | Multi-channel (Slack, Telegram, webhook, email) | httpx-based; fail-open design | — |
+| **Notifications** | ✅ | Multi-channel (Slack, Telegram, webhook, email) | httpx-based, timeout-bounded, fail-open provider dispatch | — |
 | **AWS Deployment** | ❌ | Terraform + EC2 + RDS + ECR (Stage 0) → ECS Fargate + managed services | Start with the existing low-complexity AWS foundation; use Terraform and OIDC throughout | ADR-008 |
 | **Production Monitoring** | ❌ | Grafana + Alertmanager + GlitchTip | Prometheus data → Grafana dashboards; SLO-based alerting | — |
 
@@ -108,9 +108,10 @@ Switch from MVP to MVP+ when all are true:
 
 See [audit-gaps.md](audit-gaps.md) for known gaps between the planned MVP/post-MVP scope and actual implementation status.
 
-## Post-MVP Execution
+## Current Continuation
 
-See [`docs/.plans/post-mvp-nfr-roadmap.md`](../.plans/post-mvp-nfr-roadmap.md) for the phased, NFR-first execution plan (tracing, resilience, retention, auth, RLS, quality gates, AI-native depth, cloud handoff) that this roadmap's "Post-MVP (MVP+) Mode" hands off to.
+Use the canonical [evergreen engineering topics](../02-architecture/engineering-topics.md) for
+current evidence and adoption triggers. Older phase plans are historical execution records.
 
 ## Changelog
 

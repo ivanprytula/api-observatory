@@ -3,7 +3,8 @@
 Track: C — Architecture and Platform Strategy
 
 
-This playbook defines how to evolve Data Zoo without losing product clarity or delivery speed.
+This playbook defines how to evolve API Observatory without losing technical focus or
+operational clarity.
 
 ## Purpose
 
@@ -14,7 +15,7 @@ Use this when planning or implementing:
 - Dependency additions/removals
 - UI framework changes (for example HTMX to React/Next.js)
 - Third-party integrations (auth, billing, notifications, analytics)
-- Product value reframing, monetization options, or GitHub Sponsors positioning
+- Lightweight user-value reframing for the solo-founder scenario
 
 ## Decision Flow
 
@@ -23,7 +24,7 @@ Use this when planning or implementing:
 3. Define contract surface: APIs, events, schemas, ownership.
 4. Choose dependency strategy: add, replace, or remove libraries.
 5. Define operational impact: CI/CD, observability, rollback, security.
-6. Define business impact: pricing story, sponsorship narrative, GTM signal.
+6. Define practical impact using the four-question business layer below.
 7. Implement in small slices with measurable acceptance criteria.
 
 ### Vertical-Slice Estimation
@@ -105,46 +106,27 @@ For each integration, document:
 - Cost and rate-limit model
 - Removal strategy (exit plan)
 
-## Product Value Reframing
+## Lightweight Business Layer
 
-Use this template before changing project positioning:
+For each major feature, answer only these questions:
 
-1. Core user segment: who benefits first.
-2. Core pain solved: what becomes faster/cheaper/safer.
-3. Evidence: measurable outcomes already in repo.
-4. Storyline: one-sentence value proposition.
-5. Monetization hypothesis: what someone would pay for.
+1. Who experiences the problem?
+2. What failure or cost does it create?
+3. How does this implementation reduce that risk?
+4. At what scale would the current approach stop being appropriate?
 
-## Monetization and Sponsorship Paths
-
-### Path A: Open Core + Paid Enablement
-
-- Open source core pipeline and reference architecture.
-- Paid offerings: implementation support, architecture reviews, migration playbooks.
-
-### Path B: Managed Templates and Accelerators
-
-- Paid setup templates: cloud-ready terraform stacks, hardened CI packs, observability starter kits.
-- Subscription for updates and support.
-
-### Path C: GitHub Sponsors Strategy
-
-- Public roadmap with sponsor-priority labels.
-- Sponsor tiers tied to outcomes:
-  - Tier 1: early access docs/templates
-  - Tier 2: monthly architecture office hours
-  - Tier 3: implementation review and migration guidance
-- Publish monthly changelog with sponsor acknowledgments.
+The standing example is a solo SaaS developer monitoring third-party dependencies. Customer
+acquisition, billing, permanent hosting, and ongoing product operations are non-goals.
 
 ## Governance Rules
 
 - One canonical doc per topic. Other docs link, not duplicate.
 - Every major architecture shift must have an ADR.
-- Every product-positioning shift must update Track D docs.
+- Every positioning shift must remain consistent with the lightweight business layer.
 - Historical snapshots stay in Track E and are labeled as dated.
 
 ## Execution Cadence
 
 - Weekly: feature progress + dependency review + docs sync.
-- Monthly: roadmap/priorities and sponsorship narrative refresh.
-- Quarterly: architecture and monetization hypothesis review.
+- Monthly: roadmap, priorities, evidence status, and interview readiness review.
+- Quarterly: architecture triggers and deferred decisions review.

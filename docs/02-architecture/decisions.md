@@ -18,9 +18,12 @@ For in-depth trade-off analysis ("why not X?"), open the linked ADR file.
 
 ### 001: Kafka vs RabbitMQ — Message Broker
 
-**Decision**: Redpanda (Kafka-compatible, no Zookeeper) for local dev; MSK Serverless for AWS prod.
+**Decision**: Redpanda (Kafka-compatible, no Zookeeper) for local development. A managed Kafka
+service is deferred until a real asynchronous production workload justifies it.
 
-**Rationale**: Redpanda gives Kafka wire-protocol compatibility with a single binary (no Zookeeper). The event-log model (replay from any offset) enables CQRS read models. Switch to MSK Serverless in prod uses the same `aiokafka` code.
+**Rationale**: Redpanda gives Kafka wire-protocol compatibility with a single binary. The event-log
+model supports replay and partition/consumer-group exercises without claiming that Stage 0 needs a
+managed broker.
 
 [→ ADR 001](adr/001-kafka-vs-rabbitmq.md)
 
@@ -38,7 +41,9 @@ For in-depth trade-off analysis ("why not X?"), open the linked ADR file.
 
 ### 003: HTMX vs React — Frontend Framework
 
-**Decision**: HTMX + Jinja2 for ops/admin workflows; React/Vite for rich client interaction; Next.js for SEO/public pages.
+**Decision**: Keep the implemented Streamlit dashboard for the current playground. HTMX/Jinja2 is
+the preferred next server-rendered option only if the dashboard needs a production-oriented UI;
+React/Next.js requires materially richer client or public-site needs.
 
 **Rationale**: HTMX keeps the server as source of truth without a JS build pipeline. React/Next.js adopted only when UX complexity or SEO requirements justify it.
 
@@ -86,11 +91,13 @@ For in-depth trade-off analysis ("why not X?"), open the linked ADR file.
 
 ---
 
-### 008: ECS Fargate vs EKS
+### 008: EC2/Compose vs ECS Fargate vs EKS
 
-**Decision**: ECS Fargate for this project scale (1-10 microservices).
+**Decision**: EC2 plus Docker Compose is the AWS Stage 0 target. ECS Fargate and EKS remain later
+stages triggered by independent scaling or deployment evidence.
 
-**Rationale**: ECS Fargate eliminates Kubernetes control-plane operations. Cost-optimized for small-to-medium service counts. Kubernetes is a separate learning path.
+**Rationale**: Stage 0 preserves the locally exercised operating model and has fewer moving parts.
+ECS can remove host operations later; EKS is justified only by Kubernetes-specific requirements.
 
 *(ADR 008 not yet written up — this entry predates the ADR file existing.)*
 
@@ -98,9 +105,11 @@ For in-depth trade-off analysis ("why not X?"), open the linked ADR file.
 
 ### 012: LangGraph Agent Architecture
 
-**Decision**: LangGraph StateGraph with dual-model routing (gpt-4o-mini for classify, gpt-4o for deep analysis).
+**Decision**: LangGraph StateGraph with Anthropic model roles for classification and drafted
+analysis, PostgreSQL checkpointing, and a required human-review pause before notification.
 
-**Rationale**: LangGraph gives structured state-machine control over agent flow. Dual-model routing saves ~10x cost by using the cheap model for 90% of calls.
+**Rationale**: LangGraph makes state transitions and pause/resume explicit. The agent is optional and
+fail-open; deterministic incident behavior and offline evaluation do not depend on provider access.
 
 [→ ADR 012](adr/012-langgraph-agent.md)
 
@@ -125,10 +134,10 @@ For in-depth trade-off analysis ("why not X?"), open the linked ADR file.
 | Primary DB? | PostgreSQL almost always; MongoDB for genuinely varied document shapes |
 | ORM vs raw SQL? | ORM for CRUD; raw SQL for analytics |
 | Cache or not? | Only after measuring; fail-open pattern |
-| Message broker? | Redpanda (learning/dev); MSK (prod) |
+| Message broker? | Redpanda (learning/dev); managed Kafka only after a measured production need |
 | Vector store? | pgvector (existing Postgres, <10M); Qdrant (scale + dedicated) |
-| Frontend? | HTMX (backend devs, server-rendered); React (complex SPA) |
-| Cloud compute? | ECS Fargate (managed, learning); EKS (K8s expertise required) |
+| Frontend? | Streamlit now; HTMX for a server-rendered ops UI; React only for complex client state |
+| Cloud compute? | EC2 + Compose Stage 0; ECS/EKS only after explicit triggers |
 | Cloud database? | RDS PostgreSQL (cost); Aurora (HA + replicas, 3x cost) |
 | Cloud cache? | ElastiCache Cache (persistent); Memcached (simple, fast) |
 | Cloud message queue? | MSK Serverless (managed, IAM auth); self-managed Kafka (control) |

@@ -21,7 +21,7 @@ Gaps identified during the docs/ consolidation and filled in the same session.
 |---|-----|-----------|----------|
 | ✅ D1 | **MVP vs Post-MVP tech stack** — no single document mapped technology choices per phase | Added MVP vs Post-MVP table with 14 components, each with rationale | `03-planning/mvp-roadmap.md:51` |
 | ✅ D2 | **Feature→Technology→Reasoning matrix** — no decision trace from capability to tech choice | Added 23-row table with feature, MVP flag, technology, alternatives, ADR ref | `03-planning/mvp-roadmap.md:72` |
-| ✅ D3 | **DevOps/SRE promotion checklist** — no pre-prod→prod linear checklist | Added 44-item checklist: pre-flight, pre-deploy, deploy, smoke-test, post-deploy, rollback | `07-deployment/deployment-guide.md:7` |
+| ✅ D3 | **DevOps/SRE promotion checklist** — no pre-prod→prod linear checklist | Added a pre-flight through rollback checklist; cloud deployment documentation is now infra-owned | `api-observatory-infra/docs/deployment/deployment-guide.md` |
 | ✅ D4 | **User documentation** — no end-user guide | Merged 5 source files into one user guide with MVP/post-MVP badges; Post-MVP sections have stubs | `09-user-guides/user-guide.md` |
 
 ---
