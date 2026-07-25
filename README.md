@@ -1,57 +1,134 @@
-# api-observatory
+# API Observatory
 
-Async FastAPI service for API reliability monitoring, contract drift detection, scorecard reporting, and LangGraph-powered observation enrichment.
+API Observatory is a Python backend and distributed-systems playground built around a practical
+problem: detecting when a third-party API becomes unavailable, slow, or contract-incompatible
+before that failure reaches a small SaaS product's users.
 
-**MVP status**: Core features complete. CI/CD targets Azure free tier (ACR + B1s VM). Local dev uses floci-az emulator.
+The repository is primarily job-preparation evidence, but the demo is a deployable application,
+not a code-only exercise. It demonstrates implemented behavior, failure handling, tests, and
+architecture decisions, and can be run locally or deployed using the documented infrastructure
+contract. No live production operation is claimed.
+
+## What It Demonstrates
+
+- Async FastAPI/Pydantic APIs with JWT, API keys, role guards, tenant context, and opt-in
+  PostgreSQL row-level security.
+- PostgreSQL/SQLAlchemy/Alembic data design, scorecard aggregation, schema drift, retention, and
+  measured query-analysis paths.
+- Tenant-scoped dependency incidents with deduplication, notification cooldown, recovery, and
+  operator acknowledgement/resolution.
+- Scheduled external API probes, Redis caching/pub-sub/rate limiting, and Kafka-compatible event
+  delivery with idempotency, outbox/inbox, retries, and DLQ handling.
+- Structured logs, Prometheus metrics, OpenTelemetry traces, health/readiness endpoints, failure
+  runbooks, and bounded load/fault tests.
+- An optional LangGraph incident-triage flow with pgvector retrieval, human review, and deterministic
+  offline evaluation.
+- Local Docker Compose/k3d infrastructure plus an unexecuted AWS Stage 0 deployment contract shared
+  with the sibling infrastructure repository.
+
+## Practical Workflow
+
+1. Register an external API source.
+2. Schedule health and response-shape probes.
+3. Calculate uptime, latency percentiles, and error-budget signals.
+4. Detect breaking response-contract changes.
+5. Stream or dispatch operational signals and optionally enrich serious drift with reviewed AI
+   analysis.
+
+The standing product example is a solo SaaS developer monitoring payment, authentication, email,
+AI, or data dependencies. This context explains engineering choices; customer acquisition, billing,
+and permanent hosting are out of scope.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    User["Developer / dashboard / MCP client"]
+    API["Ingestor API\nFastAPI :8000"]
+    Scheduler["APScheduler\nhealth + contract probes"]
+    External["External APIs"]
+    DB[("PostgreSQL 17\nsource of truth")]
+    Cache[("Redis\ncache + pub/sub + limits")]
+    Broker[("Redpanda\nKafka protocol")]
+    Inference["Inference API\npgvector :8001"]
+    Agent["Optional LangGraph\nHITL triage"]
+
+    User --> API
+    API --> DB
+    API -.-> Cache
+    Scheduler --> External
+    Scheduler --> DB
+    Scheduler -.-> Broker
+    API -.-> Broker
+    Agent --> DB
+    Agent --> Inference
+```
+
+Core local runtime is the ingestor plus PostgreSQL. Redis, Redpanda, inference, monitoring, and the
+agent are optional/feature-gated. See [Application Architecture](docs/02-architecture/application-architecture.md)
+for exact boundaries and status.
 
 ## Quick Start
 
 ```bash
 cp .env.example .env
-just up       # db, cache, broker, ingestor
+just up
 just migrate
+just init
 ```
 
-API docs: <http://localhost:8000/docs>
+Open the API documentation at <http://localhost:8000/docs> and the Streamlit dashboard at
+<http://localhost:8501>. The committed `.env.example` contains placeholders only; never commit the
+local `.env` created from it.
 
-See the "First-Time Setup" guide for the full setup sequence.
-See the "Commands Reference" for the CLI catalog.
+For the complete sequence, use [Setup Guide](docs/04-setup/setup-guide.md) and
+[Development Workflows](docs/05-development/dev-workflows.md).
 
-## Stack
+## Recruiter and Interview Tour
 
-| Service | Port | Role |
-|---------|-----:|------|
-| ingestor | 8000 | FastAPI — probes, scorecards, drift detection, agent enrichment |
-| db | 5432 | PostgreSQL 17 — primary persistence, PERCENTILE_CONT scorecards, RLS |
-| cache | 6379 | Cache (scorecard TTL), pub/sub (WebSocket fan-out), rate-limit backend |
-| broker | 9092/8082 | Kafka-compatible broker — drift events, async processing, DLQ |
+1. [Project Overview](docs/01-intro/overview.md) — purpose, evidence boundaries, and repository map.
+2. [Application Architecture](docs/02-architecture/application-architecture.md) — current runtime
+   and critical flows.
+3. [Evergreen Engineering Topics](docs/02-architecture/engineering-topics.md) — 20 concepts mapped
+   to code, tests, failure modes, tradeoffs, and scale triggers.
+4. [Technology Decisions](docs/02-architecture/decisions.md) — ADR index and rejected alternatives.
+5. [User Guide](docs/09-user-guides/user-guide.md) — practical behavior and API workflow.
+6. [Interview Package](docs/01-intro/interview-package.md) — tour, demo, defense, and ownership checks.
 
-See the "Architecture Overview" for the full flow diagram.
+## Repository Ownership
 
-## Documentation Map
+| Repository | Owns |
+| --- | --- |
+| `api-observatory` | Application behavior, contracts, migrations, service images, local Compose/k3d, emulators, tests, and developer bootstrap |
+| [`api-observatory-infra`](https://github.com/ivanprytula/api-observatory-infra) | Real-cloud Terraform/state, IAM, DNS/TLS, runtime secret delivery, cloud deployment workflows, and production-oriented monitoring assets |
 
-| Directory | What you'll find |
-|-----------|-----------------|
-| [01-intro/](docs/01-intro/) | Project overview, domain model, learning paths, environment matrix |
-| [02-architecture/](docs/02-architecture/) | Architecture overview, ADRs, system design, design decisions |
-| [03-planning/](docs/03-planning/) | MVP scope, audit gaps, prompting checklist |
-| [04-setup/](docs/04-setup/) | Environment bootstrap — system setup, first-time setup, local HTTPS |
-| [05-development/](docs/05-development/) | Daily dev workflow, commands reference, Bruno collections, testing |
-| [06-ci-cd/](docs/06-ci-cd/) | CI/CD workflow reference, prebuilt images, security hardening |
-| [07-deployment/](docs/07-deployment/) | Cloud deployment guides, security checklist, runbooks |
-| [08-operations/](docs/08-operations/) | Observability, webhooks, incident runbooks |
-| [09-user-guides/](docs/09-user-guides/) | Dashboard, scorecards, WebSocket, Streamlit |
-| [services/ingestor/](services/ingestor/) | FastAPI service source — routes, schemas, repos, agent, tests |
-| [tests/](tests/) | Test suite — unit, integration, e2e, shared fixtures |
-| [libs/](libs/) | Shared Python libraries — contracts, resilience, platform |
-| [infra/](infra/) | Local dev infra — Docker Compose, sandbox TF, k3d, Ansible (local) |
-| [api-observatory-infra](https://github.com/ivanprytula/api-observatory-infra) | Cloud infrastructure — Terraform (cloud envs), K8s, Helm, prod monitoring |
-| [scripts/](scripts/) | Shell scripts — setup, testing, daily dev, deployment |
-| [.github/hooks/](.github/hooks/) | Pre-commit hooks — secrets scanner, tool guardian, governance audit |
+The machine-readable AWS Stage 0 service contract is
+[`infra/deployment/aws-stage0-services.json`](infra/deployment/aws-stage0-services.json). AWS is the
+primary portfolio direction; no completed live deployment is claimed.
 
-## Read Next
+## Evidence Status
 
-- User Guide — purpose, functionality
-- Commands Reference — CLI catalog
-- Architecture Overview — visual flow diagram
-- Deployment Guide — cloud deployment sequence
+Documentation uses five statuses:
+
+- **Core:** implemented and tested in the application path.
+- **Lab:** executable/configurable in an isolated local environment.
+- **Decision:** analyzed but not exercised as production behavior.
+- **Deferred:** waits for a measurable scale or ownership trigger.
+- **Historical:** retained only to explain an older design.
+
+This distinction is mandatory when discussing Kubernetes, gateways, autoscaling, sharding, real
+cloud deployment, or archived services.
+
+## Primary Commands
+
+```bash
+just doctor
+just test-unit
+just test-integration
+just smoke-test
+just up-monitoring
+uv run python scripts/eval/run-agent-eval.py --output /tmp/agent-eval-report.json
+```
+
+Run `just --list` for the complete command catalogue. Real cloud operations and destructive
+teardown commands require an explicit, separately reviewed decision.
