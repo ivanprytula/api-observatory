@@ -47,14 +47,50 @@ Default shape: result, key validation, next step if needed. Keep explanations sh
 
 Keep this section current as the project evolves. It is the source of truth for product and architectural tradeoffs; do not infer missing decisions from it.
 
-- **Primary users:** _Document intended users and their technical level._
-- **Near-term goals:** _List 2–4 outcomes for the next 3–6 months._
-- **Non-goals:** _List explicitly out-of-scope work._
-- **Architecture trajectory:** _For example, modular monolith first; extract services only for demonstrated operational needs._
-- **Data posture:** _Document PII sensitivity, retention expectations, tenant isolation, and anticipated scale._
-- **Integration policy:** _Document preferred external systems, API-versioning, and webhook/retry expectations._
-- **Deployment target:** _Document supported environments and hosting direction._
-- **Quality bar:** _Document required tests, compatibility, performance, and observability expectations._
+- **Primary users:** The repository is primarily a job-preparation playground for a Python backend
+  engineer progressing from Strong Middle toward Senior/Lead depth. A solo SaaS developer monitoring
+  third-party dependencies is the standing product example, not a commitment to run a startup.
+- **Near-term goals:** Keep an evidence-backed engineering topic index; own the critical request,
+  data, messaging, failure, and deployment flows; add one tenant-safe dependency-incident vertical
+  slice; retain an interview-ready demo and architecture defence.
+- **Non-goals:** Maximizing technology count, implementing scale-only patterns without measured
+  triggers, customer acquisition, billing, permanent hosting, or claiming production ownership from
+  repository/configuration evidence.
+- **Architecture trajectory:** Preserve the simplest operational shape that demonstrates the current
+  behavior. Extract services, add managed platforms, or shard data only after an explicit capacity,
+  availability, ownership, or deployment trigger is measured.
+- **Data posture:** Tenant isolation is deny-by-default and extended table by table. Avoid collecting
+  unnecessary PII or secrets; retention work must be bounded, verifiable, and reversible.
+- **Integration policy:** Version shared contracts, bound every network call, retry only safe work,
+  and keep external AI/cache/broker integrations optional or fail-open where documented.
+- **Deployment target:** Local Compose is canonical. AWS Stage 0 (ECR + EC2 + RDS) is the primary
+  portfolio direction but remains a decision/configuration claim until a separately approved live
+  deployment is verified. Azure is secondary/reference.
+- **Quality bar:** Focused unit/integration tests, migration compatibility, authorization regression
+  coverage, measured performance claims, failure/recovery evidence, observability, diff review, and a
+  blocking secrets scan.
+
+## Evergreen topic lookup
+
+Use `docs/02-architecture/engineering-topics.md` as the canonical index for questions such as
+"Where is sharding?" or "How does load balancing work here?" Verify the current checkout before
+answering; the index routes discovery but is not a substitute for source evidence.
+
+Answer topic lookups in this order:
+
+1. **Status:** `Core`, `Lab`, `Decision`, `Deferred`, or `Historical`.
+2. **Where:** exact current implementation, tests, configuration, and ADR/runbook paths.
+3. **How it works here:** project-specific behavior and data flow.
+4. **What is missing:** distinguish tested runtime behavior from configuration or an idea.
+5. **Why this design:** current constraint, tradeoff, and rejected complexity.
+6. **Scale trigger:** measurable evidence required before changing the design.
+7. **Learning exercise:** one bounded test, fault, or local experiment.
+8. **Interview check:** questions the user should answer without AI.
+
+Archived files can explain history but cannot prove current functionality. Never describe a lab,
+manifest, Terraform plan, or unexecuted deployment workflow as production experience. When a topic
+mixes implemented and deferred concepts (for example table partitioning versus database sharding),
+state each boundary explicitly.
 
 ---
 
@@ -124,9 +160,11 @@ Diagnose the friction *before* picking a pattern. Pain-first decision tree: obje
 - **Block private ranges**: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `::1`, link-local.
 - Applies to webhook URLs, scraper targets, source-profile base URLs, and any other user-controlled URL.
 
-### Secrets scanning → see `.github/hooks/secrets-scanner/README.md`
+### Secrets scanning → see `.pre-commit-config.yaml`
 
-Every coding-agent session should end with a secrets scan over the diff. Pattern-based detection catches cloud keys, GitHub PATs, private-key blocks, connection strings, JWTs, internal-IP:port combos. Pair with auto-commit so a `block`-mode scanner stops the commit. Keep a per-project `SECRETS_ALLOWLIST` for test fixtures. Use `warn` in dev, `block` in CI.
+Use the pinned Gitleaks pre-commit hook for staged-content secret scanning. Keep false-positive
+exceptions narrow and reviewable through the repository's Gitleaks configuration; do not add a
+blanket allowlist for source directories.
 
 ### Anti-overengineering
 
