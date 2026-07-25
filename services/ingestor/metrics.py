@@ -70,6 +70,12 @@ retention_observations_deleted_total = Counter(
     name="pipeline_retention_observations_deleted_total",
     documentation="Verified archived observations removed from the hot table.",
 )
+
+dependency_incident_transitions_total = Counter(
+    name="pipeline_dependency_incident_transitions_total",
+    documentation="Dependency incident lifecycle transitions by trigger.",
+    labelnames=["trigger_type", "transition"],
+)
 # Incremented when upsert detects a (source, timestamp) conflict.
 #
 # Labels:

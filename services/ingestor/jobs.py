@@ -35,6 +35,7 @@ from services.ingestor.api_schemas.observations import ObservationRequest
 from services.ingestor.api_schemas.scorecards import HealthSampleCreate
 from services.ingestor.constants import SOURCE_HEALTH_TIMEOUT_SECONDS
 from services.ingestor.fetch import get_http_client
+from services.ingestor.incident_lifecycle import record_health_sample
 from services.ingestor.metrics import (
     retention_observations_archived_total,
     retention_observations_deleted_total,
@@ -43,7 +44,6 @@ from services.ingestor.metrics import (
 from services.ingestor.models import Observation, ObservationArchive, SourceProfile
 from services.ingestor.repositories import observations as crud
 from services.ingestor.repositories.contract_drift import create_contract_snapshot
-from services.ingestor.repositories.scorecards import observation_health_sample
 
 
 logger = logging.getLogger(__name__)
@@ -116,7 +116,7 @@ async def run_source_probe(db: AsyncSession, source_id: int) -> dict[str, Any]:
 
     elapsed_ms = round((time.monotonic() - start) * 1000, 2)
 
-    await observation_health_sample(
+    await record_health_sample(
         db,
         HealthSampleCreate(
             source_id=source_id,
@@ -127,7 +127,7 @@ async def run_source_probe(db: AsyncSession, source_id: int) -> dict[str, Any]:
             response_body_hash=body_hash,
             error_message=error_message,
             region=None,
-            tenant_id=None,
+            tenant_id=profile.tenant_id,
         ),
     )
 

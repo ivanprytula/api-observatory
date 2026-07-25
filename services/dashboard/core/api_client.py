@@ -18,6 +18,8 @@ from __future__ import annotations
 from typing import Any
 
 from libs.contracts.schemas_dashboard import (
+    DependencyIncidentListResponse,
+    DependencyIncidentResponse,
     DriftEventResponse,
     ObservationListResponse,
     ObservationResponse,
@@ -212,6 +214,40 @@ class DriftResource:
         return [DriftEventResponse(**item) for item in items]
 
 
+class IncidentsResource:
+    """Tenant-scoped dependency incidents."""
+
+    def __init__(self, client: SyncClient) -> None:
+        self._c = client
+
+    def list(
+        self,
+        token: str = "",
+        *,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> DependencyIncidentListResponse:
+        params: dict[str, Any] = {"limit": limit}
+        if status is not None:
+            params["status"] = status
+        data = self._c.request("GET", "/api/v1/incidents", token=token, params=params)
+        return DependencyIncidentListResponse(**data)
+
+    def acknowledge(
+        self, incident_id: int, token: str = ""
+    ) -> DependencyIncidentResponse:
+        data = self._c.request(
+            "POST", f"/api/v1/incidents/{incident_id}/acknowledge", token=token
+        )
+        return DependencyIncidentResponse(**data)
+
+    def resolve(self, incident_id: int, token: str = "") -> DependencyIncidentResponse:
+        data = self._c.request(
+            "POST", f"/api/v1/incidents/{incident_id}/resolve", token=token
+        )
+        return DependencyIncidentResponse(**data)
+
+
 class HealthResource:
     """Liveness + readiness + scheduler health."""
 
@@ -287,6 +323,7 @@ class API:
         self.observations = ObservationsResource(c)
         self.scorecards = ScorecardsResource(c)
         self.drift = DriftResource(c)
+        self.incidents = IncidentsResource(c)
         self.health = HealthResource(c)
         self.metrics = MetricsResource(c)
         self.auth = AuthResource(c)

@@ -643,6 +643,7 @@ _ROUTER_MODULES = [
     "source_registry",
     "contract_drift",
     "insights",
+    "incidents",
     "subscriptions",
     "reporting",
     "scorecards",

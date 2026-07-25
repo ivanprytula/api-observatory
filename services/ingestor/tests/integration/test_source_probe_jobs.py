@@ -111,7 +111,7 @@ class TestRunSourceProbe:
                 return_value=mock_client,
             ),
             patch(
-                "services.ingestor.jobs.observation_health_sample",
+                "services.ingestor.jobs.record_health_sample",
                 new_callable=AsyncMock,
             ) as mock_persist,
         ):
@@ -140,7 +140,7 @@ class TestRunSourceProbe:
                 "services.ingestor.jobs._get_source_probe_breaker",
             ) as mock_breaker_fn,
             patch(
-                "services.ingestor.jobs.observation_health_sample",
+                "services.ingestor.jobs.record_health_sample",
                 new_callable=AsyncMock,
             ) as mock_persist,
         ):
@@ -168,7 +168,7 @@ class TestRunSourceProbe:
                 "services.ingestor.jobs._get_source_probe_breaker",
             ) as mock_breaker_fn,
             patch(
-                "services.ingestor.jobs.observation_health_sample",
+                "services.ingestor.jobs.record_health_sample",
                 new_callable=AsyncMock,
             ) as mock_persist,
         ):
@@ -217,7 +217,7 @@ class TestRunSourceProbe:
                 "services.ingestor.jobs._get_source_probe_breaker",
             ) as mock_breaker_fn,
             patch(
-                "services.ingestor.jobs.observation_health_sample",
+                "services.ingestor.jobs.record_health_sample",
                 new_callable=AsyncMock,
             ),
         ):

@@ -70,7 +70,7 @@ async def validate_source_base_url(base_url: str, *, allow_http: bool = False) -
 
 
 async def create_source_profile(
-    db: AsyncSession, payload: SourceProfileCreate
+    db: AsyncSession, payload: SourceProfileCreate, *, tenant_id: int | None = None
 ) -> SourceProfile:
     """Insert a new source profile row and return it fully hydrated.
 
@@ -90,6 +90,10 @@ async def create_source_profile(
         health_check_path=payload.health_check_path,
         probe_interval_seconds=payload.probe_interval_seconds,
         is_active=payload.is_active,
+        tenant_id=tenant_id,
+        latency_threshold_ms=payload.latency_threshold_ms,
+        incident_failure_threshold=payload.incident_failure_threshold,
+        incident_cooldown_seconds=payload.incident_cooldown_seconds,
     )
     db.add(profile)
     await db.commit()

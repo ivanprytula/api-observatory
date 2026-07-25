@@ -10,7 +10,7 @@ defined here.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AnyHttpUrl, BaseModel, Field, field_validator
 
 from libs.contracts.constants import (
     SOURCE_PROFILE_NAME_MAX,
@@ -37,7 +37,7 @@ class SourceProfileCreate(BaseModel):
         max_length=SOURCE_PROFILE_NAME_MAX,
         description="Unique human-readable identifier for this source (slug-style).",
     )
-    base_url: str = Field(
+    base_url: AnyHttpUrl = Field(
         ...,
         max_length=SOURCE_PROFILE_URL_MAX,
         description="Base URL used by server-side probes.",
@@ -57,6 +57,23 @@ class SourceProfileCreate(BaseModel):
         True,
         description="Whether this source should be included in probe scheduling.",
     )
+    latency_threshold_ms: float | None = Field(
+        None,
+        gt=0,
+        description="Optional sustained-latency threshold that opens an incident.",
+    )
+    incident_failure_threshold: int = Field(
+        2,
+        ge=1,
+        le=20,
+        description="Consecutive unhealthy samples required before opening an incident.",
+    )
+    incident_cooldown_seconds: int = Field(
+        900,
+        ge=0,
+        le=86400,
+        description="Minimum interval between notifications for one active incident.",
+    )
 
     @field_validator("health_check_path")
     @classmethod
@@ -70,7 +87,7 @@ class SourceProfileCreate(BaseModel):
 class SourceProfileUpdate(BaseModel):
     """Partial update schema — all fields optional."""
 
-    base_url: str | None = Field(
+    base_url: AnyHttpUrl | None = Field(
         None,
         max_length=SOURCE_PROFILE_URL_MAX,
         description="Updated base URL.",
@@ -85,6 +102,15 @@ class SourceProfileUpdate(BaseModel):
         None, ge=1, description="Updated probe cadence in seconds."
     )
     is_active: bool | None = Field(None, description="Enable or disable this source.")
+    latency_threshold_ms: float | None = Field(
+        None, gt=0, description="Updated sustained-latency incident threshold."
+    )
+    incident_failure_threshold: int | None = Field(
+        None, ge=1, le=20, description="Updated consecutive-failure threshold."
+    )
+    incident_cooldown_seconds: int | None = Field(
+        None, ge=0, le=86400, description="Updated notification cooldown."
+    )
 
     @field_validator("health_check_path")
     @classmethod

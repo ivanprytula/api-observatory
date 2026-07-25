@@ -61,6 +61,42 @@ class DriftEventListResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Dependency incidents (cross-service)
+# ---------------------------------------------------------------------------
+
+
+class DependencyIncidentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    source_id: int
+    tenant_id: int | None
+    trigger_type: str
+    status: str
+    severity: str
+    summary: str
+    guidance: str
+    trigger_details: dict
+    occurrence_count: int
+    first_seen_at: datetime
+    last_seen_at: datetime
+    acknowledged_at: datetime | None
+    acknowledged_by: str | None
+    resolved_at: datetime | None
+    resolved_by: str | None
+    last_notification_at: datetime | None
+    created_at: datetime
+    updated_at: datetime | None
+
+
+class DependencyIncidentListResponse(BaseModel):
+    items: list[DependencyIncidentResponse]
+    total: int = Field(..., ge=0)
+    offset: int = Field(..., ge=0)
+    limit: int = Field(..., ge=1)
+
+
+# ---------------------------------------------------------------------------
 # Source Registry (cross-service)
 # ---------------------------------------------------------------------------
 
@@ -74,6 +110,16 @@ class SourceProfileResponse(BaseModel):
     health_check_path: str = Field(..., description="Path used for health checks.")
     probe_interval_seconds: int = Field(..., description="Probe cadence in seconds.")
     is_active: bool = Field(..., description="Whether the source is enabled.")
+    tenant_id: int | None = Field(None, description="Owning tenant, when scoped.")
+    latency_threshold_ms: float | None = Field(
+        None, description="Configured sustained-latency incident threshold."
+    )
+    incident_failure_threshold: int = Field(
+        ..., description="Consecutive unhealthy samples required to open an incident."
+    )
+    incident_cooldown_seconds: int = Field(
+        ..., description="Notification cooldown for one active incident."
+    )
     created_at: datetime = Field(..., description="Registration timestamp (UTC).")
     updated_at: datetime | None = Field(None, description="Last modification (UTC).")
 
