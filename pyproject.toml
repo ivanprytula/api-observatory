@@ -25,7 +25,7 @@ dependencies = [
   "websockets>=14.0",
   "python-multipart>=0.0.27",
 ]
-description = "API health observatory — async FastAPI service for monitoring API reliability, drift detection, and scorecard reporting"
+description = "API observability platform — multi-service system for monitoring API reliability, drift detection, semantic search, and scorecard reporting"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICEN[CS]E.*"]

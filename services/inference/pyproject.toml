@@ -3,6 +3,9 @@ name = "inference"
 version = "0.1.0"
 description = "Embeddings indexing + semantic search service (pgvector-backed RAG for API Observatory)"
 requires-python = ">=3.14"
+authors = [{ name = "Ivan Prytula", email = "ivanprytula.dev@gmail.com" }]
+maintainers = [{ name = "Ivan Prytula", email = "ivanprytula.dev@gmail.com" }]
+license = "Apache-2.0"
 dependencies = [
   "fastapi>=0.139.0",
   "prometheus-fastapi-instrumentator>=8.0.2",
