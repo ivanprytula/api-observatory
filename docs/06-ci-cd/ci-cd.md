@@ -26,7 +26,8 @@ jobs block a merge.
 
 CI builds ingestor, inference, and dashboard candidates tagged `tree-<SHA>`. Release promotion
 reuses those candidates rather than rebuilding or publishing `latest`. AWS workflows use GitHub
-OIDC and remain skipped until the required variables and protected environment exist. The
+OIDC and remain skipped until `AWS_CD_ENABLED=true`, the required variables, and the protected
+environment exist. The
 [OIDC setup](github-secrets-setup.md) owns role and variable expectations; the
 [deployment contract](../07-deployment/app-repo-contract.md) owns image names, ports, health
 behavior, and environment interfaces.

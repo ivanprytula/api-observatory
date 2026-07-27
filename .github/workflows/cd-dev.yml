@@ -29,6 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     if: >-
       (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success') &&
+      vars.AWS_CD_ENABLED == 'true' &&
       vars.AWS_ECR_REGISTRY != '' && vars.AWS_ROLE_ARN_DEV != '' &&
       vars.AWS_REGION != '' && vars.AWS_EC2_INSTANCE_ID_DEV != ''
     environment: aws-dev

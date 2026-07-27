@@ -32,12 +32,15 @@ Set these as repository or `aws-dev` environment variables, not secrets:
 
 | Variable | Meaning |
 | --- | --- |
+| `AWS_CD_ENABLED` | Explicit deployment gate; keep `false` or unset until AWS is ready |
 | `AWS_ROLE_ARN_DEV` | ARN of the dedicated GitHub OIDC deployment role |
 | `AWS_REGION` | AWS region containing the Stage 0 resources |
 | `AWS_ECR_REGISTRY` | ECR registry hostname used in immutable image references |
 | `AWS_EC2_INSTANCE_ID_DEV` | Approved EC2 deployment target |
 
 Create the `aws-dev` environment and configure a required reviewer before enabling deployment.
+The workflow skips its deployment jobs unless `AWS_CD_ENABLED` is exactly `true`; an absent or
+`false` value is the safe default while AWS is being prepared.
 The workflow already requests `id-token: write` and uses
 `aws-actions/configure-aws-credentials` with `role-to-assume`.
 
