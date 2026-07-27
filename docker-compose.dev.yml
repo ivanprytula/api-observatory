@@ -22,6 +22,16 @@ services:
         limits:
           cpus: '2.0'          # Generous for debugging
           memory: '2G'         # No memory pressure
+    healthcheck:
+      interval: 30s
+
+  cache:
+    healthcheck:
+      interval: 30s
+
+  broker:
+    healthcheck:
+      interval: 30s
 
   inference-db:
     volumes:
@@ -35,11 +45,17 @@ services:
         limits:
           cpus: '1.0'          # Generous for debugging
           memory: '512M'
+    healthcheck:
+      interval: 30s
 
   ingestor:
     command: >
       sh -c "alembic upgrade head && uvicorn services.ingestor.main:app
       --host 0.0.0.0 --port 8000 --reload"
+    environment:
+      LOG_LEVEL: WARNING
+    healthcheck:
+      interval: 30s
     develop:
       watch:
         - action: sync
@@ -87,6 +103,14 @@ services:
             - __pycache__/
         - action: rebuild
           path: services/dashboard/pyproject.toml
+
+  inference:
+    healthcheck:
+      interval: 30s
+
+  edge:
+    healthcheck:
+      interval: 30s
 
 volumes:
   postgres_data:
