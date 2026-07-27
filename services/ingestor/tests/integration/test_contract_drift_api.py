@@ -8,7 +8,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.ingestor.models import AgentRun, Observation
+from services.ingestor.models import AgentRun, DependencyIncident, Observation
 
 
 _SCHEMA_V1: dict[str, Any] = {
@@ -211,6 +211,16 @@ class TestIncidentAutoCreationOnDrift:
             )
         ).scalar_one()
         assert agent_run.status == "pending"
+
+        lifecycle_incident = (
+            await db.execute(
+                select(DependencyIncident).where(
+                    DependencyIncident.source_id == source_id
+                )
+            )
+        ).scalar_one()
+        assert lifecycle_incident.trigger_type == "drift"
+        assert lifecycle_incident.status == "open"
 
     async def test_non_breaking_change_does_not_create_incident(
         self, client: AsyncClient, db: AsyncSession

@@ -136,7 +136,7 @@ async def test_token_based_rls_isolation(db: AsyncSession, client: AsyncClient):
     """
     # 1. Setup
     username = "tenant5_user"
-    await client.post(
+    registration = await client.post(
         "/api/v1/auth/register",
         json={
             "username": username,
@@ -145,6 +145,14 @@ async def test_token_based_rls_isolation(db: AsyncSession, client: AsyncClient):
             "tenant_id": 5,
         },
     )
+    assert registration.status_code == 201, registration.text
+    # Public registration deliberately ignores caller-supplied tenant assignment.
+    # Model the administrator-assignment step before issuing a tenant-scoped token.
+    await db.execute(
+        text("UPDATE users SET tenant_id = 5 WHERE username = :username"),
+        {"username": username},
+    )
+    await db.commit()
 
     # 2. Ingest some data for tenant 5 and tenant 6
     await db.execute(text("DELETE FROM observations"))

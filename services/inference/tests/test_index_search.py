@@ -8,12 +8,17 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from services.inference.main import app
 from services.inference.models import IndexedDocument
 
 
-pytestmark = pytest.mark.usefixtures("mock_embeddings")
+def test_metrics_endpoint_is_exposed() -> None:
+    metrics_route = next(route for route in app.routes if route.path == "/metrics")
+
+    assert "GET" in metrics_route.methods
 
 
+@pytest.mark.usefixtures("mock_embeddings")
 class TestIndexEndpoint:
     async def test_index_creates_rows(
         self, client: AsyncClient, db: AsyncSession
@@ -85,6 +90,7 @@ class TestIndexEndpoint:
         assert rows[0].text == "updated text"
 
 
+@pytest.mark.usefixtures("mock_embeddings")
 class TestSearchEndpoint:
     async def test_search_ranks_lexically_closer_document_first(
         self, client: AsyncClient

@@ -95,7 +95,7 @@ _R422 = {
     responses={**_R409, **_R422},
 )
 async def register_source(
-    payload: SourceProfileCreate, db: DbDep, _: AdminJwtDep
+    payload: SourceProfileCreate, db: DbDep, claims: AdminJwtDep
 ) -> SourceProfileResponse:
     """Register a new external data source in the registry.
 
@@ -112,7 +112,9 @@ async def register_source(
         ) from None
 
     try:
-        profile = await create_source_profile(db, payload)
+        raw_tenant_id = claims.get("tenant_id")
+        tenant_id = int(raw_tenant_id) if raw_tenant_id is not None else None
+        profile = await create_source_profile(db, payload, tenant_id=tenant_id)
     except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

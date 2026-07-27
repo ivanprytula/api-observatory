@@ -38,7 +38,6 @@ from services.ingestor.constants import (
     API_V1_PREFIX,
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
-    V1_RATE_LIMIT,
 )
 from services.ingestor.database import get_db
 from services.ingestor.metrics import (
@@ -48,7 +47,6 @@ from services.ingestor.metrics import (
     llm_prompt_tokens_total,
     observations_created_total,
 )
-from services.ingestor.rate_limiting import limiter
 from services.ingestor.repositories.observations import (
     create_observation,
     create_observations_batch,
@@ -69,6 +67,10 @@ from services.ingestor.repositories.observations import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix=f"{API_V1_PREFIX}/observations", tags=["observations"])
+demo_router = APIRouter(
+    prefix=f"{API_V1_PREFIX}/observations",
+    tags=["learning-lab"],
+)
 
 _R404 = {
     404: {
@@ -147,7 +149,6 @@ type AdminJwtDep = Annotated[
     status_code=status.HTTP_201_CREATED,
     responses={**_R401, **_R403, **_R422, **_R429},
 )
-@limiter.limit(V1_RATE_LIMIT)
 async def create_observation_endpoint(
     request: Request,
     body: ObservationRequest,
@@ -157,7 +158,7 @@ async def create_observation_endpoint(
     """Create a single observation.
 
     Logs are automatically tagged with correlation ID.
-    Rate limit: 1000/minute per IP.
+    Rate limit: v1 token bucket per authenticated tenant and subject.
     """
     observation = await create_observation(db, body)
     observations_created_total.labels(endpoint="single").inc()
@@ -395,7 +396,7 @@ async def delete_observation(observation_id: int, db: DbDep, _: AdminJwtDep) -> 
 # ============================================================================
 
 
-@router.post(
+@demo_router.post(
     "/auth/login",
     summary="Create a session (learning example)",
     response_model=SessionResponse,
@@ -415,7 +416,7 @@ async def login_session(user_id: str, role: str = DEFAULT_ROLE) -> SessionRespon
     return SessionResponse(session_id=session_id, message="Session created")
 
 
-@router.get(
+@demo_router.get(
     "/{observation_id}/secure",
     summary="Get observation with session auth",
     response_model=ObservationResponse,
@@ -446,7 +447,7 @@ async def get_observation_secured(
     return ObservationResponse.model_validate(observation)
 
 
-@router.patch(
+@demo_router.patch(
     "/{observation_id}/secure/archive",
     summary="Archive observation with session RBAC (writer/admin)",
     response_model=ObservationResponse,
@@ -471,7 +472,7 @@ async def archive_observation_secured(
     return ObservationResponse.model_validate(observation)
 
 
-@router.delete(
+@demo_router.delete(
     "/{observation_id}/secure/delete",
     summary="Hard-delete observation with session RBAC (admin only)",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -495,7 +496,7 @@ async def delete_observation_secured(
     await cache.invalidate_observation(observation_id)
 
 
-@router.post(
+@demo_router.post(
     "/batch/protected",
     summary="Batch-create observations with bearer token auth",
     response_model=BatchCreateResponse,

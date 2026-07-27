@@ -169,6 +169,33 @@ class Observation(Base, TimestampMixin):
         return f"<Observation id={self.id} source={self.source!r}>"
 
 
+class ObservationArchive(Base):
+    """Warm-tier copy of an observation removed from the hot table."""
+
+    __tablename__ = "observations_archive"
+    __table_args__ = (
+        Index("ix_observations_archive_timestamp", "timestamp"),
+        Index("ix_observations_archive_archived_at", "archived_at"),
+        Index("ix_observations_archive_tenant_id", "tenant_id"),
+    )
+
+    # The original ID remains the primary key, making copy verification idempotent.
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source: Mapped[str] = mapped_column(String(255), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    raw_data: Mapped[dict] = mapped_column(JSON, nullable=False)
+    tags: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    processed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    tenant_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    archived_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, nullable=False
+    )
+
+
 class User(Base, TimestampMixin):
     """Basic user model for authentication and RBAC role assignment.
 
@@ -231,6 +258,7 @@ class SourceProfile(Base, TimestampMixin):
             "is_active",
             postgresql_where=text("is_active = true"),
         ),
+        Index("ix_source_profiles_tenant_id", "tenant_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -243,10 +271,67 @@ class SourceProfile(Base, TimestampMixin):
         Integer, default=60, nullable=False
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    tenant_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    latency_threshold_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    incident_failure_threshold: Mapped[int] = mapped_column(
+        Integer, default=2, nullable=False
+    )
+    incident_cooldown_seconds: Mapped[int] = mapped_column(
+        Integer, default=900, nullable=False
+    )
     # Timestamps from TimestampMixin: created_at, updated_at, deleted_at
 
     def __repr__(self) -> str:
         return f"<SourceProfile id={self.id} name={self.name!r}>"
+
+
+class DependencyIncident(Base, TimestampMixin):
+    """Tenant-scoped lifecycle for an actionable dependency failure.
+
+    ``active_key`` is populated while an incident is open or acknowledged and
+    cleared on resolution. Its unique index makes concurrent duplicate opens
+    fail safely while allowing a later incident with the same fingerprint.
+    """
+
+    __tablename__ = "dependency_incidents"
+    __table_args__ = (
+        Index("ix_dependency_incidents_tenant_status", "tenant_id", "status"),
+        Index("ix_dependency_incidents_source_status", "source_id", "status"),
+        Index("ix_dependency_incidents_last_seen_at", "last_seen_at"),
+        Index("ix_dependency_incidents_active_key", "active_key", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    tenant_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    trigger_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(255), nullable=False)
+    active_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="open", nullable=False)
+    severity: Mapped[str] = mapped_column(String(32), nullable=False)
+    summary: Mapped[str] = mapped_column(String(1024), nullable=False)
+    guidance: Mapped[str] = mapped_column(String(2048), nullable=False)
+    trigger_details: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    occurrence_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, nullable=False
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, nullable=False
+    )
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    acknowledged_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    resolved_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last_notification_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<DependencyIncident id={self.id} source_id={self.source_id} "
+            f"trigger_type={self.trigger_type!r} status={self.status!r}>"
+        )
 
 
 class ContractSnapshot(Base, TimestampMixin):

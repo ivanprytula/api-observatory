@@ -7,7 +7,7 @@
 app_dir: '/opt/api-observatory'
 app_group: 'docker'
 app_name: 'api-observatory'
-app_repo_url: 'https://github.com/ivanp/api-observatory.git'
+app_repo_url: 'https://github.com/ivanprytula/api-observatory.git'
 app_user: 'deploy'
 app_version: 'main'
 

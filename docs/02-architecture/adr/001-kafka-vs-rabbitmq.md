@@ -2,18 +2,18 @@
 
 Track: C — Architecture and Platform Strategy
 
-
 **Status**: Accepted
 **Date**: April 18, 2026
-**Part of**: [Architecture — Data Zoo Platform](../architecture.md)
-**Related ADRs**: [ADR 002: Qdrant vs pgvector](002-qdrant-vs-pgvector.md) | [ADR 003: HTMX vs React](../../adr/003-htmx-vs-react.md)
-**Context**: Data Zoo platform needs reliable event streaming across multiple services (ingestor → processor → inference → analytics).
+**Part of**: [API Observatory application architecture](../application-architecture.md)
+**Related ADRs**: [ADR 002: Qdrant vs pgvector](002-qdrant-vs-pgvector.md) | [ADR 003: HTMX vs React](003-htmx-vs-react.md)
+**Context**: API Observatory needs an executable reference for partitioned event delivery,
+idempotent publication, consumer state, and replay. Kafka is not required for every request path.
 
 ---
 
 ## Decision
 
-**Use Redpanda (Kafka-compatible) as the primary message broker.**
+Use Redpanda (Kafka-compatible) as the primary message broker.
 
 ---
 
@@ -57,11 +57,12 @@ Track: C — Architecture and Platform Strategy
 
 ## Rationale
 
-**Chosen: Redpanda**
+Chosen: Redpanda
 
 1. **Learning Value**: Kafka is the industry standard for event streaming at scale. Redpanda's Kafka API means you learn transferable skills.
 2. **Local Development**: No Zookeeper = simpler Docker Compose = faster iteration.
-3. **Production Parity**: When you deploy to cloud (Phase 7), you can use AWS MSK (Kafka-compatible API) — zero code changes.
+3. **Portability**: A managed Kafka-compatible broker remains possible if measured traffic later
+   justifies it; no managed broker has been deployed or selected as a current requirement.
 4. **Partitioning & Scaling**: Built-in support for partitioning by `source_id` teaches distributed systems concepts naturally.
 
 ---
@@ -96,11 +97,13 @@ broker:
     - REDPANDA_ADVERTISED_KAFKA_API_ADDRESSES=broker:9092
 ```
 
-**Phase 1**: Producer & consumer in `app/events.py` and `services/processor/main.py`
+Current producer, idempotency, and delivery evidence lives in
+`services/ingestor/events.py`, `services/ingestor/repositories/messaging.py`, and the
+outbox/inbox integration tests. There is no standalone processor service.
 
 ```python
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
-# Works on Redpanda locally; same code works on AWS MSK in production
+# Works against the local Kafka-compatible Redpanda broker.
 ```
 
 ---
@@ -111,6 +114,6 @@ If RabbitMQ was chosen instead:
 
 - Would teach AMQP (less transferable to big data platforms)
 - Would require learning separate mental models for queues vs streams
-- Cloud deployment would require rewriting (AWS has no RabbitMQ equivalent)
+- A future managed-broker choice would require an explicit security, cost, and operations ADR.
 
 → **Rejected**: Kafka/Redpanda is the better choice for a distributed systems learning platform.

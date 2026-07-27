@@ -24,7 +24,13 @@ class BulkheadRejectedError(Exception):
 class AsyncBulkhead:
     """Concurrency/queue limiter for one downstream dependency."""
 
-    def __init__(self, name: str, max_concurrency: int, max_queue: int = 0) -> None:
+    def __init__(
+        self,
+        name: str,
+        max_concurrency: int,
+        max_queue: int = 0,
+        on_state_change: Callable[[AsyncBulkhead], None] | None = None,
+    ) -> None:
         if max_concurrency <= 0:
             raise ValueError("max_concurrency must be > 0")
         if max_queue < 0:
@@ -36,6 +42,21 @@ class AsyncBulkhead:
         self._inflight = 0
         self._waiting = 0
         self._condition = asyncio.Condition()
+        self._on_state_change = on_state_change
+
+    @property
+    def inflight(self) -> int:
+        """Return the number of operations currently admitted."""
+        return self._inflight
+
+    @property
+    def waiting(self) -> int:
+        """Return the number of operations waiting for admission."""
+        return self._waiting
+
+    def _notify_state_change(self) -> None:
+        if self._on_state_change is not None:
+            self._on_state_change(self)
 
     async def run(
         self, operation: Callable[..., Awaitable[Any]], *args: Any, **kwargs: Any
@@ -47,19 +68,23 @@ class AsyncBulkhead:
                     raise BulkheadRejectedError(f"Bulkhead '{self.name}' queue is full")
 
                 self._waiting += 1
+                self._notify_state_change()
                 try:
                     while self._inflight >= self.max_concurrency:
                         await self._condition.wait()
                 finally:
                     self._waiting -= 1
+                    self._notify_state_change()
 
             self._inflight += 1
+            self._notify_state_change()
 
         try:
             return await operation(*args, **kwargs)
         finally:
             async with self._condition:
                 self._inflight -= 1
+                self._notify_state_change()
                 self._condition.notify(1)
 
 

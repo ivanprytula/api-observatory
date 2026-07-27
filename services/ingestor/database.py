@@ -7,7 +7,7 @@ SQA would expire every attribute. In an async context we cannot lazily reload th
 
 from collections.abc import AsyncGenerator
 
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -42,6 +42,25 @@ class Base(DeclarativeBase):
     pass
 
 
+@event.listens_for(AsyncSession.sync_session_class, "after_begin")
+def _apply_request_database_context(session, _transaction, connection) -> None:
+    """Apply tenant and RLS settings to each transaction in a request session."""
+    tenant_id = session.info.get("tenant_id")
+    user_role = session.info.get("user_role")
+    if session.info.get("rls_enabled"):
+        connection.execute(text("SELECT set_config('app.rls_enabled', 'true', true)"))
+    if tenant_id is not None:
+        connection.execute(
+            text("SELECT set_config('app.tenant_id', :tid, true)"),
+            {"tid": str(tenant_id)},
+        )
+    if user_role is not None:
+        connection.execute(
+            text("SELECT set_config('app.user_role', :role, true)"),
+            {"role": str(user_role)},
+        )
+
+
 async def get_db() -> AsyncGenerator[AsyncSession]:
     """FastAPI dependency: yields a fresh async DB session per request.
 
@@ -53,19 +72,7 @@ async def get_db() -> AsyncGenerator[AsyncSession]:
     async with AsyncSessionLocal() as session:
         tid = tenant_context.get()
         role = role_context.get()
-        if tid is not None:
-            await session.execute(
-                text("SELECT set_config('app.tenant_id', :tid, true)"),
-                {"tid": str(tid)},
-            )
-        if role is not None:
-            import logging
-
-            logging.getLogger("services.ingestor.database").info(
-                f"DB session setting: app.tenant_id={tid}, app.user_role={role}"
-            )
-            await session.execute(
-                text("SELECT set_config('app.user_role', :role, true)"),
-                {"role": str(role)},
-            )
+        session.info["tenant_id"] = tid
+        session.info["user_role"] = role
+        session.info["rls_enabled"] = settings.rls_enabled
         yield session

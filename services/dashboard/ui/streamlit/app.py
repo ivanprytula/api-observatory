@@ -14,6 +14,7 @@ from services.dashboard.core.config import config
 from services.dashboard.ui.streamlit.adapter import StreamlitUIAdapter
 from services.dashboard.ui.streamlit.components.auth_sidebar import render_auth_sidebar
 from services.dashboard.ui.streamlit.panels.drift_events import render_drift_events
+from services.dashboard.ui.streamlit.panels.incidents import render_incidents
 from services.dashboard.ui.streamlit.panels.live_stream import render_live_stream
 from services.dashboard.ui.streamlit.panels.observations import (
     render_observations_panel,
@@ -68,6 +69,7 @@ def main() -> None:
     render_probe_scheduler(ui, manager)
     render_freshness_heatmap(ui, manager)
     render_drift_events(ui, manager)
+    render_incidents(ui, manager)
     render_observations_panel(ui, manager)
     render_live_stream(ui, manager)
     render_service_health(ui, manager)

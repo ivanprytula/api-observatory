@@ -1,8 +1,10 @@
-# ADR 009: Azure Free Tier Over AWS for MVP Deployment
+# ADR 009: Historical Azure Free-Tier Deployment Choice
 
 ## Status
 
-Accepted (2026-06-27)
+Superseded (2026-07-24) by the AWS Stage 0 direction documented in
+[current roadmap](../../03-planning/mvp-roadmap.md). The Azure deployment was
+not completed and this file is historical evidence, not the current deployment contract.
 
 ## Context
 

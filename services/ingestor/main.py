@@ -8,7 +8,8 @@ import os
 import time
 import uuid
 from contextlib import asynccontextmanager
-from typing import Annotated
+from copy import deepcopy
+from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
@@ -22,11 +23,13 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import HTMLResponse, JSONResponse
 
 from libs.platform.auth import set_security_audit_emitter
+from libs.platform.http_timeout import RequestTimeoutMiddleware
 from libs.platform.tracing import setup_tracing
 from libs.version import get_contracts_version, get_version_payload
 from services.ingestor.auth import (
     connect_session_store,
     disconnect_session_store,
+    jwt_role_guard,
     verify_docs_credentials,
 )
 from services.ingestor.config import settings
@@ -52,9 +55,13 @@ from services.ingestor.metrics import (  # noqa: F401 — imported to register m
     job_executions_total,
     observations_created_total,
     observations_upsert_conflicts_total,
+    retention_observations_archived_total,
+    retention_observations_deleted_total,
+    retention_runs_total,
 )
 from services.ingestor.notifications import notify_background_task_failed
 from services.ingestor.rate_limiting import limiter
+from services.ingestor.rate_limiting_token_bucket import enforce_v1_token_bucket
 from services.ingestor.routers import ws as ws_router
 
 
@@ -198,16 +205,11 @@ async def lifespan(app: FastAPI):
     # STARTUP
     # ========================================================================
 
-    # Init distributed tracing first (trace_id available for all subsequent logs)
     setup_sentry()
 
-    # Init distributed tracing (trace_id available for all subsequent logs)
-    if settings.otel_enabled:
-        setup_tracing(
-            app,
-            endpoint=settings.otel_exporter_otlp_endpoint,
-            service_name=settings.otel_service_name,
-        )
+    # NOTE: setup_tracing() runs at module level (after the add_middleware
+    # calls) — by lifespan time Starlette has already built the middleware
+    # stack, so FastAPIInstrumentor would never enter the request path.
 
     logger.info("startup", extra={"event": "application_started"})
     _validate_production_security_settings()
@@ -595,16 +597,7 @@ if settings.docs_username and settings.docs_password:
     )
     async def get_openapi_schema() -> dict:
         """Protected OpenAPI schema endpoint."""
-        if app.openapi_schema:
-            return app.openapi_schema
-        openapi_schema = get_openapi(
-            title=settings.app_name,
-            version=settings.app_version,
-            description=app.description,
-            routes=app.routes,
-        )
-        app.openapi_schema = openapi_schema
-        return app.openapi_schema
+        return app.openapi()
 
     logger.info(
         "docs_auth_enabled",
@@ -622,12 +615,25 @@ app.add_middleware(
 )
 app.add_middleware(TenantMiddleware)
 app.add_middleware(CorrelationIdMiddleware)
+app.add_middleware(
+    RequestTimeoutMiddleware, timeout_seconds=settings.request_timeout_seconds
+)
+
+# Init distributed tracing last so the OTel middleware wraps the whole stack:
+# CorrelationIdMiddleware's request_start/request_end logs then run inside the
+# server span and pick up trace_id. Must happen before the app starts serving
+# (middleware cannot be added once Starlette builds its stack).
+if settings.otel_enabled:
+    setup_tracing(
+        app,
+        endpoint=settings.otel_exporter_otlp_endpoint,
+        service_name=settings.otel_service_name,
+    )
 
 _ROUTER_MODULES = [
     "auth",
     "agent",
     "observations",
-    "observations_v2",
     "scraper",
     "analytics",
     "background_processing",
@@ -637,6 +643,7 @@ _ROUTER_MODULES = [
     "source_registry",
     "contract_drift",
     "insights",
+    "incidents",
     "subscriptions",
     "reporting",
     "scorecards",
@@ -644,10 +651,30 @@ _ROUTER_MODULES = [
     "api_keys",
     "abuse_detection",
 ]
+_ADMIN_PROTECTED_ROUTERS = {
+    "api_keys",
+    "background_processing",
+    "health_ingestion_jobs",
+    "notifications",
+    "scraper",
+}
+_WRITER_PROTECTED_ROUTERS = {"etl"}
+
 for _name in _ROUTER_MODULES:
+    if _name == "scraper" and (not settings.mongo_enabled or mongo_analytics is None):
+        logger.info("router_disabled", extra={"router": _name, "reason": "mongo"})
+        continue
     try:
+        dependencies = [] if _name == "auth" else [Depends(enforce_v1_token_bucket)]
+        if _name in _ADMIN_PROTECTED_ROUTERS:
+            dependencies.append(Depends(jwt_role_guard("admin")))
+        elif _name in _WRITER_PROTECTED_ROUTERS:
+            dependencies.append(
+                Depends(jwt_role_guard("writer", "tenant_admin", "admin"))
+            )
         app.include_router(
-            importlib.import_module(f"services.ingestor.routers.{_name}").router
+            importlib.import_module(f"services.ingestor.routers.{_name}").router,
+            dependencies=dependencies,
         )
     except ModuleNotFoundError as exc:
         logger.warning(
@@ -655,10 +682,87 @@ for _name in _ROUTER_MODULES:
             extra={"router": _name, "missing_module": str(exc)},
         )
 
-if mongo_analytics is not None:
-    app.include_router(mongo_analytics.router)
+if settings.mongo_enabled and mongo_analytics is not None:
+    app.include_router(
+        mongo_analytics.router,
+        dependencies=[Depends(enforce_v1_token_bucket)],
+    )
+
+if settings.auth_demo_routes_enabled:
+    from services.ingestor.routers import observations, observations_v2
+
+    app.include_router(observations.demo_router)
+    app.include_router(observations_v2.router)
 
 app.include_router(ws_router.router)
+
+
+# ---------------------------------------------------------------------------
+# OpenAPI authentication contract
+# ---------------------------------------------------------------------------
+_PUBLIC_V1_AUTH_PATHS = frozenset(
+    {
+        "/api/v1/auth/register",
+        "/api/v1/auth/token",
+        "/api/v1/auth/refresh",
+        "/api/v1/auth/logout",
+    }
+)
+_AUTH_ERROR_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "required": ["detail"],
+    "properties": {"detail": {}},
+}
+_UNAUTHORIZED_RESPONSE: dict[str, Any] = {
+    "description": "Missing, expired, or invalid bearer token.",
+    "content": {"application/json": {"schema": _AUTH_ERROR_SCHEMA}},
+}
+_FORBIDDEN_RESPONSE: dict[str, Any] = {
+    "description": "Authenticated caller lacks permission for this operation.",
+    "content": {"application/json": {"schema": _AUTH_ERROR_SCHEMA}},
+}
+
+
+def _is_protected_v1_path(path: str) -> bool:
+    """Return whether an OpenAPI path is protected by the production v1 boundary."""
+    return path.startswith("/api/v1/") and path not in _PUBLIC_V1_AUTH_PATHS
+
+
+def _openapi_with_auth_contract() -> dict[str, Any]:
+    """Generate OpenAPI with the runtime v1 JWT boundary documented uniformly."""
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=settings.app_name,
+        version=settings.app_version,
+        description=app.description,
+        routes=app.routes,
+    )
+    components = openapi_schema.setdefault("components", {})
+    security_schemes = components.setdefault("securitySchemes", {})
+    security_schemes["BearerAuth"] = {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+    }
+
+    for path, path_item in openapi_schema["paths"].items():
+        if not _is_protected_v1_path(path):
+            continue
+        for operation in path_item.values():
+            if not isinstance(operation, dict):
+                continue
+            operation["security"] = [{"BearerAuth": []}]
+            responses = operation.setdefault("responses", {})
+            responses["401"] = deepcopy(_UNAUTHORIZED_RESPONSE)
+            responses["403"] = deepcopy(_FORBIDDEN_RESPONSE)
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = _openapi_with_auth_contract  # ty: ignore[invalid-assignment]
 
 
 # ---------------------------------------------------------------------------
@@ -730,7 +834,7 @@ async def readyz(db: DbDep) -> dict[str, object]:
 
 @app.get("/version", tags=["ops"])
 @limiter.limit(HEALTH_RATE_LIMIT)
-async def version(request: Request) -> dict[str, object]:
+async def version(request: Request) -> dict[str, str]:
     """Strict version-consensus check — deliberate, not a liveness/readiness signal.
 
     Resolves service + contracts version with no fallback. Intended for CI,

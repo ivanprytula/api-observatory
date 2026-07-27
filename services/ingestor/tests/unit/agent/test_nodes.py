@@ -8,6 +8,7 @@ cycle, including human_review).
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -46,18 +47,28 @@ class TestClassifySeverity:
     async def test_returns_llm_severity_fields(self) -> None:
         fake_model = MagicMock()
         fake_model.with_structured_output.return_value.ainvoke = AsyncMock(
-            return_value=SeverityClassification(
-                severity="critical",
-                reasoning="Removed required field, breaking change.",
-                agrees_with_rule_based=True,
-            )
+            return_value={
+                "raw": SimpleNamespace(
+                    usage_metadata={"input_tokens": 100, "output_tokens": 25}
+                ),
+                "parsed": SeverityClassification(
+                    severity="critical",
+                    reasoning="Removed required field, breaking change.",
+                    agrees_with_rule_based=True,
+                ),
+                "parsing_error": None,
+            }
         )
-        with patch(
-            "services.ingestor.agent.nodes.get_chat_model", return_value=fake_model
-        ) as get_model:
+        with (
+            patch(
+                "services.ingestor.agent.nodes.get_chat_model", return_value=fake_model
+            ) as get_model,
+            patch("services.ingestor.agent.nodes.record_llm_usage") as record_usage,
+        ):
             result = await nodes.classify_severity(_base_state())
 
         get_model.assert_called_once_with(deep=False)
+        record_usage.assert_called_once()
         assert result == {
             "llm_severity": "critical",
             "llm_severity_reasoning": "Removed required field, breaking change.",
@@ -102,19 +113,27 @@ class TestDraftAnalysis:
     async def test_returns_analysis_fields(self) -> None:
         fake_model = MagicMock()
         fake_model.with_structured_output.return_value.ainvoke = AsyncMock(
-            return_value=DraftAnalysis(
-                root_cause_hypothesis="Upstream schema change without coordination.",
-                recommended_action="Roll back and add a contract test.",
-                confidence_score=0.8,
-            )
+            return_value={
+                "raw": SimpleNamespace(usage_metadata=None),
+                "parsed": DraftAnalysis(
+                    root_cause_hypothesis="Upstream schema change without coordination.",
+                    recommended_action="Roll back and add a contract test.",
+                    confidence_score=0.8,
+                ),
+                "parsing_error": None,
+            }
         )
         state = _base_state(llm_severity="critical", retrieved_context=[])
-        with patch(
-            "services.ingestor.agent.nodes.get_chat_model", return_value=fake_model
-        ) as get_model:
+        with (
+            patch(
+                "services.ingestor.agent.nodes.get_chat_model", return_value=fake_model
+            ) as get_model,
+            patch("services.ingestor.agent.nodes.record_llm_usage") as record_usage,
+        ):
             result = await nodes.draft_analysis(state)
 
         get_model.assert_called_once_with(deep=True)
+        record_usage.assert_called_once()
         assert result == {
             "root_cause_hypothesis": "Upstream schema change without coordination.",
             "recommended_action": "Roll back and add a contract test.",

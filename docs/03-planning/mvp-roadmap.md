@@ -1,109 +1,64 @@
-# MVP & Post-MVP Roadmap
+# Current Roadmap and Evolution Triggers
 
-Track: C — Architecture and Platform Strategy
+The repository is a locally runnable backend/platform portfolio project. The standing product
+example is a small SaaS developer monitoring third-party APIs; permanent hosting, billing,
+customer acquisition, and speculative scale work are out of scope.
 
-This document defines the two operating modes, the tech stack per phase, and the functionality-to-technology mapping with reasoning.
+## Current State
 
----
+- **Core:** source registry, scheduled health/contract probes, scorecards, tenant-scoped incidents,
+  auth, migrations, retention, resilience controls, dashboard, and optional agent/inference paths.
+- **Lab:** gateway/load-balancing, Kafka partitioning, k3d, monitoring, cloud emulators, and bounded
+  performance/failure exercises.
+- **Decision:** AWS Stage 0 uses three immutable images on EC2 Compose with RDS; configuration and
+  contract checks exist, but no completed live deployment is claimed.
+- **Deferred:** managed gateway/Kafka, ECS/EKS, database sharding, multi-region, and a replacement
+  frontend require measured product or operational pressure.
 
-## Operating Modes
+The [engineering evidence map](../02-architecture/engineering-topics.md) owns topic-level status;
+ADRs own technology rationale.
 
-### MVP Mode
+## Near-Term Priorities
 
-Use during active feature stabilization. Favors speed and predictable local feedback.
+### 1. Keep the critical product slice demonstrable
 
-#### Runtime profile
+Trace source registration → scheduled probe → health sample → scorecard/incident → operator action.
+Completion means the behavior is locally reproducible, tenant-safe, observable, covered by focused
+tests, and explainable without relying on a technology list.
 
-- Start the local stack with Docker Compose.
-- Keep schema setup simple with startup bootstrap behavior.
-- Focus on source-registry, probe loop, scorecards, and drift slices.
+### 2. Strengthen proof before adding breadth
 
-#### Test gate
+Use captured query plans, performance baselines, fault/recovery timing, authorization regressions,
+and deterministic agent evaluation. Add a tool only when it closes a named evidence gap.
 
-```bash
-DATABASE_URL_TEST=sqlite+aiosqlite:///:memory: uv run pytest tests/ services/ingestor/tests/ -q -m "unit"
-DATABASE_URL_TEST=sqlite+aiosqlite:///:memory: uv run pytest services/ingestor/tests/integration/test_source_registry_api.py -q
-```
+### 3. Validate AWS Stage 0 only as a separately approved exercise
 
-### Post-MVP (MVP+) Mode
+Before any live proof, validate the three image contracts locally, review Terraform cost and
+security, configure short-lived OIDC identities, define rollback/teardown, and obtain explicit
+approval for cloud mutations. Until then the status remains **Decision**.
 
-Use after MVP is shipped and release hardening begins.
+## Change Decision
 
-#### Runtime profile
+Plan any change as one vertical slice:
 
-- Keep the same app surface and services.
-- Enable migration-first schema workflow.
-- Require stronger release validation and operational checks.
+1. State the user failure or cost being reduced.
+2. Place behavior in the current service unless ownership or scaling evidence requires another.
+3. Define API/event/schema compatibility and data migration.
+4. Bound dependencies, timeouts, retries, payloads, and failure behavior.
+5. Include tests, telemetry, rollout, rollback, and documentation impact.
 
-#### Test gate
+## Transformation Triggers
 
-```bash
-DATABASE_URL_TEST=sqlite+aiosqlite:///:memory: uv run pytest tests/ services/ingestor/tests/ -q -m "unit"
-env -u DATABASE_URL_TEST uv run pytest tests/ services/ingestor/tests/ -q -m "integration or e2e"
-```
+| Proposed change | Evidence required first |
+| --- | --- |
+| New service/runtime | Independent ownership, release cadence, scaling profile, or isolation SLO |
+| Multiple ingestor replicas | Saturation/availability target plus explicit scheduler ownership |
+| ECS or Kubernetes | Repeated Compose delivery friction or several independently operated workloads |
+| Managed gateway | Multiple public services or consumer-specific edge policy |
+| Managed Kafka | Sustained asynchronous workload with ordering, replay, and availability objectives |
+| Database partitioning/sharding | Measured single-node limit after query, index, and retention work |
+| New frontend | Stable workflow requiring richer interaction, client state, deep links, or UI testing |
+| Multi-region | Recovery objective that backup/restore in one region cannot meet |
 
-### When to Switch
-
-Switch from MVP to MVP+ when all are true:
-
-1. Core vertical slices are stable under daily development.
-2. API behavior is locked for release candidates.
-3. You are ready to enforce migration-first database changes.
-
----
-
-## Gap #1: Tech Stack per Phase
-
-| Component | MVP (local Docker) | Post-MVP (AWS) | Rationale |
-|-----------|-------------------|----------------|-----------|
-| **API Framework** | FastAPI (Uvicorn) | FastAPI (Uvicorn) | Same codebase; async-first, auto-OpenAPI, Pydantic v2 |
-| **Database** | PostgreSQL 17 (Docker) | RDS PostgreSQL 17 | Same SQL; RDS adds managed backups, Multi-AZ, IAM auth |
-| **Cache** | Cache 7 (Docker) | ElastiCache Cache 7.1 | Same Cache protocol; ElastiCache adds TLS, AUTH, Multi-AZ |
-| **Message Broker** | Redpanda (Docker) | MSK Serverless | Kafka-compatible; `aiokafka` code unchanged; IAM auth |
-| **Vector Store** | pgvector (dedicated `inference-db`) | pgvector (managed Postgres) | Real as of Phase 2 of the AI-augmented observatory plan; Qdrant deferred, see ADR-015 |
-| **Object Store** | MinIO (optional) | AWS S3 | Same S3 API via minio-py client |
-| **Frontend** | Streamlit (MVP) → HTMX+Jinja2 | HTMX+Jinja2 (dashboard service) | MVP uses Streamlit for quick UI; HTMX added for production dashboard |
-| **Agent/LLM** | LangGraph + Anthropic | LangGraph + Anthropic | Real as of Phase 3; dual-model: claude-haiku-4-5 (classify), claude-sonnet-4-5 (deep analyze). `/analyze`'s RAG path separately still uses OpenAI (unverified, no key available) |
-| **Auth** | JWT (PyJWT) | JWT (PyJWT) + OIDC optional | Stateless, multi-service; refresh tokens for long sessions |
-| **Observability** | structlog + Prometheus + Jaeger (local) | Same + CloudWatch + Sentry | All local tools work in cloud; add managed alternatives |
-| **Container Runtime** | Docker Compose | ECS Fargate | Same Docker images; Fargate eliminates node management |
-| **Infra as Code** | None (local only) | Terraform | S3 backend + lockfile locking; OIDC for CI/CD |
-| **CI/CD** | GitHub Actions | GitHub Actions | Same workflows; OIDC instead of long-lived keys in prod |
-| **Notifications** | None | Slack, Telegram, webhook, email | Deferred; multi-channel alerting via ingestor/notifications.py |
-
----
-
-## Gap #2: Feature → Technology Mapping with Reasoning
-
-| Feature | MVP? | Technology | Why not alternatives | ADR Ref |
-|---------|------|-----------|---------------------|---------|
-| **Source Registry CRUD** | ✅ | FastAPI + SQLAlchemy 2.0 | Flask lacks async/auto-docs; Django too heavy for single service | — |
-| **Probe Scheduler** | ✅ | APScheduler + httpx | Celery too heavy for single-process probes; cron lacks API integration | — |
-| **Scorecard Aggregation** | ✅ | SQL `PERCENTILE_CONT` | Avoids Python post-processing; single query vs. Python loop over rows | — |
-| **Contract Drift Detection** | ✅ | SHA-256 fingerprint + field diff | Fingerprint short-circuits 99% of checks; no external service needed | — |
-| **WebSocket Real-Time** | ✅ | Cache pub/sub | Kafka too heavy for fan-out to N clients; Cache pub/sub is fire-and-forget | — |
-| **Streamlit Dashboard** | ✅ | Streamlit | Fastest path to visual UI for MVP; replaced by HTMX dashboard post-MVP | — |
-| **JWT Auth + RBAC** | ✅ | PyJWT + FastAPI Depends | Stateless, no session store; refresh tokens mitigate JWT revocation gap | — |
-| **Rate Limiting** | ✅ | slowapi + Cache | In-memory fallback (no Cache needed); Cache backend scales to multi-instance | — |
-| **Circuit Breaker** | ✅ | Custom asyncio impl | No lib match for async + custom state machine; 100 LOC vs heavy dependency | ADR-004 |
-| **Structured Logging** | ✅ | structlog + JSON | Machine-parseable, correlation IDs via ContextVar | — |
-| **Prometheus Metrics** | ✅ | prometheus-client | Standard; prometheus-fastapi-instrumentator for HTTP metrics | — |
-| **OpenTelemetry Tracing** | ✅ | OTLP + Jaeger | Vendor-neutral; swap Jaeger for Tempo/Datadog without code changes | — |
-| **Kafka Event Streaming** | ✅ | Redpanda (aiokafka) | Redpanda = Kafka API, no Zookeeper; MSK Serverless in prod | ADR-001 |
-| **Kafka DLQ** | ✅ | Custom aiokafka routing | Poison pill isolation; retry 3x then forward to DLQ topic | ADR-004 |
-| **Agent Enrichment** | ✅ | LangGraph StateGraph | Real as of Phase 3. Dual-model: claude-haiku-4-5 (classify_severity), claude-sonnet-4-5 (draft_analysis) — always deep for draft, since Phase 1's trigger gate already pre-filters to critical/breaking only | ADR-012 |
-| **Agent HITL Review** | ✅ | LangGraph checkpointer + Postgres | Real as of Phase 3 (not Cache, as originally speculated — `langgraph-checkpoint-postgres` on the ingestor's own `db`). Pause at human_review; resume via `POST /api/v1/agent/runs/{run_id}/resume`, verified live including a resume call in a separate process | ADR-012 |
-| **Scraping (HTTP/HTML/Browser)** | ❌ | httpx + BeautifulSoup + Playwright | Factory pattern for 3 scraper types; Semaphore(5) for concurrency | — |
-| **MongoDB Document Store** | ❌ | Motor (async MongoDB) | Genuinely varied document shapes per source | — |
-| **Vector Search** | ✅ | pgvector (dedicated instance per service) | Real per-service DB ownership without a second engine to operate; Qdrant deferred, not rejected — see ADR-015 | ADR-015 |
-| **MCP Server** | ✅ | FastMCP (stdio) | Standalone `fastmcp` package chosen over the bundled `mcp.server.fastmcp.FastMCP` for multi-transport support (stdio now, `streamable-http` later with no rework); hand-written `@mcp.tool()` wrappers over the real ingestor HTTP API (own `mcp-service` JWT login), not in-process repository imports or OpenAPI auto-generation | — |
-| **HTMX Dashboard** | ❌ | HTMX + Jinja2 + SSE | No JS build pipeline; server-side rendering keeps source of truth in backend | ADR-003 |
-| **Notifications** | ❌ | Multi-channel (Slack, Telegram, webhook, email) | httpx-based; fail-open design | — |
-| **AWS Deployment** | ❌ | Terraform + ECS Fargate + RDS + ElastiCache + MSK | Fargate eliminates K8s ops; Terraform for IaC; OIDC for CI/CD auth | ADR-008 |
-| **Production Monitoring** | ❌ | Grafana + Alertmanager + GlitchTip | Prometheus data → Grafana dashboards; SLO-based alerting | — |
-
----
-
-## Audit Gaps
-
-See [audit-gaps.md](audit-gaps.md) for known gaps between the planned MVP/post-MVP scope and actual implementation status.
+When a trigger is met, record an ADR and update the relevant contract, proof, and rollback path in
+the same change. Git history carries completed work; this roadmap stays current.

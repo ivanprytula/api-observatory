@@ -31,6 +31,10 @@ from services.ingestor.models import (
     SourceProfile,
     _utcnow,
 )
+from services.ingestor.repositories.incidents import (
+    IncidentTransition,
+    open_or_update_incident,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -241,6 +245,7 @@ async def create_contract_snapshot(
 
     drift_event: DriftEvent | None = None
     agent_run: AgentRun | None = None
+    incident_transitions: list[IncidentTransition] = []
     if latest is not None:
         event_type = _event_type(added_fields, removed_fields, type_changed_fields)
         if event_type != "none":
@@ -265,6 +270,26 @@ async def create_contract_snapshot(
             db.add(drift_event)
 
             if _requires_incident_response(event_type, severity):
+                await db.flush()
+                incident_transitions.append(
+                    await open_or_update_incident(
+                        db,
+                        source=source,
+                        trigger_type="drift",
+                        severity=severity,
+                        summary=drift_event.summary
+                        or "Breaking contract drift detected.",
+                        details={
+                            "drift_event_id": drift_event.id,
+                            "event_type": event_type,
+                            "compatibility_score": score,
+                            "removed_fields": removed_fields,
+                            "type_changed_fields": type_changed_fields,
+                        },
+                    )
+                )
+
+            if _requires_incident_response(event_type, severity):
                 await db.flush()  # assign drift_event.id for the incident payload
                 incident = Observation(
                     source=source.name,
@@ -280,6 +305,7 @@ async def create_contract_snapshot(
                         "summary": drift_event.summary,
                     },
                     tags=["incident", severity],
+                    tenant_id=source.tenant_id,
                 )
                 db.add(incident)
                 await db.flush()  # assign incident.id for the agent run FK
@@ -300,6 +326,13 @@ async def create_contract_snapshot(
 
     if agent_run is not None:
         _trigger_agent_run(agent_run.id)
+
+    if incident_transitions:
+        from services.ingestor.incident_lifecycle import (
+            dispatch_incident_transitions,
+        )
+
+        await dispatch_incident_transitions(db, incident_transitions)
 
     return snapshot, drift_event
 

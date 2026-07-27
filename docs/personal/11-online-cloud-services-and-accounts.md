@@ -200,4 +200,4 @@ Adopt when team/project complexity grows:
 ## Related Project Documents
 
 - [CI/CD](../06-ci-cd/ci-cd.md)
-- [Deployment Guide](../07-deployment/deployment-guide.md)
+- [Infrastructure Deployment Guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md)

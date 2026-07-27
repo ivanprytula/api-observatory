@@ -4,20 +4,20 @@ Track: C — Architecture and Platform Strategy
 
 **Status**: Adopted (April 22, 2026)
 **Decision Date**: April 22, 2026
-**Scope**: All Dockerfiles in project (6 services + database)
+**Scope**: Current application and database Dockerfiles
 
 ---
 
 ## Context
 
-The project runs 6 Dockerized services in development, CI/CD, and production:
+The original decision assumed six application services. The current deployable HTTP contract is
+ingestor, inference, and dashboard; local Compose also runs their dependencies. The security and
+reproducibility decision remains applicable even though the old service inventory does not.
 
-1. **Ingestor** (main app) - FastAPI REST API
-2. **Inference Service** - Embedding service
-3. **Query API** - Vector search
-4. **Processor** - Background worker
-5. **Dashboard** - UI service
-6. **Database** - PostgreSQL 17 + pgvector
+1. **Ingestor** — FastAPI REST API and background work
+2. **Inference** — embeddings and vector search
+3. **Dashboard** — Streamlit UI
+4. **Databases and local dependencies** — PostgreSQL/pgvector, cache, and Redpanda
 
 As of April 22, 2026, Dockerfiles lacked:
 

@@ -40,9 +40,8 @@ Set these as repository or `aws-dev` environment variables, not secrets:
 
 Create the `aws-dev` environment and configure a required reviewer before enabling deployment.
 The workflow skips its deployment jobs unless `AWS_CD_ENABLED` is exactly `true`; an absent or
-`false` value is the safe default while AWS is being prepared.
-The workflow already requests `id-token: write` and uses
-`aws-actions/configure-aws-credentials` with `role-to-assume`.
+`false` value is the safe default while AWS is being prepared. The workflow already requests
+`id-token: write` and uses `aws-actions/configure-aws-credentials` with `role-to-assume`.
 
 ## Local CLI Credentials
 

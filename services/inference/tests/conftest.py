@@ -65,6 +65,18 @@ def _alembic_downgrade(sync_url: str) -> None:
     command.downgrade(cfg, "base")
 
 
+def _ensure_vector_extension(sync_url: str) -> None:
+    """Enable pgvector before applying migrations that declare Vector columns."""
+    import sqlalchemy as sa
+
+    engine = sa.create_engine(sync_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(sa.text("CREATE EXTENSION IF NOT EXISTS vector"))
+    finally:
+        engine.dispose()
+
+
 @pytest.fixture(scope="session")
 def apply_inference_migrations(_auto_provision_postgres: None) -> Generator[None]:
     """Apply this service's own Alembic migrations once per test session."""
@@ -72,6 +84,7 @@ def apply_inference_migrations(_auto_provision_postgres: None) -> Generator[None
         "postgresql+asyncpg://", "postgresql+psycopg://"
     )
     _alembic_downgrade(sync_url)
+    _ensure_vector_extension(sync_url)
     _alembic_upgrade(sync_url)
     yield
 

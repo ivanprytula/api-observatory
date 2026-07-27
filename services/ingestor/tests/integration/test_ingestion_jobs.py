@@ -274,12 +274,12 @@ class TestArchiveJob:
     """Test suite for archive job."""
 
     @pytest.mark.asyncio
-    async def test_archive_old_observations_template(self) -> None:
-        """Test archive job template (placeholder)."""
-        mock_db = AsyncMock(spec=AsyncSession)
+    async def test_archive_old_observations_reports_empty_dry_run(
+        self, db: AsyncSession
+    ) -> None:
+        """The enabled job is non-destructive unless explicitly applied."""
+        result = await archive_old_observations(db)
 
-        # Archive job is a template placeholder for now
-        result = await archive_old_observations(mock_db)
-
-        # Should return dict with expected keys
-        assert isinstance(result, dict)
+        assert result["status"] == "empty"
+        assert result["archived"] == 0
+        assert result["deleted"] == 0

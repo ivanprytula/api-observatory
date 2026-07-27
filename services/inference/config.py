@@ -5,6 +5,7 @@ independently-deployable service and must not import ingestor's settings
 module (would couple deployment/config lifecycles across services).
 """
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,6 +31,12 @@ class Settings(BaseSettings):
     embedding_dim: int = 384
 
     log_level: str = "INFO"
+
+    request_timeout_seconds: int = Field(default=30, ge=1, le=300)
+
+    otel_enabled: bool = False
+    otel_exporter_otlp_endpoint: str = "http://localhost:4317"
+    otel_service_name: str = "api-obs-inference"
 
 
 settings = Settings()

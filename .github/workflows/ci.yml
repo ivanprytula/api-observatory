@@ -111,6 +111,40 @@ jobs:
       - name: Run unit tests
         run: uv run pytest -q -m unit
 
+  contract-tests:
+    name: "Contract tests (OpenAPI ASGI)"
+    runs-on: ubuntu-latest
+    needs: [lint, action-ref-validation]
+    timeout-minutes: 10
+    env:
+      DATABASE_URL_TEST: "sqlite+aiosqlite:///:memory:"
+      CACHE_ENABLED: "false"
+      DOCS_USERNAME: ""
+      DOCS_PASSWORD: ""
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Cache uv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
+
+      - name: Install uv
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Sync dependencies
+        run: uv sync --frozen
+
+      - name: Run OpenAPI contract tests
+        run: uv run pytest services/ingestor/tests/contract -q -m contract --no-cov
+
   python-deps:
     name: "Python dependencies (pip-audit)"
     needs: [lint, action-ref-validation]
@@ -140,28 +174,40 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        uses: github/codeql-action/init@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
         with:
           languages: python
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        uses: github/codeql-action/autobuild@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
 
       - name: Analyze
-        uses: github/codeql-action/analyze@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        uses: github/codeql-action/analyze@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
         with:
           upload: always
           category: /language:python
 
-  # DOCKER BUILD, PUSH & SCAN (Azure Container Registry)
-  docker-build:
+  aws-deployment-contract:
+    name: "Validate AWS deployment contract"
+    runs-on: ubuntu-latest
+    needs: [lint, action-ref-validation]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Validate deployable services and immutable image tags
+        run: python3 scripts/validate_aws_deployment_contract.py
+
+  # DOCKER BUILD, PUSH & SCAN (AWS ECR)
+  docker-build-ingestor:
     name: "Build and push candidate image (ingestor)"
     runs-on: ubuntu-latest
     needs: [lint, unit-tests, python-deps, action-ref-validation, codeql, integration-tests]
-    if: vars.ACR_LOGIN_SERVER != ''
+    if: vars.AWS_ECR_REGISTRY != '' && vars.AWS_ROLE_ARN_CI != '' && vars.AWS_REGION != ''
     timeout-minutes: 20
     permissions:
       contents: read
+      id-token: write
     outputs:
       image_ingestor: ${{ steps.build-ingestor.outputs.image }}
       tree_sha: ${{ steps.resolve.outputs.tree_sha }}
@@ -173,12 +219,15 @@ jobs:
         id: resolve
         uses: ./.github/actions/resolve-tree-sha
 
-      - name: Log in to ACR
-        uses: docker/login-action@17f7c1809f7467d4244b4ff01b0dbe0b8b9e3d43 # v3.3.0
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
         with:
-          registry: ${{ vars.ACR_LOGIN_SERVER }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_CI }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: api-observatory-ci
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@1629cc33a9521f764a4704d4d0387513918873b9 # v2.1.4
 
       - name: Build and push ingestor image
         id: build-ingestor
@@ -186,7 +235,7 @@ jobs:
           DOCKER_BUILDKIT: "1"
         run: |
           TREE_SHA="${{ steps.resolve.outputs.tree_sha }}"
-          IMAGE="${{ vars.ACR_LOGIN_SERVER }}/api-observatory/ingestor:tree-${TREE_SHA}"
+          IMAGE="${{ vars.AWS_ECR_REGISTRY }}/api-observatory/ingestor:tree-${TREE_SHA}"
           docker build -t "${IMAGE}" .
           docker push "${IMAGE}"
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
@@ -202,10 +251,11 @@ jobs:
     name: "Build and push candidate image (dashboard)"
     runs-on: ubuntu-latest
     needs: [lint, unit-tests, python-deps, action-ref-validation, codeql, integration-tests]
-    if: vars.ACR_LOGIN_SERVER != ''
+    if: vars.AWS_ECR_REGISTRY != '' && vars.AWS_ROLE_ARN_CI != '' && vars.AWS_REGION != ''
     timeout-minutes: 20
     permissions:
       contents: read
+      id-token: write
     outputs:
       image_dashboard: ${{ steps.build-dashboard.outputs.image }}
     steps:
@@ -216,12 +266,15 @@ jobs:
         id: resolve
         uses: ./.github/actions/resolve-tree-sha
 
-      - name: Log in to ACR
-        uses: docker/login-action@17f7c1809f7467d4244b4ff01b0dbe0b8b9e3d43 # v3.3.0
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
         with:
-          registry: ${{ vars.ACR_LOGIN_SERVER }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_CI }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: api-observatory-ci
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@1629cc33a9521f764a4704d4d0387513918873b9 # v2.1.4
 
       - name: Build and push dashboard image
         id: build-dashboard
@@ -229,33 +282,79 @@ jobs:
           DOCKER_BUILDKIT: "1"
         run: |
           TREE_SHA="${{ steps.resolve.outputs.tree_sha }}"
-          IMAGE="${{ vars.ACR_LOGIN_SERVER }}/api-observatory/dashboard:tree-${TREE_SHA}"
-          docker build -t "${IMAGE}" -f services/dashboard/Dockerfile services/dashboard
+          IMAGE="${{ vars.AWS_ECR_REGISTRY }}/api-observatory/dashboard:tree-${TREE_SHA}"
+          docker build -t "${IMAGE}" -f services/dashboard/Dockerfile .
+          docker push "${IMAGE}"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+
+  docker-build-inference:
+    name: "Build and push candidate image (inference)"
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests, python-deps, action-ref-validation, codeql, integration-tests]
+    if: vars.AWS_ECR_REGISTRY != '' && vars.AWS_ROLE_ARN_CI != '' && vars.AWS_REGION != ''
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image_inference: ${{ steps.build-inference.outputs.image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Resolve tree SHA
+        id: resolve
+        uses: ./.github/actions/resolve-tree-sha
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_CI }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: api-observatory-ci
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@1629cc33a9521f764a4704d4d0387513918873b9 # v2.1.4
+
+      - name: Build and push inference image
+        id: build-inference
+        env:
+          DOCKER_BUILDKIT: "1"
+        shell: bash
+        run: |
+          set -euo pipefail
+          TREE_SHA="${{ steps.resolve.outputs.tree_sha }}"
+          IMAGE="${{ vars.AWS_ECR_REGISTRY }}/api-observatory/inference:tree-${TREE_SHA}"
+          docker build -t "${IMAGE}" -f services/inference/Dockerfile .
           docker push "${IMAGE}"
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
 
   docker-scan-security:
     name: "Scan docker image (Trivy - strict)"
     runs-on: ubuntu-latest
-    needs: [docker-build, docker-build-dashboard]
-    if: vars.ACR_LOGIN_SERVER != ''
+    needs: [docker-build-ingestor, docker-build-inference, docker-build-dashboard]
+    if: vars.AWS_ECR_REGISTRY != '' && vars.AWS_ROLE_ARN_CI != '' && vars.AWS_REGION != ''
     permissions:
       contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Log in to ACR
-        uses: docker/login-action@17f7c1809f7467d4244b4ff01b0dbe0b8b9e3d43 # v3.3.0
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
         with:
-          registry: ${{ vars.ACR_LOGIN_SERVER }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_CI }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: api-observatory-ci
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@1629cc33a9521f764a4704d4d0387513918873b9 # v2.1.4
 
       - name: Pull and scan ingestor image
         run: |
-          docker pull "${{ needs.docker-build.outputs.image_ingestor }}"
-          docker tag "${{ needs.docker-build.outputs.image_ingestor }}" ingestor:scan
+          docker pull "${{ needs.docker-build-ingestor.outputs.image_ingestor }}"
+          docker tag "${{ needs.docker-build-ingestor.outputs.image_ingestor }}" ingestor:scan
 
       - name: Scan ingestor (Trivy advisory)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -277,6 +376,22 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: dashboard:scan
+          format: table
+          ignore-unfixed: true
+          scanners: vuln
+          vuln-type: os,library
+          severity: MEDIUM,HIGH,CRITICAL
+          exit-code: "0"
+
+      - name: Pull and scan inference image
+        run: |
+          docker pull "${{ needs.docker-build-inference.outputs.image_inference }}"
+          docker tag "${{ needs.docker-build-inference.outputs.image_inference }}" inference:scan
+
+      - name: Scan inference (Trivy advisory)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: inference:scan
           format: table
           ignore-unfixed: true
           scanners: vuln
@@ -317,6 +432,7 @@ jobs:
       DATABASE_URL_TEST: postgresql+asyncpg://postgres:postgres@localhost:5432/api_observatory_test
       CACHE_ENABLED: "true"
       CACHE_URL: redis://localhost:6379/0
+      AUTH_DEMO_ROUTES_ENABLED: "true"
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -378,11 +494,134 @@ jobs:
 
       - name: Run integration tests with coverage gate
         run: |
+          mkdir -p coverage
           uv run pytest -q -m integration \
             --cov=services/ingestor \
             --cov=libs \
             --cov-report=term-missing \
+            --cov-report=xml:coverage/ingestor.xml \
             --cov-fail-under=40
+
+      - name: Upload ingestor coverage
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ingestor-coverage
+          path: coverage/ingestor.xml
+          if-no-files-found: error
+
+  inference-integration-tests:
+    name: "Inference integration tests (pgvector)"
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests, action-ref-validation]
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17-trixie
+        env:
+          POSTGRES_DB: inference_test
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+    env:
+      DATABASE_URL_TEST: postgresql+asyncpg://postgres:postgres@localhost:5432/inference_test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Cache uv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
+
+      - name: Install uv
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Sync dependencies
+        run: uv sync --frozen --all-packages
+
+      - name: Verify PostgreSQL health before tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          for _ in {1..30}; do
+            if docker exec "${{ job.services.postgres.id }}" pg_isready -U postgres >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          docker exec "${{ job.services.postgres.id }}" pg_isready -U postgres
+
+      - name: Run inference integration tests with coverage gate
+        run: |
+          mkdir -p coverage
+          uv run pytest services/inference/tests -q -o addopts='' \
+            --cov-config=coverage.inference.ini \
+            --cov \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage/inference.xml \
+            --cov-fail-under=85
+
+      - name: Upload inference coverage
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: inference-coverage
+          path: coverage/inference.xml
+          if-no-files-found: error
+
+  agent-eval-baseline:
+    name: "Agent evaluation baseline (advisory)"
+    runs-on: ubuntu-latest
+    needs: [lint, action-ref-validation]
+    continue-on-error: true
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Cache uv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
+
+      - name: Install uv
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Sync dependencies
+        run: uv sync --frozen
+
+      - name: Run deterministic agent evaluation
+        run: |
+          uv run python scripts/eval/run-agent-eval.py \
+            --output "${RUNNER_TEMP}/agent-eval/agent-eval-report.json"
+
+      - name: Upload agent evaluation report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: agent-eval-report
+          path: ${{ runner.temp }}/agent-eval/agent-eval-report.json
+          if-no-files-found: warn
+          retention-days: 14
 
   # GATE: ALL CHECKS MUST PASS
   ci-gate:
@@ -392,12 +631,16 @@ jobs:
       - lint
       - action-ref-validation
       - unit-tests
+      - contract-tests
       - python-deps
-      - docker-build
+      - aws-deployment-contract
+      - docker-build-ingestor
       - docker-build-dashboard
+      - docker-build-inference
       - docker-scan-security
       - codeql
       - integration-tests
+      - inference-integration-tests
     if: always()
     permissions:
       contents: read
@@ -408,14 +651,18 @@ jobs:
           [[ "${{ needs.lint.result }}" == "success" ]] || { echo "❌ Lint"; failed=1; }
           [[ "${{ needs.action-ref-validation.result }}" == "success" ]] || { echo "❌ Action refs"; failed=1; }
           [[ "${{ needs.unit-tests.result }}" == "success" ]] || { echo "❌ Unit tests"; failed=1; }
+          [[ "${{ needs.contract-tests.result }}" == "success" ]] || { echo "❌ Contract tests"; failed=1; }
           [[ "${{ needs.python-deps.result }}" == "success" ]] || { echo "❌ Python deps"; failed=1; }
-          # Docker build/push/scan require ACR_LOGIN_SERVER; they report "skipped"
-          # (not failure) until Azure Container Registry credentials are provisioned.
-          [[ "${{ needs.docker-build.result }}" =~ ^(success|skipped)$ ]] || { echo "❌ Docker build (ingestor)"; failed=1; }
+          [[ "${{ needs.aws-deployment-contract.result }}" == "success" ]] || { echo "❌ AWS deployment contract"; failed=1; }
+          # ECR publish/scan requires repository variables plus an AWS OIDC role. These
+          # jobs remain skipped until the AWS foundation is provisioned.
+          [[ "${{ needs.docker-build-ingestor.result }}" =~ ^(success|skipped)$ ]] || { echo "❌ Docker build (ingestor)"; failed=1; }
           [[ "${{ needs.docker-build-dashboard.result }}" =~ ^(success|skipped)$ ]] || { echo "❌ Docker build (dashboard)"; failed=1; }
+          [[ "${{ needs.docker-build-inference.result }}" =~ ^(success|skipped)$ ]] || { echo "❌ Docker build (inference)"; failed=1; }
           [[ "${{ needs.docker-scan-security.result }}" =~ ^(success|skipped)$ ]] || { echo "❌ Docker scan"; failed=1; }
           [[ "${{ needs.codeql.result }}" == "success" ]] || { echo "❌ CodeQL"; failed=1; }
           [[ "${{ needs.integration-tests.result }}" == "success" ]] || { echo "❌ Integration tests"; failed=1; }
+          [[ "${{ needs.inference-integration-tests.result }}" == "success" ]] || { echo "❌ Inference integration tests"; failed=1; }
           # Advisory scan: report status but do not block
           [[ "${{ needs.docker-scan-security.result }}" =~ ^(success|skipped)$ ]] || echo "⚠️  Docker advisory scan: ${{ needs.docker-scan-security.result }}"
           [ $failed -eq 0 ] && echo "✅ All CI checks passed"
@@ -432,11 +679,15 @@ jobs:
           | Lint | ${{ needs.lint.result }} |
           | Action Refs | ${{ needs.action-ref-validation.result }} |
           | Unit Tests | ${{ needs.unit-tests.result }} |
+          | Contract Tests | ${{ needs.contract-tests.result }} |
           | Python Deps | ${{ needs.python-deps.result }} |
-          | Docker Build (ingestor) | ${{ needs.docker-build.result }} |
+          | AWS Deployment Contract | ${{ needs.aws-deployment-contract.result }} |
+          | Docker Build (ingestor) | ${{ needs.docker-build-ingestor.result }} |
           | Docker Build (dashboard) | ${{ needs.docker-build-dashboard.result }} |
+          | Docker Build (inference) | ${{ needs.docker-build-inference.result }} |
           | Docker Security | ${{ needs.docker-scan-security.result }} |
           | Docker Advisory | ${{ needs.docker-scan-security.result }} |
           | CodeQL | ${{ needs.codeql.result }} |
           | Integration Tests | ${{ needs.integration-tests.result }} |
+          | Inference Integration Tests | ${{ needs.inference-integration-tests.result }} |
           EOF
