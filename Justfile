@@ -1,20 +1,8 @@
 # ─── DOCTOR / INIT CHECKS ────────────────────────────────────────────────────
 
-# Shared local URL helpers are implemented in scripts/daily/local-url.sh.
-# Use LOCAL_API_SCHEME=http (default) for direct API URLs, or
-# LOCAL_API_SCHEME=https to route API calls through the edge proxy at https://127.0.0.1/api.
-# LOCAL_API_BASE_URL and LOCAL_DASHBOARD_URL override the computed local values.
-_local_api_base_url:
-    @bash scripts/daily/local-url.sh api-base-url
-
-_local_api_public_base_url:
-    @bash scripts/daily/local-url.sh api-public-base-url
-
-_local_dashboard_url:
-    @bash scripts/daily/local-url.sh dashboard-url
-
-_local_wait_ready path="/readyz":
-    @bash -c 'source scripts/daily/local-url.sh; until curl_local -sf "$(local_api_url "{{path}}")" >/dev/null 2>&1; do sleep 1; done'
+# Containerized workflows always wait on the direct ingestor readiness endpoint.
+_wait_ready:
+    @until curl -fsS http://127.0.0.1:8000/readyz >/dev/null 2>&1; do sleep 1; done
 
 doctor:
     bash scripts/setup/00-doctor.sh
@@ -43,7 +31,7 @@ bootstrap-venv:
 docs-check-just-refs:
     bash scripts/docs/check-just-refs.sh
 
-# Generate high-entropy secrets for .env configuration (db, redis, jwt, etc.).
+# Generate or rotate local prod-like credentials in the existing private .env.
 generate-secrets:
     uv run python scripts/tools/generate-secrets.py
 
@@ -67,13 +55,11 @@ generate-secrets:
 
 # Start both ingestor (uvicorn --reload) and dashboard (Streamlit hot-reload) locally.
 # Data-plane (db, cache, broker) runs in Compose; both app services reload on file save.
-# For HTTPS API access from the host (e.g. curl, Bruno), set LOCAL_API_SCHEME=https.
 dev:
     #!/usr/bin/env bash
     set -euo pipefail
     export PYTHONPATH="${PWD}"
     set -a; source "${PWD}/.env"; set +a
-    just stack-info
     # Data-plane only — app services run locally with hot reload
     docker compose up -d db cache broker
     docker compose stop ingestor dashboard >/dev/null 2>&1 || true
@@ -95,9 +81,8 @@ dev:
 
 # Start containerized fleet with HTTPS ingress (prod-parity).
 up:
-    @just stack-info
     docker compose up -d --build db cache broker ingestor dashboard edge
-    just _local_wait_ready
+    just _wait_ready
     echo "stack ready — https://127.0.0.1 (edge)"
 
 
@@ -107,9 +92,8 @@ up:
 # uvicorn --reload / Streamlit poll watcher restart the process on file change.
 # Dependency file changes (pyproject.toml, uv.lock) trigger a full image rebuild.
 watch:
-    @just stack-info
     docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build db cache broker ingestor dashboard
-    just _local_wait_ready
+    just _wait_ready
     echo ""
     echo "Watching for file changes — Compose Watch syncs code into containers."
     echo "Stop with Ctrl+C.  Containers keep running in the background."
@@ -118,7 +102,6 @@ watch:
 
 # Start monitoring stack (Prometheus, Grafana, Loki, Promtail, Tempo, Alertmanager, Mailpit).
 up-monitoring:
-    @just stack-info
     docker compose --profile monitoring up -d prometheus grafana loki promtail tempo alertmanager mailpit
     echo "monitoring ready — Grafana http://127.0.0.1:3000, Prometheus http://127.0.0.1:9090, Tempo http://127.0.0.1:3200"
 
@@ -130,10 +113,9 @@ up-all: up up-monitoring
 
 # Reset DB and ingestor containers (keep Floci state intact if running).
 db-reset:
-    @just stack-info
     docker compose rm -sfv ingestor db || true
     docker compose up -d --build db cache broker ingestor dashboard edge
-    just _local_wait_ready
+    just _wait_ready
     echo "stack ready"
 
 
@@ -171,7 +153,6 @@ sandbox-up:
         gcp)   PROFILE=gcp;   SERVICE=floci-gcp; PORT=4588 ;;
         *)     echo "FAIL: Unknown CLOUD=${CLOUD}. Use: azure, aws, gcp" >&2; exit 1 ;;
     esac
-    just stack-info
     docker compose --profile "$PROFILE" up -d "$SERVICE"
     echo "  Waiting for ${SERVICE} health on port ${PORT}..."
     for i in $(seq 1 60); do
@@ -228,7 +209,6 @@ sandbox-dev:
             ;;
         *)  echo "FAIL: Unknown CLOUD=${CLOUD}. Use: azure, aws, gcp" >&2; exit 1 ;;
     esac
-    just stack-info
     docker compose up -d db cache broker
     docker compose stop ingestor dashboard >/dev/null 2>&1 || true
     docker compose rm -f ingestor dashboard >/dev/null 2>&1 || true
@@ -313,7 +293,6 @@ stack-info:
     set -euo pipefail
     PROJECT_ROOT="$(pwd)"
     set -a; source "${PROJECT_ROOT}/.env"; set +a
-    source "${PROJECT_ROOT}/scripts/daily/local-url.sh"
     TF="${TF_ENV:-azure-sandbox}"
     if [ -n "${STORAGE_EMULATOR_HOST:-}" ]; then
         CLOUD="Floci-gcp (${STORAGE_EMULATOR_HOST})"
@@ -348,7 +327,7 @@ stack-info:
     echo "  Postgres        : ${DB}"
     echo "  Cache           : ${CACHE}"
     echo "  Event broker    : ${BROKER_URL:-unset}"
-    echo "  INGESTOR_URL    : $(local_api_base_url)"
+    echo "  INGESTOR_URL    : ${API_BASE_URL:-http://127.0.0.1:8000}"
     echo "======================"
 
 
@@ -594,17 +573,16 @@ test-e2e:
 api-test:
     just db-reset
     just _auto-init
-    BRUNO_BASE_URL="$(just _local_api_base_url)"
-    cd bruno && bru run auth ops sources contracts scorecards websocket -r --env local --env-var "baseUrl=${BRUNO_BASE_URL}"
+    cd bruno && bru run auth ops sources contracts scorecards websocket -r --env local --env-var "baseUrl=${BRUNO_BASE_URL:-http://127.0.0.1:8000}"
 
 # Load test (k6). Requires k6 installed locally. Realistic CRUD scenario.
 # Usage:
-#   just test-load                    # defaults from scripts/daily/local-url.sh
+#   just test-load                    # defaults to http://127.0.0.1:8000
 #   just test-load BASE_URL=https://127.0.0.1 VUS=20 DURATION=60s
 test-load:
     #!/usr/bin/env bash
     set -euo pipefail
-    BASE_URL="${BASE_URL:-$(just __local_api_public_base_url)}"
+    BASE_URL="${BASE_URL:-http://127.0.0.1:8000}"
     VUS="${VUS:-5}"
     DURATION="${DURATION:-90s}"
     echo "Running k6 — BASE_URL=${BASE_URL}, VUS=${VUS}, DURATION=${DURATION}"
@@ -716,8 +694,7 @@ migrate:
 _sandbox-seed:
     #!/usr/bin/env bash
     set -euo pipefail
-    source scripts/daily/local-url.sh
-    until curl_local -sf "$(local_api_url /health)" > /dev/null 2>&1; do sleep 1; done
+    until curl -sf http://127.0.0.1:8000/health > /dev/null 2>&1; do sleep 1; done
     just _auto-init
 
 # Private: start emulator + Docker infra for sandbox workflows
@@ -733,11 +710,11 @@ _sandbox-infra:
 _get_token:
     #!/usr/bin/env bash
     set -euo pipefail
-    source scripts/daily/local-url.sh
-    TOKEN_URL="$(local_api_url /api/v1/auth/token)"
+    API_BASE_URL="${API_BASE_URL:-http://127.0.0.1:8000}"
+    TOKEN_URL="${API_BASE_URL%/}/api/v1/auth/token"
     for attempt in 1 2 3; do
         set +e
-        HTTP_CODE=$(curl_local -s -o /tmp/get_token_body.$$ -w "%{http_code}" \
+        HTTP_CODE=$(curl -s -o /tmp/get_token_body.$$ -w "%{http_code}" \
             -X POST "$TOKEN_URL" \
             -H 'Content-Type: application/x-www-form-urlencoded' \
             -d 'username=admin&password=admin123')
@@ -800,14 +777,15 @@ init:
 _auto-init:
     #!/usr/bin/env bash
     set -euo pipefail
-    source scripts/daily/local-url.sh
-    REGISTER_URL="$(local_api_url /api/v1/auth/register)"
-    curl_local -sf -X POST "$REGISTER_URL" \
+    API_BASE_URL="${API_BASE_URL:-http://127.0.0.1:8000}"
+    API_BASE_URL="${API_BASE_URL%/}"
+    REGISTER_URL="${API_BASE_URL}/api/v1/auth/register"
+    curl -sf -X POST "$REGISTER_URL" \
       -H 'Content-Type: application/json' \
       -d '{"username":"admin","password":"admin123","email":"admin@example.com","role":"admin"}' \
       >/dev/null 2>&1 || true
     TOKEN=$(just _get_token)
-    BASE_URL="$(local_api_url)" \
+    BASE_URL="${API_BASE_URL}" \
       bash .local-dev/scripts/seed-sources.sh "$TOKEN" \
         .local-dev/payloads/source-*.json
     echo "auto-init complete — probe sources run every 10s"
@@ -925,5 +903,5 @@ k3s-down:
     k3d cluster delete data-zoo
 
 # Run post-deploy smoke checks.
-smoke-test base-url="{{_local_api_base_url}}" dashboard-url="{{__local_dashboard_url}}":
+smoke-test base-url="http://127.0.0.1:8000" dashboard-url="http://127.0.0.1:8501":
     bash scripts/smoke-test.sh {{base-url}} {{dashboard-url}}

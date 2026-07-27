@@ -5,7 +5,8 @@ and stable development rules so command syntax is not duplicated in Markdown.
 
 ## Development Loop
 
-1. Run `just doctor` and choose Docker-first (`just up`) or hot reload (`just dev`).
+1. Run `just doctor`, then choose direct HTTP hot reload (`just dev`) or HTTPS ingress parity
+   (`just up`).
 2. Apply migrations before exercising changed persistence behavior.
 3. Run the smallest focused unit/integration test while iterating.
 4. Run the affected service boundary, contract, security, and documentation checks.

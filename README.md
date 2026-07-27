@@ -70,13 +70,25 @@ for exact boundaries and status.
 
 ## Quick Start
 
-Copy the placeholder-only [`.env.example`](.env.example) to a private local `.env`, then use the
-[`Justfile`](Justfile) targets `up`, `migrate`, and `init`. The executable sequence remains owned by
-those source files.
+Create the ignored local configuration file, then generate its private credentials before selecting
+a workflow:
 
-Open the API documentation at <http://localhost:8000/docs> and the Streamlit dashboard at
-<http://localhost:8501>. The committed `.env.example` contains placeholders only; never commit the
-local `.env` created from it.
+```bash
+cp .env.example .env
+just generate-secrets
+# First HTTPS ingress run on this workstation:
+bash scripts/setup/02-setup-local-https.sh
+just up
+```
+
+The committed [`.env.example`](.env.example) contains public development settings only. The local
+generator writes real credentials to `.env`; production injects the same names through
+infrastructure-owned secret delivery. The [`Justfile`](Justfile) owns the executable workflows.
+
+`just up` is the HTTPS ingress-parity workflow: use <https://127.0.0.1/api/docs> for the API and
+<https://127.0.0.1> for the dashboard after installing local certificates. Direct HTTP endpoints
+such as <http://127.0.0.1:8000/docs> and <http://127.0.0.1:8501> remain debugging endpoints. Use
+`just dev` for the fast HTTP hot-reload loop. Never commit the local `.env` created from it.
 
 For the complete sequence, use [Setup Guide](docs/04-setup/setup-guide.md) and
 [Development Workflows](docs/05-development/dev-workflows.md).
