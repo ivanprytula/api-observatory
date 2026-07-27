@@ -11,8 +11,6 @@ readonly DOCKERFILES=(
   "Dockerfile"
   "services/inference/Dockerfile"
   "services/dashboard/Dockerfile"
-  "services/processor/Dockerfile"
-  "services/analytics/Dockerfile"
 )
 
 info()    { echo "[INFO]    $*" >&2; }
