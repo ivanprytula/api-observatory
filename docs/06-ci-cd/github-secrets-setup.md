@@ -1,42 +1,57 @@
-# GitHub Variables & OIDC Setup — AWS
+# GitHub Actions AWS OIDC Setup
 
-AWS is the primary deployment path. GitHub Actions uses OIDC and does not store
-long-lived AWS access keys or ECR passwords. This is configuration guidance only;
-it does not provision an AWS account or enable the workflows by itself.
+The application delivery workflow uses short-lived AWS credentials through GitHub OIDC. It does
+not require an IAM user access key or secret key in GitHub. The executable contract is
+[`cd-dev.yml`](../../.github/workflows/cd-dev.yml); this page records the AWS and GitHub settings it
+expects.
 
-## Repository Variables
+## AWS Identity Configuration
 
-Set these under **Settings → Secrets and variables → Actions → Variables** after
-the infra repository has created the matching AWS resources and IAM roles.
+Create or reuse the GitHub OIDC provider for
+`https://token.actions.githubusercontent.com` with audience `sts.amazonaws.com`. Create a
+dedicated deployment role, such as `github-actions-api-observatory-dev`, with a trust policy
+restricted to this repository and the `aws-dev` environment:
 
-| Variable | Used by | Example shape |
-| --- | --- | --- |
-| `AWS_ECR_REGISTRY` | CI, release, CD | `123456789012.dkr.ecr.eu-central-1.amazonaws.com` |
-| `AWS_REGION` | CI, release, CD | `eu-central-1` |
-| `AWS_ROLE_ARN_CI` | Candidate-image publishing | `arn:aws:iam::123456789012:role/api-observatory-ci` |
-| `AWS_ROLE_ARN_DEV` | Approved EC2 deployment | `arn:aws:iam::123456789012:role/api-observatory-dev-deploy` |
-| `AWS_ROLE_ARN_RELEASE` | Semver-tag promotion | `arn:aws:iam::123456789012:role/api-observatory-release` |
-| `AWS_EC2_INSTANCE_ID_DEV` | Stage-0 CD target | `i-0123456789abcdef0` |
+- audience: `sts.amazonaws.com`;
+- subject: `repo:ivanprytula/api-observatory:environment:aws-dev`;
+- action: `sts:AssumeRoleWithWebIdentity`.
 
-Create an `aws-dev` GitHub environment with a required reviewer. Until all CI
-variables and the environment are present, candidate publishing and deployment jobs
-are skipped safely.
+Attach only the permissions required by the workflow: SSM command delivery and command-result
+inspection for the approved EC2 target. The EC2 instance role separately needs permission to pull
+the three application images from ECR. Do not attach `PowerUserAccess` to the GitHub deployment
+role.
 
-## OIDC Requirements
+The application repository owns the role ARN and variable names; infrastructure owns the IAM
+provider, role policy, ECR, EC2, and runtime delivery. See the
+[infra deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md)
+for the platform boundary.
 
-The AWS trust policy must permit GitHub's OIDC issuer,
-`https://token.actions.githubusercontent.com`, with audience `sts.amazonaws.com`.
-Restrict each role to the relevant repository, branch, or GitHub environment.
+## GitHub Actions Variables
 
-- CI role: write only the three candidate ECR repositories.
-- Release role: read candidate tags and write semver tags in those repositories.
-- Dev role: invoke the approved EC2 Systems Manager command only.
-- EC2 instance role: pull its three ECR images and accept Systems Manager commands.
+Set these as repository or `aws-dev` environment variables, not secrets:
 
-No AWS access keys, ECR passwords, SSH private keys, or service-principal JSON
-belong in GitHub secrets for this AWS path.
+| Variable | Meaning |
+| --- | --- |
+| `AWS_CD_ENABLED` | Explicit deployment gate; keep `false` or unset until AWS is ready |
+| `AWS_ROLE_ARN_DEV` | ARN of the dedicated GitHub OIDC deployment role |
+| `AWS_REGION` | AWS region containing the Stage 0 resources |
+| `AWS_ECR_REGISTRY` | ECR registry hostname used in immutable image references |
+| `AWS_EC2_INSTANCE_ID_DEV` | Approved EC2 deployment target |
 
-## Azure Reference
+Create the `aws-dev` environment and configure a required reviewer before enabling deployment.
+The workflow skips its deployment jobs unless `AWS_CD_ENABLED` is exactly `true`; an absent or
+`false` value is the safe default while AWS is being prepared. The workflow already requests
+`id-token: write` and uses `aws-actions/configure-aws-credentials` with `role-to-assume`.
 
-Azure/ACR credentials remain outside the primary path and are retained only in the
-infra repository's secondary/reference material.
+## Local CLI Credentials
+
+An IAM user profile such as `dev-cli` may be used for local AWS CLI administration or inspection.
+Keep its access key and secret key in the local credential store or environment, never in GitHub,
+workflow files, repository variables, or committed documentation. Prefer short-lived federation
+for human access when the account supports it.
+
+## Verification Boundary
+
+A successful role assumption and SSM command prove credential wiring and command delivery only.
+Deployment evidence additionally requires the selected immutable image tag, health/readiness
+results, migration result, smoke proof, rollback path, and retained redacted evidence.

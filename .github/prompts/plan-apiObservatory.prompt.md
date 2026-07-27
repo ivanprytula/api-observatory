@@ -3,8 +3,8 @@
 **Status**: Active ✅
 **Updated**: 2026-05-24
 **Repo**: https://github.com/ivanprytula/api-observatory.git
-**Local dir**: /home/ivanp/PersonalProjects/api-observatory (orphan branch `foundation`, index cleared)
-**Job context**: Middle/middle+ Python dev role — prioritise shippable demo over completeness
+**Local dir**: /home/ivanprytula/PersonalProjects/api-observatory (orphan branch `foundation`, index cleared)
+**Job context**: Middle/middle+ Python dev role — prioritize shippable demo over completeness
 
 ## TL;DR
 
@@ -580,7 +580,7 @@ env -u DATABASE_URL_TEST uv run pytest tests/ services/ingestor/tests/ -q -m "in
 **Security (OWASP)**
 - [ ] No hardcoded secrets, passwords, tokens
 - [ ] User-controlled URLs validated against private IP ranges (SSRF)
-- [ ] Parameterised SQL only — no f-string queries
+- [ ] Parameterized SQL only — no f-string queries
 - [ ] Error responses do not leak internal state
 
 **Async**
