@@ -1,102 +1,43 @@
-# CI/CD Reference
+# Application CI/CD
 
-Track: C — Architecture and Platform Strategy
+Workflow YAML under [`.github/workflows/`](../../.github/workflows/) is the executable source of
+truth. This page explains gate intent and ownership without duplicating job steps or command
+syntax.
 
----
+## Quality Gates
 
-## CI Workflow Structure
+The main CI workflow runs lint, formatting, type, unit, contract, security, dependency, image, and
+documentation checks according to the changed path and workflow trigger. Slow integration and
+smoke work is explicitly gated. The workflow files and branch protection settings decide which
+jobs block a merge.
 
-**Trigger model:** PR and push run Waves 0-3 + 5-6 (fast path). `workflow_dispatch` adds Wave 4 (slow checks).
+## Workflow Ownership
 
-### Wave Breakdown
+| Workflow | Responsibility |
+| --- | --- |
+| [`ci.yml`](../../.github/workflows/ci.yml) | Main quality gates, tests, contracts, and candidate images |
+| [`security.yml`](../../.github/workflows/security.yml) | Security analysis and dependency/image evidence |
+| [`security-secrets-lite.yml`](../../.github/workflows/security-secrets-lite.yml) | Blocking secrets scan |
+| [`pip-audit.yml`](../../.github/workflows/pip-audit.yml) | Scheduled/manual dependency audit |
+| [`release.yml`](../../.github/workflows/release.yml) | Immutable candidate promotion |
+| [`cd-dev.yml`](../../.github/workflows/cd-dev.yml) | Approved AWS Stage 0 deployment through SSM |
 
-| Wave | Jobs | Type |
-|------|------|------|
-| **0** | `change-impact` — detect changed paths | Fast |
-| **1** | Infrastructure/gate: prebuilt image, service version, service matrix, docs-impact-gate, contracts-versioning-gate | Fast |
-| **2** | Prechecks: Ruff lint+format, `ty` type check, `compileall` | Fast |
-| **3** | Unit tests, outbox-inbox schema guard | Medium |
-| **4** (gated) | Migrations, integration, e2e, compose smoke | Slow |
-| **5** | Dependency audit + image build (Trivy scan + GHCR push) | Medium |
-| **6** | Build summary comment | Fast |
+## Artifact and Identity Contract
 
-### Common CI Failures
+CI builds ingestor, inference, and dashboard candidates tagged `tree-<SHA>`. Release promotion
+reuses those candidates rather than rebuilding or publishing `latest`. AWS workflows use GitHub
+OIDC and remain skipped until `AWS_CD_ENABLED=true`, the required variables, and the protected
+environment exist. The
+[OIDC setup](github-secrets-setup.md) owns role and variable expectations; the
+[deployment contract](../07-deployment/app-repo-contract.md) owns image names, ports, health
+behavior, and environment interfaces.
 
-| Symptom | Likely Cause | Fix |
-|---------|-------------|-----|
-| Ruff fails | Lint/format issue | `uv run ruff check --fix . && uv run ruff format .` |
-| `ty` fails | Type error | `uv run mypy .` to see exact error |
-| `ScopeMismatch` | Async fixture scope issue | Check `conftest.py` fixture scopes |
-| Docs-impact-gate | Service changed without docs update | Update relevant docs or mark exception |
-| Contracts-versioning-gate | Schema changed without version bump | `python scripts/bump_contracts_version.py` |
+## Delivery Evidence
 
-### Branch Model
-
-- `main` — stable, release tags (`v*`)
-- `develop` — default branch
-- `feature/*`, `fix/*` — work branches
-
----
-
-## CI/CD + IaC Strategy
-
-### Architecture
-
-```text
-Developer push/PR
-  → GitHub Actions CI (lint, test, security, image build + SBOM + signing)
-  → Artifact Registry (immutable SHA tags)
-  → IaC pipeline (Terraform plan/apply via OIDC)
-  → ECS Fargate (near-term) or EKS + Argo CD (future)
-```
-
-### Supply Chain Security
-
-- CodeQL analysis
-- Trivy container scan (SARIF → GitHub Code Scanning)
-- Syft SBOM generation
-- Cosign keyless signing (GH OIDC)
-- Verification gate before deploy
-
-### Secrets vs Variables Model
-
-- **OIDC only** — no long-lived AWS access keys in GitHub Secrets
-- GitHub Actions assumes IAM role via OIDC per workflow run
-- Environment-scoped variables: `AWS_ROLE_ARN_DEV`, `DEV_ECR_REGISTRY`, `TERRAFORM_STATE_BUCKET_DEV`
-
-### Required Accounts
-
-GitHub, AWS (with OIDC), ECR, ACM, Route53 (optional), Terraform Cloud (optional), Sentry, Grafana Cloud (optional), PagerDuty (optional), Slack (optional).
-
----
-
-## Prebuilt CI Image
-
-A prebuilt Docker image at `ghcr.io/${{ github.repository_owner }}/data-pipeline-ci` ensures Python 3.14 consistency, preinstalled `uv`, and cached wheels across all CI jobs.
-
-```bash
-docker buildx build -f infra/ci/ci-base-image/Dockerfile -t ghcr.io/...:latest .
-```
-
-**Pinning:** Pin workflows to the image digest (`container.image: ghcr.io/...@sha256:<digest>`) for immutability. Rollback by changing digest to previous known-good.
-
----
-
-## Workflow Reference
-
-See `.github/workflows/ci.yml` for the canonical workflow definition. Key workflows:
-
-| File | Purpose |
-|------|---------|
-| `ci.yml` | Full CI: lint, test, security, build |
-| `docker-build.yml` | Manual build + optional ECR push + Cosign signing |
-| `release-promote.yml` | Promote image digest to environment tag |
-| `cd-deploy.yml` | Deploy to ECS (environment-scoped) |
-
----
-
-## Related Documents
-
-- [Deployment Guide](../07-deployment/deployment-guide.md) — deploy runbook and cloud security checklist
+Workflow YAML and infrastructure configuration are **Decision** evidence. A completed deployment
+claim requires an approved live run with retained image identity, health/readiness, migration,
+smoke, rollback, and teardown evidence. Use the sibling
+[infra deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md)
+for platform preparation and recovery boundaries.
 - [Dev Workflows](../05-development/dev-workflows.md) — local testing commands
 - [Policies](../05-development/policies.md) — merge/release gates
