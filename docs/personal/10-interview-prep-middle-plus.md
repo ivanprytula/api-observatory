@@ -425,7 +425,7 @@ Result: We fixed it, zero restarts after. CEO was happy we communicated clearly.
 
 4. ✅ Have Data Zoo project ready to reference
     - "I built a project demonstrating these patterns..."
-    - Link to GitHub: [api-observatory](https://github.com/ivanp/api-observatory) (formerly data-pipeline-async)
+    - Link to GitHub: [api-observatory](https://github.com/ivanprytula/api-observatory) (formerly data-pipeline-async)
 
 ---
 

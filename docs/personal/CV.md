@@ -241,7 +241,7 @@ Backend engineer with deep technical expertise across async systems, databases, 
 
 ## api-observatory: Job-Ready Learning Project
 
-### [GitHub: api-observatory](https://github.com/ivanp/api-observatory)
+### [GitHub: api-observatory](https://github.com/ivanprytula/api-observatory)
 
 A production-grade learning project demonstrating **8 phases** of backend system design.
 
@@ -351,8 +351,8 @@ To consolidate 5 years of production experience into a **reference implementatio
 
 ## Contact & Projects
 
-- **GitHub**: [github.com/ivanp](https://github.com/ivanp)
-- **api-observatory (Learning Project)**: [github.com/ivanp/api-observatory](https://github.com/ivanp/api-observatory)
+- **GitHub**: [github.com/ivanpytula](https://github.com/ivanpytula)
+- **api-observatory (Learning Project)**: [github.com/ivanpytula/api-observatory](https://github.com/ivanpytula/api-observatory)
 - **Email**: [Available on request]
 
 ---

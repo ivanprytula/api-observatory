@@ -21,6 +21,7 @@ API Observatory continuously checks the health and reliability of your external 
 ## Quick Start [Core]
 
 ### Prerequisites
+
 - Docker and Docker Compose
 - Python 3.14+
 
