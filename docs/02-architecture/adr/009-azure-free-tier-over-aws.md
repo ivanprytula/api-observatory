@@ -3,7 +3,7 @@
 ## Status
 
 Superseded (2026-07-24) by the AWS Stage 0 direction documented in
-[`infrastructure-architecture.md`](../infrastructure-architecture.md). The Azure deployment was
+[current roadmap](../../03-planning/mvp-roadmap.md). The Azure deployment was
 not completed and this file is historical evidence, not the current deployment contract.
 
 ## Context

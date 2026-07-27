@@ -70,12 +70,9 @@ for exact boundaries and status.
 
 ## Quick Start
 
-```bash
-cp .env.example .env
-just up
-just migrate
-just init
-```
+Copy the placeholder-only [`.env.example`](.env.example) to a private local `.env`, then use the
+[`Justfile`](Justfile) targets `up`, `migrate`, and `init`. The executable sequence remains owned by
+those source files.
 
 Open the API documentation at <http://localhost:8000/docs> and the Streamlit dashboard at
 <http://localhost:8501>. The committed `.env.example` contains placeholders only; never commit the
@@ -86,14 +83,14 @@ For the complete sequence, use [Setup Guide](docs/04-setup/setup-guide.md) and
 
 ## Recruiter and Interview Tour
 
-1. [Project Overview](docs/01-intro/overview.md) — purpose, evidence boundaries, and repository map.
+1. [Application Lifecycle and SDLC](docs/01-intro/application-lifecycle.md) — the cross-repository
+   path from product idea through delivery, operation, maintenance, and transformation.
 2. [Application Architecture](docs/02-architecture/application-architecture.md) — current runtime
    and critical flows.
-3. [Evergreen Engineering Topics](docs/02-architecture/engineering-topics.md) — 20 concepts mapped
-   to code, tests, failure modes, tradeoffs, and scale triggers.
-4. [Technology Decisions](docs/02-architecture/decisions.md) — ADR index and rejected alternatives.
-5. [User Guide](docs/09-user-guides/user-guide.md) — practical behavior and API workflow.
-6. [Interview Package](docs/01-intro/interview-package.md) — tour, demo, defense, and ownership checks.
+3. [Evergreen Engineering Evidence](docs/02-architecture/engineering-topics.md) — topic status,
+   primary proof, and adoption triggers.
+4. [Technology Decisions](docs/02-architecture/decisions.md) — durable choices and ADRs.
+5. [Interview Package](docs/01-intro/interview-package.md) — demo, defense, and evidence checks.
 
 ## Repository Ownership
 
@@ -121,14 +118,7 @@ cloud deployment, or archived services.
 
 ## Primary Commands
 
-```bash
-just doctor
-just test-unit
-just test-integration
-just smoke-test
-just up-monitoring
-uv run python scripts/eval/run-agent-eval.py --output /tmp/agent-eval-report.json
-```
-
-Run `just --list` for the complete command catalogue. Real cloud operations and destructive
+The [`Justfile`](Justfile) is the command catalogue for environment checks, focused tests, smoke
+proof, monitoring, and evaluation; linked scripts own specialized flags. Run `just --list` for the
+current targets. Real cloud operations and destructive
 teardown commands require an explicit, separately reviewed decision.

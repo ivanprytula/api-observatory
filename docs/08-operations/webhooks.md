@@ -17,13 +17,10 @@ The notification API and subscription API are registered in:
 - [`services/ingestor/routers/notifications.py`](../../services/ingestor/routers/notifications.py)
 - [`services/ingestor/routers/subscriptions.py`](../../services/ingestor/routers/subscriptions.py)
 
-Focused proof:
-
-```bash
-uv run pytest services/ingestor/tests/unit/core/test_notifications.py \
-  services/ingestor/tests/unit/test_notifications_resilience.py \
-  services/ingestor/tests/integration/test_notifications_api.py -q
-```
+Focused proof lives in
+[`test_notifications.py`](../../services/ingestor/tests/unit/core/test_notifications.py),
+[`test_notifications_resilience.py`](../../services/ingestor/tests/unit/test_notifications_resilience.py),
+and [`test_notifications_api.py`](../../services/ingestor/tests/integration/test_notifications_api.py).
 
 ## Deferred Inbound Gateway
 

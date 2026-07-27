@@ -1,207 +1,77 @@
 # Development Workflows
 
-Track: A — Product and Onboarding
+The [`Justfile`](../../Justfile) is the command catalogue. This guide owns intent, proof selection,
+and stable development rules so command syntax is not duplicated in Markdown.
 
-Workflow intent, sequence, and canonical commands for active development.
+## Development Loop
 
----
+1. Run `just doctor` and choose Docker-first (`just up`) or hot reload (`just dev`).
+2. Apply migrations before exercising changed persistence behavior.
+3. Run the smallest focused unit/integration test while iterating.
+4. Run the affected service boundary, contract, security, and documentation checks.
+5. Review the diff, migration compatibility, telemetry, and rollback path.
+6. Run the applicable pre-commit and CI-equivalent gates before considering the change complete.
 
-## Daily Cadence
+Use [setup](../04-setup/setup-guide.md) for runtime modes. The
+[CI/CD reference](../06-ci-cd/ci-cd.md) explains automated gates.
 
-```text
-1. just doctor                → verify tooling
-2. just up                    → start dependencies + API (Docker-first)
-3. just migrate               → apply Alembic migrations
-4. uv run pytest -m unit -q   → fast unit checks (iterating)
-5. uv run pytest -m integration -q  → integration checks (before merge)
-6. pre-commit run --all-files → lint/format gates (before PR)
-7. just down                  → shut down when done
-```
+## Proof Selection
 
-## Two Development Modes
+| Change | Minimum focused proof |
+| --- | --- |
+| Pure domain/helper | Unit test for success and failure behavior |
+| API/auth/tenant behavior | ASGI integration test including unauthorized/cross-tenant regression |
+| Model/schema | Alembic upgrade/downgrade plus PostgreSQL integration test |
+| Cross-service contract | Contract version check and both producer/consumer tests |
+| Cache/broker/provider boundary | Dependency failure/recovery and fail-open/fail-closed assertion |
+| Query/performance | Captured workload and query plan in the performance worksheet |
+| Deployment interface | Machine-readable app/infra contract validator and image health checks |
+| Documentation only | Docs quality, links, stale-claim search, and diff check |
 
-### Docker-first (default)
+The maintained test recipes and flags live in the [`Justfile`](../../Justfile); CI definitions live
+under [`.github/workflows/`](../../.github/workflows/).
 
-```bash
-just up       # start full stack in Docker
-just dev      # Docker infra + host uvicorn (hot reload)
-```
+## Test Architecture
 
-Best for: integration parity, migration validation, CI-equivalent environment.
+| Suite | Dependency boundary | Purpose |
+| --- | --- | --- |
+| Unit | In-memory/mocked boundary | Deterministic behavior and failure rules |
+| Integration | PostgreSQL/Redis/service container as applicable | Persistence, migrations, auth, concurrency, and service contracts |
+| Contract | In-process OpenAPI/shared schemas | Backward compatibility and protected-route behavior |
+| End-to-end/smoke | Running local stack | Critical user and deployment path |
+| Performance/fault | Explicit opt-in workload | Measurement, degradation, recovery, and remaining uncertainty |
 
-### Infra-only + local uvicorn
+Shared fixtures live in [`tests/fixtures_shared.py`](../../tests/fixtures_shared.py). Root and
+ingestor `conftest.py` files re-export them; fixture logic should not be copied between trees.
+Inference and MCP keep service-owned suites because their dependency boundaries differ.
 
-```bash
-docker compose up -d db cache broker   # infrastructure containers only
-uv run uvicorn ingestor.main:app --reload  # debugger-attachable
-```
+## Durable Engineering Rules
 
-Best for: IDE debugging, breakpoint workflows, faster reload cycles.
+- Preserve backward compatibility unless a breaking change is explicitly approved.
+- Keep routes thin and persistence tenant-scoped; use parameterized database access.
+- Treat Alembic as schema authority and use expand/contract sequencing for rollout compatibility.
+- Bound every network call, retry only safe work, and document fail-open/fail-closed behavior.
+- Do not add a service, datastore, framework, or dependency without a current evidence gap.
+- Keep `libs/` independent from `services/`; validate shared contracts at process boundaries.
+- Never hardcode or print secrets. Use placeholder/example configuration only.
+- Update durable architecture, contract, or recovery documentation in the same change; omit
+  transient progress notes.
 
----
+## Review Focus
 
-## Canonical Commands
+Check authorization, data ownership, bounded queries/payloads, migration compatibility, timeout and
+retry behavior, useful telemetry, and rollback. New code should follow the project-specific
+instructions in [`.github/copilot-instructions.md`](../../.github/copilot-instructions.md); generic
+language/tool rules do not need to be repeated here.
 
-### Core
+## Specialized Evidence
 
-| Action | Command |
-|--------|---------|
-| Health check | `just doctor` |
-| Start stack | `just up` |
-| Stop stack | `just down` |
-| Dev server (hot reload) | `just dev` |
-| Apply migrations | `just migrate` |
-| Reset DB | `just db-reset` |
-| Bootstrap demo data | `just init` |
-
-### Testing
-
-| Action | Command |
-|--------|---------|
-| Unit tests | `just test-unit` or `uv run pytest -m unit -q` |
-| Integration tests | `just test-integration` or `uv run pytest -m integration -q` |
-| E2E tests | `just test-e2e` or `uv run pytest -m e2e -q` |
-| All tests | `uv run pytest tests/ -v` |
-
-### Linting & Type Checking
-
-| Action | Command |
-|--------|---------|
-| Ruff lint | `uv run ruff check .` |
-| Ruff format check | `uv run ruff format --check .` |
-| mypy type check | `uv run mypy .` (via `ty`) |
-| Pre-commit all | `pre-commit run --all-files` |
-
-### API Testing (Bruno)
-
-```bash
-just api-test                # run Bruno collection against localhost
-npm install -g @usebruno/cli # install Bruno CLI first
-```
-
-Collections live in `bruno/`: auth, sources, contracts, scorecards, ops, websocket.
-Use Bruno Desktop (`just bruno`) for interactive work. WebSocket testing requires `wscat` or the Streamlit dashboard.
-
-### Authenticated k6 Smoke
-
-Start the local stack first with `just up`. The smoke test creates its own disposable
-viewer account, checks `/health`, and reads the protected source list. It records a
-local baseline but deliberately does not enforce a latency threshold yet.
-
-```bash
-export K6_USERNAME="k6local$(date +%s)"
-read -rsp 'k6 password: ' K6_PASSWORD
-export K6_PASSWORD
-k6 run --summary-export=/tmp/api-observatory-k6-summary.json \
-  scripts/load/k6-ci-smoke.js
-```
-
-The same test runs weekly and on demand in GitHub Actions as
-[`performance-smoke.yml`](../../.github/workflows/performance-smoke.yml). Download
-its `performance-smoke-*` artifact to compare JSON summaries before setting a
-latency SLO gate.
-
-### Database Ops
-
-| Action | Command |
-|--------|---------|
-| Safe psql | `just psql-safe` (blocks RDS hostnames) |
-| Dump local DB | `just pg-dump` |
-| Restore from file | `just pg-restore <file>` |
-| Restore from S3 | `just pg-restore-from-s3 s3://...` |
-
-### Floci Sandbox
-
-| Action | Command |
-|--------|---------|
-| Start Floci + seed | `just floci-up` |
-| Dev against Floci | `just floci-dev` |
-| Validate Floci health | `just floci-validate` |
-| Run Floci E2E tests | `just floci-test` |
-
-### Terraform
-
-```bash
-TF_ENV=sandbox just tf init   # sandbox (default)
-TF_ENV=dev just tf init       # real AWS dev
-TF_ENV=sandbox just tf plan
-TF_ENV=sandbox just tf apply
-```
-
----
-
-## Testing Architecture
-
-### Test Tree Layout
-
-```text
-tests/
-  unit/              → marker: unit
-  integration/       → marker: integration
-  e2e/               → marker: e2e / aws
-  fixtures_shared.py # single shared fixtures source
-  conftest.py        # re-exports fixtures_shared.__all__
-
-services/ingestor/tests/
-  unit/              → marker: unit
-  integration/       → marker: integration
-  conftest.py        # re-exports fixtures_shared.__all__
-```
-
-### Marker Policy
-
-| Marker | DB needed | Docker needed |
-|--------|-----------|---------------|
-| `unit` | no | no |
-| `integration` | Postgres + Cache | optional (testcontainers) |
-| `e2e` | yes | yes |
-| `aws` | yes | yes |
-
-### Database Strategy
-
-- **Unit tests:** `sqlite+aiosqlite:///:memory:` (no external dep)
-- **Integration tests local:** testcontainers auto-provisions `pgvector/pgvector:pg17`
-- **Integration tests CI:** `DATABASE_URL_TEST` injected by GHA service container
-
-### Fixture Ownership
-
-1. Shared fixtures (DB session, HTTP client, Cache, migrations) live in `tests/fixtures_shared.py`.
-2. `tests/conftest.py` and `services/ingestor/tests/conftest.py` re-export `fixtures_shared.__all__` — no logic of their own.
-3. Never import fixtures across trees in either direction.
-
----
-
-## Code Review Checklist
-
-- New functions in `services/ingestor/` must include Google-style docstrings (purpose, Args, Returns, design patterns applied)
-- Parameterized DB access (no raw SQL string interpolation)
-- No hardcoded secrets or API keys
-- Respect import boundaries: `libs/` must not import from `services/`
-
-## Contract Drift Detection
-
-Each ingest submits a **ContractSnapshot** with SHA-256 fingerprint. If fingerprint matches previous, diff is skipped. Otherwise field-level diff runs → **DriftEvent** with type (breaking/non-breaking/none), severity, score, summary. Events publish to Cache pub/sub channel `ingestor:events`.
-
-## Bruno Collections
-
-- Run: `just bruno` (Desktop) or `bru run` (CLI)
-- Post-response scripts auto-set `token` and `source_id`
-- To add a request: Desktop right-click → New Request, or create `.bru` file manually
-
-## Contract Version Bumping
-
-```bash
-python scripts/bump_contracts_version.py --check                       # validate
-python scripts/bump_contracts_version.py --apply --strategy patch --changelog-entry "..."  # bump
-```
-
-Pre-commit hook runs automatically. CI-side auto-bump is deferred (pre-commit hook sufficient for now).
-
----
-
-## Related Documents
-
-- [Setup Guide](../04-setup/setup-guide.md) — first-time bootstrap
-- [Policies & Gotchas](policies.md) — CI policy, common pitfalls, dependency management
-- [CI/CD Reference](../06-ci-cd/ci-cd.md) — workflow semantics and governance
-- [Infrastructure Deployment Guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md) — canonical cloud deploy runbook
+- API collections live under [`bruno/`](../../bruno/) and are exercised by the maintained recipe.
+- Authenticated k6 smoke ownership lives in
+  [`performance-smoke.yml`](../../.github/workflows/performance-smoke.yml) and its script.
+- Contract versioning is owned by [`libs/contracts`](../../libs/contracts/) and
+  [`scripts/bump_contracts_version.py`](../../scripts/bump_contracts_version.py).
+- Performance and recovery records use the
+  [performance/failure worksheet](performance-and-failure-lab.md).
+- Cloud provisioning and rollback belong to the infra
+  [deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md).

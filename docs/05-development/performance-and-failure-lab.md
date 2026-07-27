@@ -5,11 +5,9 @@ repeatable mechanisms; a number is a baseline only when its environment and date
 
 ## Query Plan Exercise
 
-Profile the scorecard query against PostgreSQL, not SQLite:
-
-```bash
-uv run pytest services/ingestor/tests/integration/observations/test_query_analysis.py -q
-```
+Profile the scorecard query against PostgreSQL, not SQLite. The focused proof is
+[`test_query_analysis.py`](../../services/ingestor/tests/integration/observations/test_query_analysis.py);
+use the test runner documented in [Development Workflows](dev-workflows.md).
 
 For a populated local database, capture `EXPLAIN (ANALYZE, BUFFERS)` for the rolling scorecard
 aggregation. Record row count, window, indexes used, planning/execution time, buffer hits/reads, and
@@ -18,13 +16,11 @@ schema, cardinality, and environment.
 
 ## Bounded Load Baseline
 
-Use the existing k6 smoke and observations workload:
-
-```bash
-uv run python scripts/ci/validate_runtime_alignment.py
-k6 run scripts/load/k6-ci-smoke.js
-k6 run scripts/load/k6-observations-load.js
-```
+Use the existing
+[`k6-ci-smoke.js`](../../scripts/load/k6-ci-smoke.js) and
+[`k6-observations-load.js`](../../scripts/load/k6-observations-load.js) workloads. Their CI owner is
+[`performance-smoke.yml`](../../.github/workflows/performance-smoke.yml), and the
+[Justfile](../../Justfile) owns supported local recipes.
 
 Record commit, hardware/container limits, concurrency, duration, dataset size, p50/p95/p99, error
 rate, CPU/memory, connection-pool use, and queue depth. Do not convert a laptop result into a
@@ -41,11 +37,9 @@ production capacity claim.
 | Notification provider | timeout/5xx stub | notification result, breaker, incident retained | later bounded attempt without duplicate incident |
 | Inference/LLM | timeout/invalid response | agent state, resilience metrics | deterministic incident guidance remains usable |
 
-The existing resilience exercise is:
-
-```bash
-scripts/verify-resilience-fault.sh
-```
+The executable resilience exercise is
+[`verify-resilience-fault.sh`](../../scripts/verify-resilience-fault.sh); keep its invocation and
+failure-injection details in the script rather than duplicating them here.
 
 Measure **time to detection**, **time to containment**, **time to recovery**, and whether queued or
 retried work drains safely. Merely observing an exception is not recovery evidence.

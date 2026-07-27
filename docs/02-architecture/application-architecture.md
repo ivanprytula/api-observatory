@@ -1,11 +1,9 @@
 # Application Architecture — API Observatory
 
-**Scope**: Current MVP state (application repo only). For platform/infra topology, see
-[Infrastructure Architecture](infrastructure-architecture.md). For phase-by-phase feature
-status, see [MVP Roadmap](../03-planning/mvp-roadmap.md) and its
-[audit-gaps](../03-planning/audit-gaps.md) tracker — this document shows structure, those
-track status. For concept lookup and evidence strength, use
-[Evergreen Engineering Topics](engineering-topics.md).
+**Scope:** current application structure and deployable boundaries. The
+[roadmap](../03-planning/mvp-roadmap.md) owns priorities, the
+[engineering evidence map](engineering-topics.md) owns topic status, and the
+[deployment contract](../07-deployment/app-repo-contract.md) owns the app/infra interface.
 
 > An earlier, larger 8-phase design (multi-service, AWS ECS, MongoDB, Qdrant) is archived at
 > `../_archive/02-architecture/architecture.md` — historical record, not current state.
@@ -119,11 +117,32 @@ default and JWT-authenticated. The opt-in learning lab is mounted only when
 (`services/mcp/server.py`) exposing 11 MCP tools that each call the routers above over real HTTP,
 authenticated as a dedicated `mcp-service` account. See the Containers diagram above.
 
+## Source and Data Ownership
+
+| Path | Responsibility |
+| --- | --- |
+| `services/ingestor/` | API, scheduled probes, persistence, incidents, eventing, security, optional agent |
+| `services/dashboard/` | Streamlit client over ingestor HTTP/WebSocket contracts |
+| `services/inference/` | Embedding/vector-search API with dedicated pgvector PostgreSQL |
+| `services/mcp/` | Local stdio tools backed by authenticated ingestor HTTP calls |
+| `libs/contracts/` | Versioned cross-process Pydantic contracts |
+| `libs/platform/` | Shared logging, tracing, timeout, retry, breaker, and bulkhead primitives |
+| `alembic/` | Ingestor schema source of truth |
+
+`User`, `UserTenant`, and `ApiKey` establish identity and tenant access. `SourceProfile` defines a
+monitored dependency; health samples, contract snapshots, drift events, and dependency incidents
+preserve its operational history. Outbox/inbox records protect event delivery, while `AgentRun`
+stores optional checkpointed triage and human review.
+
+The app repository owns these behaviors, contracts, migrations, images, and local runtime. The
+sibling infrastructure repository owns real-cloud Terraform/state, IAM, networking, secret
+delivery, deployment, and platform monitoring. Cross-repository changes follow the deployment
+contract rather than duplicating topology documentation.
+
 ## How to Update
 
-- **New service** (e.g. a real `analytics` or `inference` service gets source code): add a
-  container node to the Containers diagram, add a row to the Router/Feature Map if it exposes
-  routers, and follow the CLAUDE.md "Plan Maintenance" trigger (update `app-repo-contract.md` + baseline checklist in the same PR).
+- **New service:** add the container and contract boundary, then update the deployment contract and
+  applicable baseline controls in the same change.
 - **New router**: add one row to the table above. No diagram edit needed unless it introduces
   a new external dependency (new datastore, new outbound integration).
 - **Feature moves from deferred → active** (roadmap phase advances): flip its Status cell and

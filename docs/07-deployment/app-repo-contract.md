@@ -46,22 +46,26 @@ Each service image must satisfy these requirements for the infra manifests to fu
 
 ### Security
 
-- [ ] **Application reads secrets from environment variables** — infra injects `DATABASE_URL`, `INTERNAL_JWT_SECRET`, `BROKER_URL`, `ADMIN_TOKEN` via `secretKeyRef` (not files). The `inference` service (real as of the AI-augmented observatory Phase 2) uses pgvector on the shared `DATABASE_URL` Postgres instance — no separate `QDRANT_URL`/Qdrant deployment; see `docs/.plans/ai-augmented-observatory-agent-mcp.md` for why.
+- [ ] **Application reads secrets from environment variables** — delivery may use EC2/Compose or a
+      Kubernetes `secretKeyRef`, but application code does not assume the delivery mechanism.
+      Inference uses pgvector and owns its database configuration separately from ingestor as
+      recorded in [ADR 015](../02-architecture/adr/015-inference-dedicated-pgvector-postgres.md);
+      Qdrant is not part of the current runtime.
 - [ ] **No secrets in logs** — log scrubbing for env var values is the app's responsibility
 - [ ] **No `root` required** — app must work with `runAsNonRoot: true`, `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`, and `capabilities.drop: [ALL]`
 - [ ] **No privileged ports** (<1024) — apps bind to ephemeral/high ports only
 
-#### Secret Source in Production
+#### Secret Source by Runtime
 
 - **Local dev**: `infra/kubernetes/overlays/local/secret.example.yaml` is a static, plaintext,
   dummy-value `Secret` — never used outside `k3d` local sandboxes.
-- **AWS Stage 0 production:** the infra repo supplies values to the EC2 Compose runtime.
+- **AWS Stage 0:** the infra repo supplies values to the EC2 Compose runtime. This remains a
+  deployment decision/configuration claim until a live run is separately approved and verified.
   A later ECS/Kubernetes stage should use AWS Secrets Manager with task-role or external-secret
   delivery. The app continues to read environment variables and must not assume a delivery mechanism.
 - Either mechanism is infra-repo-owned. The app repo's obligation stays exactly what it is today:
-  read secrets from environment variables via `secretKeyRef`, never assume a specific delivery
-  mechanism. This mirrors the UID 10001 boundary above — the app repo declares the *contract*
-  (env var names, `secretKeyRef` usage), the infra repo owns the *delivery mechanism*.
+  read secrets from environment variables and never assume a specific delivery mechanism. The app
+  repo declares names and behavior; the infra repo owns delivery.
 
 ### Observability
 

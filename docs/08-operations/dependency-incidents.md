@@ -64,13 +64,10 @@ notifications while occurrence counts continue to increase.
 - Migration: [`20260724_120000_add_dependency_incidents.py`](../../alembic/versions/20260724_120000_add_dependency_incidents.py)
 - Dashboard: [`panels/incidents.py`](../../services/dashboard/ui/streamlit/panels/incidents.py)
 
-Focused proof:
-
-```bash
-uv run pytest services/ingestor/tests/unit/core/test_incident_lifecycle.py \
-  services/ingestor/tests/integration/test_incidents_api.py \
-  services/ingestor/tests/integration/test_contract_drift_api.py -q
-```
+Focused proof lives in
+[`test_incident_lifecycle.py`](../../services/ingestor/tests/unit/core/test_incident_lifecycle.py),
+[`test_incidents_api.py`](../../services/ingestor/tests/integration/test_incidents_api.py), and
+[`test_contract_drift_api.py`](../../services/ingestor/tests/integration/test_contract_drift_api.py).
 
 ## Failure, Signals, and Rollback
 

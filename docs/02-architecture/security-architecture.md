@@ -19,15 +19,10 @@ mechanisms remain available only in the opt-in learning lab.
 | Learning lab   | `/api/v2/*` and `/api/v1/observations/secure/*` | Fixed-window/session/bearer/JWT comparison; disabled by default |
 | Session cookie | Dashboard / admin UI               | Stateful session, `HttpOnly`      |
 
-Environment variables that control auth:
-
-```bash
-DOCS_USERNAME=<value>          # HTTP Basic — username for OpenAPI UI
-DOCS_PASSWORD=<value>          # HTTP Basic — password for OpenAPI UI
-JWT_SECRET=<value>             # Signing key for v1 production JWTs
-SESSION_SECRET=<value>         # Session cookie signing key
-AUTH_DEMO_ROUTES_ENABLED=false # Mount the opt-in authentication learning lab
-```
+Authentication settings and their environment mappings are owned by
+[`config.py`](../../services/ingestor/config.py); safe configuration shape is documented in
+[`.env.example`](../../.env.example). This includes optional documentation credentials, JWT
+signing keys, and the opt-in authentication lab flag.
 
 None of these have safe defaults. The service fails fast at startup if any secret is still the
 default placeholder value (see [Production Guardrails](#production-guardrails)).

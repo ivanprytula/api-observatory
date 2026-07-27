@@ -7,10 +7,11 @@ script to memorize.
 
 1. State the practical problem: a solo SaaS developer depends on APIs that can fail, slow down, or
    change contract.
-2. Show the [system context](overview.md) and app/infra ownership boundary.
+2. Use the [application lifecycle](application-lifecycle.md) to frame discovery, delivery,
+   operation, and evidence-driven change across the app/infra ownership boundary.
 3. Trace source registration → scheduled probe → health sample → scorecard/incident.
 4. Show one test and one telemetry signal rather than listing technologies.
-5. Use the [topic index](../02-architecture/engineering-topics.md) to explain what is Core, Lab,
+5. Use the [evidence map](../02-architecture/engineering-topics.md) to explain what is Core, Lab,
    Decision, Deferred, or Historical.
 
 ## Ten-Minute Demo
@@ -52,18 +53,18 @@ Start with the measured bottleneck. Walk 10x and 100x changes while preserving o
 isolation, recovery, and cost. Defend when not to add sharding, Kubernetes, a gateway, another
 database, or another service.
 
-## Ownership Scorecard
+## Evidence Scorecard
 
 The repository now supports locating all 20 topics. Personal ownership still requires teach-back
 without generated notes.
 
 | Target | Repository evidence | Personal proof required |
 | --- | --- | --- |
-| 20 Locate | Canonical topic index with current links and commands | Find evidence live in under two minutes |
-| 12 Explain | Behavior, failure, tradeoff, and scale prompts in each entry | Explain selected flows without notes |
-| 6 Operate | Auth/RLS, schema/retention, cache/resilience, incidents, broker lab, gateway lab | Diagnose, recover, and interpret signals |
-| 3 Lead | Deferred sharding, gateway adoption, deployment/frontend triggers | Defend sequencing to technical and business stakeholders |
+| Locate | Compact evidence map with current implementation/test links | Find evidence live in under two minutes |
+| Explain | Architecture, ADRs, and failure boundaries | Explain selected flows without notes |
+| Operate | Auth/RLS, schema/retention, cache/resilience, incidents, broker lab, gateway lab | Diagnose, recover, and interpret signals |
+| Lead | Deferred sharding, gateway adoption, deployment/frontend triggers | Defend sequencing to technical and business stakeholders |
 
-Freeze broad feature development when the core topic index and this package are demonstrable. New
+Freeze broad feature development when the core evidence and this package are demonstrable. New
 work should close an evidence gap or respond to a measured trigger, not increase the technology
 count.

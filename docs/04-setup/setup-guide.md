@@ -1,181 +1,82 @@
 # Setup Guide
 
-Track: B — Engineering Execution
+Local Docker Compose is the canonical runtime. The [`Justfile`](../../Justfile) owns command syntax;
+this guide explains which mode to choose, what it proves, and where configuration lives.
 
-Consolidated setup reference. For first-time bootstrap, start at [Quick Start](#quick-start) below.
+## Prerequisites
 
----
+Required tools are Docker with Compose, Python 3.14, `uv`, `just`, Git, and `curl`. PostgreSQL/Redis
+clients, k6, Bruno, Terraform, cloud CLIs, kubectl, Helm, and k3d/k3s are optional for their
+corresponding workflows. Run `just doctor` for the maintained environment check.
 
-## System Requirements
-
-### Ubuntu/Debian Packages
-
-```bash
-sudo apt-get install -y postgresql-client redis-tools docker-ce docker-ce-cli containerd.io \
-  docker-buildx-plugin docker-compose-plugin gdal-bin graphviz curl jq git
-```
-
-### Python Tooling (uv)
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv sync                            # install all project dependencies
-uv tool install awscli-local       # for local AWS emulation
-```
-
-### Verification
-
-Run `just doctor` for automated system check, or verify manually:
-
-```bash
-docker --version && docker compose version && python3 --version && uv --version
-```
-
-### Docker Permissions
-
-```bash
-sudo usermod -aG docker "$USER"
-# Log out and back in
-```
-
-### Local Artifacts
-
-All local state lives in `.local-dev/` (gitignored). This directory is created automatically by `just doctor`.
-
----
+Never read or commit a local `.env`. Copy the placeholder-only [`.env.example`](../../.env.example)
+and supply local values privately.
 
 ## Quick Start
 
-```bash
-just doctor            # verify tooling, create .local-dev/
-cp .env.example .env   # create local configuration
-uv sync                # sync Python deps
-just up                # start PostgreSQL + Cache + Redpanda + ingestor + Streamlit
-just migrate           # apply Alembic migrations
-```
+Copy [`.env.example`](../../.env.example) to a private local `.env`, then use the
+[`Justfile`](../../Justfile) targets `up`, `migrate`, and `init`. Those files own the executable
+sequence.
 
-### Verify
+The API is available at `http://127.0.0.1:8000`, its OpenAPI UI at `/docs`, and Streamlit at
+`http://127.0.0.1:8501`. Verify `/health` before using the demo.
 
-```bash
-curl -sf http://127.0.0.1:8000/health          # expect {"status":"healthy"}
-uv run pytest tests/unit/ -q                     # fast unit test pass
-```
+## Supported Local Modes
 
-For an interactive demo, run `just init` and follow the printed `curl` commands to register an admin user, sign in, and register a demo source.
+| Mode | Entry point | Use |
+| --- | --- | --- |
+| Docker-first | `just up` | Canonical application/data-plane runtime and integration target |
+| Hot reload | `just dev` | Container dependencies with host Uvicorn for debugging |
+| Monitoring | `just up-monitoring` or `just up-all` | Opt-in Prometheus, Grafana, Loki/Promtail, Tempo, Alertmanager, Mailpit |
+| Cloud emulator | `CLOUD=<aws|azure|gcp> just sandbox-up` | Zero-cost provider-shaped API/IaC exercises, not real cloud behavior |
+| Local Kubernetes | `just k3s-up` | Orchestration lab; Compose remains canonical |
 
----
+The [`Justfile`](../../Justfile) documents companion stop, status, test, and teardown recipes. Real
+AWS Stage 0 is **Decision** evidence and is handled by the sibling infra
+[deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md),
+not by a local environment profile.
 
-## Environment Variables
+## Configuration Ownership
 
-### Core Variables (Required)
+- [`.env.example`](../../.env.example) lists safe placeholder names for local use.
+- [`services/ingestor/config.py`](../../services/ingestor/config.py) owns ingestor defaults,
+  validation, feature flags, and secret classification.
+- [`services/inference/config.py`](../../services/inference/config.py) and
+  [`services/mcp/config.py`](../../services/mcp/config.py) own their service-specific settings.
+- [`docker-compose.yml`](../../docker-compose.yml) owns service wiring, ports, profiles, and
+  container-to-container addresses.
 
-| Variable | Purpose | Example |
-|----------|---------|---------|
-| `DATABASE_URL` | SQLAlchemy async URL | `postgresql+asyncpg://postgres:postgres@db:5432/api_observatory` |
-| `ENVIRONMENT` | Runtime mode | `development`, `staging`, `production` |
-| `SERVICE_VERSION` | Service provenance | `0.1.0` or `git describe --tags` |
-| `LOG_LEVEL` | Logging verbosity | `INFO` |
-| `LOG_FORMAT` | Log format | `text` (dev) / `json` (prod) |
+Core operation requires PostgreSQL and authentication configuration. Redis, Redpanda, telemetry,
+notifications, background workers, external AI providers, and demo routes remain optional or
+feature-gated. Host processes use `127.0.0.1`; containers use Compose DNS names such as `db`,
+`cache`, and `broker`.
 
-### Auth Variables
+Local secrets may come from the ignored `.env`. Cloud secret delivery is infrastructure-owned; the
+application only consumes environment variables declared by the
+[deployment contract](../07-deployment/app-repo-contract.md).
 
-| Variable | Purpose |
-|----------|---------|
-| `JWT_SECRET` | HS256 signing key (≥32 chars) |
-| `JWT_EXPIRY_MINUTES` | Access token TTL (default 30) |
-| `JWT_REFRESH_TTL_DAYS` | Refresh token TTL (default 7) |
-| `API_V1_BEARER_TOKEN` | Simple bearer token for v1 endpoints |
-| `INTERNAL_JWT_SECRET` | M2M service-to-service auth |
+## Optional Local Capabilities
 
-### Feature Flag Variables
+- HTTPS/edge parity is owned by the Compose `ingress` profile and
+  [`scripts/setup/02-setup-local-https.sh`](../../scripts/setup/02-setup-local-https.sh).
+- Image/dependency scanning is owned by the security recipes in the
+  [`Justfile`](../../Justfile) and [CI workflows](../../.github/workflows/).
+- pgvector is provisioned by the inference database image and migration under
+  [`services/inference/`](../../services/inference/).
+- Performance and fault work starts from the
+  [performance/failure worksheet](../05-development/performance-and-failure-lab.md), which links the
+  maintained scripts.
 
-| Variable | Effect |
-|----------|--------|
-| `CACHE_ENABLED=true` | Enable Cache: scorecard cache, pub/sub, rate limiting, agent checkpointer |
-| `BROKER_ENABLED=true` | Enable Redpanda/Kafka for drift event streaming |
-| `OTEL_ENABLED=true` | Enable OpenTelemetry tracing export to the configured OTLP backend (Tempo locally) |
-| `SENTRY_ENABLED=true` | Enable Sentry/GlitchTip exception tracking |
-| `OPENAI_ENABLED=true` | Enable LangGraph agent (requires `OPENAI_API_KEY`) |
-| `NOTIFICATIONS_ENABLED=true` | Enable multi-channel alert dispatch |
-| `BACKGROUND_WORKERS_ENABLED=true` | Enable in-process background worker pool |
+Qdrant, a production frontend replacement, ECS/EKS, and real multi-cloud environments are not
+active setup modes. Their adoption requires a trigger from the
+[roadmap](../03-planning/mvp-roadmap.md).
 
-### DB Connection Pool
+## Verification and Troubleshooting
 
-| Variable | Default | Meaning |
-|----------|---------|---------|
-| `DB_POOL_SIZE` | 5 | Connections kept open |
-| `DB_MAX_OVERFLOW` | 10 | Extra connections on burst |
-| `DB_POOL_TIMEOUT` | 30s | Wait for available connection |
-| `DB_POOL_RECYCLE` | 1800s | Connection refresh interval |
+Use `just doctor`, service health/readiness endpoints, and the focused test recipes in the
+[`Justfile`](../../Justfile). If startup fails, inspect the Compose service state and logs, then
+check migrations and the owning settings module rather than copying command sequences into this
+guide.
 
-### Secrets Management
-
-**Local dev:** Copy `.env.example` → `.env`, set dummy secrets. Never commit `.env`.
-
-**Production:** Use AWS Secrets Manager / SSM Parameter Store. In ECS: use task definition Secrets section. In CI: use GitHub Secrets with masking.
-
-**Rotation:** Rotate long-lived secrets every 90 days. Use `JWT_PREVIOUS_SECRETS` for zero-downtime JWT rotation.
-
----
-
-## Local URL Matrix
-
-The `LOCAL_API_SCHEME` environment variable switches between two modes:
-
-| Mode | API base | API docs | Dashboard | WebSocket | Bruno baseUrl |
-|------|----------|----------|-----------|-----------|---------------|
-| Direct HTTP | `http://127.0.0.1:8000` | `http://127.0.0.1:8000/docs` | `http://127.0.0.1:8501` | `ws://127.0.0.1:8000` | `http://127.0.0.1:8000` |
-| Edge HTTPS | `https://127.0.0.1/api` | `https://127.0.0.1/api/docs` | `https://127.0.0.1/` | `wss://127.0.0.1` | `https://127.0.0.1/api` |
-
-All URLs use `127.0.0.1` (IPv4 literal) instead of `localhost` to bypass DNS resolution.
-
-**Shared helper:** `bash scripts/daily/local-url.sh --help` prints URLs for the current mode.
-
----
-
-## AWS Sandbox Profile (Floci)
-
-One-time setup for local AWS emulation:
-
-```bash
-# ~/.aws/credentials
-[sandbox]
-aws_access_key_id     = test
-aws_secret_access_key = test
-
-# ~/.aws/config
-[profile sandbox]
-region = eu-central-1
-```
-
-Then point the AWS CLI at the emulator and verify:
-
-```bash
-export AWS_PROFILE=sandbox
-export AWS_ENDPOINT_URL=http://localhost:4566   # floci-aws (docker-compose.yml `aws` profile)
-aws sts get-caller-identity
-```
-
----
-
-## What Just Happened? (Services Started)
-
-`just up` starts the core MVP stack:
-
-- **PostgreSQL 17** `:5432` — Primary persistence
-- **Cache 7** `:6379` — Scorecard cache, WebSocket pub/sub, rate-limit backend
-- **Redpanda (Kafka)** `:9092` — Drift events, async processing, DLQ
-- **Ingestor API** `:8000` — FastAPI: probes, scorecards, agent enrichment
-- **Dashboard (Streamlit)** `:8501` — Visual UI for scorecards, drift, live stream
-
-### Database Schema
-
-Alembic migrations create tables for: observations, pipeline jobs, source profiles, contract snapshots, drift events, users, API keys, security audit events, abuse signals, messaging infrastructure.
-
----
-
-## Related
-
-- [Environment / Stack Matrix](../01-intro/environment-stack-matrix.md) — deployment scenarios and env var matrix
-- [Commands Reference](../05-development/dev-workflows.md) — canonical command catalog
-- [Daily Development](../05-development/dev-workflows.md) — workflow intent and sequence
+For the development loop and proof selection, continue with
+[development workflows](../05-development/dev-workflows.md).

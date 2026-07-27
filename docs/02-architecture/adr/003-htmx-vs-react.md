@@ -137,5 +137,5 @@ Key HTMX patterns used:
 
 - [HTMX documentation](https://htmx.org/docs/)
 - [Hypermedia Systems (book)](https://hypermedia.systems/)
-- [ADR-001: Kafka vs RabbitMQ](../design/adr/001-kafka-vs-rabbitmq.md)
-- [ADR-002: Qdrant vs pgvector](../design/adr/002-qdrant-vs-pgvector.md)
+- [ADR-001: Kafka vs RabbitMQ](001-kafka-vs-rabbitmq.md)
+- [ADR-002: Qdrant vs pgvector](002-qdrant-vs-pgvector.md)

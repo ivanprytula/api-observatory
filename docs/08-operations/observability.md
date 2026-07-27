@@ -26,24 +26,10 @@ Application metrics are defined in
 requests, observations, cache outcomes, circuit-breaker state, scheduled jobs, background
 queue depth, retention, authentication, and other bounded operational work.
 
-Useful queries:
-
-```promql
-rate(http_requests_total[5m])
-rate(http_requests_total{status=~"4..|5.."}[5m])
-histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
-pipeline_circuit_breaker_state == 1
-pipeline_background_jobs_in_queue
-rate(pipeline_job_executions_total{status="failed"}[10m])
-```
-
-Alert rules live in [`infra/monitoring/rules/`](../../infra/monitoring/rules/). Validate
-them without changing application state:
-
-```bash
-docker compose config --quiet
-uv run python scripts/ci/validate_runtime_alignment.py
-```
+Operational queries and alert thresholds are owned by the provisioned Grafana dashboards and
+[`infra/monitoring/rules/`](../../infra/monitoring/rules/). The
+[Compose topology](../../docker-compose.yml) owns their runtime references, and the
+[Justfile](../../Justfile) owns supported validation syntax.
 
 ## Traces and Correlation
 
@@ -89,13 +75,10 @@ failure exercise.
 
 ## Proof and Limits
 
-Start the opt-in monitoring profile and check service configuration:
-
-```bash
-just up-monitoring
-docker compose --profile monitoring ps
-curl -fsS http://127.0.0.1:8000/metrics >/dev/null
-```
+Start the opt-in monitoring profile through the
+[`up-monitoring` target](../../Justfile), then inspect the monitoring services and the ingestor
+`/metrics` endpoint. The [Compose topology](../../docker-compose.yml) owns profile and service
+details.
 
 This proves local wiring only. A production SLO claim requires a deployed workload,
 representative traffic, an agreed objective, and retained incident evidence.

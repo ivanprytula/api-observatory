@@ -26,23 +26,13 @@ API Observatory continuously checks the health and reliability of your external 
 
 ### Run the Dashboard
 
-```bash
-# Start core services (ingestor includes built-in Streamlit dashboard)
-just up
-
-# Apply database schema
-just migrate
-
-# Manual bootstrap (prints curl commands)
-just init
-```
+Use the [Justfile](../../Justfile) targets `up`, `migrate`, and `init`; the executable definitions
+remain there. See the [Setup Guide](../04-setup/setup-guide.md) for supported local modes.
 
 Open `http://127.0.0.1:8501` to access the dashboard.
 
-> For local development without Docker:
-> ```bash
-> uv run streamlit run services/dashboard/streamlit_app.py
-> ```
+For local development without Docker, follow
+[Development Workflows](../05-development/dev-workflows.md), which links the dashboard entrypoint.
 
 ### Monitor Your First API
 
@@ -80,9 +70,7 @@ Get rolling-window reliability metrics for any API:
 | p50/p95 Latency | Median and 95th-percentile response time |
 | Error Budget Burn Rate | How fast you're consuming your SLO budget |
 
-```bash
-GET /api/v1/scorecards/{source_id}?days=7
-```
+The rolling-window endpoint is `GET /api/v1/scorecards/{source_id}?days=7`.
 
 ### API Reference
 
@@ -125,25 +113,9 @@ Real-time event stream at `WS /ws/observations/stream?token=<bearer_token>`.
 | `job.progress` | Background job progress (0-1) |
 | `ping` | 30s keepalive |
 
-### Connection Examples
-
-```bash
-# wscat
-wscat -c "ws://127.0.0.1:8000/ws/observations/stream?token=<bearer>"
-```
-
-```javascript
-// Browser
-const ws = new WebSocket(`wss://api.example.com/ws/observations/stream?token=${token}`);
-ws.onmessage = (event) => { console.log(JSON.parse(event.data)); };
-```
-
-```python
-# Python
-import websockets
-async with websockets.connect(f"ws://127.0.0.1:8000/ws/observations/stream?token={token}") as ws:
-    async for msg in ws: print(msg)
-```
+Connection behavior is implemented by the dashboard client under
+[`services/dashboard/`](../../services/dashboard/) and verified by the ingestor WebSocket tests;
+keep client syntax with those executable consumers rather than copying it into this guide.
 
 Close codes: 4001 (missing token), 4003 (invalid token).
 
@@ -219,27 +191,17 @@ and latency incidents. See the [operations guide](../08-operations/dependency-in
 
 ---
 
-## Value Proposition
+## Practical Value
 
-### For Engineering Teams
-- **Proactive Reliability**: Catch API outages before users notice
-- **Contract Safety**: Enforce API compatibility through automated monitoring
-- **Data-Driven SLAs**: Quantify reliability with SLO-compliant metrics
-
-### For Operations
-- **Real-time Visibility**: WebSocket streaming for instant event delivery
-- **Operational Health**: Built-in `/health` and `/readyz` endpoints
-- **Cost Control**: Explicit teardown guides to prevent cloud waste
-
-### For Product Managers
-- **SLA Reporting**: Clear metrics for stakeholder communication
-- **Vendor Evaluation**: Compare API reliability objectively
+- Detect dependency outages and latency degradation before users report them.
+- Preserve contract-change evidence instead of relying on transient alerts.
+- Prioritize incidents using uptime, latency, drift severity, and operator state.
+- Compare dependency reliability without claiming a production SLA from local evidence.
 
 ---
 
 ## Related Documents
 
 - [Application Architecture](../02-architecture/application-architecture.md) — service structure and data flows
-- [Infrastructure Architecture](../02-architecture/infrastructure-architecture.md) — deployment topology
 - [Infrastructure Deployment Guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md) — canonical cloud deploy and monitoring guide
 - [Observability](../08-operations/observability.md) — metrics, tracing, logging
