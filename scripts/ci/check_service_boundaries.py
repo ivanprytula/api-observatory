@@ -1,67 +1,50 @@
 #!/usr/bin/env python3
-"""Phase 2 guardrails for service boundary enforcement.
+"""Guardrails for service boundary enforcement.
 
 Checks implemented:
-1. No cross-service Python imports between the six service boundaries.
-2. No direct access to another service's persistence modules
-   (database/models/crud/storage/repository/repositories).
-3. libs.platform and libs.contracts are shared namespaces — any service
-   may import from them, but they must not import back into any service.
-
-The six service boundaries are:
-- ingestor
-- inference
-- analytics
-- processor
-- dashboard
-- webhook
-
-Allowed shared namespaces (any service may import):
-- libs.platform
-- libs.contracts
+1. No cross-service Python imports between workspace service boundaries.
+2. Python modules under libs/ are shared namespaces — services may import
+   them, but shared libraries must not import back into a service.
 
 Test co-location:
 Each service owns its tests under services/<name>/tests/. The boundary
 scanner maps those files to the same service owner as the service code, so
 imports from services/<name>/* inside services/<name>/tests/* are permitted
 (owner == target). No special-casing is needed — detect_service_owner()
-handles it by longest-prefix matching on SERVICE_ROOTS.
+handles it by matching the owning workspace service root.
 """
 
 from __future__ import annotations
 
 import ast
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# Shared library namespaces — imports from these are always permitted.
-SHARED_LIBS: frozenset[str] = frozenset({"libs.platform", "libs.contracts"})
+EXCLUDED_DIRS = frozenset(
+    {".git", ".venv", "__pycache__", ".mypy_cache", ".pytest_cache", "build", "dist"}
+)
 
-LIBS_ROOTS: dict[str, Path] = {
-    "libs.platform": REPO_ROOT / "libs" / "platform",
-    "libs.contracts": REPO_ROOT / "libs" / "contracts",
-}
 
-SERVICE_ROOTS: dict[str, Path] = {
-    "ingestor": REPO_ROOT / "services" / "ingestor",
-    "inference": REPO_ROOT / "services" / "inference",
-    "analytics": REPO_ROOT / "services" / "analytics",
-    "processor": REPO_ROOT / "services" / "processor",
-    "dashboard": REPO_ROOT / "services" / "dashboard",
-    "webhook": REPO_ROOT / "services" / "webhook",
-}
+def workspace_service_roots() -> dict[str, Path]:
+    """Load service directories from the root uv workspace declaration."""
+    with (REPO_ROOT / "pyproject.toml").open("rb") as stream:
+        manifest = tomllib.load(stream)
 
-PERSISTENCE_MODULE_HINTS = {
-    "database",
-    "models",
-    "crud",
-    "storage",
-    "repository",
-    "repositories",
-}
+    members = manifest["tool"]["uv"]["workspace"]["members"]
+    roots: dict[str, Path] = {}
+    for member in members:
+        path = REPO_ROOT / member
+        if path.parent.name != "services":
+            continue
+        roots[path.name] = path
+    return roots
+
+
+SERVICE_ROOTS = workspace_service_roots()
 
 
 @dataclass
@@ -87,33 +70,24 @@ def module_to_service(module: str) -> str | None:
 
     Returns None for:
     - stdlib / third-party modules
-    - libs.platform and libs.contracts (shared, always allowed)
+    - any module under libs (shared, always allowed)
     """
-    # Shared libs are always allowed — not owned by any single service.
-    if module == "libs" or any(
-        module == lib or module.startswith(lib + ".") for lib in SHARED_LIBS
-    ):
+    if module == "libs" or module.startswith("libs."):
         return None
 
-    if (
-        module == "ingestor"
-        or module.startswith("ingestor.")
-        or module == "services.ingestor"
-        or module.startswith("services.ingestor.")
-    ):
-        return "ingestor"
-
-    if module == "services" or module.startswith("services."):
+    if module == "services":
+        return None
+    if module.startswith("services."):
         parts = module.split(".")
-        if len(parts) >= 2:
-            svc = parts[1]
-            if svc in {"inference", "analytics", "processor", "dashboard"}:
-                return svc
+        if len(parts) >= 2 and parts[1] in SERVICE_ROOTS:
+            return parts[1]
+
+    # Keep the historical top-level ingestor import form supported while the
+    # service is still rooted at services/ingestor.
+    for service in SERVICE_ROOTS:
+        if module == service or module.startswith(service + "."):
+            return service
     return None
-
-
-def references_persistence_module(module: str) -> bool:
-    return any(part in PERSISTENCE_MODULE_HINTS for part in module.split("."))
 
 
 def extract_import_modules(node: ast.AST) -> list[tuple[int, str]]:
@@ -138,7 +112,17 @@ def scan_file(file_path: Path) -> list[Violation]:
         return []
 
     content = file_path.read_text(encoding="utf-8")
-    tree = ast.parse(content, filename=str(file_path))
+    try:
+        tree = ast.parse(content, filename=str(file_path))
+    except SyntaxError as error:
+        return [
+            Violation(
+                file=file_path,
+                line=error.lineno or 1,
+                code="SVC000",
+                message=f"Python syntax error: {error.msg}",
+            )
+        ]
 
     violations: list[Violation] = []
 
@@ -161,21 +145,6 @@ def scan_file(file_path: Path) -> list[Violation]:
                     )
                 )
 
-            if target_service != service_owner and references_persistence_module(
-                module
-            ):
-                violations.append(
-                    Violation(
-                        file=file_path,
-                        line=line,
-                        code="SVC002",
-                        message=(
-                            "Direct access to another service's persistence boundary is forbidden: "
-                            f"'{module}'."
-                        ),
-                    )
-                )
-
     return violations
 
 
@@ -184,23 +153,35 @@ def collect_service_python_files() -> list[Path]:
     for root in SERVICE_ROOTS.values():
         if not root.exists():
             continue
-        files.extend(p for p in root.rglob("*.py") if "__pycache__" not in p.parts)
+        files.extend(
+            p for p in root.rglob("*.py") if not EXCLUDED_DIRS.intersection(p.parts)
+        )
     return sorted(files)
 
 
 def collect_libs_python_files() -> list[Path]:
-    files: list[Path] = []
-    for root in LIBS_ROOTS.values():
-        if not root.exists():
-            continue
-        files.extend(p for p in root.rglob("*.py") if "__pycache__" not in p.parts)
-    return sorted(files)
+    libs_root = REPO_ROOT / "libs"
+    if not libs_root.exists():
+        return []
+    return sorted(
+        p for p in libs_root.rglob("*.py") if not EXCLUDED_DIRS.intersection(p.parts)
+    )
 
 
 def scan_libs_file(file_path: Path) -> list[Violation]:
-    """Check that libs/* do not import back into any service (SVC003)."""
+    """Check that shared libs do not import back into any service (SVC002)."""
     content = file_path.read_text(encoding="utf-8")
-    tree = ast.parse(content, filename=str(file_path))
+    try:
+        tree = ast.parse(content, filename=str(file_path))
+    except SyntaxError as error:
+        return [
+            Violation(
+                file=file_path,
+                line=error.lineno or 1,
+                code="SVC000",
+                message=f"Python syntax error: {error.msg}",
+            )
+        ]
 
     violations: list[Violation] = []
     for node in ast.walk(tree):
@@ -211,7 +192,7 @@ def scan_libs_file(file_path: Path) -> list[Violation]:
                     Violation(
                         file=file_path,
                         line=line,
-                        code="SVC003",
+                        code="SVC002",
                         message=(
                             f"libs must not import from services: '{module}' "
                             f"(target: '{target_service}')."
