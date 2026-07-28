@@ -68,4 +68,4 @@ EXPOSE 8001
 HEALTHCHECK --interval=5s --timeout=3s --retries=5 --start-period=10s \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')" || exit 1
 
-CMD ["sh", "-c", "alembic upgrade head && uvicorn services.inference.main:app --host 0.0.0.0 --port 8001"]
+CMD ["uvicorn", "services.inference.main:app", "--host", "0.0.0.0", "--port", "8001"]

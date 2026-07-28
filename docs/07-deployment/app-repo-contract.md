@@ -74,11 +74,31 @@ Each service image must satisfy these requirements for the infra manifests to fu
 
 ## CI/CD Image Tagging Contract
 
-- [ ] **Tags follow `tree-<SHA>` format** — CI in the app repo builds and pushes images tagged with the short commit SHA prefixed by `tree-`
+- [ ] **Candidates use full-tree tags and deployed digests** — CI creates `tree-<full-tree-SHA>` candidates, while Stage 0 Compose receives `repository@sha256:...` references only.
 - [ ] **`latest` is never pushed** to production registries — `latest` is used only for local `k3d import`
 - [ ] **Image pull policy is `Always`** in production — guaranteed fresh pods on rollout
-- [ ] **Primary registry is ECR** — `${AWS_ECR_REGISTRY}/api-observatory/{ingestor,inference,dashboard}:tree-<SHA>`.
+- [ ] **Primary registry is ECR** — `${AWS_ECR_REGISTRY}/api-observatory/{ingestor,inference,dashboard}`; CD resolves each approved candidate to an immutable digest.
   Azure ACR remains a secondary/reference target only.
+
+### Stage 0 Rollout Contract
+
+[`docker-compose.aws-stage0.yml`](../../docker-compose.aws-stage0.yml) is the AWS-only delivery
+file. It starts only the three HTTP services from required `repository@sha256:...` image
+references. Runtime values remain infra-owned; in particular, `DATABASE_URL` stays the ingestor
+database while `INFERENCE_DATABASE_URL` is mapped only to inference.
+
+For each approved image set, CD records the currently running image references, pulls the new
+digests, then runs these forward-only migration commands before replacing containers:
+
+```text
+docker compose run --rm --no-deps ingestor alembic upgrade head
+docker compose run --rm --no-deps inference alembic upgrade head
+```
+
+It then waits for `/readyz` on ingestor and inference and the dashboard health endpoint, runs an
+API smoke check, and records redacted evidence. If migration, rollout, readiness, or smoke fails,
+CD restarts the captured image references. Database schema rollback is intentionally excluded;
+migrations must preserve expand/contract compatibility with the previous application images.
 
 ## Communication Contract
 
