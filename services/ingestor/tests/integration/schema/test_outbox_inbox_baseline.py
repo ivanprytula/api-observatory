@@ -7,6 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from services.ingestor.repositories import messaging
 
 
+pytestmark = pytest.mark.integration
+
+
 @pytest.mark.postgresonly
 async def test_outbox_enqueue_and_inbox_idempotent_consumption(
     postgresql_async_session: AsyncSession,

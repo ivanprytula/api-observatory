@@ -7,6 +7,9 @@ import pytest
 from httpx import AsyncClient
 
 
+pytestmark = pytest.mark.integration
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

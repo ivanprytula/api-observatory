@@ -126,7 +126,6 @@ async def test_tenant_isolation_rls(db: AsyncSession, client: AsyncClient) -> No
 
 
 @pytest.mark.postgresonly
-@pytest.mark.asyncio
 async def test_token_based_rls_isolation(db: AsyncSession, client: AsyncClient):
     """Verifies that RLS isolation works when tenant is derived from JWT token.
 
@@ -200,7 +199,6 @@ async def test_token_based_rls_isolation(db: AsyncSession, client: AsyncClient):
 
 
 @pytest.mark.postgresonly
-@pytest.mark.asyncio
 async def test_admin_rls_bypass(db: AsyncSession, client: AsyncClient):
     """Verifies that an Admin can bypass RLS to see all tenant data.
 
@@ -248,7 +246,6 @@ async def test_admin_rls_bypass(db: AsyncSession, client: AsyncClient):
         data={"username": username, "password": "adminpassword123"},
     )
     token = login_resp.json()["access_token"]
-    print(f"DEBUG: Admin token: {token}")
     auth_headers = {"Authorization": f"Bearer {token}"}
 
     # 4. Verify bypass

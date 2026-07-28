@@ -8,9 +8,11 @@ from services.ingestor.main import app
 from tests.shared.payloads import OBSERVATION_E2E
 
 
+pytestmark = pytest.mark.e2e
+
+
 @pytest.mark.skip(reason="Long-running test for memory leak detection")
-@pytest.mark.e2e
-async def test_throughput_with_512m_memory():
+async def test_throughput_with_512m_memory() -> None:
     """
     Verify app handles expected load under 512M memory constraint.
 
@@ -42,8 +44,7 @@ async def test_throughput_with_512m_memory():
 
 
 @pytest.mark.skip(reason="Long-running test for memory leak detection")
-@pytest.mark.e2e
-async def test_memory_leak_detection():
+async def test_memory_leak_detection() -> None:
     """
     Long-running test: create/list observations for 5 min.
     If memory keeps growing, we have a leak.

@@ -17,6 +17,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+pytestmark = pytest.mark.integration
+
+
 @pytest.mark.postgresonly
 class TestObservationsTableIndexes:
     """Verify indexes on observations table are correctly defined."""

@@ -1,13 +1,14 @@
 # Tests — Architecture & Patterns
 
-Overview: Test architecture for api-observatory uses a three-layer strategy (unit, integration, e2e) with shared fixtures and selectable database modes.
+Top-level tests cover repository-level platform utilities and external-stack checks. Ingestor
+application behavior belongs in `services/ingestor/tests/`.
 
 Fixture strategy:
 
 - Layer 1 (shared): `fixtures_shared.py` — database mode selection (`aiosqlite` in-memory vs. PostgreSQL)
-- Layer 2 (unit): `tests/unit/conftest.py` — unit test marker, lightweight mocks
-- Layer 3 (integration): `tests/integration/conftest.py` — full app context, real database
-- Custom fixtures: reusable factories in `tests/shared/factories.py`
+- Layer 2 (platform): `tests/unit/` — shared-library, script, and lab checks
+- Layer 3 (external stack): `tests/e2e/` — Compose chaos and floci-az checks
+- Ingestor tests: `services/ingestor/tests/` — API, schema, auth, and scraper behavior
 
 Test hierarchy (quick):
 
@@ -16,7 +17,6 @@ tests/
   ├─ conftest.py          # Global: database mode, asyncio_mode=auto
   ├─ fixtures_shared.py   # Database fixture selection
   ├─ unit/
-  ├─ integration/
   ├─ e2e/
   └─ shared/
 ```
@@ -24,15 +24,14 @@ tests/
 When to write each type:
 
 - Unit: single function/method, no I/O — fast
-- Integration: API routes, DB round-trips — medium
-- E2E: full workflows — slow, CI-only or nightly
+- E2E: Compose/external-stack workflows — slow and opt-in
 
 Fixture patterns:
 
 - Database mode controlled by `PYTEST_DB_MODE` (default: `aiosqlite`)
-- Run integration against Postgres: `PYTEST_DB_MODE=postgres pytest tests/integration/`
+- Run ingestor integration tests against PostgreSQL: `uv run pytest -m integration`
 
 Coverage expectations:
 
-- Local: `pytest tests/unit/ tests/integration/ --cov`
-- CI gate: 80% coverage on modified files (unit + integration)
+- Local platform checks: `uv run pytest tests/unit/ -m unit`
+- CI covers root platform checks plus `services/ingestor/tests/` by marker.
