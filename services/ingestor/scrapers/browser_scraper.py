@@ -14,7 +14,9 @@ Setup (run once): playwright install chromium
 from __future__ import annotations
 
 import asyncio
+import importlib
 import logging
+from typing import Any
 
 from services.ingestor.scrapers import BloomFilter, ScrapedItem
 
@@ -50,7 +52,9 @@ class BrowserScraper:
             List of ScrapedItem instances, or None if all retries fail.
         """
         try:
-            from playwright.async_api import async_playwright
+            async_playwright: Any = importlib.import_module(
+                "playwright.async_api"
+            ).async_playwright
         except ImportError:
             logger.warning(
                 "playwright_not_installed",

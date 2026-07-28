@@ -34,7 +34,10 @@ from services.ingestor.auth import (
 )
 from services.ingestor.config import settings
 from services.ingestor.constants import HEALTH_RATE_LIMIT
-from services.ingestor.core.background_workers import BackgroundWorkerPool
+from services.ingestor.core.background_workers import (
+    BackgroundTaskStatus,
+    BackgroundWorkerPool,
+)
 from services.ingestor.core.logging import set_cid, setup_logging
 from services.ingestor.core.scheduler import JobScheduler
 from services.ingestor.core.sentry import setup_sentry
@@ -251,11 +254,7 @@ async def lifespan(app: FastAPI):
                 worker_count=settings.background_worker_count,
                 queue_size=settings.background_worker_queue_size,
                 max_tracked_tasks=settings.background_max_tracked_tasks,
-                on_task_failed=lambda task: notify_background_task_failed(
-                    task_id=task.task_id,
-                    batch_size=task.batch_size,
-                    error=task.error or "unknown",
-                ),
+                on_task_failed=_notify_background_task_failure,
             )
             await _background_workers.start()
             importlib.import_module(
@@ -806,7 +805,7 @@ async def readyz(db: DbDep) -> dict[str, object]:
 
     try:
         if _cache is not None:
-            await _cache.ping()  # ty: ignore[invalid-await]
+            await _cache.ping()
             checks["cache"] = "ok"
         else:
             checks["cache"] = "not_configured"
@@ -859,11 +858,20 @@ if __name__ == "__main__":
 
     from services.ingestor.core.logging import get_formatter, make_uvicorn_log_config
 
-    log_config = make_uvicorn_log_config(get_formatter()) if get_formatter() else None
+    formatter = get_formatter()
+    log_config = make_uvicorn_log_config(formatter) if formatter else None
     uvicorn.run(
         "services.ingestor.main:app",
         host=os.getenv("UVICORN_HOST", "127.0.0.1"),
         port=8000,
         reload=True,
         log_config=log_config,
+    )
+
+
+async def _notify_background_task_failure(task: BackgroundTaskStatus) -> None:
+    await notify_background_task_failed(
+        task_id=task.task_id,
+        batch_size=task.batch_size,
+        error=task.error or "unknown",
     )

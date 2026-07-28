@@ -123,6 +123,8 @@ def exponential_backoff(
     """
 
     def decorator(func: F) -> F:
+        function_name = getattr(func, "__name__", "unnamed_operation")
+
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             last_exception = None
@@ -142,13 +144,13 @@ def exponential_backoff(
                                 logger.error(
                                     "retry_budget_exhausted",
                                     extra={
-                                        "function": func.__name__,
+                                        "function": function_name,
                                         "attempt": attempt + 1,
                                         "max_retries": max_retries + 1,
                                     },
                                 )
                                 raise RetryBudgetExceededError(
-                                    f"Retry budget exhausted for {func.__name__}"
+                                    f"Retry budget exhausted for {function_name}"
                                 ) from e
 
                         delay = min(base_delay * (2**attempt), max_delay)
@@ -159,7 +161,7 @@ def exponential_backoff(
                         logger.warning(
                             "retry_attempt",
                             extra={
-                                "function": func.__name__,
+                                "function": function_name,
                                 "attempt": attempt + 1,
                                 "max_retries": max_retries + 1,
                                 "delay_seconds": delay,
@@ -171,7 +173,7 @@ def exponential_backoff(
                         logger.error(
                             "retry_exhausted",
                             extra={
-                                "function": func.__name__,
+                                "function": function_name,
                                 "total_attempts": attempt + 1,
                                 "error": str(last_exception),
                             },

@@ -95,7 +95,7 @@ class TestSessionAuth:
 
         # Create an expired session directly in the fake cache
         session_id = str(uuid.uuid4())
-        await auth._session_client.hset(  # ty: ignore[invalid-await]
+        await auth._session_client.hset(
             session_id,
             mapping={
                 "user_id": "testuser",

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 
 try:
@@ -75,13 +75,15 @@ async def classify_severity(state: AgentState) -> dict:
     }
 
 
-async def _invoke_structured_model(
+async def _invoke_structured_model[
+    StructuredResponse: (SeverityClassification, DraftAnalysis)
+](
     *,
     model: Any,
-    schema: type[SeverityClassification] | type[DraftAnalysis],
+    schema: type[StructuredResponse],
     model_name: str,
     messages: list[dict[str, str]],
-) -> SeverityClassification | DraftAnalysis:
+) -> StructuredResponse:
     """Invoke a structured model while retaining raw provider metadata."""
     structured_model = model.with_structured_output(schema, include_raw=True)
     response = await _llm_resilience.call(structured_model.ainvoke, messages)
@@ -93,7 +95,7 @@ async def _invoke_structured_model(
     result = response["parsed"]
     if result is None:
         raise RuntimeError("LLM structured output was empty.")
-    return result
+    return cast("StructuredResponse", result)
 
 
 async def retrieve_similar_incidents(state: AgentState) -> dict:

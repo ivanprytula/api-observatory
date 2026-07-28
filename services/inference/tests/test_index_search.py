@@ -7,14 +7,20 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.routing import Route
 
 from services.inference.main import app
 from services.inference.models import IndexedDocument
 
 
 def test_metrics_endpoint_is_exposed() -> None:
-    metrics_route = next(route for route in app.routes if route.path == "/metrics")
+    metrics_route = next(
+        route
+        for route in app.routes
+        if isinstance(route, Route) and route.path == "/metrics"
+    )
 
+    assert metrics_route.methods is not None
     assert "GET" in metrics_route.methods
 
 

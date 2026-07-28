@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import httpx
 
@@ -28,11 +28,11 @@ _notification_resilience = DependencyResilience(
 
 def _parse_channels(raw: str) -> list[NotificationChannel]:
     values = [v.strip().lower() for v in raw.split(",") if v.strip()]
-    valid: set[str] = {"slack", "telegram", "webhook", "email"}
+    valid = {"slack", "telegram", "webhook", "email"}
     channels: list[NotificationChannel] = []
     for value in values:
         if value in valid:
-            channels.append(value)  # type: ignore[arg-type]
+            channels.append(cast("NotificationChannel", value))
     return channels
 
 

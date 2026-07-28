@@ -54,10 +54,65 @@ jobs:
         run: uv sync --frozen
 
       - name: Ruff check
-        run: uv run ruff check services libs
+        run: uv run ruff check services libs scripts tests
 
       - name: Ruff format check
-        run: uv run ruff format --check services libs
+        run: uv run ruff format --check services libs scripts tests
+
+  docs-quality:
+    name: "Docs quality"
+    runs-on: ubuntu-latest
+    needs: [action-ref-validation]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check Markdown quality
+        run: python3 scripts/ci/docs_quality_check.py
+
+  type-check:
+    name: "Type check (ty)"
+    runs-on: ubuntu-latest
+    needs: [lint, action-ref-validation]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Cache uv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
+
+      - name: Install uv
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Sync all workspace extras
+        run: uv sync --frozen --all-packages --all-extras
+
+      - name: Run type checks
+        run: |
+          uv run ty check \
+            libs/platform \
+            services/dashboard/core \
+            services/dashboard/ui \
+            services/ingestor/auth.py \
+            services/ingestor/cache.py \
+            services/ingestor/main.py \
+            services/ingestor/pubsub.py \
+            services/ingestor/repositories/etl.py \
+            services/ingestor/routers/mongo_analytics.py \
+            services/ingestor/routers/scraper.py \
+            services/ingestor/scrapers \
+            services/ingestor/storage/minios3.py \
+            services/ingestor/transformations/tabular.py \
+            services/mcp/main.py
 
   action-ref-validation:
     name: "Validate action refs are immutable"
@@ -738,6 +793,8 @@ jobs:
     needs:
       - lint
       - action-ref-validation
+      - docs-quality
+      - type-check
       - unit-tests
       - contract-tests
       - python-deps
@@ -760,6 +817,8 @@ jobs:
           failed=0
           [[ "${{ needs.lint.result }}" == "success" ]] || { echo "❌ Lint"; failed=1; }
           [[ "${{ needs.action-ref-validation.result }}" == "success" ]] || { echo "❌ Action refs"; failed=1; }
+          [[ "${{ needs.docs-quality.result }}" == "success" ]] || { echo "❌ Docs quality"; failed=1; }
+          [[ "${{ needs.type-check.result }}" == "success" ]] || { echo "❌ Type check"; failed=1; }
           [[ "${{ needs.unit-tests.result }}" == "success" ]] || { echo "❌ Unit tests"; failed=1; }
           [[ "${{ needs.contract-tests.result }}" == "success" ]] || { echo "❌ Contract tests"; failed=1; }
           [[ "${{ needs.python-deps.result }}" == "success" ]] || { echo "❌ Python deps"; failed=1; }
@@ -790,6 +849,8 @@ jobs:
           |-------|--------|
           | Lint | ${{ needs.lint.result }} |
           | Action Refs | ${{ needs.action-ref-validation.result }} |
+          | Docs Quality | ${{ needs.docs-quality.result }} |
+          | Type Check | ${{ needs.type-check.result }} |
           | Unit Tests | ${{ needs.unit-tests.result }} |
           | Contract Tests | ${{ needs.contract-tests.result }} |
           | Python Deps | ${{ needs.python-deps.result }} |

@@ -5,10 +5,13 @@ Tests Motor async client interactions: insert, find, update, delete operations.
 
 import pytest
 
-from services.ingestor.storage.mongo import (
-    find_by_source,
-    insert_scraped_doc,
+
+mongo = pytest.importorskip(
+    "services.ingestor.storage.mongo",
+    reason="Mongo storage is not part of the active runtime",
 )
+find_by_source = mongo.find_by_source
+insert_scraped_doc = mongo.insert_scraped_doc
 
 
 @pytest.mark.unit

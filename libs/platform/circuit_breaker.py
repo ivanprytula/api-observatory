@@ -44,6 +44,11 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def _attach_circuit_breaker(function: Any, breaker: Any) -> None:
+    """Expose decorator state for diagnostics without widening call signatures."""
+    function._circuit_breaker = breaker
+
+
 class CircuitState(Enum):
     CLOSED = "closed"
     OPEN = "open"
@@ -314,7 +319,7 @@ def circuit_breaker(
 
     def decorator(func: Callable) -> Callable:
         breaker = _CircuitBreaker(
-            name=func.__qualname__,
+            name=getattr(func, "__qualname__", "unnamed_circuit"),
             failure_threshold=failure_threshold,
             recovery_timeout=recovery_timeout,
         )
@@ -324,7 +329,7 @@ def circuit_breaker(
             return await breaker.call(func, *args, **kwargs)
 
         # Expose the breaker instance for inspection / testing
-        wrapper._circuit_breaker = breaker  # type: ignore[attr-defined]
+        _attach_circuit_breaker(wrapper, breaker)
         return wrapper
 
     return decorator

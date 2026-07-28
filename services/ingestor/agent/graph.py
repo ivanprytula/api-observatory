@@ -12,7 +12,7 @@ in a different process than the one that started it.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from services.ingestor.agent import nodes
 from services.ingestor.agent.state import AgentState
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 def build_graph(checkpointer: BaseCheckpointSaver) -> CompiledStateGraph:
     from langgraph.graph import END, START, StateGraph
 
-    builder = StateGraph(AgentState)
+    builder = StateGraph(cast("type[Any]", AgentState))
     builder.add_node("classify_severity", nodes.classify_severity)
     builder.add_node("retrieve_similar_incidents", nodes.retrieve_similar_incidents)
     builder.add_node("draft_analysis", nodes.draft_analysis)
@@ -40,4 +40,7 @@ def build_graph(checkpointer: BaseCheckpointSaver) -> CompiledStateGraph:
     builder.add_edge("human_review", "notify")
     builder.add_edge("notify", END)
 
-    return builder.compile(checkpointer=checkpointer)
+    return cast(
+        "CompiledStateGraph[Any, Any, Any, Any]",
+        builder.compile(checkpointer=checkpointer),
+    )

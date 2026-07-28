@@ -176,15 +176,14 @@ max-doc-length = 100
 max-line-length = 100
 
 [[tool.ty.overrides]]
-include = ["services/ingestor", "tests"]
-
-[tool.ty.rules]
-unresolved-attribute = "ignore"
+include = ["tests", "services/*/tests", "labs"]
 
 [tool.ty.overrides.rules]
-unresolved-attribute = "ignore"
+# Tests and learning labs intentionally use dynamic fixtures, optional extras, and mocks.
+# Keep application type checks actionable instead of maintaining local stub trees.
 invalid-argument-type = "ignore"
-# invalid-assignment = "ignore"
+invalid-assignment = "ignore"
+unresolved-attribute = "ignore"
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv", "venv"]

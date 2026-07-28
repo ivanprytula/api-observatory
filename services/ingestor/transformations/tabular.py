@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, SupportsFloat, cast
 
 
 if TYPE_CHECKING:
@@ -154,7 +154,7 @@ class TabularETLEngine:
     ) -> TabularPreviewResult:
         import pandas as pd
 
-        frame = pd.DataFrame.from_observations(observations)
+        frame = pd.DataFrame(observations)
         frame = _apply_pandas_ops(
             frame,
             select_columns=select_columns,
@@ -167,7 +167,7 @@ class TabularETLEngine:
         row_count = len(frame.index)
         preview = frame.head(preview_limit)
         sanitized_observations = preview.where(pd.notna(preview), None).to_dict(
-            "observations"
+            orient="records"
         )
         return TabularPreviewResult(
             backend_requested=backend_requested,
@@ -260,9 +260,9 @@ def _summarize_polars(
         summaries.append(
             NumericSummary(
                 field=field,
-                min_value=numeric_series.min(),
-                max_value=numeric_series.max(),
-                mean_value=numeric_series.mean(),
+                min_value=_as_optional_float(numeric_series.min()),
+                max_value=_as_optional_float(numeric_series.max()),
+                mean_value=_as_optional_float(numeric_series.mean()),
                 null_count=numeric_series.null_count(),
             )
         )
@@ -294,8 +294,8 @@ def _summarize_pandas(
 def _as_optional_float(value: object) -> float | None:
     import pandas as pd
 
-    if pd.isna(value):
-        return None
     if value is None:
         return None
-    return float(value)
+    if bool(pd.isna(value)):
+        return None
+    return float(cast("SupportsFloat", value))

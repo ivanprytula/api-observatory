@@ -6,10 +6,16 @@ syntax.
 
 ## Quality Gates
 
-The main CI workflow runs lint, formatting, type, unit, contract, security, dependency, image, and
-documentation checks according to the changed path and workflow trigger. Slow integration and
-smoke work is explicitly gated. The workflow files and branch protection settings decide which
-jobs block a merge.
+The main CI workflow blocks on Ruff across maintained Python, documentation quality, a focused
+`ty` gate for the core runtime surfaces, unit,
+contract, migration, dependency, and security checks. Candidate-image jobs additionally require
+both service migration gates. The weekly performance smoke remains diagnostic evidence rather
+than a release condition. Workflow files and branch protection settings decide which jobs block a
+merge.
+
+The `ty` lane deliberately covers shared platform code plus the dashboard, ingestor request,
+adapter, storage, and transform surfaces. It does not claim clean diagnostics across every legacy
+lab, optional integration, or test helper; those are remediated when their owning behavior changes.
 
 ## Workflow Ownership
 
@@ -25,12 +31,13 @@ jobs block a merge.
 
 ## Artifact and Identity Contract
 
-CI builds ingestor, inference, and dashboard candidates tagged `tree-<SHA>`. Release promotion
-reuses those candidates rather than rebuilding or publishing `latest`. AWS workflows use GitHub
-OIDC and remain skipped until `AWS_CD_ENABLED=true`, the required variables, and the protected
-environment exist. The [OIDC setup](github-secrets-setup.md) owns role and variable expectations;
-the [deployment contract](../07-deployment/app-repo-contract.md) owns image names, ports, health
-behavior, and environment interfaces.
+CI builds ingestor, inference, and dashboard candidates tagged `tree-<full-tree-SHA>`. Release
+promotion reuses those candidates rather than rebuilding or publishing `latest`; CD resolves them
+to digests before Stage 0 Compose receives them. AWS workflows use GitHub OIDC and remain skipped
+until `AWS_CD_ENABLED=true`, the required variables, and the protected environment exist. The
+[OIDC setup](github-secrets-setup.md) owns role and variable expectations; the [deployment
+contract](../07-deployment/app-repo-contract.md) owns image names, ports, health behavior, and
+environment interfaces.
 
 ## Delivery Evidence
 

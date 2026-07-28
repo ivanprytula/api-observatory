@@ -59,7 +59,7 @@ async def validate_source_base_url(base_url: str, *, allow_http: bool = False) -
     except socket.gaierror:
         raise ValueError("base_url hostname could not be resolved.") from None
 
-    resolved_ips = {info[4][0] for info in infos if info[4]}
+    resolved_ips = {str(info[4][0]) for info in infos if info[4]}
 
     if not resolved_ips:
         raise ValueError("base_url hostname could not be resolved.")

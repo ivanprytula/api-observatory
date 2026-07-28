@@ -37,7 +37,7 @@ type DocsCredentialsDep = Annotated[HTTPBasicCredentials, Depends(security)]
 
 # Cache-backed session store (module-level singleton, initialized in lifespan).
 # Key pattern: session:{session_id} → Cache hash {user_id, role, created_at}
-_session_client: Redis | None = None
+_session_client: Redis[str] | None = None
 
 # Simple role names for RBAC learning examples.
 DEFAULT_ROLE = "viewer"
@@ -79,8 +79,8 @@ async def connect_session_store(cache_url: str) -> None:
         cache_url: Cache DSN (e.g. redis://localhost:6379/0)
     """
     global _session_client
-    _session_client = Redis.from_url(cache_url, decode_responses=True)
-    await _session_client.ping()  # ty: ignore[invalid-await]
+    _session_client = Redis[str].from_url(cache_url, decode_responses=True)
+    await _session_client.ping()
     logger.info("session_store_connected", extra={"url": cache_url})
 
 
@@ -185,7 +185,9 @@ async def verify_session(
         )
 
     key = f"{_SESSION_KEY_PREFIX}{session_id}"
-    session_data: dict[str, Any] = await _session_client.hgetall(key)  # ty: ignore[invalid-await]
+    session_data: dict[str, Any] = {
+        field: value for field, value in (await _session_client.hgetall(key)).items()
+    }
     if not session_data:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -311,7 +313,7 @@ async def create_session(
     if _session_client is not None:
         key = f"{_SESSION_KEY_PREFIX}{session_id}"
         try:
-            await _session_client.hset(key, mapping=fields)  # ty: ignore[invalid-await]
+            await _session_client.hset(key, mapping=fields)
             await _session_client.expire(key, ttl_seconds)
         except Exception:
             logger.warning(
@@ -414,7 +416,7 @@ async def create_refresh_token(
         try:
             await _session_client.setex(
                 f"{_REFRESH_TOKEN_PREFIX}{jti}", ttl_seconds, sub
-            )  # ty: ignore[invalid-await]
+            )
         except Exception:
             logger.warning("refresh_token_store_failed", extra={"jti": jti})
 
@@ -453,7 +455,7 @@ async def verify_refresh_token(token: str) -> dict[str, Any]:
 
         jti = payload.get("jti")
         if _session_client is not None and jti:
-            exists = await _session_client.exists(f"{_REFRESH_TOKEN_PREFIX}{jti}")  # ty: ignore[invalid-await]
+            exists = await _session_client.exists(f"{_REFRESH_TOKEN_PREFIX}{jti}")
             if not exists:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -483,7 +485,7 @@ async def revoke_refresh_token(jti: str) -> None:
         logger.warning("refresh_revoke_skipped_no_cache", extra={"jti": jti})
         return
     try:
-        await _session_client.delete(f"{_REFRESH_TOKEN_PREFIX}{jti}")  # ty: ignore[invalid-await]
+        await _session_client.delete(f"{_REFRESH_TOKEN_PREFIX}{jti}")
         logger.info("refresh_token_revoked", extra={"jti": jti})
     except Exception:
         logger.warning("refresh_token_revoke_failed", extra={"jti": jti})

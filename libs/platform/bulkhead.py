@@ -88,6 +88,11 @@ class AsyncBulkhead:
                 self._condition.notify(1)
 
 
+def _attach_bulkhead(function: Any, limiter: AsyncBulkhead) -> None:
+    """Expose the limiter for operational inspection without changing call typing."""
+    function._bulkhead = limiter
+
+
 def bulkhead(
     name: str, max_concurrency: int, max_queue: int = 0
 ) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
@@ -104,7 +109,7 @@ def bulkhead(
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             return await limiter.run(func, *args, **kwargs)
 
-        wrapper._bulkhead = limiter  # type: ignore[attr-defined]
+        _attach_bulkhead(wrapper, limiter)
         return wrapper
 
     return decorator

@@ -22,10 +22,11 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from sqlalchemy import delete, select
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from libs.platform.circuit_breaker import CircuitBreaker, CircuitOpenError
@@ -359,7 +360,7 @@ async def ingest_scheduled_batch_example(db: AsyncSession) -> dict[str, Any]:
 
         # 1. Fetch external data (stub for example)
         source_name = "example_source"
-        observations_data = [
+        observations_data: list[dict[str, Any]] = [
             {
                 "source": source_name,
                 "timestamp": datetime.now(UTC),
@@ -510,11 +511,14 @@ async def archive_old_observations(
                         "Archive verification failed; hot observations were not deleted"
                     )
 
-                delete_result = await db.execute(
-                    delete(Observation).where(
-                        Observation.id.in_(observation_ids),
-                        Observation.timestamp < cutoff,
-                    )
+                delete_result = cast(
+                    CursorResult[Any],
+                    await db.execute(
+                        delete(Observation).where(
+                            Observation.id.in_(observation_ids),
+                            Observation.timestamp < cutoff,
+                        ),
+                    ),
                 )
                 deleted = delete_result.rowcount or 0
                 if deleted != len(observation_ids):

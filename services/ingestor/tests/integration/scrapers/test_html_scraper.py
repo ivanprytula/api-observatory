@@ -3,10 +3,23 @@
 Tests CSS selector extraction, malformed HTML handling, and Hacker News scraping.
 """
 
-import pytest
-from bs4 import BeautifulSoup
+import importlib
+from typing import TYPE_CHECKING, Any
 
-from services.ingestor.scrapers.html_scraper import HtmlScraper
+import pytest
+
+
+if TYPE_CHECKING:
+    from services.ingestor.scrapers.html_scraper import HtmlScraper
+
+
+BeautifulSoup: Any = pytest.importorskip(
+    "bs4", reason="BeautifulSoup is an optional scraper dependency"
+).BeautifulSoup
+if not TYPE_CHECKING:
+    HtmlScraper = importlib.import_module(
+        "services.ingestor.scrapers.html_scraper"
+    ).HtmlScraper
 
 
 @pytest.mark.integration
