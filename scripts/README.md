@@ -12,6 +12,7 @@ Scripts are grouped by how they participate in the repository workflow.
 - `run-retention.py` — bounded retention operation.
 - `smoke-test.sh` — post-start HTTP smoke checks.
 - `validate_aws_deployment_contract.py` — local deployment-contract validation.
+- `ci/smoke-deployable-images.sh` — CI build/readiness proof for the three Stage 0 images.
 - `verify-resilience-fault.sh` — controlled local failure-injection verification.
 
 ## Manual development and learning tools

@@ -34,8 +34,8 @@ owns Terraform, Kubernetes, and platform SRE controls.
 | Network calls have timeouts; retries are safe and bounded | [`libs/platform`](../../libs/platform/), fault tests |
 | Optional cache, broker, telemetry, and AI paths fail as documented | feature flags and dependency failure tests |
 | Service images run non-root as UID 10001 and satisfy health contracts | Dockerfiles and [deployment contract](../07-deployment/app-repo-contract.md) |
-| Dependencies and images receive maintained vulnerability checks | dependency/security workflows and container scans |
-| Image provenance uses immutable `tree-<SHA>` candidates | application CI/release workflows |
+| Dependencies and images receive maintained vulnerability checks | manually triggered assurance workflow |
+| Image provenance uses immutable `tree-<SHA>` candidates | CI-gated manual deployment workflow |
 | `libs/` never imports service internals | service-boundary check |
 
 ## Maintenance Rule

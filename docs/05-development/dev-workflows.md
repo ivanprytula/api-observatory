@@ -68,8 +68,8 @@ language/tool rules do not need to be repeated here.
 ## Specialized Evidence
 
 - API collections live under [`bruno/`](../../bruno/) and are exercised by the maintained recipe.
-- Authenticated k6 smoke ownership lives in
-  [`performance-smoke.yml`](../../.github/workflows/performance-smoke.yml) and its script.
+- Authenticated k6 smoke ownership lives in the manual
+  [`assurance.yml`](../../.github/workflows/assurance.yml) workflow and its script.
 - Contract versioning is owned by [`libs/contracts`](../../libs/contracts/) and
   [`scripts/bump_contracts_version.py`](../../scripts/bump_contracts_version.py).
 - Performance and recovery records use the

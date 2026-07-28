@@ -74,7 +74,7 @@ Each service image must satisfy these requirements for the infra manifests to fu
 
 ## CI/CD Image Tagging Contract
 
-- [ ] **Candidates use full-tree tags and deployed digests** — CI creates `tree-<full-tree-SHA>` candidates, while Stage 0 Compose receives `repository@sha256:...` references only.
+- [ ] **Candidates use full-tree tags and deployed digests** — manual CD creates `tree-<full-tree-SHA>` candidates only after exact-commit CI verification, while Stage 0 Compose receives `repository@sha256:...` references only.
 - [ ] **`latest` is never pushed** to production registries — `latest` is used only for local `k3d import`
 - [ ] **Image pull policy is `Always`** in production — guaranteed fresh pods on rollout
 - [ ] **Primary registry is ECR** — `${AWS_ECR_REGISTRY}/api-observatory/{ingestor,inference,dashboard}`; CD resolves each approved candidate to an immutable digest.

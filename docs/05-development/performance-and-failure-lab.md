@@ -19,7 +19,7 @@ schema, cardinality, and environment.
 Use the existing
 [`k6-ci-smoke.js`](../../scripts/load/k6-ci-smoke.js) and
 [`k6-observations-load.js`](../../scripts/load/k6-observations-load.js) workloads. Their CI owner is
-[`performance-smoke.yml`](../../.github/workflows/performance-smoke.yml), and the
+[`assurance.yml`](../../.github/workflows/assurance.yml), and the
 [Justfile](../../Justfile) owns supported local recipes.
 
 Record commit, hardware/container limits, concurrency, duration, dataset size, p50/p95/p99, error

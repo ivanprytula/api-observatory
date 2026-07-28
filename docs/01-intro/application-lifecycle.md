@@ -92,7 +92,8 @@ Passing configuration or a Terraform plan is not runtime proof. The statuses **C
 
 ## 6. Release and Delivery
 
-Application CI validates and builds immutable `tree-<SHA>` images for ingestor, inference, and
+Application CI validates all three deployable images without publishing them. After exact-commit
+CI verification, manual CD builds immutable `tree-<SHA>` images for ingestor, inference, and
 dashboard. Infrastructure supplies ECR, EC2, RDS, IAM, runtime values, and deployment mechanics.
 MCP is excluded because it is a locally spawned stdio process.
 

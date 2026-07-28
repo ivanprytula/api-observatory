@@ -10,11 +10,17 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = PROJECT_ROOT / "infra/deployment/aws-stage0-services.json"
 STAGE0_COMPOSE_PATH = PROJECT_ROOT / "docker-compose.aws-stage0.yml"
+CI_WORKFLOW_PATH = PROJECT_ROOT / ".github/workflows/ci.yml"
+CD_WORKFLOW_PATH = PROJECT_ROOT / ".github/workflows/cd-dev.yml"
+ASSURANCE_WORKFLOW_PATH = PROJECT_ROOT / ".github/workflows/assurance.yml"
 
 
 def validate() -> list[str]:
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     stage0_compose = STAGE0_COMPOSE_PATH.read_text(encoding="utf-8")
+    ci_workflow = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
+    cd_workflow = CD_WORKFLOW_PATH.read_text(encoding="utf-8")
+    assurance_workflow = ASSURANCE_WORKFLOW_PATH.read_text(encoding="utf-8")
     errors: list[str] = []
 
     if manifest.get("deployment_target") != "aws-stage0-ec2-compose":
@@ -28,7 +34,8 @@ def validate() -> list[str]:
     if manifest.get("compose_file") != "docker-compose.aws-stage0.yml":
         errors.append("AWS Stage 0 must use docker-compose.aws-stage0.yml")
 
-    for service in manifest.get("services", []):
+    services = manifest.get("services", [])
+    for service in services:
         name = service["name"]
         for required_key in (
             "image_repository",
@@ -46,6 +53,12 @@ def validate() -> list[str]:
                 f"{name}: Stage 0 Compose does not require an immutable image"
             )
 
+    service_names = " ".join(service["name"] for service in services)
+    if f"for service in {service_names}; do" not in cd_workflow:
+        errors.append("manual CD must publish every manifest service")
+    if 'repository="api-observatory/${service}"' not in cd_workflow:
+        errors.append("manual CD repository naming must match the Stage 0 contract")
+
     if "INFERENCE_DATABASE_URL" not in stage0_compose:
         errors.append("Stage 0 Compose must use a distinct inference database URL")
     for service in ("ingestor", "inference"):
@@ -57,6 +70,20 @@ def validate() -> list[str]:
             errors.append(
                 f"Stage 0 Compose must declare the {service} migration command"
             )
+
+    if "scripts/ci/smoke-deployable-images.sh" not in ci_workflow:
+        errors.append("CI must run the local deployable-image smoke")
+    if "docker push" in ci_workflow or "configure-aws-credentials" in ci_workflow:
+        errors.append("routine CI must not publish images or authenticate to AWS")
+    if "workflow_run:" in cd_workflow or "workflow_dispatch:" not in cd_workflow:
+        errors.append("AWS Stage 0 CD must be manual-only")
+    if "docker push" not in cd_workflow or "@${digest}" not in cd_workflow:
+        errors.append("manual CD must publish tree images and deploy digest references")
+    if (
+        "workflow_dispatch:" not in assurance_workflow
+        or "schedule:" in assurance_workflow
+    ):
+        errors.append("deep assurance must be explicitly triggered, not scheduled")
 
     return errors
 

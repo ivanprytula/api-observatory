@@ -1,18 +1,10 @@
-name: CD Dev (AWS EC2)
+name: Manual CD (AWS EC2)
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    branches: [develop]
-    types: [completed]
   workflow_dispatch:
-    inputs:
-      tree_sha:
-        description: "Tree SHA to deploy; leave empty for the current develop tree."
-        required: false
-        type: string
 
 permissions:
+  checks: read
   contents: read
   id-token: write
 
@@ -24,24 +16,16 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  environment-approval:
-    name: "Require AWS dev environment approval"
+  deploy:
+    name: Build and deploy Stage 0
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     if: >-
-      (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success') &&
       vars.AWS_CD_ENABLED == 'true' &&
       vars.AWS_ECR_REGISTRY != '' && vars.AWS_ROLE_ARN_DEV != '' &&
-      vars.AWS_REGION != '' && vars.AWS_EC2_INSTANCE_ID_DEV != ''
+      vars.AWS_REGION != '' && vars.AWS_EC2_INSTANCE_ID_DEV != '' &&
+      (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
     environment: aws-dev
-    steps:
-      - name: Approval gate
-        run: echo "AWS dev environment approval is required before EC2 deployment."
-
-  deploy-aws-ec2:
-    name: "Deploy immutable images to AWS EC2"
-    runs-on: ubuntu-latest
-    needs: [environment-approval]
-    if: needs.environment-approval.result == 'success'
     outputs:
       tree_sha: ${{ steps.images.outputs.tree_sha }}
       ingestor: ${{ steps.images.outputs.ingestor }}
@@ -53,34 +37,43 @@ jobs:
       AWS_ECR_REGISTRY: ${{ vars.AWS_ECR_REGISTRY }}
       AWS_EC2_INSTANCE_ID_DEV: ${{ vars.AWS_EC2_INSTANCE_ID_DEV }}
     steps:
-      - name: Checkout
+      - name: Checkout selected protected branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Resolve selected tree SHA
-        id: resolve
-        uses: ./.github/actions/resolve-tree-sha
-
-      - name: Reject a mismatched manual tree SHA
-        if: github.event_name == 'workflow_dispatch' && inputs.tree_sha != ''
+      - name: Verify the selected commit passed all four CI jobs
         env:
-          REQUESTED_TREE_SHA: ${{ inputs.tree_sha }}
-          CHECKOUT_TREE_SHA: ${{ steps.resolve.outputs.tree_sha }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          [[ "${REQUESTED_TREE_SHA}" == "${CHECKOUT_TREE_SHA}" ]] \
-            || { echo "tree_sha must match the selected checkout tree." >&2; exit 1; }
+          check_runs=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?per_page=100")
+          for check_name in \
+            "Quality" \
+            "Unit and contract tests" \
+            "PostgreSQL integration and migrations" \
+            "Deployable image smoke"; do
+            conclusion=$(jq -r --arg name "${check_name}" \
+              '[.check_runs[] | select(.name == $name)][0].conclusion // "missing"' \
+              <<< "${check_runs}")
+            [[ "${conclusion}" == "success" ]] \
+              || { echo "CI check '${check_name}' is ${conclusion}." >&2; exit 1; }
+          done
 
-      - name: Configure AWS credentials
+      - name: Resolve tree SHA
+        id: resolve
+        uses: ./.github/actions/resolve-tree-sha
+
+      - name: Configure short-lived AWS credentials
         uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN_DEV }}
           aws-region: ${{ env.AWS_REGION }}
-          role-session-name: api-observatory-cd
+          role-session-name: api-observatory-manual-cd
 
-      - name: Resolve immutable image references
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@1629cc33a9521f764a4704d4d0387513918873b9 # v2.1.4
+
+      - name: Build and publish immutable images
         id: images
         env:
           REGISTRY: ${{ env.AWS_ECR_REGISTRY }}
@@ -89,20 +82,28 @@ jobs:
         run: |
           set -euo pipefail
           for service in ingestor inference dashboard; do
+            case "${service}" in
+              ingestor) dockerfile="Dockerfile" ;;
+              inference) dockerfile="services/inference/Dockerfile" ;;
+              dashboard) dockerfile="services/dashboard/Dockerfile" ;;
+            esac
+            repository="api-observatory/${service}"
+            image="${REGISTRY}/${repository}:tree-${TREE_SHA}"
+            docker build --file "${dockerfile}" --tag "${image}" .
+            docker push "${image}"
             digest=$(aws ecr describe-images \
-              --repository-name "api-observatory/${service}" \
+              --repository-name "${repository}" \
               --image-ids imageTag="tree-${TREE_SHA}" \
               --query 'imageDetails[0].imageDigest' --output text)
             [[ -n "${digest}" && "${digest}" != "None" ]] \
-              || { echo "Missing candidate ${service}: tree-${TREE_SHA}" >&2; exit 1; }
-            echo "${service}=${REGISTRY}/api-observatory/${service}@${digest}" >> "$GITHUB_OUTPUT"
+              || { echo "Missing published digest for ${service}." >&2; exit 1; }
+            echo "${service}=${REGISTRY}/${repository}@${digest}" >> "$GITHUB_OUTPUT"
           done
           echo "tree_sha=${TREE_SHA}" >> "$GITHUB_OUTPUT"
 
-      - name: Send deployment command through Systems Manager
+      - name: Deploy through AWS Systems Manager
         env:
           INSTANCE_ID: ${{ env.AWS_EC2_INSTANCE_ID_DEV }}
-          REGISTRY: ${{ env.AWS_ECR_REGISTRY }}
           TREE_SHA: ${{ steps.images.outputs.tree_sha }}
           INGESTOR_IMAGE: ${{ steps.images.outputs.ingestor }}
           INFERENCE_IMAGE: ${{ steps.images.outputs.inference }}
@@ -118,26 +119,21 @@ jobs:
             --query 'Command.CommandId' --output text)
           aws ssm wait command-executed --command-id "${command_id}" --instance-id "${INSTANCE_ID}"
           aws ssm get-command-invocation --command-id "${command_id}" --instance-id "${INSTANCE_ID}"
-          {
-            echo "tree_sha=${TREE_SHA}"
-            echo "ingestor=${INGESTOR_IMAGE}"
-            echo "inference=${INFERENCE_IMAGE}"
-            echo "dashboard=${DASHBOARD_IMAGE}"
-          } >> "$GITHUB_OUTPUT"
 
-  publish-summary:
-    name: "Publish AWS CD summary"
+  summary:
+    name: Deployment summary
     runs-on: ubuntu-latest
-    needs: [environment-approval, deploy-aws-ec2]
+    needs: [deploy]
     if: always()
     steps:
-      - name: Publish summary
+      - name: Publish redacted result
         run: |
           {
-            echo "## CD Dev (AWS EC2)"
-            echo "Status: ${{ needs.deploy-aws-ec2.result }}"
-            echo "Deployed version: tree-${{ needs.deploy-aws-ec2.outputs.tree_sha }}"
-            echo "Ingestor: ${{ needs.deploy-aws-ec2.outputs.ingestor }}"
-            echo "Inference: ${{ needs.deploy-aws-ec2.outputs.inference }}"
-            echo "Dashboard: ${{ needs.deploy-aws-ec2.outputs.dashboard }}"
+            echo "## Manual AWS Stage 0 deployment"
+            echo "Selected ref: ${{ github.ref_name }}"
+            echo "Status: ${{ needs.deploy.result }}"
+            echo "Tree identity: tree-${{ needs.deploy.outputs.tree_sha }}"
+            echo "Ingestor: ${{ needs.deploy.outputs.ingestor }}"
+            echo "Inference: ${{ needs.deploy.outputs.inference }}"
+            echo "Dashboard: ${{ needs.deploy.outputs.dashboard }}"
           } >> "$GITHUB_STEP_SUMMARY"

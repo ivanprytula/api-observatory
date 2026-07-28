@@ -16,10 +16,10 @@ restricted to this repository and the `aws-dev` environment:
 - subject: `repo:ivanprytula/api-observatory:environment:aws-dev`;
 - action: `sts:AssumeRoleWithWebIdentity`.
 
-Attach only the permissions required by the workflow: SSM command delivery and command-result
-inspection for the approved EC2 target. The EC2 instance role separately needs permission to pull
-the three application images from ECR. Do not attach `PowerUserAccess` to the GitHub deployment
-role.
+Attach only the permissions required by the workflow: push and inspect the three application ECR
+repositories, plus SSM command delivery and command-result inspection for the approved EC2 target.
+The EC2 instance role separately needs permission to pull those images. Do not attach
+`PowerUserAccess` to the GitHub deployment role.
 
 The application repository owns the role ARN and variable names; infrastructure owns the IAM
 provider, role policy, ECR, EC2, and runtime delivery. See the
@@ -42,6 +42,9 @@ Create the `aws-dev` environment and configure a required reviewer before enabli
 The workflow skips its deployment jobs unless `AWS_CD_ENABLED` is exactly `true`; an absent or
 `false` value is the safe default while AWS is being prepared. The workflow already requests
 `id-token: write` and uses `aws-actions/configure-aws-credentials` with `role-to-assume`.
+
+Trigger the workflow manually from a CI-green `develop` or `main` ref. Feature-branch deployments
+are rejected. Routine CI never receives AWS credentials and never publishes images.
 
 ## Local CLI Credentials
 

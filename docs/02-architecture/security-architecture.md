@@ -101,15 +101,14 @@ outbound requests (SSRF mitigation).
 
 ## CI Security Controls
 
-| Control                  | CI job                 | Trigger      | What it does                              |
-| ------------------------ | ---------------------- | ------------ | ----------------------------------------- |
-| `pip-audit`              | `python-deps`          | push / PR    | Checks all Python deps for known CVEs     |
-| CodeQL SAST              | `codeql`               | push / PR    | Deep static analysis for Python           |
-| Trivy image scan         | `docker-scan-security` | push / PR    | Scans built container images for CVEs     |
-| `gitleaks`               | `gitleaks-scan`        | PR           | Secret scan over the commit range         |
-| `ruff` security rules    | `lint`                 | push / PR    | Lints for security anti-patterns (S rules)|
-| SHA-pinned action refs   | all workflows          | —            | Supply chain security for Actions         |
-| Scheduled deep audit     | `security-audit`       | daily cron   | Full deps + SAST + image scan (security.yml) |
+| Control                | Owner              | Trigger   | What it does                          |
+| ---------------------- | ------------------ | --------- | ------------------------------------- |
+| `gitleaks`             | `CI / Quality`     | push / PR | Blocks committed secrets              |
+| `ruff` security rules  | `CI / Quality`     | push / PR | Lints security anti-patterns          |
+| SHA-pinned action refs | `CI / Quality`     | push / PR | Guards the Actions supply chain       |
+| `pip-audit`            | Manual Assurance   | manual    | Audits locked Python dependencies     |
+| CodeQL SAST            | Manual Assurance   | manual    | Performs deep Python static analysis  |
+| Trivy image scans      | Manual Assurance   | manual    | Reports vulnerabilities in each image |
 
 All GitHub Actions refs in `.github/workflows/` are pinned to full commit SHAs.
 See GitHub Actions Security for the

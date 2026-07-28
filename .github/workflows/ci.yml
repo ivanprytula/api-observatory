@@ -2,13 +2,9 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
-      - develop
+    branches: [main, develop]
   pull_request:
-    branches:
-      - main
-      - develop
+    branches: [main, develop]
   workflow_dispatch:
 
 concurrency:
@@ -22,19 +18,35 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  # FAST GATES
-  lint:
-    name: "Lint (ruff check + format)"
+  quality:
+    name: "Quality"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
-      - name: Validate workspace manifests
-        run: python3 scripts/ci/check_workspace_manifests.py
+      - name: Validate workspace and service boundaries
+        run: |
+          python3 scripts/ci/check_workspace_manifests.py
+          python3 scripts/ci/check_service_boundaries.py
+          python3 scripts/validate_aws_deployment_contract.py
 
-      - name: Validate service boundaries
-        run: python3 scripts/ci/check_service_boundaries.py
+      - name: Validate workflow action references
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t workflow_files < <(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) | sort)
+          mutable_refs=$(grep -nE 'uses:\s*[^#]+@(v[0-9]+|latest|main|master|develop)\b' "${workflow_files[@]}" || true)
+          mutable_docker_refs=$(grep -nE 'uses:\s*docker://' "${workflow_files[@]}" | grep -v '@sha256:' || true)
+          if [[ -n "${mutable_refs}" || -n "${mutable_docker_refs}" ]]; then
+            echo "Mutable action reference detected."
+            echo "${mutable_refs}"
+            echo "${mutable_docker_refs}"
+            exit 1
+          fi
 
       - name: Cache uv
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -50,54 +62,14 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Sync dependencies
-        run: uv sync --frozen
-
-      - name: Ruff check
-        run: uv run ruff check services libs scripts tests
-
-      - name: Ruff format check
-        run: uv run ruff format --check services libs scripts tests
-
-  docs-quality:
-    name: "Docs quality"
-    runs-on: ubuntu-latest
-    needs: [action-ref-validation]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Check Markdown quality
-        run: python3 scripts/ci/docs_quality_check.py
-
-  type-check:
-    name: "Type check (ty)"
-    runs-on: ubuntu-latest
-    needs: [lint, action-ref-validation]
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Cache uv
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
-
-      - name: Install uv
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      - name: Sync all workspace extras
+      - name: Sync workspace
         run: uv sync --frozen --all-packages --all-extras
 
-      - name: Run type checks
+      - name: Lint, format, docs, and type checks
         run: |
+          uv run ruff check services libs scripts tests
+          uv run ruff format --check services libs scripts tests
+          uv run python scripts/ci/docs_quality_check.py
           uv run ty check \
             libs/platform \
             services/dashboard/core \
@@ -114,71 +86,15 @@ jobs:
             services/ingestor/transformations/tabular.py \
             services/mcp/main.py
 
-  action-ref-validation:
-    name: "Validate action refs are immutable"
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Fail on mutable action refs
-        shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -t workflow_files < <(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) | sort)
-          if [ ${#workflow_files[@]} -eq 0 ]; then
-            echo "No workflow files found."
-            exit 0
-          fi
-          mutable_refs=$(grep -nE 'uses:\s*[^#]+@(v[0-9]+|latest|main|master|develop)\b' "${workflow_files[@]}" || true)
-          mutable_docker_refs=$(grep -nE 'uses:\s*docker://' "${workflow_files[@]}" | grep -v '@sha256:' || true)
-          if [ -n "$mutable_refs" ] || [ -n "$mutable_docker_refs" ]; then
-            echo "Mutable action references detected. Pin GitHub Actions to full commit SHAs and docker actions to digests."
-            echo "$mutable_refs"
-            echo "$mutable_docker_refs"
-            exit 1
-          fi
-          echo "All action references are pinned to immutable identifiers."
-
-  # UNIT & DEPENDENCY SECURITY
-  unit-tests:
-    name: "Unit tests (sqlite)"
-    runs-on: ubuntu-latest
-    needs: [lint, action-ref-validation]
-    timeout-minutes: 10
-    env:
-      DATABASE_URL_TEST: "sqlite+aiosqlite:///:memory:"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Cache uv
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Detect committed secrets
+        uses: docker://ghcr.io/gitleaks/gitleaks@sha256:0e99e8821643ea5b235718642b93bb32486af9c8162c8b8731f7cbdc951a7f46 # v8.21.2
         with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
+          args: detect --source=/github/workspace --verbose --no-banner
 
-      - name: Install uv
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      - name: Sync dependencies
-        run: uv sync --frozen
-
-      - name: Run unit tests
-        run: uv run pytest -q -m unit
-
-  contract-tests:
-    name: "Contract tests (OpenAPI ASGI)"
+  unit:
+    name: "Unit and contract tests"
     runs-on: ubuntu-latest
-    needs: [lint, action-ref-validation]
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       DATABASE_URL_TEST: "sqlite+aiosqlite:///:memory:"
       CACHE_ENABLED: "false"
@@ -205,410 +121,15 @@ jobs:
       - name: Sync dependencies
         run: uv sync --frozen
 
-      - name: Run OpenAPI contract tests
-        run: uv run pytest services/ingestor/tests/contract -q -m contract --no-cov
-
-  python-deps:
-    name: "Python dependencies (pip-audit)"
-    needs: [lint, action-ref-validation]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Cache uv
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
-
-      - name: Install uv
-        shell: bash
+      - name: Run unit and OpenAPI contract tests
         run: |
-          set -euo pipefail
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          uv run pytest -q -m unit
+          uv run pytest services/ingestor/tests/contract -q -m contract --no-cov
 
-      - name: Sync dependencies
-        run: uv sync --frozen
-
-      - name: Export dependencies for audit
-        run: uv export --frozen --all-groups --no-hashes --format requirements-txt > requirements-audit.txt
-
-      - name: Run pip-audit
-        uses: pypa/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266 # v1.1.0
-        with:
-          inputs: requirements-audit.txt
-          ignore-vulns: |
-            PYSEC-2026-161
-            CVE-2026-34993
-            CVE-2026-47265
-            CVE-2026-54283
-            CVE-2026-54282
-            PYSEC-2026-179
-            PYSEC-2026-175
-            PYSEC-2026-177
-            PYSEC-2026-178
-
-  codeql:
-    name: "CodeQL analyze (Python)"
+  integration:
+    name: "PostgreSQL integration and migrations"
     runs-on: ubuntu-latest
-    needs: [lint, action-ref-validation]
-    permissions:
-      actions: read
-      contents: read
-      security-events: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
-        with:
-          languages: python
-
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
-
-      - name: Analyze
-        uses: github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
-        with:
-          upload: always
-          category: /language:python
-
-  aws-deployment-contract:
-    name: "Validate AWS deployment contract"
-    runs-on: ubuntu-latest
-    needs: [lint, action-ref-validation]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Validate deployable services and immutable image tags
-        run: python3 scripts/validate_aws_deployment_contract.py
-
-  migration-ingestor:
-    name: "Migrations (ingestor fresh PostgreSQL)"
-    runs-on: ubuntu-latest
-    needs: [lint, action-ref-validation]
-    timeout-minutes: 10
-    services:
-      postgres:
-        image: pgvector/pgvector:pg17-trixie
-        env:
-          POSTGRES_DB: ingestor_migrations
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_USER: postgres
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-        ports:
-          - 5432:5432
-    env:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/ingestor_migrations
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Cache uv
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
-
-      - name: Install uv
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      - name: Sync dependencies
-        run: uv sync --frozen --all-packages
-
-      - name: Upgrade a fresh database to head
-        run: uv run alembic upgrade head
-
-      - name: Assert revision is at head
-        run: uv run alembic current --check-heads
-
-      - name: Assert migrations match models
-        run: uv run alembic check
-
-  migration-inference:
-    name: "Migrations (inference fresh PostgreSQL)"
-    runs-on: ubuntu-latest
-    needs: [lint, action-ref-validation]
-    timeout-minutes: 10
-    services:
-      postgres:
-        image: pgvector/pgvector:pg17-trixie
-        env:
-          POSTGRES_DB: inference_migrations
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_USER: postgres
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-        ports:
-          - 5432:5432
-    env:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/inference_migrations
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Cache uv
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
-
-      - name: Install uv
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      - name: Sync dependencies
-        run: uv sync --frozen --all-packages
-
-      - name: Upgrade a fresh database to head
-        run: uv run alembic -c services/inference/alembic.ini upgrade head
-
-      - name: Assert revision is at head
-        run: uv run alembic -c services/inference/alembic.ini current --check-heads
-
-      - name: Assert migrations match models
-        run: uv run alembic -c services/inference/alembic.ini check
-
-  # DOCKER BUILD, PUSH & SCAN (AWS ECR)
-  docker-build-ingestor:
-    name: "Build and push candidate image (ingestor)"
-    runs-on: ubuntu-latest
-    needs: [lint, unit-tests, python-deps, action-ref-validation, codeql, integration-tests, migration-ingestor, migration-inference]
-    if: vars.AWS_ECR_REGISTRY != '' && vars.AWS_ROLE_ARN_CI != '' && vars.AWS_REGION != ''
-    timeout-minutes: 20
-    permissions:
-      contents: read
-      id-token: write
-    outputs:
-      image_ingestor: ${{ steps.build-ingestor.outputs.image }}
-      tree_sha: ${{ steps.resolve.outputs.tree_sha }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Resolve tree SHA
-        id: resolve
-        uses: ./.github/actions/resolve-tree-sha
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
-        with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN_CI }}
-          aws-region: ${{ vars.AWS_REGION }}
-          role-session-name: api-observatory-ci
-
-      - name: Log in to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@1629cc33a9521f764a4704d4d0387513918873b9 # v2.1.4
-
-      - name: Build and push ingestor image
-        id: build-ingestor
-        env:
-          DOCKER_BUILDKIT: "1"
-        run: |
-          TREE_SHA="${{ steps.resolve.outputs.tree_sha }}"
-          IMAGE="${{ vars.AWS_ECR_REGISTRY }}/api-observatory/ingestor:tree-${TREE_SHA}"
-          docker build -t "${IMAGE}" .
-          docker push "${IMAGE}"
-          DIGEST=$(aws ecr describe-images \
-            --repository-name api-observatory/ingestor \
-            --image-ids imageTag="tree-${TREE_SHA}" \
-            --query 'imageDetails[0].imageDigest' --output text)
-          echo "image=${IMAGE%:*}@${DIGEST}" >> "$GITHUB_OUTPUT"
-
-      - name: Check image size (MB)
-        shell: bash
-        run: |
-          set -euo pipefail
-          IMAGE="${{ vars.AWS_ECR_REGISTRY }}/api-observatory/ingestor:tree-${{ steps.resolve.outputs.tree_sha }}"
-          docker inspect "${IMAGE}" --format '{{.Size}}' | awk '{mb=$1/1024/1024; printf "Image size: %.0f MB\n", mb}'
-
-  docker-build-dashboard:
-    name: "Build and push candidate image (dashboard)"
-    runs-on: ubuntu-latest
-    needs: [lint, unit-tests, python-deps, action-ref-validation, codeql, integration-tests, migration-ingestor, migration-inference]
-    if: vars.AWS_ECR_REGISTRY != '' && vars.AWS_ROLE_ARN_CI != '' && vars.AWS_REGION != ''
-    timeout-minutes: 20
-    permissions:
-      contents: read
-      id-token: write
-    outputs:
-      image_dashboard: ${{ steps.build-dashboard.outputs.image }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Resolve tree SHA
-        id: resolve
-        uses: ./.github/actions/resolve-tree-sha
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
-        with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN_CI }}
-          aws-region: ${{ vars.AWS_REGION }}
-          role-session-name: api-observatory-ci
-
-      - name: Log in to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@1629cc33a9521f764a4704d4d0387513918873b9 # v2.1.4
-
-      - name: Build and push dashboard image
-        id: build-dashboard
-        env:
-          DOCKER_BUILDKIT: "1"
-        run: |
-          TREE_SHA="${{ steps.resolve.outputs.tree_sha }}"
-          IMAGE="${{ vars.AWS_ECR_REGISTRY }}/api-observatory/dashboard:tree-${TREE_SHA}"
-          docker build -t "${IMAGE}" -f services/dashboard/Dockerfile .
-          docker push "${IMAGE}"
-          DIGEST=$(aws ecr describe-images \
-            --repository-name api-observatory/dashboard \
-            --image-ids imageTag="tree-${TREE_SHA}" \
-            --query 'imageDetails[0].imageDigest' --output text)
-          echo "image=${IMAGE%:*}@${DIGEST}" >> "$GITHUB_OUTPUT"
-
-  docker-build-inference:
-    name: "Build and push candidate image (inference)"
-    runs-on: ubuntu-latest
-    needs: [lint, unit-tests, python-deps, action-ref-validation, codeql, integration-tests, migration-ingestor, migration-inference]
-    if: vars.AWS_ECR_REGISTRY != '' && vars.AWS_ROLE_ARN_CI != '' && vars.AWS_REGION != ''
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      id-token: write
-    outputs:
-      image_inference: ${{ steps.build-inference.outputs.image }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Resolve tree SHA
-        id: resolve
-        uses: ./.github/actions/resolve-tree-sha
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
-        with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN_CI }}
-          aws-region: ${{ vars.AWS_REGION }}
-          role-session-name: api-observatory-ci
-
-      - name: Log in to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@1629cc33a9521f764a4704d4d0387513918873b9 # v2.1.4
-
-      - name: Build and push inference image
-        id: build-inference
-        env:
-          DOCKER_BUILDKIT: "1"
-        shell: bash
-        run: |
-          set -euo pipefail
-          TREE_SHA="${{ steps.resolve.outputs.tree_sha }}"
-          IMAGE="${{ vars.AWS_ECR_REGISTRY }}/api-observatory/inference:tree-${TREE_SHA}"
-          docker build -t "${IMAGE}" -f services/inference/Dockerfile .
-          docker push "${IMAGE}"
-          DIGEST=$(aws ecr describe-images \
-            --repository-name api-observatory/inference \
-            --image-ids imageTag="tree-${TREE_SHA}" \
-            --query 'imageDetails[0].imageDigest' --output text)
-          echo "image=${IMAGE%:*}@${DIGEST}" >> "$GITHUB_OUTPUT"
-
-  docker-scan-security:
-    name: "Scan docker image (Trivy - strict)"
-    runs-on: ubuntu-latest
-    needs: [docker-build-ingestor, docker-build-inference, docker-build-dashboard]
-    if: vars.AWS_ECR_REGISTRY != '' && vars.AWS_ROLE_ARN_CI != '' && vars.AWS_REGION != ''
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
-        with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN_CI }}
-          aws-region: ${{ vars.AWS_REGION }}
-          role-session-name: api-observatory-ci
-
-      - name: Log in to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@1629cc33a9521f764a4704d4d0387513918873b9 # v2.1.4
-
-      - name: Pull and scan ingestor image
-        run: |
-          docker pull "${{ needs.docker-build-ingestor.outputs.image_ingestor }}"
-          docker tag "${{ needs.docker-build-ingestor.outputs.image_ingestor }}" ingestor:scan
-
-      - name: Scan ingestor (Trivy advisory)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: ingestor:scan
-          format: table
-          ignore-unfixed: true
-          scanners: vuln
-          vuln-type: os,library
-          severity: MEDIUM,HIGH,CRITICAL
-          exit-code: "0"
-
-      - name: Pull and scan dashboard image
-        run: |
-          docker pull "${{ needs.docker-build-dashboard.outputs.image_dashboard }}"
-          docker tag "${{ needs.docker-build-dashboard.outputs.image_dashboard }}" dashboard:scan
-
-      - name: Scan dashboard (Trivy advisory)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: dashboard:scan
-          format: table
-          ignore-unfixed: true
-          scanners: vuln
-          vuln-type: os,library
-          severity: MEDIUM,HIGH,CRITICAL
-          exit-code: "0"
-
-      - name: Pull and scan inference image
-        run: |
-          docker pull "${{ needs.docker-build-inference.outputs.image_inference }}"
-          docker tag "${{ needs.docker-build-inference.outputs.image_inference }}" inference:scan
-
-      - name: Scan inference (Trivy advisory)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: inference:scan
-          format: table
-          ignore-unfixed: true
-          scanners: vuln
-          vuln-type: os,library
-          severity: MEDIUM,HIGH,CRITICAL
-          exit-code: "0"
-
-  # INTEGRATION TESTS (run after security gates)
-  integration-tests:
-    name: "Integration tests (postgres + cache)"
-    runs-on: ubuntu-latest
-    needs: [lint, unit-tests, action-ref-validation]
-    timeout-minutes: 15
+    timeout-minutes: 25
     services:
       postgres:
         image: pgvector/pgvector:pg17-trixie
@@ -655,48 +176,32 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Sync dependencies
-        run: uv sync --frozen
+      - name: Sync workspace
+        run: uv sync --frozen --all-packages
 
-      - name: Verify service health before tests
-        shell: bash
+      - name: Create isolated migration and inference databases
         run: |
-          set -euo pipefail
+          docker exec "${{ job.services.postgres.id }}" createdb -U postgres ingestor_migrations
+          docker exec "${{ job.services.postgres.id }}" createdb -U postgres inference_migrations
+          docker exec "${{ job.services.postgres.id }}" createdb -U postgres inference_test
 
-          for _ in {1..30}; do
-            if docker exec "${{ job.services.postgres.id }}" pg_isready -U postgres >/dev/null 2>&1; then
-              break
-            fi
-            sleep 2
-          done
-          docker exec "${{ job.services.postgres.id }}" pg_isready -U postgres
-
-          for _ in {1..30}; do
-            if docker exec "${{ job.services.cache.id }}" redis-cli ping | grep -q PONG; then
-              break
-            fi
-            sleep 2
-          done
-          docker exec "${{ job.services.cache.id }}" redis-cli ping
-
-      - name: Capture dependency diagnostics
-        if: failure()
-        shell: bash
+      - name: Validate ingestor migrations
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/ingestor_migrations
         run: |
-          set -euo pipefail
-          mkdir -p ci-diagnostics
-          docker ps -a > ci-diagnostics/docker-ps.txt
-          docker logs "${{ job.services.postgres.id }}" > ci-diagnostics/postgres.log 2>&1 || true
-          docker logs "${{ job.services.cache.id }}" > ci-diagnostics/cache.log 2>&1 || true
+          uv run alembic upgrade head
+          uv run alembic current --check-heads
+          uv run alembic check
 
-      - name: Upload dependency diagnostics
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: ci-dependency-diagnostics
-          path: ci-diagnostics
+      - name: Validate inference migrations
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/inference_migrations
+        run: |
+          uv run alembic -c services/inference/alembic.ini upgrade head
+          uv run alembic -c services/inference/alembic.ini current --check-heads
+          uv run alembic -c services/inference/alembic.ini check
 
-      - name: Run integration tests with coverage gate
+      - name: Run ingestor integration tests
         run: |
           mkdir -p coverage
           uv run pytest -q -m integration \
@@ -706,71 +211,10 @@ jobs:
             --cov-report=xml:coverage/ingestor.xml \
             --cov-fail-under=40
 
-      - name: Upload ingestor coverage
-        if: success()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: ingestor-coverage
-          path: coverage/ingestor.xml
-          if-no-files-found: error
-
-  inference-integration-tests:
-    name: "Inference integration tests (pgvector)"
-    runs-on: ubuntu-latest
-    needs: [lint, unit-tests, action-ref-validation]
-    timeout-minutes: 10
-    services:
-      postgres:
-        image: pgvector/pgvector:pg17-trixie
+      - name: Run inference integration tests
         env:
-          POSTGRES_DB: inference_test
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_USER: postgres
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-        ports:
-          - 5432:5432
-    env:
-      DATABASE_URL_TEST: postgresql+asyncpg://postgres:postgres@localhost:5432/inference_test
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Cache uv
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
-
-      - name: Install uv
-        shell: bash
+          DATABASE_URL_TEST: postgresql+asyncpg://postgres:postgres@localhost:5432/inference_test
         run: |
-          set -euo pipefail
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      - name: Sync dependencies
-        run: uv sync --frozen --all-packages
-
-      - name: Verify PostgreSQL health before tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          for _ in {1..30}; do
-            if docker exec "${{ job.services.postgres.id }}" pg_isready -U postgres >/dev/null 2>&1; then
-              break
-            fi
-            sleep 2
-          done
-          docker exec "${{ job.services.postgres.id }}" pg_isready -U postgres
-
-      - name: Run inference integration tests with coverage gate
-        run: |
-          mkdir -p coverage
           uv run pytest services/inference/tests -q -o addopts='' \
             --cov-config=coverage.inference.ini \
             --cov \
@@ -778,132 +222,22 @@ jobs:
             --cov-report=xml:coverage/inference.xml \
             --cov-fail-under=85
 
-      - name: Upload inference coverage
+      - name: Upload coverage
         if: success()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: inference-coverage
-          path: coverage/inference.xml
+          name: integration-coverage
+          path: coverage
           if-no-files-found: error
 
-  agent-eval-baseline:
-    name: "Agent evaluation baseline (advisory)"
+  image-smoke:
+    name: "Deployable image smoke"
     runs-on: ubuntu-latest
-    needs: [lint, action-ref-validation]
-    continue-on-error: true
-    timeout-minutes: 10
+    needs: [quality, unit, integration]
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Cache uv
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
-
-      - name: Install uv
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      - name: Sync dependencies
-        run: uv sync --frozen
-
-      - name: Run deterministic agent evaluation
-        run: |
-          uv run python scripts/eval/run-agent-eval.py \
-            --output "${RUNNER_TEMP}/agent-eval/agent-eval-report.json"
-
-      - name: Upload agent evaluation report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: agent-eval-report
-          path: ${{ runner.temp }}/agent-eval/agent-eval-report.json
-          if-no-files-found: warn
-          retention-days: 14
-
-  # GATE: ALL CHECKS MUST PASS
-  ci-gate:
-    name: "CI gate (all checks passed)"
-    runs-on: ubuntu-latest
-    needs:
-      - lint
-      - action-ref-validation
-      - docs-quality
-      - type-check
-      - unit-tests
-      - contract-tests
-      - python-deps
-      - aws-deployment-contract
-      - migration-ingestor
-      - migration-inference
-      - docker-build-ingestor
-      - docker-build-dashboard
-      - docker-build-inference
-      - docker-scan-security
-      - codeql
-      - integration-tests
-      - inference-integration-tests
-    if: always()
-    permissions:
-      contents: read
-    steps:
-      - name: Verify all required checks passed
-        run: |
-          failed=0
-          [[ "${{ needs.lint.result }}" == "success" ]] || { echo "❌ Lint"; failed=1; }
-          [[ "${{ needs.action-ref-validation.result }}" == "success" ]] || { echo "❌ Action refs"; failed=1; }
-          [[ "${{ needs.docs-quality.result }}" == "success" ]] || { echo "❌ Docs quality"; failed=1; }
-          [[ "${{ needs.type-check.result }}" == "success" ]] || { echo "❌ Type check"; failed=1; }
-          [[ "${{ needs.unit-tests.result }}" == "success" ]] || { echo "❌ Unit tests"; failed=1; }
-          [[ "${{ needs.contract-tests.result }}" == "success" ]] || { echo "❌ Contract tests"; failed=1; }
-          [[ "${{ needs.python-deps.result }}" == "success" ]] || { echo "❌ Python deps"; failed=1; }
-          [[ "${{ needs.aws-deployment-contract.result }}" == "success" ]] || { echo "❌ AWS deployment contract"; failed=1; }
-          [[ "${{ needs.migration-ingestor.result }}" == "success" ]] || { echo "❌ Ingestor migrations"; failed=1; }
-          [[ "${{ needs.migration-inference.result }}" == "success" ]] || { echo "❌ Inference migrations"; failed=1; }
-          # ECR publish/scan requires repository variables plus an AWS OIDC role. These
-          # jobs remain skipped until the AWS foundation is provisioned.
-          [[ "${{ needs.docker-build-ingestor.result }}" =~ ^(success|skipped)$ ]] || { echo "❌ Docker build (ingestor)"; failed=1; }
-          [[ "${{ needs.docker-build-dashboard.result }}" =~ ^(success|skipped)$ ]] || { echo "❌ Docker build (dashboard)"; failed=1; }
-          [[ "${{ needs.docker-build-inference.result }}" =~ ^(success|skipped)$ ]] || { echo "❌ Docker build (inference)"; failed=1; }
-          [[ "${{ needs.docker-scan-security.result }}" =~ ^(success|skipped)$ ]] || { echo "❌ Docker scan"; failed=1; }
-          [[ "${{ needs.codeql.result }}" == "success" ]] || { echo "❌ CodeQL"; failed=1; }
-          [[ "${{ needs.integration-tests.result }}" == "success" ]] || { echo "❌ Integration tests"; failed=1; }
-          [[ "${{ needs.inference-integration-tests.result }}" == "success" ]] || { echo "❌ Inference integration tests"; failed=1; }
-          # Advisory scan: report status but do not block
-          [[ "${{ needs.docker-scan-security.result }}" =~ ^(success|skipped)$ ]] || echo "⚠️  Docker advisory scan: ${{ needs.docker-scan-security.result }}"
-          [ $failed -eq 0 ] && echo "✅ All CI checks passed"
-          exit $failed
-
-      - name: Publish summary
-        if: always()
-        shell: bash
-        run: |
-          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
-          ## CI Workflow Summary
-          | Check | Result |
-          |-------|--------|
-          | Lint | ${{ needs.lint.result }} |
-          | Action Refs | ${{ needs.action-ref-validation.result }} |
-          | Docs Quality | ${{ needs.docs-quality.result }} |
-          | Type Check | ${{ needs.type-check.result }} |
-          | Unit Tests | ${{ needs.unit-tests.result }} |
-          | Contract Tests | ${{ needs.contract-tests.result }} |
-          | Python Deps | ${{ needs.python-deps.result }} |
-          | AWS Deployment Contract | ${{ needs.aws-deployment-contract.result }} |
-          | Ingestor Migrations | ${{ needs.migration-ingestor.result }} |
-          | Inference Migrations | ${{ needs.migration-inference.result }} |
-          | Docker Build (ingestor) | ${{ needs.docker-build-ingestor.result }} |
-          | Docker Build (dashboard) | ${{ needs.docker-build-dashboard.result }} |
-          | Docker Build (inference) | ${{ needs.docker-build-inference.result }} |
-          | Docker Security | ${{ needs.docker-scan-security.result }} |
-          | Docker Advisory | ${{ needs.docker-scan-security.result }} |
-          | CodeQL | ${{ needs.codeql.result }} |
-          | Integration Tests | ${{ needs.integration-tests.result }} |
-          | Inference Integration Tests | ${{ needs.inference-integration-tests.result }} |
-          EOF
+      - name: Build and health-check the Stage 0 images
+        run: scripts/ci/smoke-deployable-images.sh

@@ -78,29 +78,17 @@ fi
 # Keep check names aligned with current .github/workflows/ci.yml job names.
 # Format: "<workflow name> / <job display name>"
 #
-# Requiring only ci-gate is intentional: it is the aggregate gate job that
-# verifies every upstream job (lint, action-ref-validation, unit-tests,
-# python-deps, docker-build, docker-scan-security, codeql, integration-tests)
-# passed. Listing individual jobs here would require updating this script every
-# time the CI DAG changes.
-default_contexts_develop_json='[
-	"CI / CI gate (all checks passed)"
-]'
-
-# main additionally requires the secrets scan (runs on every PR/push).
-# Note: security.yml is schedule-only and never runs on PRs, so it is
-# intentionally excluded from required checks.
-default_contexts_main_json='[
-	"CI / CI gate (all checks passed)",
-	"Security Secrets Lite / Secrets Scan (changed lines)"
+# Both protected branches use the same four visible CI gates. Manual assurance
+# and manual CD are intentionally excluded from merge requirements.
+default_contexts_json='[
+	"CI / Quality",
+	"CI / Unit and contract tests",
+	"CI / PostgreSQL integration and migrations",
+	"CI / Deployable image smoke"
 ]'
 
 for branch in "${branches[@]}"; do
-	if [[ "$branch" == "main" ]]; then
-		contexts_json="$default_contexts_main_json"
-	else
-		contexts_json="$default_contexts_develop_json"
-	fi
+	contexts_json="$default_contexts_json"
 
 	payload="$(jq -n \
 		--argjson contexts "$contexts_json" \
