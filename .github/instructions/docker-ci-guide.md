@@ -200,9 +200,9 @@ scan, publishing, and digest-rotation lifecycle.
     push-ecr:
       runs-on: ubuntu-latest
       if: github.ref == 'refs/heads/main'
+  ```
 
-
-  Tip: For maintainers, keep the standard hosted runner plus pinned `uv` setup unless timing
+Tip: For maintainers, keep the standard hosted runner plus pinned `uv` setup unless timing
 data shows that a separately built CI image provides enough benefit to justify its ownership.
 
 ```yaml
