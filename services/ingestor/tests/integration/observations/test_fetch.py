@@ -150,7 +150,7 @@ async def test_concurrent_fetches(cleanup_http_client) -> None:
 
         # All should succeed
         assert len(results) == 5
-        assert all(r["title"].startswith("Post") for r in results)
+        assert all(r["title"].startswith("Post") for r in results), results
 
 
 @pytest.mark.integration

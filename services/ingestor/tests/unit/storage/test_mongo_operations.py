@@ -56,7 +56,7 @@ async def test_find_by_source() -> None:
         # Find by source
         docs = await find_by_source(source="hn", limit=10)
         assert len(docs) >= 2
-        assert all(doc["source"] == "hn" for doc in docs)
+        assert all(doc["source"] == "hn" for doc in docs), docs
     except RuntimeError as e:
         if "MongoDB client not connected" in str(e):
             pytest.skip("MongoDB not available")

@@ -30,7 +30,7 @@ async def test_outbox_enqueue_and_inbox_idempotent_consumption(
         postgresql_async_session,
         limit=10,
     )
-    assert any(event.id == outbox_event.id for event in pending)
+    assert any(event.id == outbox_event.id for event in pending), pending
 
     first_insert = await messaging.try_observation_inbox_consumption(
         postgresql_async_session,
@@ -117,4 +117,6 @@ async def test_outbox_claim_failure_retry_and_publish_lifecycle(
         postgresql_async_session,
         limit=10,
     )
-    assert all(item.id != event.id for item in pending_after_publish)
+    assert all(item.id != event.id for item in pending_after_publish), (
+        pending_after_publish
+    )

@@ -39,7 +39,9 @@ async def test_throughput_with_512m_memory() -> None:
 
         # Assert
         # All requests succeeded under resource constraint
-        assert all(r.status_code == 201 for r in responses)
+        assert all(r.status_code == 201 for r in responses), [
+            (r.status_code, r.text) for r in responses
+        ]
         print(f"\n100 concurrent requests in {duration:.2f}s under 512M memory limit")
 
 

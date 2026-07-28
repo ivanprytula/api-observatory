@@ -75,7 +75,7 @@ async def test_concurrent_expired_calls_trigger_exactly_one_login(
 
     results = await asyncio.gather(*(auth_client.get_valid_token() for _ in range(5)))
 
-    assert all(token == "token-1" for token in results)
+    assert all(token == "token-1" for token in results), results
     assert route.call_count == 2  # one initial login (above) + one re-login
 
 

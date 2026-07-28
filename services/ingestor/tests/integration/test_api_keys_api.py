@@ -134,7 +134,7 @@ async def test_revoke_is_idempotent_in_list(client: AsyncClient) -> None:
     resp = await client.get("/api/v1/api-keys")
     assert resp.status_code == 200
     # Key still shows in the list (soft delete)
-    assert any(k["id"] == key_id for k in resp.json())
+    assert any(k["id"] == key_id for k in resp.json()), resp.json()
 
 
 # ---------------------------------------------------------------------------

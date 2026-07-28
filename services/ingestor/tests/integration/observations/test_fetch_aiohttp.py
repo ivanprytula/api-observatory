@@ -175,7 +175,7 @@ async def test_concurrent_fetches(cleanup_http_session) -> None:
 
         # All should succeed
         assert len(results) == 5
-        assert all(r["name"]["common"] in countries for r in results)
+        assert all(r["name"]["common"] in countries for r in results), results
 
 
 @pytest.mark.integration

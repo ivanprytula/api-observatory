@@ -60,7 +60,7 @@ class TestEventsWithDB:
         # Retrieve pending events
         events = await get_events_by_status(db, status="pending", limit=10)
         assert len(events) >= 2
-        assert all(e.status == "pending" for e in events)
+        assert all(e.status == "pending" for e in events), events
 
     async def test_event_update_status(self, db: AsyncSession) -> None:
         """Update event status from pending → processing → completed."""

@@ -305,5 +305,5 @@ class TestRetryWithRealWorldScenarios:
 
         # All should succeed
         assert len(results) == 5
-        assert all(isinstance(r, dict) for r in results)
-        assert all(r["id"] == 1 for r in results)
+        assert all(isinstance(r, dict) for r in results), results
+        assert all(r["id"] == 1 for r in results), results
