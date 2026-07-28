@@ -50,6 +50,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Resolve selected tree SHA
+        id: resolve
+        uses: ./.github/actions/resolve-tree-sha
+
+      - name: Reject a mismatched manual tree SHA
+        if: github.event_name == 'workflow_dispatch' && inputs.tree_sha != ''
+        env:
+          REQUESTED_TREE_SHA: ${{ inputs.tree_sha }}
+          CHECKOUT_TREE_SHA: ${{ steps.resolve.outputs.tree_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${REQUESTED_TREE_SHA}" == "${CHECKOUT_TREE_SHA}" ]] \
+            || { echo "tree_sha must match the selected checkout tree." >&2; exit 1; }
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
@@ -60,31 +77,47 @@ jobs:
 
       - name: Resolve immutable image references
         id: images
-        uses: ./.github/actions/resolve-tree-sha
+        env:
+          REGISTRY: ${{ vars.AWS_ECR_REGISTRY }}
+          TREE_SHA: ${{ steps.resolve.outputs.tree_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for service in ingestor inference dashboard; do
+            digest=$(aws ecr describe-images \
+              --repository-name "api-observatory/${service}" \
+              --image-ids imageTag="tree-${TREE_SHA}" \
+              --query 'imageDetails[0].imageDigest' --output text)
+            [[ -n "${digest}" && "${digest}" != "None" ]] \
+              || { echo "Missing candidate ${service}: tree-${TREE_SHA}" >&2; exit 1; }
+            echo "${service}=${REGISTRY}/api-observatory/${service}@${digest}" >> "$GITHUB_OUTPUT"
+          done
+          echo "tree_sha=${TREE_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Send deployment command through Systems Manager
         env:
           INSTANCE_ID: ${{ vars.AWS_EC2_INSTANCE_ID_DEV }}
           REGISTRY: ${{ vars.AWS_ECR_REGISTRY }}
-          TREE_SHA: ${{ inputs.tree_sha || steps.images.outputs.tree_sha }}
+          TREE_SHA: ${{ steps.images.outputs.tree_sha }}
+          INGESTOR_IMAGE: ${{ steps.images.outputs.ingestor }}
+          INFERENCE_IMAGE: ${{ steps.images.outputs.inference }}
+          DASHBOARD_IMAGE: ${{ steps.images.outputs.dashboard }}
         shell: bash
         run: |
           set -euo pipefail
-          INGESTOR="${REGISTRY}/api-observatory/ingestor:tree-${TREE_SHA}"
-          INFERENCE="${REGISTRY}/api-observatory/inference:tree-${TREE_SHA}"
-          DASHBOARD="${REGISTRY}/api-observatory/dashboard:tree-${TREE_SHA}"
+          rollout_script=$(base64 -w 0 scripts/aws-stage0-rollout.sh)
           command_id=$(aws ssm send-command \
             --instance-ids "${INSTANCE_ID}" \
             --document-name AWS-RunShellScript \
-            --parameters "commands=[\"cd /opt/api-observatory\",\"export INGESTOR_IMAGE=${INGESTOR} INFERENCE_IMAGE=${INFERENCE} DASHBOARD_IMAGE=${DASHBOARD} SERVICE_VERSION=tree-${TREE_SHA}\",\"docker compose pull ingestor inference dashboard\",\"docker compose up -d ingestor inference dashboard\",\"curl --fail http://127.0.0.1:8000/health\",\"curl --fail http://127.0.0.1:8001/health\",\"curl --fail http://127.0.0.1:8501/_stcore/health\",\"docker image prune -f --filter until=48h\"]" \
+            --parameters "commands=[\"cd /opt/api-observatory\",\"export INGESTOR_IMAGE=${INGESTOR_IMAGE} INFERENCE_IMAGE=${INFERENCE_IMAGE} DASHBOARD_IMAGE=${DASHBOARD_IMAGE} SERVICE_VERSION=tree-${TREE_SHA}\",\"echo ${rollout_script} | base64 -d | bash\"]" \
             --query 'Command.CommandId' --output text)
           aws ssm wait command-executed --command-id "${command_id}" --instance-id "${INSTANCE_ID}"
           aws ssm get-command-invocation --command-id "${command_id}" --instance-id "${INSTANCE_ID}"
           {
             echo "tree_sha=${TREE_SHA}"
-            echo "ingestor=${INGESTOR}"
-            echo "inference=${INFERENCE}"
-            echo "dashboard=${DASHBOARD}"
+            echo "ingestor=${INGESTOR_IMAGE}"
+            echo "inference=${INFERENCE_IMAGE}"
+            echo "dashboard=${DASHBOARD_IMAGE}"
           } >> "$GITHUB_OUTPUT"
 
   publish-summary:

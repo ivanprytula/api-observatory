@@ -37,14 +37,38 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
           role-session-name: api-observatory-release
 
-      - name: Log in to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@1629cc33a9521f764a4704d4d0387513918873b9 # v2.1.4
-
       - name: Resolve candidate tree SHA
         id: resolve
         uses: ./.github/actions/resolve-tree-sha
 
-      - name: Promote all deployable services
+      - name: Verify CI passed for the exact tagged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?per_page=100" \
+            --jq '.check_runs[] | select(.name == "CI gate (all checks passed)") | .conclusion' \
+            | grep -qx 'success' \
+            || { echo "The tagged commit must pass CI / CI gate (all checks passed)." >&2; exit 1; }
+
+      - name: Verify all three candidate images exist
+        env:
+          TREE_SHA: ${{ steps.resolve.outputs.tree_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for service in ingestor inference dashboard; do
+            digest=$(aws ecr describe-images \
+              --repository-name "api-observatory/${service}" \
+              --image-ids imageTag="tree-${TREE_SHA}" \
+              --query 'imageDetails[0].imageDigest' --output text)
+            [[ -n "${digest}" && "${digest}" != "None" ]] \
+              || { echo "Missing candidate for ${service}: tree-${TREE_SHA}" >&2; exit 1; }
+            echo "${service}: ${digest}"
+          done
+
+      - name: Promote all deployable services without rebuilding
         env:
           REGISTRY: ${{ vars.AWS_ECR_REGISTRY }}
           TREE_SHA: ${{ steps.resolve.outputs.tree_sha }}
@@ -53,11 +77,16 @@ jobs:
         run: |
           set -euo pipefail
           for service in ingestor inference dashboard; do
-            source_image="${REGISTRY}/api-observatory/${service}:tree-${TREE_SHA}"
-            release_image="${REGISTRY}/api-observatory/${service}:${RELEASE_TAG}"
-            docker pull "${source_image}"
-            docker tag "${source_image}" "${release_image}"
-            docker push "${release_image}"
+            manifest=$(aws ecr batch-get-image \
+              --repository-name "api-observatory/${service}" \
+              --image-ids imageTag="tree-${TREE_SHA}" \
+              --query 'images[0].imageManifest' --output text)
+            [[ -n "${manifest}" && "${manifest}" != "None" ]] \
+              || { echo "Unable to read candidate manifest for ${service}" >&2; exit 1; }
+            aws ecr put-image \
+              --repository-name "api-observatory/${service}" \
+              --image-tag "${RELEASE_TAG}" \
+              --image-manifest "${manifest}" >/dev/null
           done
 
       - name: Publish release summary

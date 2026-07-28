@@ -31,11 +31,14 @@ lab, optional integration, or test helper; those are remediated when their ownin
 
 ## Artifact and Identity Contract
 
-CI builds ingestor, inference, and dashboard candidates tagged `tree-<full-tree-SHA>`. Release
-promotion reuses those candidates rather than rebuilding or publishing `latest`; CD resolves them
-to digests before Stage 0 Compose receives them. AWS workflows use GitHub OIDC and remain skipped
-until `AWS_CD_ENABLED=true`, the required variables, and the protected environment exist. The
-[OIDC setup](github-secrets-setup.md) owns role and variable expectations; the [deployment
+CI builds ingestor, inference, and dashboard candidates tagged `tree-<full-tree-SHA>` and records
+their ECR digests. Release promotion checks that the exact tagged commit is on `main`, passed
+`CI / CI gate (all checks passed)`, and has all three candidates; it copies their ECR manifests
+without rebuilding or publishing `latest`. CD checks out `workflow_run.head_sha` (and rejects a
+manual tree SHA that differs), resolves the three candidate digests, and gives only
+`repository@sha256:...` values to Stage 0 Compose. AWS workflows use GitHub OIDC and remain
+skipped until `AWS_CD_ENABLED=true`, the required variables, and the protected environment exist.
+The [OIDC setup](github-secrets-setup.md) owns role and variable expectations; the [deployment
 contract](../07-deployment/app-repo-contract.md) owns image names, ports, health behavior, and
 environment interfaces.
 

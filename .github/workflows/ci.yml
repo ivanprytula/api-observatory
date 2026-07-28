@@ -401,13 +401,17 @@ jobs:
           IMAGE="${{ vars.AWS_ECR_REGISTRY }}/api-observatory/ingestor:tree-${TREE_SHA}"
           docker build -t "${IMAGE}" .
           docker push "${IMAGE}"
-          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          DIGEST=$(aws ecr describe-images \
+            --repository-name api-observatory/ingestor \
+            --image-ids imageTag="tree-${TREE_SHA}" \
+            --query 'imageDetails[0].imageDigest' --output text)
+          echo "image=${IMAGE%:*}@${DIGEST}" >> "$GITHUB_OUTPUT"
 
       - name: Check image size (MB)
         shell: bash
         run: |
           set -euo pipefail
-          IMAGE="${{ steps.build-ingestor.outputs.image }}"
+          IMAGE="${{ vars.AWS_ECR_REGISTRY }}/api-observatory/ingestor:tree-${{ steps.resolve.outputs.tree_sha }}"
           docker inspect "${IMAGE}" --format '{{.Size}}' | awk '{mb=$1/1024/1024; printf "Image size: %.0f MB\n", mb}'
 
   docker-build-dashboard:
@@ -448,7 +452,11 @@ jobs:
           IMAGE="${{ vars.AWS_ECR_REGISTRY }}/api-observatory/dashboard:tree-${TREE_SHA}"
           docker build -t "${IMAGE}" -f services/dashboard/Dockerfile .
           docker push "${IMAGE}"
-          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          DIGEST=$(aws ecr describe-images \
+            --repository-name api-observatory/dashboard \
+            --image-ids imageTag="tree-${TREE_SHA}" \
+            --query 'imageDetails[0].imageDigest' --output text)
+          echo "image=${IMAGE%:*}@${DIGEST}" >> "$GITHUB_OUTPUT"
 
   docker-build-inference:
     name: "Build and push candidate image (inference)"
@@ -490,7 +498,11 @@ jobs:
           IMAGE="${{ vars.AWS_ECR_REGISTRY }}/api-observatory/inference:tree-${TREE_SHA}"
           docker build -t "${IMAGE}" -f services/inference/Dockerfile .
           docker push "${IMAGE}"
-          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          DIGEST=$(aws ecr describe-images \
+            --repository-name api-observatory/inference \
+            --image-ids imageTag="tree-${TREE_SHA}" \
+            --query 'imageDetails[0].imageDigest' --output text)
+          echo "image=${IMAGE%:*}@${DIGEST}" >> "$GITHUB_OUTPUT"
 
   docker-scan-security:
     name: "Scan docker image (Trivy - strict)"
