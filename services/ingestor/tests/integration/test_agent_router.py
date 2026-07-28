@@ -14,12 +14,16 @@ from __future__ import annotations
 from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.ingestor.auth import verify_jwt_token
 from services.ingestor.main import app
 from services.ingestor.models import AgentRun, Observation, User
+
+
+pytestmark = pytest.mark.integration
 
 
 async def _viewer_claims() -> dict[str, str]:

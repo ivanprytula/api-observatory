@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.ingestor.models import AgentRun, DependencyIncident, Observation
+
+
+pytestmark = pytest.mark.integration
 
 
 _SCHEMA_V1: dict[str, Any] = {

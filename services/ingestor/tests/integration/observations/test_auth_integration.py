@@ -2,19 +2,23 @@
 
 Tests session-based auth, bearer token auth, protected docs, and rate limit handler.
 
-Note: No @pytest.mark.asyncio or @pytest.mark.integration — asyncio_mode='auto' is set.
+`asyncio_mode='auto'` handles async test execution; the module marker classifies this suite.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.ingestor.api_schemas.observations import ObservationRequest
 from services.ingestor.auth import verify_jwt_token
 from services.ingestor.main import app
+
+
+pytestmark = pytest.mark.integration
 
 
 async def _viewer_claims() -> dict[str, str]:

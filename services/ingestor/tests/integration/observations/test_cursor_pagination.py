@@ -10,6 +10,9 @@ import pytest
 from httpx import AsyncClient
 
 
+pytestmark = pytest.mark.integration
+
+
 @pytest.mark.parametrize(
     "limit",
     [1, 5, 10],

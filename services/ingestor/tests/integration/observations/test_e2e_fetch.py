@@ -223,6 +223,7 @@ class TestFetchWithRetry:
 class TestHttpClientLifecycle:
     """Tests for HTTP client creation and cleanup."""
 
+    @pytest.mark.integration
     async def test_get_http_client_creates_client(self) -> None:
         """get_http_client creates a new AsyncClient on first call."""
         client = await get_http_client()
@@ -230,6 +231,7 @@ class TestHttpClientLifecycle:
         assert isinstance(client, httpx.AsyncClient)
         assert client.is_closed is False
 
+    @pytest.mark.integration
     async def test_get_http_client_reuses_same_client(self) -> None:
         """get_http_client returns the same client for the same event loop."""
         client1 = await get_http_client()
@@ -237,6 +239,7 @@ class TestHttpClientLifecycle:
 
         assert client1 is client2  # Same object
 
+    @pytest.mark.integration
     async def test_close_http_client_closes_the_client(self) -> None:
         """close_http_client closes the client for the current loop."""
         client = await get_http_client()
@@ -247,6 +250,7 @@ class TestHttpClientLifecycle:
         # After close, the client should be closed
         assert client.is_closed is True
 
+    @pytest.mark.integration
     async def test_close_http_client_is_idempotent(self) -> None:
         """close_http_client can be called multiple times safely."""
         await get_http_client()
@@ -257,6 +261,7 @@ class TestHttpClientLifecycle:
         # Second close (should not raise)
         await close_http_client()
 
+    @pytest.mark.integration
     async def test_close_all_http_clients_closes_all(self) -> None:
         """close_all_http_clients closes clients from all loops."""
         # Create first client in current loop

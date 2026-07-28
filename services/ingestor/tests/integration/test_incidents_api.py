@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +10,9 @@ from services.ingestor.auth import verify_jwt_token
 from services.ingestor.main import app
 from services.ingestor.models import SourceProfile
 from services.ingestor.repositories.incidents import open_or_update_incident
+
+
+pytestmark = pytest.mark.integration
 
 
 async def _seed_incident(db: AsyncSession, *, tenant_id: int, name: str) -> int:

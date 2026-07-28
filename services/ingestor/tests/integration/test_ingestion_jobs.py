@@ -27,6 +27,9 @@ from services.ingestor.jobs import (
 from services.ingestor.models import Observation
 
 
+pytestmark = pytest.mark.integration
+
+
 # ============================================================================
 # IdempotencyKeyTracker Tests
 # ============================================================================

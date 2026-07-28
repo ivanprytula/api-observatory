@@ -23,6 +23,9 @@ from services.ingestor.jobs_registry import register_jobs, register_source_probe
 from services.ingestor.models import SourceProfile
 
 
+pytestmark = pytest.mark.integration
+
+
 # ============================================================================
 # JobScheduler Tests
 # ============================================================================

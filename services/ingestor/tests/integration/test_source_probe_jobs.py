@@ -18,6 +18,9 @@ from services.ingestor.jobs import run_source_contract_snapshot, run_source_prob
 from services.ingestor.models import ContractSnapshot, DriftEvent, SourceProfile
 
 
+pytestmark = pytest.mark.integration
+
+
 def _make_profile(
     source_id: int = 1,
     base_url: str = "https://api.example.com",

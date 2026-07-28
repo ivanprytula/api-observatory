@@ -16,6 +16,9 @@ from services.ingestor.api_schemas.observations import ObservationRequest
 from services.ingestor.repositories import observations as crud
 
 
+pytestmark = pytest.mark.integration
+
+
 @pytest.mark.parametrize(
     "error",
     [BulkheadRejectedError("queue full"), CircuitOpenError("circuit open")],

@@ -11,6 +11,9 @@ from httpx import AsyncClient
 from services.ingestor.api_schemas.source_registry import SourceHealthResponse
 
 
+pytestmark = pytest.mark.integration
+
+
 # ---------------------------------------------------------------------------
 # Test fixtures / payloads
 # ---------------------------------------------------------------------------
