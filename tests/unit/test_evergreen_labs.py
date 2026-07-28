@@ -1,10 +1,15 @@
 """Deterministic proof for the isolated partitioning lab."""
 
+import pytest
+
 from labs.partitioning_sharding.partition_demo import (
     analyze,
     consumer_assignment,
     partition_for,
 )
+
+
+pytestmark = pytest.mark.unit
 
 
 def test_same_key_routes_to_same_partition() -> None:

@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from libs.platform.http_timeout import RequestTimeoutMiddleware
+
+
+pytestmark = pytest.mark.unit
 
 
 async def test_request_timeout_returns_504_and_cancels_handler() -> None:

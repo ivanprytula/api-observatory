@@ -16,6 +16,9 @@ from services.ingestor.security.abuse_detection import (
 )
 
 
+pytestmark = pytest.mark.unit
+
+
 # ---------------------------------------------------------------------------
 # evaluate_source_noise
 # ---------------------------------------------------------------------------

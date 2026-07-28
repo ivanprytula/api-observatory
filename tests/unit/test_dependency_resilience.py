@@ -14,6 +14,9 @@ from libs.platform.resilience import DependencyResilience
 from libs.platform.retry import RetryBudget
 
 
+pytestmark = pytest.mark.unit
+
+
 async def test_retries_transient_transport_error_once() -> None:
     resilience = DependencyResilience(
         "test-retry",

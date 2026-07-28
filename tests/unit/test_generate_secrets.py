@@ -8,6 +8,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+
+pytestmark = pytest.mark.unit
+
 
 _SCRIPT = Path(__file__).parents[2] / "scripts/tools/generate-secrets.py"
 _CORE_SECRET_KEYS = (
