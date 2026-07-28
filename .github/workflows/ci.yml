@@ -204,11 +204,113 @@ jobs:
       - name: Validate deployable services and immutable image tags
         run: python3 scripts/validate_aws_deployment_contract.py
 
+  migration-ingestor:
+    name: "Migrations (ingestor fresh PostgreSQL)"
+    runs-on: ubuntu-latest
+    needs: [lint, action-ref-validation]
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17-trixie
+        env:
+          POSTGRES_DB: ingestor_migrations
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/ingestor_migrations
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Cache uv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
+
+      - name: Install uv
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Sync dependencies
+        run: uv sync --frozen --all-packages
+
+      - name: Upgrade a fresh database to head
+        run: uv run alembic upgrade head
+
+      - name: Assert revision is at head
+        run: uv run alembic current --check-heads
+
+      - name: Assert migrations match models
+        run: uv run alembic check
+
+  migration-inference:
+    name: "Migrations (inference fresh PostgreSQL)"
+    runs-on: ubuntu-latest
+    needs: [lint, action-ref-validation]
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17-trixie
+        env:
+          POSTGRES_DB: inference_migrations
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/inference_migrations
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Cache uv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
+
+      - name: Install uv
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Sync dependencies
+        run: uv sync --frozen --all-packages
+
+      - name: Upgrade a fresh database to head
+        run: uv run alembic -c services/inference/alembic.ini upgrade head
+
+      - name: Assert revision is at head
+        run: uv run alembic -c services/inference/alembic.ini current --check-heads
+
+      - name: Assert migrations match models
+        run: uv run alembic -c services/inference/alembic.ini check
+
   # DOCKER BUILD, PUSH & SCAN (AWS ECR)
   docker-build-ingestor:
     name: "Build and push candidate image (ingestor)"
     runs-on: ubuntu-latest
-    needs: [lint, unit-tests, python-deps, action-ref-validation, codeql, integration-tests]
+    needs: [lint, unit-tests, python-deps, action-ref-validation, codeql, integration-tests, migration-ingestor, migration-inference]
     if: vars.AWS_ECR_REGISTRY != '' && vars.AWS_ROLE_ARN_CI != '' && vars.AWS_REGION != ''
     timeout-minutes: 20
     permissions:
@@ -256,7 +358,7 @@ jobs:
   docker-build-dashboard:
     name: "Build and push candidate image (dashboard)"
     runs-on: ubuntu-latest
-    needs: [lint, unit-tests, python-deps, action-ref-validation, codeql, integration-tests]
+    needs: [lint, unit-tests, python-deps, action-ref-validation, codeql, integration-tests, migration-ingestor, migration-inference]
     if: vars.AWS_ECR_REGISTRY != '' && vars.AWS_ROLE_ARN_CI != '' && vars.AWS_REGION != ''
     timeout-minutes: 20
     permissions:
@@ -296,7 +398,7 @@ jobs:
   docker-build-inference:
     name: "Build and push candidate image (inference)"
     runs-on: ubuntu-latest
-    needs: [lint, unit-tests, python-deps, action-ref-validation, codeql, integration-tests]
+    needs: [lint, unit-tests, python-deps, action-ref-validation, codeql, integration-tests, migration-ingestor, migration-inference]
     if: vars.AWS_ECR_REGISTRY != '' && vars.AWS_ROLE_ARN_CI != '' && vars.AWS_REGION != ''
     timeout-minutes: 30
     permissions:
@@ -640,6 +742,8 @@ jobs:
       - contract-tests
       - python-deps
       - aws-deployment-contract
+      - migration-ingestor
+      - migration-inference
       - docker-build-ingestor
       - docker-build-dashboard
       - docker-build-inference
@@ -660,6 +764,8 @@ jobs:
           [[ "${{ needs.contract-tests.result }}" == "success" ]] || { echo "❌ Contract tests"; failed=1; }
           [[ "${{ needs.python-deps.result }}" == "success" ]] || { echo "❌ Python deps"; failed=1; }
           [[ "${{ needs.aws-deployment-contract.result }}" == "success" ]] || { echo "❌ AWS deployment contract"; failed=1; }
+          [[ "${{ needs.migration-ingestor.result }}" == "success" ]] || { echo "❌ Ingestor migrations"; failed=1; }
+          [[ "${{ needs.migration-inference.result }}" == "success" ]] || { echo "❌ Inference migrations"; failed=1; }
           # ECR publish/scan requires repository variables plus an AWS OIDC role. These
           # jobs remain skipped until the AWS foundation is provisioned.
           [[ "${{ needs.docker-build-ingestor.result }}" =~ ^(success|skipped)$ ]] || { echo "❌ Docker build (ingestor)"; failed=1; }
@@ -688,6 +794,8 @@ jobs:
           | Contract Tests | ${{ needs.contract-tests.result }} |
           | Python Deps | ${{ needs.python-deps.result }} |
           | AWS Deployment Contract | ${{ needs.aws-deployment-contract.result }} |
+          | Ingestor Migrations | ${{ needs.migration-ingestor.result }} |
+          | Inference Migrations | ${{ needs.migration-inference.result }} |
           | Docker Build (ingestor) | ${{ needs.docker-build-ingestor.result }} |
           | Docker Build (dashboard) | ${{ needs.docker-build-dashboard.result }} |
           | Docker Build (inference) | ${{ needs.docker-build-inference.result }} |
