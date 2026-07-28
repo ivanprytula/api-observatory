@@ -47,6 +47,11 @@ jobs:
       ingestor: ${{ steps.images.outputs.ingestor }}
       inference: ${{ steps.images.outputs.inference }}
       dashboard: ${{ steps.images.outputs.dashboard }}
+    env:
+      AWS_ROLE_ARN_DEV: ${{ vars.AWS_ROLE_ARN_DEV }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ECR_REGISTRY: ${{ vars.AWS_ECR_REGISTRY }}
+      AWS_EC2_INSTANCE_ID_DEV: ${{ vars.AWS_EC2_INSTANCE_ID_DEV }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -71,14 +76,14 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN_DEV }}
-          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ env.AWS_ROLE_ARN_DEV }}
+          aws-region: ${{ env.AWS_REGION }}
           role-session-name: api-observatory-cd
 
       - name: Resolve immutable image references
         id: images
         env:
-          REGISTRY: ${{ vars.AWS_ECR_REGISTRY }}
+          REGISTRY: ${{ env.AWS_ECR_REGISTRY }}
           TREE_SHA: ${{ steps.resolve.outputs.tree_sha }}
         shell: bash
         run: |
@@ -96,8 +101,8 @@ jobs:
 
       - name: Send deployment command through Systems Manager
         env:
-          INSTANCE_ID: ${{ vars.AWS_EC2_INSTANCE_ID_DEV }}
-          REGISTRY: ${{ vars.AWS_ECR_REGISTRY }}
+          INSTANCE_ID: ${{ env.AWS_EC2_INSTANCE_ID_DEV }}
+          REGISTRY: ${{ env.AWS_ECR_REGISTRY }}
           TREE_SHA: ${{ steps.images.outputs.tree_sha }}
           INGESTOR_IMAGE: ${{ steps.images.outputs.ingestor }}
           INFERENCE_IMAGE: ${{ steps.images.outputs.inference }}
