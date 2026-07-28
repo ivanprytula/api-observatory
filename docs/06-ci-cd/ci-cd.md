@@ -22,9 +22,8 @@ lab, optional integration, or test helper; those are remediated when their ownin
 | Workflow | Responsibility |
 | --- | --- |
 | [`ci.yml`](../../.github/workflows/ci.yml) | Main quality gates, tests, contracts, and candidate images |
-| [`security.yml`](../../.github/workflows/security.yml) | Security analysis and dependency/image evidence |
+| [`security.yml`](../../.github/workflows/security.yml) | Weekly dependency-audit evidence |
 | [`security-secrets-lite.yml`](../../.github/workflows/security-secrets-lite.yml) | Blocking secrets scan |
-| [`pip-audit.yml`](../../.github/workflows/pip-audit.yml) | Scheduled/manual dependency audit |
 | [`performance-smoke.yml`](../../.github/workflows/performance-smoke.yml) | Manual/weekly authenticated load baseline |
 | [`release.yml`](../../.github/workflows/release.yml) | Immutable candidate promotion |
 | [`cd-dev.yml`](../../.github/workflows/cd-dev.yml) | Approved AWS Stage 0 deployment through SSM |

@@ -133,12 +133,14 @@ jobs:
             exit 0
           fi
           mutable_refs=$(grep -nE 'uses:\s*[^#]+@(v[0-9]+|latest|main|master|develop)\b' "${workflow_files[@]}" || true)
-          if [ -n "$mutable_refs" ]; then
-            echo "Mutable GitHub Action references detected. Pin actions to full commit SHAs."
+          mutable_docker_refs=$(grep -nE 'uses:\s*docker://' "${workflow_files[@]}" | grep -v '@sha256:' || true)
+          if [ -n "$mutable_refs" ] || [ -n "$mutable_docker_refs" ]; then
+            echo "Mutable action references detected. Pin GitHub Actions to full commit SHAs and docker actions to digests."
             echo "$mutable_refs"
+            echo "$mutable_docker_refs"
             exit 1
           fi
-          echo "All action references are pinned to immutable SHAs."
+          echo "All action references are pinned to immutable identifiers."
 
   # UNIT & DEPENDENCY SECURITY
   unit-tests:
@@ -209,18 +211,45 @@ jobs:
   python-deps:
     name: "Python dependencies (pip-audit)"
     needs: [lint, action-ref-validation]
-    uses: ./.github/workflows/pip-audit.yml
-    with:
-      ignore-vulns: |
-        PYSEC-2026-161
-        CVE-2026-34993
-        CVE-2026-47265
-        CVE-2026-54283
-        CVE-2026-54282
-        PYSEC-2026-179
-        PYSEC-2026-175
-        PYSEC-2026-177
-        PYSEC-2026-178
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Cache uv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
+
+      - name: Install uv
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Sync dependencies
+        run: uv sync --frozen
+
+      - name: Export dependencies for audit
+        run: uv export --frozen --all-groups --no-hashes --format requirements-txt > requirements-audit.txt
+
+      - name: Run pip-audit
+        uses: pypa/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266 # v1.1.0
+        with:
+          inputs: requirements-audit.txt
+          ignore-vulns: |
+            PYSEC-2026-161
+            CVE-2026-34993
+            CVE-2026-47265
+            CVE-2026-54283
+            CVE-2026-54282
+            PYSEC-2026-179
+            PYSEC-2026-175
+            PYSEC-2026-177
+            PYSEC-2026-178
 
   codeql:
     name: "CodeQL analyze (Python)"

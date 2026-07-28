@@ -1,183 +1,59 @@
-name: Security Audit (Scheduled)
+name: Scheduled Dependency Audit
 
 on:
   schedule:
-    # Daily security audit at 02:00 UTC to catch new vulnerabilities
-    - cron: "0 2 * * *"
+    - cron: "0 2 * * 1"
   workflow_dispatch:
 
 permissions:
   contents: read
-  security-events: write
-  packages: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 concurrency:
-  group: security-audit-${{ github.ref }}
+  group: scheduled-dependency-audit-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  action-ref-validation:
-    name: "Validate action refs are immutable"
+  python-deps:
+    name: "Python dependencies (pip-audit)"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Validate action refs are immutable
+      - name: Cache uv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
+
+      - name: Install uv
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t workflow_files < <(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) | sort)
-          if [ ${#workflow_files[@]} -eq 0 ]; then
-            echo "No workflow files found."
-            exit 0
-          fi
-          mutable_refs=$(grep -nE 'uses:\s*[^#]+@(v[0-9]+|latest|main|master|develop)\b' "${workflow_files[@]}" || true)
-          if [ -n "$mutable_refs" ]; then
-            echo "❌ Mutable GitHub Action references detected. Pin actions to full commit SHAs."
-            echo "$mutable_refs"
-            exit 1
-          fi
-          echo "✅ All action references are pinned to immutable SHAs."
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-  python-deps:
-    name: "Python dependencies (pip-audit)"
-    needs: [action-ref-validation]
-    uses: ./.github/workflows/pip-audit.yml
-    with:
-      ignore-vulns: |
-        PYSEC-2026-161
+      - name: Sync dependencies
+        run: uv sync --frozen
 
-  secrets-scan:
-    name: "Scan full repo for secrets (Gitleaks)"
-    runs-on: ubuntu-latest
-    needs: [action-ref-validation]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Export dependencies for audit
+        run: uv export --frozen --all-groups --no-hashes --format requirements-txt > requirements-audit.txt
 
-      - name: "Scan full repo for secrets (Gitleaks)"
-        uses: docker://ghcr.io/gitleaks/gitleaks:v8.21.2
+      - name: Run pip-audit
+        uses: pypa/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266 # v1.1.0
         with:
-          args: detect --source=/github/workspace --verbose --no-banner
-
-  codeql-audit:
-    name: "CodeQL SAST (Python)"
-    runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: read
-      security-events: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
-        with:
-          languages: python
-
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
-
-      - name: Analyze
-        uses: github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
-        with:
-          upload: always
-          category: /language:python
-
-  docker-scan:
-    name: "Docker image scan (Trivy)"
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Build ingestor image for scanning
-        env:
-          DOCKER_BUILDKIT: "1"
-        run: |
-          docker build -t ingestor:audit -f Dockerfile .
-
-      - name: "Scan ingestor image: strict (HIGH+CRITICAL)"
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: ingestor:audit
-          format: table
-          ignore-unfixed: true
-          scanners: vuln
-          vuln-type: os,library
-          severity: CRITICAL,HIGH
-          exit-code: "1"
-
-      - name: "Scan ingestor image: advisory (MEDIUM+HIGH+CRITICAL, non-blocking)"
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        if: always()
-        with:
-          image-ref: ingestor:audit
-          format: table
-          ignore-unfixed: true
-          scanners: vuln
-          vuln-type: os,library
-          severity: MEDIUM,HIGH,CRITICAL
-          exit-code: "0"
-
-      - name: Build database image for scanning
-        env:
-          DOCKER_BUILDKIT: "1"
-        run: |
-          docker build -t database:audit -f infra/database/Dockerfile .
-
-      - name: "Scan database image: strict (HIGH+CRITICAL)"
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: database:audit
-          format: table
-          ignore-unfixed: true
-          scanners: vuln
-          vuln-type: os,library
-          severity: CRITICAL,HIGH
-          exit-code: "1"
-
-      - name: "Scan database image: advisory (MEDIUM+HIGH+CRITICAL, non-blocking)"
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        if: always()
-        with:
-          image-ref: database:audit
-          format: table
-          ignore-unfixed: true
-          scanners: vuln
-          vuln-type: os,library
-          severity: MEDIUM,HIGH,CRITICAL
-          exit-code: "0"
-
-  audit-summary:
-    name: Audit complete
-    runs-on: ubuntu-latest
-    needs: [action-ref-validation, python-deps, secrets-scan, codeql-audit, docker-scan]
-    if: always()
-    steps:
-      - name: Report results
-        shell: bash
-        run: |
-          echo "## Security Audit Results" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Check | Result |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|-------|--------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Action Refs | ${{ needs.action-ref-validation.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Python Deps | ${{ needs.python-deps.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Secrets Scan | ${{ needs.secrets-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| CodeQL | ${{ needs.codeql-audit.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Docker Scan | ${{ needs.docker-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
-
-          if [ "${{ needs.action-ref-validation.result }}" != "success" ] || [ "${{ needs.python-deps.result }}" != "success" ] || [ "${{ needs.secrets-scan.result }}" != "success" ] || [ "${{ needs.codeql-audit.result }}" != "success" ] || [ "${{ needs.docker-scan.result }}" != "success" ]; then
-            echo ""
-            echo "⚠️  Security audit found issues. Review above for details."
-            exit 1
-          fi
-          echo "✅ All security audits passed"
+          inputs: requirements-audit.txt
+          ignore-vulns: |
+            PYSEC-2026-161
+            CVE-2026-34993
+            CVE-2026-47265
+            CVE-2026-54283
+            CVE-2026-54282
+            PYSEC-2026-179
+            PYSEC-2026-175
+            PYSEC-2026-177
+            PYSEC-2026-178
