@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from datetime import datetime, timedelta
 from uuid import uuid4
 
@@ -102,6 +103,7 @@ async def claim_pending_outbox_events(
     claim_token: str | None = None,
     lease_seconds: int = 30,
     now: datetime | None = None,
+    event_types: Collection[str] | None = None,
 ) -> list[OutboxEvent]:
     """Atomically claim unpublished outbox rows for one publisher worker.
 
@@ -110,6 +112,9 @@ async def claim_pending_outbox_events(
     """
     current_time = now or _utcnow()
     token = claim_token or str(uuid4())
+    selected_event_types = tuple(event_types) if event_types is not None else None
+    if selected_event_types == ():
+        return []
     stmt = (
         select(OutboxEvent)
         .where(
@@ -128,6 +133,8 @@ async def claim_pending_outbox_events(
         .with_for_update(skip_locked=True)
         .limit(limit)
     )
+    if selected_event_types is not None:
+        stmt = stmt.where(OutboxEvent.event_type.in_(selected_event_types))
     result = await db.execute(stmt)
     events = list(result.scalars().all())
 
@@ -174,7 +181,7 @@ async def mark_outbox_publish_failed(
     next_attempt_at: datetime | None = None,
     claim_token: str | None = None,
 ) -> OutboxEvent | None:
-    """Observation a publish failure while keeping the row pending for retry."""
+    """Record a publish failure while keeping the row pending for retry."""
     stmt = select(OutboxEvent).where(OutboxEvent.id == event_id)
     if claim_token is not None:
         stmt = stmt.where(OutboxEvent.claim_token == claim_token)
