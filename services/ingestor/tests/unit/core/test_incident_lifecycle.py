@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.ingestor.api_schemas.scorecards import HealthSampleCreate
+from services.ingestor.config import settings
 from services.ingestor.incident_lifecycle import record_health_sample
 from services.ingestor.models import (
     DependencyIncident,
@@ -37,6 +38,7 @@ def _sample(
 async def test_health_incidents_deduplicate_and_recover(
     db: AsyncSession, monkeypatch
 ) -> None:
+    monkeypatch.setattr(settings, "notification_delivery_mode", "direct")
     dispatch = AsyncMock(return_value={"sent": 0, "failed": 0})
     monkeypatch.setattr(
         "services.ingestor.incident_lifecycle.dispatch_notification_event", dispatch
@@ -89,6 +91,7 @@ async def test_health_incidents_deduplicate_and_recover(
 async def test_consecutive_latency_breach_opens_and_recovers(
     db: AsyncSession, monkeypatch
 ) -> None:
+    monkeypatch.setattr(settings, "notification_delivery_mode", "direct")
     monkeypatch.setattr(
         "services.ingestor.incident_lifecycle.dispatch_notification_event",
         AsyncMock(return_value={"sent": 0, "failed": 0}),

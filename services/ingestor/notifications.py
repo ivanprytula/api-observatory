@@ -36,7 +36,8 @@ def _parse_channels(raw: str) -> list[NotificationChannel]:
     return channels
 
 
-def _default_channels() -> list[NotificationChannel]:
+def configured_notification_channels() -> list[NotificationChannel]:
+    """Return the validated channel names selected by configuration."""
     return _parse_channels(settings.notification_default_channels)
 
 
@@ -68,7 +69,7 @@ async def dispatch_notification_event(
             "detail": "notifications disabled",
         }
 
-    selected = channels or _default_channels()
+    selected = channels or configured_notification_channels()
     results: list[dict[str, str]] = []
 
     for channel in selected:

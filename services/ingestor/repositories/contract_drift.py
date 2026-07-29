@@ -24,6 +24,10 @@ from services.ingestor.constants import (
     CONTRACT_PENALTY_REMOVED_FIELD,
     CONTRACT_PENALTY_TYPE_CHANGE,
 )
+from services.ingestor.incident_lifecycle import (
+    dispatch_incident_transitions,
+    enqueue_incident_notification_requests,
+)
 from services.ingestor.models import (
     AgentRun,
     ContractBaseline,
@@ -448,6 +452,7 @@ async def create_contract_snapshot(
                 agent_run = AgentRun(observation_id=incident.id, status="pending")
                 db.add(agent_run)
 
+    await enqueue_incident_notification_requests(db, incident_transitions)
     await db.commit()
     await db.refresh(snapshot)
     if drift_event is not None:
@@ -464,10 +469,6 @@ async def create_contract_snapshot(
         _trigger_agent_run(agent_run.id)
 
     if incident_transitions:
-        from services.ingestor.incident_lifecycle import (
-            dispatch_incident_transitions,
-        )
-
         await dispatch_incident_transitions(db, incident_transitions)
 
     return snapshot, drift_event

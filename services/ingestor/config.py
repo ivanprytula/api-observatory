@@ -1,6 +1,7 @@
 """App settings (async stack)."""
 
 import secrets
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -325,6 +326,14 @@ class Settings(BaseSettings):
     notifications_enabled: bool = Field(
         default=False,
         description="Enable notification dispatching for operational events.",
+    )
+
+    notification_delivery_mode: Literal["direct", "broker"] = Field(
+        default="direct",
+        description=(
+            "Deliver notifications directly after commit or enqueue them transactionally "
+            "for the broker consumer."
+        ),
     )
 
     notification_default_channels: str = Field(
