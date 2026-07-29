@@ -14,6 +14,9 @@ customer acquisition, and speculative scale work are out of scope.
   contract checks exist, but no completed live deployment is claimed.
 - **Deferred:** managed gateway/Kafka, ECS/EKS, database sharding, multi-region, and a replacement
   frontend require measured product or operational pressure.
+- **Local event consumer:** notification delivery has a separately owned, opt-in Redpanda consumer
+  process with at-least-once semantics. It is local implementation evidence, not a production
+  operations claim; see [ADR 016](../02-architecture/adr/016-redpanda-consumer-service.md).
 
 The [engineering evidence map](../02-architecture/engineering-topics.md) owns topic-level status;
 ADRs own technology rationale.
@@ -56,6 +59,7 @@ Plan any change as one vertical slice:
 | ECS or Kubernetes | Repeated Compose delivery friction or several independently operated workloads |
 | Managed gateway | Multiple public services or consumer-specific edge policy |
 | Managed Kafka | Sustained asynchronous workload with ordering, replay, and availability objectives |
+| Additional Redpanda consumer service | A named asynchronous workflow with an ownership, isolation, replay, or throughput objective beyond notification delivery; record the boundary in [ADR 016](../02-architecture/adr/016-redpanda-consumer-service.md) |
 | Database partitioning/sharding | Measured single-node limit after query, index, and retention work |
 | New frontend | Stable workflow requiring richer interaction, client state, deep links, or UI testing |
 | Multi-region | Recovery objective that backup/restore in one region cannot meet |

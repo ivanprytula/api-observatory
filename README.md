@@ -74,24 +74,25 @@ Create the ignored local configuration file, then generate its private credentia
 a workflow:
 
 ```bash
+just doctor
 cp .env.example .env
 just generate-secrets
-# First HTTPS ingress run on this workstation:
-bash scripts/setup/02-setup-local-https.sh
-just up
+just dev-up
 ```
+
+This starts the default HTTP stack. For readiness, migrations, optional demo initialization, smoke
+verification, and extended services, continue with the [Setup Guide](docs/04-setup/setup-guide.md).
 
 The committed [`.env.example`](.env.example) contains public development settings only. The local
 generator writes real credentials to `.env`; production injects the same names through
 infrastructure-owned secret delivery. The [`Justfile`](Justfile) owns the executable workflows.
 
-`just up` is the HTTPS ingress-parity workflow: use <https://127.0.0.1/api/docs> for the API and
-<https://127.0.0.1> for the dashboard after installing local certificates. Direct HTTP endpoints
-such as <http://127.0.0.1:8000/docs> and <http://127.0.0.1:8501> remain debugging endpoints. Use
-`just dev` for the fast HTTP hot-reload loop. Never commit the local `.env` created from it.
+`just dev-up` is the default HTTP containerized workflow: use <http://127.0.0.1:8000/api/docs> for the
+API and <http://127.0.0.1:8501> for the dashboard. HTTPS is an opt-in next step for proxy and
+security-specific testing; follow the setup guide to install certificates and enable the ingress
+profile. Use `just dev` for the fast HTTP hot-reload loop. Never commit the local `.env` created from it.
 
-For the complete sequence, use [Setup Guide](docs/04-setup/setup-guide.md) and
-[Development Workflows](docs/05-development/dev-workflows.md).
+For daily development and test selection, use [Development Workflows](docs/05-development/dev-workflows.md).
 
 ## Recruiter and Interview Tour
 

@@ -1,8 +1,9 @@
 # Observability Guide
 
 Use metrics, logs, traces, and health probes together to diagnose the current system. The
-monitoring stack is opt-in; `just up` starts the application dependencies, while
-`just up-monitoring` starts the monitoring profile.
+monitoring stack is opt-in; `just dev-up` starts the core application stack, while
+`just dev-up-monitoring` starts the monitoring profile. It requires `API_OBS_OTEL_ENABLED=true`;
+restart the application services before starting monitoring.
 
 ## Current Signal Stack
 
@@ -76,7 +77,7 @@ failure exercise.
 ## Proof and Limits
 
 Start the opt-in monitoring profile through the
-[`up-monitoring` target](../../Justfile), then inspect the monitoring services and the ingestor
+[`dev-up-monitoring` target](../../Justfile), then inspect the monitoring services and the ingestor
 `/metrics` endpoint. The [Compose topology](../../docker-compose.yml) owns profile and service
 details.
 

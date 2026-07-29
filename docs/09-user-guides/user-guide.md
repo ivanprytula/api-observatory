@@ -22,25 +22,30 @@ API Observatory continuously checks the health and reliability of your external 
 
 ### Prerequisites
 
-- Docker and Docker Compose
-- Python 3.14+
+- Docker Engine/Desktop with Compose v2
+- Python 3.14.6, `uv`, `just`, Git, and `curl`
 
 ### Run the Dashboard
 
-Use the [Justfile](../../Justfile) targets `up`, `migrate`, and `init`; the executable definitions
+Use the [Justfile](../../Justfile) targets `dev-up`, `db-migrate`, and optional `db-auto-init`; the executable definitions
 remain there. See the [Setup Guide](../04-setup/setup-guide.md) for supported local modes.
 
 Open `http://127.0.0.1:8501` to access the dashboard.
 
-For local development without Docker, follow
-[Development Workflows](../05-development/dev-workflows.md), which links the dashboard entrypoint.
+An empty dashboard confirms that the UI is running. Protected actions such as source management
+require the authenticated local demo state; run `just db-auto-init` when following the populated walkthrough.
+
+The Docker-first Compose workflow is the supported setup. Host-process hot reload is an optional
+follow-up described in the [Setup Guide](../04-setup/setup-guide.md). MCP is separate from the
+Compose stack: after its one-time service-account setup, run
+`uv run python -m services.mcp.main` as a local stdio process.
 
 ### Monitor Your First API
 
-1. Add a source: `POST /api/v1/sources`
-2. Wait for probe cycles (or trigger manually via "Probe all" in dashboard)
-3. View real-time metrics in the **Source Health** panel
-4. Watch for drift events in the **Live Stream** panel
+1. Open the dashboard at `http://127.0.0.1:8501`.
+2. Use the source-management panel to add an API source.
+3. Wait for probe cycles (or trigger manually via **Probe all**).
+4. View metrics in **Source Health** and events in **Live Stream**.
 
 ---
 
@@ -124,7 +129,7 @@ Close codes: 4001 (missing token), 4003 (invalid token).
 
 ## Streamlit Dashboard [Core]
 
-Access at `http://127.0.0.1:8501` (or via `uv run streamlit run services/dashboard/streamlit_app.py`).
+Access at `http://127.0.0.1:8501`.
 
 ### Login Roles
 
@@ -155,7 +160,7 @@ Access at `http://127.0.0.1:8501` (or via `uv run streamlit run services/dashboa
 
 ## Additional Implemented Capabilities
 
-### Agent Enrichment (LangGraph) [Core]
+### Agent Enrichment (LangGraph) [Core Optional Path]
 
 AI-powered analysis of observations via LangGraph StateGraph:
 
@@ -172,7 +177,7 @@ flow does not expose an SSE stream.
 Streamlit is the current dashboard. An HTMX/Jinja2 operations UI was explored in an ADR but
 is not a running service; it should be adopted only if Streamlit prevents a required workflow.
 
-### Vector Search [Core]
+### Vector Search [Core Optional Path]
 
 The inference service uses pgvector and supports deterministic embeddings in tests. Qdrant
 is deferred rather than part of the current runtime.
