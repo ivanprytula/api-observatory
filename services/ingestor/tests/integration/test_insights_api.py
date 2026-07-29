@@ -48,15 +48,16 @@ async def _seed_breaking_drift(client: AsyncClient, source_id: int) -> None:
     )
     assert first.status_code == 201
 
-    second = await client.post(
-        "/api/v1/contracts/snapshots",
-        json={
-            "source_id": source_id,
-            "schema_version": "v2",
-            "payload_schema": _SCHEMA_V2_BREAKING,
-        },
-    )
-    assert second.status_code == 201
+    for _ in range(3):
+        candidate = await client.post(
+            "/api/v1/contracts/snapshots",
+            json={
+                "source_id": source_id,
+                "schema_version": "v2",
+                "payload_schema": _SCHEMA_V2_BREAKING,
+            },
+        )
+        assert candidate.status_code == 201
 
 
 class TestInsightFeeds:

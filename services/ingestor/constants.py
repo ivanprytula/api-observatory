@@ -104,6 +104,7 @@ CONTRACT_COMPATIBILITY_MAX_SCORE: float = 100.0
 CONTRACT_PENALTY_ADDED_FIELD: float = 2.0
 CONTRACT_PENALTY_REMOVED_FIELD: float = 20.0
 CONTRACT_PENALTY_TYPE_CHANGE: float = 15.0
+CONTRACT_BASELINE_CONFIRMATION_POLLS: int = 3
 
 # ---------------------------------------------------------------------------
 # Insight Engine

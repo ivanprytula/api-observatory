@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     Index,
@@ -360,8 +361,67 @@ class ContractSnapshot(Base, TimestampMixin):
         )
 
 
+class ContractBaseline(Base, TimestampMixin):
+    """Versioned accepted contract baseline and its current candidate state."""
+
+    __tablename__ = "contract_baselines"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_id",
+            "version",
+            name="uq_contract_baselines_source_version",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'superseded')",
+            name="ck_contract_baselines_status",
+        ),
+        Index("ix_contract_baselines_source_status", "source_id", "status"),
+        Index("ix_contract_baselines_tenant_status", "tenant_id", "status"),
+        Index("ix_contract_baselines_baseline_snapshot", "baseline_snapshot_id"),
+        Index("ix_contract_baselines_active_key", "active_key", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    tenant_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    baseline_snapshot_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    promoted_from_baseline_id: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
+    active_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    accepted_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    accepted_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, nullable=False
+    )
+    acceptance_note: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    candidate_snapshot_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    candidate_schema_fingerprint: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    candidate_observation_count: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    candidate_drift_event_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    candidate_first_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
+    candidate_last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<ContractBaseline id={self.id} source_id={self.source_id} "
+            f"version={self.version} status={self.status!r}>"
+        )
+
+
 class DriftEvent(Base, TimestampMixin):
-    """Detected schema drift between two consecutive contract snapshots."""
+    """Confirmed schema drift from an accepted baseline to a candidate snapshot."""
 
     __tablename__ = "drift_events"
     __table_args__ = (

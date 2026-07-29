@@ -18,6 +18,7 @@ Current implementation status belongs in the
 | AWS Stage 0 | EC2 plus Docker Compose; ECS/EKS deferred | Preserve the exercised operating model until delivery/scaling evidence justifies another platform |
 | Agent workflow | Optional LangGraph graph, PostgreSQL checkpointing, human review | Explicit pause/resume and fail-open behavior. [ADR 012](adr/012-langgraph-agent.md) |
 | Management vs operations | Keep product administration separate from platform access | Different identities, risks, and audit boundaries. [ADR 014](adr/014-management-vs-ops-plane.md) |
+| Contract drift baseline | Compare observations with a versioned accepted baseline; confirm candidates before alerting | Prevents single-poll noise and gradual baseline creep while keeping acceptance tenant-scoped and auditable. [ADR 017](adr/017-versioned-contract-baselines.md) |
 | Primary cloud direction | AWS primary; Azure secondary/reference | Current portfolio direction supersedes the older Azure-first choice. [Historical ADR 009](adr/009-azure-free-tier-over-aws.md) |
 
 ## Decision Rules

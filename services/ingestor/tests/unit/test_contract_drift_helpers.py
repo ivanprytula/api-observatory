@@ -15,6 +15,7 @@ from services.ingestor.repositories.contract_drift import (
     _fingerprint,
     _flatten_schema,
     _severity,
+    _structure_fingerprint,
     _summary,
 )
 
@@ -36,6 +37,11 @@ class TestFingerprint:
 
     def test_empty_dict_is_stable(self) -> None:
         assert _fingerprint({}) == _fingerprint({})
+
+    def test_structure_fingerprint_ignores_observed_values(self) -> None:
+        first = _flatten_schema({"id": 1, "status": "ok"})
+        second = _flatten_schema({"id": 99, "status": "degraded"})
+        assert _structure_fingerprint(first) == _structure_fingerprint(second)
 
 
 @pytest.mark.unit
