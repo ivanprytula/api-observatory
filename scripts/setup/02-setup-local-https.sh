@@ -25,6 +25,11 @@ main() {
     echo "════════════════════════════════════════════════════════════════════════════"
     echo ""
 
+    if [[ ! -f "${PROJECT_ROOT}/.env" ]] || ! grep -Eq '^API_OBS_LOCAL_HTTPS=true([[:space:]]*)$' "${PROJECT_ROOT}/.env"; then
+        error "Set API_OBS_LOCAL_HTTPS=true in the ignored .env before enabling local HTTPS."
+        exit 1
+    fi
+
     # Check if mkcert is installed
     if ! command -v mkcert &>/dev/null; then
         error "mkcert not found. Install it first:"
@@ -96,7 +101,7 @@ main() {
     echo "════════════════════════════════════════════════════════════════════════════"
     echo ""
     echo "1. Start services (with HTTPS on :443):"
-    echo "     just up-https"
+    echo "     docker compose --profile ingress up -d --build"
     echo ""
     echo "2. Access via HTTPS:"
     echo "     LOCAL_API_SCHEME=https bash scripts/daily/local-url.sh open /"
@@ -106,7 +111,7 @@ main() {
     echo "     curl -v $(LOCAL_API_SCHEME=https bash scripts/daily/local-url.sh api-url /health)"
     echo ""
     echo "Full documentation:"
-    echo "     docs/04-setup/local-https-setup.md"
+    echo "     docs/04-setup/setup-guide.md#http-and-https-split"
     echo ""
     log "Setup complete!"
 }

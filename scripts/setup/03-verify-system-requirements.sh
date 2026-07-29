@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-set -euo pipefail
+
+################################################################################
+# Script: 03-verify-system-requirements.sh
+# Description: Verify required local tools for API Observatory development.
+################################################################################
+
+set -o errexit -o pipefail -o nounset -o errtrace
 
 # ─── Configuration ─────────────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -19,14 +25,11 @@ check_command() {
 }
 
 check_docker_compose() {
-    if command -v docker-compose &>/dev/null; then
-        echo -e "${GREEN}✓${NC} docker-compose (v1)"
-        return 0
-    elif docker compose version &>/dev/null 2>&1; then
+    if docker compose version &>/dev/null 2>&1; then
         echo -e "${GREEN}✓${NC} docker compose (v2 - bundled with Docker)"
         return 0
     else
-        echo -e "${RED}✗${NC} docker-compose ${RED}NOT FOUND${NC} (install: docker-compose)"
+        echo -e "${RED}✗${NC} Docker Compose v2 ${RED}NOT FOUND${NC} (install Docker Engine/Desktop with Compose v2)"
         return 1
     fi
 }
@@ -42,29 +45,23 @@ check_command_warning() {
 }
 
 check_python_version() {
-    # Check if python3.14 is available
+    local python_bin=""
     if command -v python3.14 &>/dev/null; then
-        local version
-        version=$(python3.14 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)
-        echo -e "${GREEN}✓${NC} python3.14 (${version})"
-        return 0
+        python_bin="python3.14"
+    elif command -v python3 &>/dev/null; then
+        python_bin="python3"
     fi
-
-    # Fallback: check default python3
-    if command -v python3 &>/dev/null; then
-        local version
-        version=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)
-        if awk 'BEGIN{exit !($version >= 3.14)}'; then
-            echo -e "${GREEN}✓${NC} python3 (${version})"
-            return 0
-        else
-            echo -e "${YELLOW}⚠${NC} python3 VERSION ${version} (uv can use system Python to bootstrap; 3.14+ needed for app)"
-            return 0
-        fi
+    if [[ -z "${python_bin}" ]]; then
+        echo -e "${RED}✗${NC} Python 3.14.6 ${RED}NOT FOUND${NC}"
+        return 1
     fi
-
-    echo -e "${RED}✗${NC} python3 ${RED}NOT FOUND${NC} (install: python3.14)"
-    return 1
+    local version
+    version="$(${python_bin} -c 'import platform; print(platform.python_version())')"
+    if [[ "${version}" != "3.14.6" ]]; then
+        echo -e "${RED}✗${NC} Python ${version}; this project requires 3.14.6"
+        return 1
+    fi
+    echo -e "${GREEN}✓${NC} Python ${version}"
 }
 
 # ─── Main ──────────────────────────────────────────────────────────────────────
@@ -78,21 +75,26 @@ FAILED=0
 
 echo "Core Development Tools:"
 check_command "docker" "docker" || ((FAILED++))
+if command -v docker &>/dev/null && ! docker info &>/dev/null 2>&1; then
+    echo -e "${RED}✗${NC} Docker daemon is not running (start Docker, then rerun just doctor)"
+    ((FAILED++))
+fi
 check_docker_compose || ((FAILED++))
 check_python_version || ((FAILED++))
 check_command "uv" "uv" || ((FAILED++))
+check_command "just" "just" || ((FAILED++))
+check_command "git" "git" || ((FAILED++))
 check_command "curl" "curl" || ((FAILED++))
 
 echo ""
-echo "Floci / Terraform (optional)"
-# Terraform CLI — required when using the local Floci Terraform stacks
-check_command_warning "terraform" "terraform (install: https://www.terraform.io/downloads) - required for Floci/infra/terraform" || true
+echo "Cloud / Infrastructure as Code (Optional):"
+check_command_warning "terraform" "terraform (install: https://www.terraform.io/downloads)" || true
 
 echo ""
-echo "Database Backup/Restore:"
-check_command "pg_dump" "postgresql" || ((FAILED++))
-check_command "pg_restore" "postgresql" || ((FAILED++))
-check_command "psql" "postgresql" || ((FAILED++))
+echo "Database Backup/Restore (Optional):"
+check_command_warning "pg_dump" "postgresql client tools" || true
+check_command_warning "pg_restore" "postgresql client tools" || true
+check_command_warning "psql" "postgresql client tools" || true
 check_command_warning "mongodump" "mongodb-tools" || true
 check_command_warning "mongorestore" "mongodb-tools" || true
 
@@ -128,9 +130,7 @@ if command -v docker &>/dev/null; then
     echo "Docker:          $(docker --version)"
 fi
 
-if command -v docker-compose &>/dev/null; then
-    echo "Docker Compose:  $(docker-compose --version)"
-elif docker compose version &>/dev/null 2>&1; then
+if docker compose version &>/dev/null 2>&1; then
     echo "Docker Compose:  $(docker compose version)"
 fi
 
@@ -151,13 +151,15 @@ if [[ "${FAILED}" -eq 0 ]]; then
     echo ""
     echo "Next steps:"
     echo "  1. cp .env.example .env"
-    echo "  2. just up"
-    echo "  3. uv run pytest tests/ -v"
-    echo "  4. bash infra/scripts/backup.sh"
+    echo "  2. just generate-secrets"
+    echo "  3. just dev-up"
+    echo "  4. just dev-wait-ready"
+    echo "  5. just db-migrate"
+    echo "  6. just test-smoke"
     exit 0
 else
     echo -e "${RED}════════════════════════════════════════════════════════════════════════════${NC}"
-    echo -e "${RED}✗ ${FAILED} required package(s) missing. See docs/04-setup/system-requirements.md${NC}"
+    echo -e "${RED}✗ ${FAILED} required package(s) missing. See docs/04-setup/setup-guide.md${NC}"
     echo -e "${RED}════════════════════════════════════════════════════════════════════════════${NC}"
     exit 1
 fi

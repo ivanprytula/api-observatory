@@ -4,10 +4,9 @@ Database selection:
   - Default: SQLite in-memory (no external dependency)
   - If DATABASE_URL_TEST env var set: Use PostgreSQL (for concurrent tests)
 
-To run with PostgreSQL:
-     1. Start test DB: just up
-    2. Env vars are auto-loaded from .env (DATABASE_URL_TEST set automatically)
-    3. Run tests: pytest tests/integration/observations/test_concurrency.py -v
+PostgreSQL integration tests provision a temporary container through testcontainers when Docker is
+available. Set ``DATABASE_URL_TEST`` only when intentionally targeting a dedicated local test
+database; it is not read from ``.env``.
 
 IMPORTANT TESTING NOTE (parallelism):
 
