@@ -41,15 +41,16 @@ from services.ingestor.repositories.incidents import (
 
 logger = logging.getLogger(__name__)
 
+_ARRAY_INSPECTION_LIMIT = 20
+_TYPE_UNION_SEPARATOR = "|"
+
 
 def _value_type(value: Any) -> str:
     if value is None:
         return "null"
     if isinstance(value, bool):
         return "boolean"
-    if isinstance(value, int):
-        return "integer"
-    if isinstance(value, float):
+    if isinstance(value, (int, float)):
         return "number"
     if isinstance(value, str):
         return "string"
@@ -60,19 +61,38 @@ def _value_type(value: Any) -> str:
     return "unknown"
 
 
+def _merge_value_types(existing: str, observed: str) -> str:
+    """Return a deterministic union of runtime types observed at one path."""
+    types = set(existing.split(_TYPE_UNION_SEPARATOR))
+    types.update(observed.split(_TYPE_UNION_SEPARATOR))
+    return _TYPE_UNION_SEPARATOR.join(sorted(types))
+
+
+def _merge_flat_schema(target: dict[str, str], observed: dict[str, str]) -> None:
+    for path, value_type in observed.items():
+        if existing := target.get(path):
+            target[path] = _merge_value_types(existing, value_type)
+        else:
+            target[path] = value_type
+
+
+def _flatten_value(value: Any, path: str) -> dict[str, str]:
+    flat = {path: _value_type(value)}
+    if isinstance(value, dict):
+        for key, child in value.items():
+            _merge_flat_schema(flat, _flatten_value(child, f"{path}.{key}"))
+    elif isinstance(value, list):
+        element_path = f"{path}[]"
+        for element in value[:_ARRAY_INSPECTION_LIMIT]:
+            _merge_flat_schema(flat, _flatten_value(element, element_path))
+    return flat
+
+
 def _flatten_schema(payload: dict[str, Any], prefix: str = "") -> dict[str, str]:
     flat: dict[str, str] = {}
     for key, value in payload.items():
         path = f"{prefix}.{key}" if prefix else key
-        value_type = _value_type(value)
-
-        if isinstance(value, dict):
-            # Observation the parent node type so scalar<->object transitions are visible.
-            flat[path] = value_type
-            if value:
-                flat.update(_flatten_schema(value, path))
-        else:
-            flat[path] = value_type
+        _merge_flat_schema(flat, _flatten_value(value, path))
 
     return flat
 
@@ -93,7 +113,12 @@ def _diff_contract(
     current_flat: dict[str, str],
 ) -> tuple[list[str], list[str], dict[str, dict[str, str]]]:
     added = sorted([k for k in current_flat if k not in previous_flat])
-    removed = sorted([k for k in previous_flat if k not in current_flat])
+    removed = sorted(
+        key
+        for key in previous_flat
+        if key not in current_flat
+        and not _is_below_inconclusive_array(key, current_flat)
+    )
 
     type_changed: dict[str, dict[str, str]] = {}
     shared = set(previous_flat).intersection(current_flat)
@@ -105,6 +130,20 @@ def _diff_contract(
             }
 
     return added, removed, type_changed
+
+
+def _is_below_inconclusive_array(path: str, flat_schema: dict[str, str]) -> bool:
+    """Return whether ``path`` is below an observed array with no inspected children."""
+    for array_path, value_type in flat_schema.items():
+        if "array" not in value_type.split(_TYPE_UNION_SEPARATOR):
+            continue
+        element_prefix = f"{array_path}[]"
+        has_inspected_children = any(
+            candidate.startswith(element_prefix) for candidate in flat_schema
+        )
+        if not has_inspected_children and path.startswith(element_prefix):
+            return True
+    return False
 
 
 def _compatibility_score(

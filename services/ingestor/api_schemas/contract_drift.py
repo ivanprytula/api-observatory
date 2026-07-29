@@ -40,8 +40,8 @@ class ContractSnapshotCreate(BaseModel):
     payload_schema: dict[str, Any] = Field(
         ...,
         description=(
-            "Observed payload-schema sample. Nested objects are allowed and will be "
-            "flattened internally for drift comparison."
+            "Observed payload-schema sample. Nested objects and bounded array element "
+            "shapes are flattened internally for drift comparison."
         ),
     )
     schema_version: str | None = Field(

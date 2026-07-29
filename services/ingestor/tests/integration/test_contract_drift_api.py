@@ -199,6 +199,117 @@ class TestIngestContractSnapshot:
         assert body["drift_event"] is None
         assert body["snapshot"]["compatibility_score"] == 100.0
 
+    async def test_integer_to_fractional_value_is_same_json_number_type(
+        self, client: AsyncClient
+    ) -> None:
+        source_id = await _create_source(client, name="contract-number-normalization")
+        await client.post(
+            "/api/v1/contracts/snapshots",
+            json={"source_id": source_id, "payload_schema": {"amount": 1}},
+        )
+
+        response = await client.post(
+            "/api/v1/contracts/snapshots",
+            json={"source_id": source_id, "payload_schema": {"amount": 1.5}},
+        )
+
+        assert response.status_code == 201
+        body = response.json()
+        assert body["drift_event"] is None
+        assert body["snapshot"]["compatibility_score"] == 100.0
+
+    async def test_concrete_value_to_null_is_confirmed_type_change(
+        self, client: AsyncClient
+    ) -> None:
+        source_id = await _create_source(client, name="contract-null-type-change")
+        await client.post(
+            "/api/v1/contracts/snapshots",
+            json={"source_id": source_id, "payload_schema": {"comment": "ready"}},
+        )
+
+        response = await _confirm_candidate(
+            client,
+            source_id,
+            {"comment": None},
+            schema_version="nullable",
+        )
+
+        drift_event = response.json()["drift_event"]
+        assert drift_event is not None
+        assert drift_event["event_type"] == "breaking"
+        assert drift_event["type_changed_fields"]["comment"] == {
+            "from_type": "string",
+            "to_type": "null",
+        }
+
+    async def test_null_field_to_missing_is_confirmed_removal(
+        self, client: AsyncClient
+    ) -> None:
+        source_id = await _create_source(client, name="contract-null-to-missing")
+        await client.post(
+            "/api/v1/contracts/snapshots",
+            json={"source_id": source_id, "payload_schema": {"comment": None}},
+        )
+
+        response = await _confirm_candidate(
+            client,
+            source_id,
+            {},
+            schema_version="missing-comment",
+        )
+
+        drift_event = response.json()["drift_event"]
+        assert drift_event is not None
+        assert drift_event["event_type"] == "breaking"
+        assert drift_event["removed_fields"] == ["comment"]
+
+    async def test_array_element_field_addition_is_confirmed_drift(
+        self, client: AsyncClient
+    ) -> None:
+        source_id = await _create_source(client, name="contract-array-addition")
+        initial = await client.post(
+            "/api/v1/contracts/snapshots",
+            json={
+                "source_id": source_id,
+                "payload_schema": {"items": [{"id": 1}, {"id": 2}]},
+            },
+        )
+        assert initial.status_code == 201
+
+        response = await _confirm_candidate(
+            client,
+            source_id,
+            {"items": [{"id": 1}, {"id": 2, "price": 9.5}]},
+            schema_version="array-price",
+        )
+
+        drift_event = response.json()["drift_event"]
+        assert drift_event is not None
+        assert drift_event["event_type"] == "non_breaking"
+        assert drift_event["added_fields"] == ["items[].price"]
+
+    async def test_empty_array_does_not_imply_element_removal(
+        self, client: AsyncClient
+    ) -> None:
+        source_id = await _create_source(client, name="contract-array-empty")
+        initial = await client.post(
+            "/api/v1/contracts/snapshots",
+            json={
+                "source_id": source_id,
+                "payload_schema": {"items": [{"id": 1, "price": 9.5}]},
+            },
+        )
+        assert initial.status_code == 201
+
+        for _ in range(3):
+            response = await client.post(
+                "/api/v1/contracts/snapshots",
+                json={"source_id": source_id, "payload_schema": {"items": []}},
+            )
+            assert response.status_code == 201
+            assert response.json()["drift_event"] is None
+            assert response.json()["snapshot"]["compatibility_score"] == 100.0
+
     async def test_return_to_baseline_clears_candidate_without_inverse_event(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
