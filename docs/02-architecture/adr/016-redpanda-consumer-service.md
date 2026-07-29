@@ -2,9 +2,10 @@
 
 ## Status
 
-Proposed. The business outcome, runtime boundary, database-scheduled retry semantics, terminal
-Redpanda dead-letter transport, and internal operations interface were selected on 2026-07-29.
-Implementation and proof remain before acceptance.
+Implemented locally on 2026-07-29: the transactional producer, outbox publisher, standalone
+consumer process, database-owned retry state, and sanitized terminal DLQ outbox are present. This
+is not a deployed-production claim; local Redpanda end-to-end verification remains a required
+proof. The internal operations server is deferred.
 
 ## Context
 
@@ -39,8 +40,8 @@ Add an opt-in reliable notification-delivery flow with these boundaries:
 4. Each channel outcome is stored as real delivery data. Subscription delivery logs will read
    these records instead of manufacturing a `delivered` status from drift severity.
 5. The source Kafka offset is committed only after delivery reaches a durable completed,
-   retry-scheduled, or dead-letter state. Malformed or unsupported events are quarantined
-   immediately.
+   retry-scheduled, or dead-letter state. A malformed or unsupported event stops the worker without
+   committing its offset for explicit operator investigation; it is never silently discarded.
 6. Dead-letter records retain the message identity, safe payload metadata, attempt count, and
    bounded error detail. Replay is explicit, audited, and idempotent.
 7. Metrics cover consumer lag, received/completed/failed/dead-letter totals, attempts, and delivery
@@ -103,18 +104,16 @@ installs only the `ai` and `tracing` extras. The implementation must add `--extr
 existing image build so `aiokafka` is present. This is a shared-image dependency correction, not a
 new image or dependency manifest.
 
-The service is enabled only through the opt-in local messaging profile. It shares the ingestor
-database and broker configuration but does not start the ingestor API, scheduler, producer
-lifespan, cache Pub/Sub bridge, or agent runtime. It starts only the consumer and its internal
-operations server.
+The service is enabled only through the opt-in local broker profile. It shares the ingestor database
+and broker configuration but does not start the ingestor API, scheduler, producer lifespan, cache
+Pub/Sub bridge, or agent runtime. It starts only the consumer process.
 
 Local Compose remains canonical and opt-in. AWS Stage 0 remains unchanged because its deployment
 contract does not currently require a broker.
 
-## Worker Health Interface
+## Deferred Worker Health Interface
 
-Run a minimal FastAPI/Uvicorn operations server on internal port `8002`; do not publish the port to
-the host. It exposes only:
+An internal FastAPI/Uvicorn operations server on port `8002` is deferred. It would expose only:
 
 - `GET /health` for process/event-loop liveness.
 - `GET /readyz` for consumer and retry-loop readiness.
@@ -157,6 +156,5 @@ or delivery history. Re-enabling broker delivery resumes from committed offsets 
   application lifespan.
 - Rendered Compose proof that the consumer uses the ingestor image, has no host port, and remains
   absent unless the messaging profile is selected.
-- Operations-interface proof for liveness, every readiness dependency, stale heartbeats, failed
-  tasks, safe response fields, Prometheus metrics, and non-zero process termination on worker
-  failure.
+- Operations-interface proof is deferred with the operations server: liveness, readiness
+  dependencies, stale heartbeats, safe response fields, and Prometheus metrics.

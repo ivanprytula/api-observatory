@@ -25,6 +25,7 @@ from services.ingestor.notification_delivery_consumer import (
     accept_notification_request,
     deliver_due_notifications,
 )
+from services.ingestor.notification_delivery_worker import process_notification_record
 from services.ingestor.repositories.messaging import (
     add_outbox_event,
     claim_pending_outbox_events,
@@ -462,6 +463,30 @@ async def test_consumer_orchestration_schedules_then_dead_letters_retries(
     inbox = await db.get(InboxConsumption, accepted.inbox_id)
     assert inbox is not None
     assert inbox.status == "dead_letter"
+
+
+async def test_worker_record_handoff_persists_before_an_offset_can_commit(
+    postgresql_async_session: AsyncSession,
+) -> None:
+    db = postgresql_async_session
+    event = _request_event()
+
+    async def provider(
+        _delivery: NotificationDelivery,
+        _request: NotificationDeliveryRequestedV1,
+    ) -> str:
+        return "provider-message-1"
+
+    await process_notification_record(
+        db,
+        event.model_dump_json().encode(),
+        provider,
+    )
+
+    inbox = (await db.scalars(select(InboxConsumption))).one()
+    delivery = (await db.scalars(select(NotificationDelivery))).one()
+    assert inbox.status == "completed"
+    assert delivery.status == "delivered"
 
 
 def test_notification_delivery_migration_round_trip(

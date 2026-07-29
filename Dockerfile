@@ -23,8 +23,10 @@ ENV UV_COMPILE_BYTECODE=1 \
 # path are core ingestor features, not optional demos — install their deps.
 # --extra tracing: OTel SDK + OTLP exporter; without it setup_tracing() degrades
 # to a no-op and spans/trace_id correlation are silently lost (post-MVP Phase 0).
+# --extra messaging: the opt-in Redpanda notification-consumer command shares
+# this image and imports aiokafka without starting the FastAPI lifespan.
 COPY pyproject.toml uv.lock ./
-RUN uv sync --no-dev --frozen --no-install-project --extra ai --extra tracing
+RUN uv sync --no-dev --frozen --no-install-project --extra ai --extra tracing --extra messaging
 
 # Stage 2: Final image — slim, no build tools, non-root user
 FROM python:3.14-slim@sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061 AS runtime

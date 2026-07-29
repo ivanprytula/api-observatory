@@ -7,12 +7,14 @@ from typing import Any, Literal, cast
 
 import httpx
 
+from libs.contracts.events import NotificationDeliveryRequestedV1
 from libs.platform.resilience import DependencyResilience
 from services.ingestor.config import settings
 from services.ingestor.constants import (
     NOTIFICATION_SEVERITY_INFO,
     NOTIFICATION_SEVERITY_WARNING,
 )
+from services.ingestor.models import NotificationDelivery
 
 
 logger = logging.getLogger(__name__)
@@ -110,6 +112,26 @@ async def dispatch_notification_event(
         "failed": failed,
         "results": results,
     }
+
+
+async def deliver_notification_channel(
+    delivery: NotificationDelivery,
+    request: NotificationDeliveryRequestedV1,
+) -> str:
+    """Deliver one durable channel attempt through the existing provider adapters."""
+    return await _dispatch_to_channel(
+        channel=cast("NotificationChannel", delivery.channel),
+        event=f"dependency_incident.{request.payload.trigger_type}",
+        message=request.payload.summary,
+        severity=request.payload.severity,
+        context={
+            "incident_id": request.payload.incident_id,
+            "source_id": request.payload.source_id,
+            "tenant_id": request.payload.tenant_id,
+            "occurrence_count": request.payload.occurrence_count,
+            "guidance": request.payload.guidance,
+        },
+    )
 
 
 async def notify_background_task_failed(

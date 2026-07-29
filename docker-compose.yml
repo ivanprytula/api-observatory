@@ -1,18 +1,19 @@
-# Minimal MVP stack: db, cache, broker, ingestor, dashboard
+# Minimal MVP stack: ingestor-db, cache, broker, ingestor, dashboard
 # Network model: All services (including cloud emulator) share `api-obs` network
-# for inter-service communication (e.g., ingestor → db, ingestor → cache).
+# for inter-service communication (e.g., ingestor → ingestor-db, ingestor → cache).
 # Host access: All services expose ports to 127.0.0.1 or 0.0.0.0 for local development.
 
 services:
-  db:
+  ingestor-db:
     build:
       context: ./infra/database
       dockerfile: Dockerfile
-    container_name: api-obs-db
+    image: api-obs/ingestor-db:local
+    container_name: api-obs-ingestor-db
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: api_observatory
+      POSTGRES_PASSWORD: ${API_OBS_INGESTOR_DB_PASSWORD:-postgres}
+      POSTGRES_DB: api_obs_ingestor
     ports:
       - '5432:5432'
     volumes:
@@ -115,7 +116,7 @@ services:
     container_name: api-obs-ingestor
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/api_observatory
+      DATABASE_URL: postgresql+asyncpg://postgres:${API_OBS_INGESTOR_DB_PASSWORD:-postgres}@ingestor-db:5432/api_obs_ingestor
       BROKER_URL: broker:29092
       CACHE_URL: redis://:${REDIS_PASSWORD:-cache_secret}@cache:6379/0
       INFERENCE_URL: http://inference:8001
@@ -132,7 +133,7 @@ services:
     ports:
       - '8000:8000'
     depends_on:
-      db:
+      ingestor-db:
         condition: service_healthy
       cache:
         condition: service_healthy
@@ -158,6 +159,42 @@ services:
         limits:
           cpus: '0.5'
           memory: '512M'
+    networks:
+      - api-obs
+
+  notification-consumer:
+    profiles: [broker]
+    build:
+      context: .
+    image: api-obs/ingestor:local
+    container_name: api-obs-notification-consumer
+    command: ["python", "-m", "services.ingestor.notification_delivery_worker"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:${API_OBS_INGESTOR_DB_PASSWORD:-postgres}@ingestor-db:5432/api_obs_ingestor
+      BROKER_URL: broker:29092
+      BROKER_ENABLED: ${API_OBS_BROKER_ENABLED:-false}
+      NOTIFICATIONS_ENABLED: ${API_OBS_NOTIFICATIONS_ENABLED:-false}
+      NOTIFICATION_DELIVERY_MODE: ${API_OBS_NOTIFICATION_DELIVERY_MODE:-direct}
+    depends_on:
+      ingestor-db:
+        condition: service_healthy
+      broker:
+        condition: service_healthy
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+      resources:
+        reservations:
+          cpus: '0.1'
+          memory: '128M'
+        limits:
+          cpus: '0.25'
+          memory: '256M'
     networks:
       - api-obs
 
