@@ -134,7 +134,7 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg17-trixie
         env:
-          POSTGRES_DB: api_observatory_test
+          POSTGRES_DB: api_obs_ingestor_test
           POSTGRES_PASSWORD: postgres
           POSTGRES_USER: postgres
         options: >-
@@ -154,7 +154,7 @@ jobs:
         ports:
           - 6379:6379
     env:
-      DATABASE_URL_TEST: postgresql+asyncpg://postgres:postgres@localhost:5432/api_observatory_test
+      DATABASE_URL_TEST: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_ingestor_test
       CACHE_ENABLED: "true"
       CACHE_URL: redis://localhost:6379/0
       AUTH_DEMO_ROUTES_ENABLED: "true"
@@ -181,13 +181,13 @@ jobs:
 
       - name: Create isolated migration and inference databases
         run: |
-          docker exec "${{ job.services.postgres.id }}" createdb -U postgres ingestor_migrations
-          docker exec "${{ job.services.postgres.id }}" createdb -U postgres inference_migrations
-          docker exec "${{ job.services.postgres.id }}" createdb -U postgres inference_test
+          docker exec "${{ job.services.postgres.id }}" createdb -U postgres api_obs_ingestor_migrations
+          docker exec "${{ job.services.postgres.id }}" createdb -U postgres api_obs_inference_migrations
+          docker exec "${{ job.services.postgres.id }}" createdb -U postgres api_obs_inference_test
 
       - name: Validate ingestor migrations
         env:
-          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/ingestor_migrations
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_ingestor_migrations
         run: |
           uv run alembic upgrade head
           uv run alembic current --check-heads
@@ -195,7 +195,7 @@ jobs:
 
       - name: Validate inference migrations
         env:
-          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/inference_migrations
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_inference_migrations
         run: |
           uv run alembic -c services/inference/alembic.ini upgrade head
           uv run alembic -c services/inference/alembic.ini current --check-heads
@@ -213,7 +213,7 @@ jobs:
 
       - name: Run inference integration tests
         env:
-          DATABASE_URL_TEST: postgresql+asyncpg://postgres:postgres@localhost:5432/inference_test
+          DATABASE_URL_TEST: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_inference_test
         run: |
           uv run pytest services/inference/tests -q -o addopts='' \
             --cov-config=coverage.inference.ini \

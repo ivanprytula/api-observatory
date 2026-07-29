@@ -100,9 +100,9 @@ chaos_network_partition() {
 # Stop the database, wait, bring it back.
 # Validates: connection pool error handling, circuit breaker on db, recovery.
 chaos_db_blackout() {
-    local db_container="${CONTAINER_PREFIX}-db"
+    local db_container="${CONTAINER_PREFIX}-ingestor-db"
     if ! docker ps --filter "name=^/${db_container}$" --format '{{.Names}}' | grep -q .; then
-        db_container="data-pipeline-db"
+        db_container="data-pipeline-ingestor-db"
     fi
 
     log "DB BLACKOUT: Stopping '${db_container}' for ${CHAOS_DURATION}s"

@@ -117,7 +117,7 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg17-trixie
         env:
-          POSTGRES_DB: api_observatory_performance
+          POSTGRES_DB: api_obs_ingestor_performance
           POSTGRES_PASSWORD: postgres
           POSTGRES_USER: postgres
         options: >-
@@ -128,7 +128,7 @@ jobs:
         ports:
           - 5432:5432
     env:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/api_observatory_performance
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_ingestor_performance
       CACHE_ENABLED: "false"
       BROKER_ENABLED: "false"
       MONGO_ENABLED: "false"

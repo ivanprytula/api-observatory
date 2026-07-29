@@ -25,11 +25,11 @@ docs {
 
   ```bash
   # tags is a plain `json` column (not `jsonb`) — cast explicitly for containment checks.
-  docker compose exec -T db psql -U postgres -d api_observatory -c \
+  docker compose exec -T ingestor-db psql -U postgres -d api_obs_ingestor -c \
     "SELECT id, source, tags, raw_data->>'drift_event_id' AS drift_event_id
      FROM observations WHERE tags::jsonb @> '[\"incident\"]' ORDER BY id DESC LIMIT 5;"
 
-  docker compose exec -T db psql -U postgres -d api_observatory -c \
+  docker compose exec -T ingestor-db psql -U postgres -d api_obs_ingestor -c \
     "SELECT id, observation_id, status FROM agent_runs ORDER BY id DESC LIMIT 5;"
   ```
 
