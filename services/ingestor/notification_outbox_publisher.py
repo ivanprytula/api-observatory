@@ -1,9 +1,10 @@
-"""Bounded notification outbox publishing without runtime-loop ownership."""
+"""Bounded notification outbox publishing and its ingestor-owned runtime loop."""
 
 from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -17,6 +18,7 @@ from libs.contracts.events import (
     TOPIC_NOTIFICATION_DELIVERY_DLQ_V1,
     TOPIC_NOTIFICATION_DELIVERY_REQUESTS_V1,
 )
+from services.ingestor.config import settings
 from services.ingestor.models import _utcnow
 from services.ingestor.repositories.messaging import (
     claim_pending_outbox_events,
@@ -26,6 +28,9 @@ from services.ingestor.repositories.messaging import (
 
 
 type PublishBytes = Callable[[str, bytes], Awaitable[None]]
+type SessionFactory = Callable[[], AsyncSession]
+
+logger = logging.getLogger(__name__)
 
 _NOTIFICATION_TOPICS = {
     EVENT_NOTIFICATION_DELIVERY_REQUESTED_V1: (TOPIC_NOTIFICATION_DELIVERY_REQUESTS_V1),
@@ -45,6 +50,15 @@ class OutboxPublishBatchResult:
     published: int
     failed: int
     claim_conflicts: int
+
+
+def notification_outbox_publisher_enabled() -> bool:
+    """Return whether the ingestor should own the notification publisher loop."""
+    return (
+        settings.notifications_enabled
+        and settings.notification_delivery_mode == "broker"
+        and settings.broker_enabled
+    )
 
 
 def notification_outbox_topic(event_type: str) -> str:
@@ -140,3 +154,47 @@ async def publish_notification_outbox_batch(
         failed=failed,
         claim_conflicts=claim_conflicts,
     )
+
+
+async def run_notification_outbox_publisher(
+    session_factory: SessionFactory,
+    publish: PublishBytes,
+    *,
+    poll_interval_seconds: float = 1,
+    batch_limit: int = 10,
+    lease_seconds: int = 120,
+    publish_timeout_seconds: float = 10,
+) -> None:
+    """Run cancellable bounded passes; isolate transient batch failures."""
+    if not 0 < poll_interval_seconds <= 60:
+        raise ValueError("poll_interval_seconds must be between 0 and 60")
+
+    while True:
+        try:
+            async with session_factory() as db:
+                result = await publish_notification_outbox_batch(
+                    db,
+                    publish,
+                    limit=batch_limit,
+                    lease_seconds=lease_seconds,
+                    publish_timeout_seconds=publish_timeout_seconds,
+                )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "notification_outbox_batch_failed",
+                extra={"error_type": type(exc).__name__},
+            )
+        else:
+            if result.claimed:
+                logger.info(
+                    "notification_outbox_batch_complete",
+                    extra={
+                        "claimed": result.claimed,
+                        "published": result.published,
+                        "failed": result.failed,
+                        "claim_conflicts": result.claim_conflicts,
+                    },
+                )
+        await asyncio.sleep(poll_interval_seconds)

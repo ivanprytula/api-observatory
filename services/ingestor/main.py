@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import logging
 import os
@@ -43,6 +44,7 @@ from services.ingestor.core.scheduler import JobScheduler
 from services.ingestor.core.sentry import setup_sentry
 from services.ingestor.core.tenant import TenantMiddleware
 from services.ingestor.database import AsyncSessionLocal, engine, get_db
+from services.ingestor.events import publish_event_bytes
 from services.ingestor.fetch import close_http_client
 
 # from services.ingestor.fetch_aiohttp import close_http_session
@@ -61,6 +63,10 @@ from services.ingestor.metrics import (  # noqa: F401 — imported to register m
     retention_observations_archived_total,
     retention_observations_deleted_total,
     retention_runs_total,
+)
+from services.ingestor.notification_outbox_publisher import (
+    notification_outbox_publisher_enabled,
+    run_notification_outbox_publisher,
 )
 from services.ingestor.notifications import notify_background_task_failed
 from services.ingestor.rate_limiting import limiter
@@ -187,6 +193,7 @@ def _validate_production_security_settings() -> None:
 # Global scheduler instance (initialized in lifespan startup)
 _scheduler: JobScheduler | None = None
 _background_workers: BackgroundWorkerPool | None = None
+_notification_outbox_publisher_task: asyncio.Task[None] | None = None
 
 
 @asynccontextmanager
@@ -196,13 +203,13 @@ async def lifespan(app: FastAPI):
     Encapsulates startup and shutdown logic:
     1. Initialize distributed tracing (OTel) first
     2. Initialize external services (Cache, Broker, MongoDB) — fail-open
-    3. Initialize and start job scheduler
-    4. Yield to run application
-    5. Shutdown in reverse order: scheduler, external services, HTTP clients, DB
+    3. Start the opt-in notification outbox publisher
+    4. Initialize and start job scheduler
+    5. Yield to run application, then shut resources down in reverse order
 
     All external service failures are non-fatal and logged as warnings.
     """
-    global _background_workers, _scheduler
+    global _background_workers, _notification_outbox_publisher_task, _scheduler
 
     # ========================================================================
     # STARTUP
@@ -228,6 +235,16 @@ async def lifespan(app: FastAPI):
 
     # Initialize external services (Cache, Broker, MongoDB)
     await initialize_external_services()
+
+    if notification_outbox_publisher_enabled():
+        _notification_outbox_publisher_task = asyncio.create_task(
+            run_notification_outbox_publisher(
+                AsyncSessionLocal,
+                publish_event_bytes,
+            ),
+            name="notification-outbox-publisher",
+        )
+        logger.info("notification_outbox_publisher_started")
 
     # Initialize job scheduler and register all jobs
     _scheduler = JobScheduler()
@@ -327,6 +344,16 @@ async def lifespan(app: FastAPI):
                 "scheduler_shutdown_error",
                 extra={"error": str(e)},
             )
+
+    if _notification_outbox_publisher_task:
+        _notification_outbox_publisher_task.cancel()
+        try:
+            await _notification_outbox_publisher_task
+        except asyncio.CancelledError:
+            pass
+        finally:
+            _notification_outbox_publisher_task = None
+        logger.info("notification_outbox_publisher_stopped")
 
     # Stop background workers
     if _background_workers:
