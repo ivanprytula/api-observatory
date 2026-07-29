@@ -12,10 +12,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # Dedicated Postgres instance (port 5433, db "inference") — not shared with
-    # the ingestor's "api_observatory" database. See ADR-015.
+    # Dedicated Postgres instance (port 5433, db "api_obs_inference") — not shared with
+    # the ingestor's "api_obs_ingestor" database. See ADR-015.
     database_url: str = (
-        "postgresql+asyncpg://postgres:postgres@localhost:5433/inference"
+        "postgresql+asyncpg://postgres:postgres@localhost:5433/api_obs_inference"
     )
     db_pool_size: int = 5
     db_max_overflow: int = 5

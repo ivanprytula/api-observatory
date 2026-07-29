@@ -10,7 +10,7 @@
 #   - cap_drop: [ALL]
 
 services:
-  db:
+  ingestor-db:
     deploy:
       resources:
         reservations:

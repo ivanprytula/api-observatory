@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # REQUIRED: Must be set via DATABASE_URL environment variable
     # ============ Database ============
     database_url: str = Field(
-        default="postgresql+asyncpg://localhost:5432/api_observatory",
+        default="postgresql+asyncpg://localhost:5432/api_obs_ingestor",
         description="PostgreSQL connection string (asyncpg driver)",
     )
 
@@ -237,7 +237,7 @@ class Settings(BaseSettings):
     )
 
     mongo_db_name: str = Field(
-        default="api_observatory",
+        default="api_obs_ingestor",
         description="MongoDB database name",
     )
 

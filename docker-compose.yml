@@ -205,8 +205,8 @@ services:
     container_name: api-obs-inference-db
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${INFERENCE_DB_PASSWORD:-postgres}
-      POSTGRES_DB: inference
+      POSTGRES_PASSWORD: ${API_OBS_INFERENCE_DB_PASSWORD:-postgres}
+      POSTGRES_DB: api_obs_inference
     ports:
       - '5433:5432'
     volumes:
@@ -242,8 +242,8 @@ services:
       dockerfile: services/inference/Dockerfile
     container_name: api-obs-inference
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:${INFERENCE_DB_PASSWORD:-postgres}@inference-db:5432/inference
-      OTEL_ENABLED: ${OTEL_ENABLED:-true}
+      DATABASE_URL: postgresql+asyncpg://postgres:${API_OBS_INFERENCE_DB_PASSWORD:-postgres}@inference-db:5432/api_obs_inference
+      OTEL_ENABLED: ${API_OBS_OTEL_ENABLED:-false}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
       OTEL_SERVICE_NAME: ${INFERENCE_OTEL_SERVICE_NAME:-api-obs-inference}
     ports:

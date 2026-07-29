@@ -30,7 +30,7 @@ def include_object(
     `inference` runs on its own dedicated Postgres instance (`inference-db`,
     see ADR 015) — this shouldn't ever see foreign tables in practice. Kept
     as a defensive guard so a misconfigured `DATABASE_URL` (e.g. accidentally
-    pointed at the ingestor's `db`) can't turn an autogenerate into a
+    pointed at the ingestor's `ingestor-db`) can't turn an autogenerate into a
     cross-service DROP TABLE spree — see the Phase 1/2 incident where exactly
     that happened before this guard existed.
     """

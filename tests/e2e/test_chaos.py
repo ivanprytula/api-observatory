@@ -3,7 +3,7 @@
 Skip by default; enable with --run-chaos.
 
 Requires:
-  - docker compose up -d db cache broker ingestor dashboard
+  - docker compose up -d ingestor-db cache broker ingestor dashboard
   - Run with: pytest tests/e2e/test_chaos.py --run-chaos
 """
 

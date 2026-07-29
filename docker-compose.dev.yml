@@ -3,17 +3,18 @@
 # bind mounts (ignores __pycache__/, .venv/, etc.). uvicorn --reload / Streamlit
 # poll watcher restart the process on file change automatically.
 # Dependency file changes (pyproject.toml, uv.lock) trigger a full image rebuild.
-# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --watch
+# Advanced core watcher:
+# docker compose -f docker-compose.yml -f docker-compose.dev.yml up --watch --build ingestor-db ingestor dashboard
 
 services:
-  db:
+  ingestor-db:
     volumes:
       # Named volume so `docker compose down` (without `-v`) preserves Postgres
       # data across restarts — lets local data accumulate for indexing/
       # perf-tuning practice instead of resetting to empty on every `up`.
       # Dev-only: the base docker-compose.yml stays cloud-deploy-ready, where
       # a managed Postgres (Azure Flexible Server / RDS) owns persistence.
-      - postgres_data:/var/lib/postgresql/data
+      - ingestor_postgres_data:/var/lib/postgresql/data
     deploy:
       resources:
         reservations:
@@ -35,7 +36,7 @@ services:
 
   inference-db:
     volumes:
-      # Same rationale as db's postgres_data above — dev-only persistence.
+      # Same rationale as ingestor-db's ingestor_postgres_data above — dev-only persistence.
       - inference_postgres_data:/var/lib/postgresql/data
     deploy:
       resources:
@@ -113,5 +114,7 @@ services:
       interval: 30s
 
 volumes:
-  postgres_data:
+  ingestor_postgres_data:
+    name: api-obs-ingestor-postgres-data
   inference_postgres_data:
+    name: api-obs-inference-postgres-data

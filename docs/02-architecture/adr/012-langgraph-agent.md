@@ -51,7 +51,7 @@ agent.
 
 5. **Durable HITL via LangGraph's checkpointer, not a custom mechanism**:
    - `human_review` calls `interrupt()`; `langgraph-checkpoint-postgres`
-     persists graph state to the same `db` Postgres instance already in the
+     persists graph state to the same `ingestor-db` Postgres instance already in the
      stack. Resume happens via an independent
      `POST /api/v1/agent/runs/{run_id}/resume` call, potentially in a
      different process — verified live. (Considered PydanticAI+DBOS as an
