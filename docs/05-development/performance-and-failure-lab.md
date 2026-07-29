@@ -14,6 +14,14 @@ aggregation. Record row count, window, indexes used, planning/execution time, bu
 whether the plan changes at 10x generated samples. Never paste an isolated plan without the query,
 schema, cardinality, and environment.
 
+The tenant incident listing has a separate PostgreSQL proof in
+[`test_query_analysis.py`](../../services/ingestor/tests/integration/observations/test_query_analysis.py).
+It seeds 40 matching incidents among 1,040 rows, then captures the bounded
+`tenant_id` + `status` query with `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`. The expected plan uses
+`ix_dependency_incidents_tenant_status`; this demonstrates index eligibility, not a portable latency
+target. Record any manually captured plan with the commit, row distribution, PostgreSQL image, and
+container resource limits.
+
 ## Bounded Load Baseline
 
 Use the existing
@@ -43,6 +51,12 @@ failure-injection details in the script rather than duplicating them here.
 
 Measure **time to detection**, **time to containment**, **time to recovery**, and whether queued or
 retried work drains safely. Merely observing an exception is not recovery evidence.
+
+For the PostgreSQL exercise, start the core stack, then run
+`CHAOS_DURATION=15 bash infra/scripts/chaos.sh db`. The script requires `/readyz` to become non-200
+while PostgreSQL is stopped, then waits for both `pg_isready` and `/readyz` after restart. Follow it
+with the focused incident API integration test. This is opt-in local fault evidence, not a production
+recovery claim.
 
 ## 10x and 100x Review
 

@@ -169,7 +169,7 @@ with them:
 | Full persisted auth flows         | Implemented | Registration and refresh-token rotation are available |
 | Broader RBAC coverage             | Implemented | Default mounted v1 routers have JWT and role dependencies |
 | Rate limiting per tenant          | Implemented | Atomic Redis token bucket, keyed by tenant and subject |
-| PostgreSQL observation RLS        | Opt-in | `RLS_ENABLED=true` enforces tenant isolation for the observations hot table; global rows remain visible |
+| PostgreSQL tenant RLS             | Opt-in | `RLS_ENABLED=true` protects observations and dependency incidents; global rows remain visible and administrators retain cross-tenant API access. Each additional table requires its own migration and PostgreSQL proof |
 | mTLS between services             | Planned | Service-to-service auth                |
 
 ---

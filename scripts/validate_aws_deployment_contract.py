@@ -13,6 +13,7 @@ STAGE0_COMPOSE_PATH = PROJECT_ROOT / "docker-compose.aws-stage0.yml"
 CI_WORKFLOW_PATH = PROJECT_ROOT / ".github/workflows/ci.yml"
 CD_WORKFLOW_PATH = PROJECT_ROOT / ".github/workflows/cd-dev.yml"
 ASSURANCE_WORKFLOW_PATH = PROJECT_ROOT / ".github/workflows/assurance.yml"
+ROLLOUT_SCRIPT_PATH = PROJECT_ROOT / "scripts/aws-stage0-rollout.sh"
 
 
 def validate() -> list[str]:
@@ -21,6 +22,7 @@ def validate() -> list[str]:
     ci_workflow = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
     cd_workflow = CD_WORKFLOW_PATH.read_text(encoding="utf-8")
     assurance_workflow = ASSURANCE_WORKFLOW_PATH.read_text(encoding="utf-8")
+    rollout_script = ROLLOUT_SCRIPT_PATH.read_text(encoding="utf-8")
     errors: list[str] = []
 
     if manifest.get("deployment_target") != "aws-stage0-ec2-compose":
@@ -77,8 +79,21 @@ def validate() -> list[str]:
         errors.append("routine CI must not publish images or authenticate to AWS")
     if "workflow_run:" in cd_workflow or "workflow_dispatch:" not in cd_workflow:
         errors.append("AWS Stage 0 CD must be manual-only")
+    if "vars.AWS_CD_ENABLED == 'true'" not in cd_workflow:
+        errors.append("AWS Stage 0 CD must retain the explicit enablement gate")
+    if "id-token: write" not in cd_workflow:
+        errors.append("AWS Stage 0 CD must retain GitHub OIDC permission")
     if "docker push" not in cd_workflow or "@${digest}" not in cd_workflow:
         errors.append("manual CD must publish tree images and deploy digest references")
+    for rollback_marker in (
+        "rollback()",
+        "previous_ingestor",
+        "Database schema rollback is intentionally excluded.",
+    ):
+        if rollback_marker not in rollout_script:
+            errors.append(
+                "Stage 0 rollout must retain documented image rollback behavior"
+            )
     if (
         "workflow_dispatch:" not in assurance_workflow
         or "schedule:" in assurance_workflow

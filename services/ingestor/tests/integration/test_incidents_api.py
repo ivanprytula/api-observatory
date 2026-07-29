@@ -53,6 +53,35 @@ async def test_tenant_can_only_read_own_incidents(
     assert hidden.status_code == 404
 
 
+async def test_tenant_operator_cannot_change_another_tenants_incident(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    other_id = await _seed_incident(db, tenant_id=20, name="tenant-twenty")
+
+    async def tenant_operator() -> dict:
+        return {"sub": "operator-10", "role": "operator", "tenant_id": 10}
+
+    app.dependency_overrides[verify_jwt_token] = tenant_operator
+    for action in ("acknowledge", "resolve"):
+        response = await client.post(f"/api/v1/incidents/{other_id}/{action}")
+        assert response.status_code == 404
+
+
+async def test_admin_can_read_incidents_across_tenants(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    first_id = await _seed_incident(db, tenant_id=10, name="tenant-ten")
+    second_id = await _seed_incident(db, tenant_id=20, name="tenant-twenty")
+
+    async def admin() -> dict:
+        return {"sub": "admin", "role": "admin"}
+
+    app.dependency_overrides[verify_jwt_token] = admin
+    response = await client.get("/api/v1/incidents")
+    assert response.status_code == 200
+    assert {item["id"] for item in response.json()["items"]} == {first_id, second_id}
+
+
 async def test_operator_acknowledges_and_resolves_incident(
     client: AsyncClient, db: AsyncSession
 ) -> None:

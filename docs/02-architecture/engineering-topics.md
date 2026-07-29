@@ -17,7 +17,7 @@ trigger to explain why the design should or should not change.
 | Topic | Status | Primary evidence | Adoption or change trigger |
 | --- | --- | --- | --- |
 | API contracts and versioning | **Core** | [`libs/contracts`](../../libs/contracts/), [contract tests](../../services/ingestor/tests/contract/) | A cross-process schema change requires a version bump and compatibility plan |
-| Authentication, authorization, tenancy, RLS | **Core** | [security architecture](security-architecture.md), [`security/`](../../services/ingestor/security/), [RLS tests](../../services/ingestor/tests/integration/test_observations_rls.py) | Extend RLS table-by-table after each access path is verified |
+| Authentication, authorization, tenancy, RLS | **Core** | [security architecture](security-architecture.md), [`security/`](../../services/ingestor/security/), [observation RLS tests](../../services/ingestor/tests/integration/test_observations_rls.py), [incident RLS tests](../../services/ingestor/tests/integration/test_dependency_incidents_rls.py) | Extend RLS table-by-table after each access path is verified |
 | Gateway and reverse proxy | **Lab** | [gateway lab](../../labs/gateway_load_balancing/), local edge profile | Adopt a managed gateway for multiple public services or consumer-specific edge policy |
 | Rate limiting and SSRF | **Core** | [`rate_limiting.py`](../../services/ingestor/rate_limiting.py), [`source_registry.py`](../../services/ingestor/routers/source_registry.py) | Move policy outward only when multiple public entry points need shared enforcement |
 | Schema design and migrations | **Core** | [`models.py`](../../services/ingestor/models.py), [`alembic/`](../../alembic/) | Split migration ownership only with independently deployed data owners |

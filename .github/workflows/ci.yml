@@ -191,6 +191,9 @@ jobs:
         run: |
           uv run alembic upgrade head
           uv run alembic current --check-heads
+          uv run alembic downgrade -1
+          uv run alembic upgrade head
+          uv run alembic current --check-heads
           uv run alembic check
 
       - name: Validate inference migrations

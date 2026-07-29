@@ -24,6 +24,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.ingestor.api_schemas.observations import ObservationRequest
+from services.ingestor.models import DependencyIncident, SourceProfile
 
 
 pytestmark = pytest.mark.integration
@@ -490,3 +491,76 @@ class TestIndexEffectiveness:
 
         assert plan["execution_ms"] is not None
         assert len(plan["nodes"]) > 0
+
+    async def test_tenant_incident_listing_uses_tenant_status_index(
+        self, postgresql_async_session: AsyncSession
+    ) -> None:
+        """Capture the bounded tenant incident query against representative skew."""
+        db = postgresql_async_session
+        tenant_source = SourceProfile(
+            name="incident-plan-tenant",
+            base_url="https://tenant.example",
+            tenant_id=101,
+        )
+        other_source = SourceProfile(
+            name="incident-plan-other",
+            base_url="https://other.example",
+            tenant_id=202,
+        )
+        db.add_all([tenant_source, other_source])
+        await db.flush()
+        incidents = [
+            DependencyIncident(
+                source_id=tenant_source.id,
+                tenant_id=101,
+                trigger_type="availability",
+                fingerprint=f"incident-plan-target-{number}",
+                active_key=f"incident-plan-target-{number}",
+                status="open",
+                severity="critical",
+                summary="Target tenant incident.",
+                guidance="Test only.",
+                trigger_details={},
+                occurrence_count=1,
+            )
+            for number in range(40)
+        ]
+        incidents.extend(
+            DependencyIncident(
+                source_id=other_source.id,
+                tenant_id=202,
+                trigger_type="availability",
+                fingerprint=f"incident-plan-other-{number}",
+                active_key=f"incident-plan-other-{number}",
+                status="resolved" if number % 2 else "open",
+                severity="critical",
+                summary="Other tenant incident.",
+                guidance="Test only.",
+                trigger_details={},
+                occurrence_count=1,
+            )
+            for number in range(1_000)
+        )
+        db.add_all(incidents)
+        await db.commit()
+        await db.execute(text("ANALYZE dependency_incidents"))
+
+        result = await db.execute(
+            text(
+                """
+                EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
+                SELECT *
+                FROM dependency_incidents
+                WHERE tenant_id = :tenant_id
+                  AND status = :status
+                ORDER BY last_seen_at DESC
+                LIMIT :limit
+                """
+            ),
+            {"tenant_id": 101, "status": "open", "limit": 20},
+        )
+        plan = parse_explain_output(result.scalar())
+
+        assert plan["planning_ms"] is not None
+        assert plan["execution_ms"] is not None
+        assert plan["uses_index"] is True
