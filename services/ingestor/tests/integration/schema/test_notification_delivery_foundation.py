@@ -20,6 +20,11 @@ from services.ingestor.models import (
     NotificationDelivery,
     OutboxEvent,
 )
+from services.ingestor.notification_delivery_consumer import (
+    NotificationProviderError,
+    accept_notification_request,
+    deliver_due_notifications,
+)
 from services.ingestor.repositories.messaging import (
     add_outbox_event,
     claim_pending_outbox_events,
@@ -368,6 +373,95 @@ async def test_mixed_channel_outcomes_update_inbox_aggregate(
         by_channel["email"].id,
         by_channel["webhook"].id,
     }
+
+
+async def test_consumer_orchestration_persists_acceptance_and_provider_outcomes(
+    postgresql_async_session: AsyncSession,
+) -> None:
+    db = postgresql_async_session
+    event = _request_event(channels=["webhook", "email"])
+
+    accepted = await accept_notification_request(db, event.model_dump(mode="json"))
+    duplicate = await accept_notification_request(db, event)
+    assert accepted.claimed is True
+    assert accepted.delivery_count == 2
+    assert duplicate.claimed is False
+
+    async def provider(
+        delivery: NotificationDelivery,
+        request: NotificationDeliveryRequestedV1,
+    ) -> str:
+        assert request.payload.summary == "Dependency unavailable."
+        if delivery.channel == "email":
+            raise NotificationProviderError(
+                "configuration", "missing_sender", retryable=False
+            )
+        return "provider-message-1"
+
+    result = await deliver_due_notifications(
+        db,
+        provider,
+        claim_token="consumer-a",
+    )
+    assert result.claimed == 2
+    assert result.delivered == 1
+    assert result.dead_lettered == 1
+
+    inbox = await db.get(InboxConsumption, accepted.inbox_id)
+    assert inbox is not None
+    assert inbox.status == "completed_with_dead_letters"
+
+
+async def test_consumer_orchestration_schedules_then_dead_letters_retries(
+    postgresql_async_session: AsyncSession,
+) -> None:
+    db = postgresql_async_session
+    event = _request_event()
+    accepted = await accept_notification_request(db, event)
+
+    async def unavailable(
+        _delivery: NotificationDelivery,
+        _request: NotificationDeliveryRequestedV1,
+    ) -> str:
+        raise NotificationProviderError("transport", "timeout")
+
+    first = await deliver_due_notifications(
+        db,
+        unavailable,
+        claim_token="consumer-a",
+        retry_delay=lambda _attempt: timedelta(seconds=1),
+        now=_NOW,
+    )
+    assert first.retried == 1
+
+    delivery = (await db.scalars(select(NotificationDelivery))).one()
+    assert delivery.next_attempt_at == _NOW + timedelta(seconds=1)
+
+    # Make the stored retry due without needing a worker loop or broker.
+    delivery.next_attempt_at = _NOW - timedelta(seconds=1)
+    await db.commit()
+    second = await deliver_due_notifications(
+        db,
+        unavailable,
+        claim_token="consumer-b",
+        retry_delay=lambda _attempt: timedelta(seconds=1),
+        now=_NOW,
+    )
+    assert second.retried == 1
+
+    delivery.next_attempt_at = _NOW - timedelta(seconds=1)
+    await db.commit()
+    third = await deliver_due_notifications(
+        db,
+        unavailable,
+        claim_token="consumer-c",
+        retry_delay=lambda _attempt: timedelta(seconds=1),
+        now=_NOW,
+    )
+    assert third.dead_lettered == 1
+    inbox = await db.get(InboxConsumption, accepted.inbox_id)
+    assert inbox is not None
+    assert inbox.status == "dead_letter"
 
 
 def test_notification_delivery_migration_round_trip(
