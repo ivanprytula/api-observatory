@@ -1,4 +1,4 @@
-"""MCP server settings — reads from environment/`.env` only.
+"""MCP server settings — reads from the MCP environment or service `.env`.
 
 Kept separate from `services.ingestor.config` deliberately: this is an
 independently-deployable process (a stdio MCP server, not a FastAPI app) and
@@ -9,18 +9,23 @@ client would.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+_MCP_ENV_FILE = Path(__file__).with_name(".env")
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=_MCP_ENV_FILE, extra="ignore")
 
     # Base URL of the running ingestor API this MCP server calls.
     ingestor_url: str = "http://localhost:8000"
 
     # Credentials for the dedicated `mcp-service` account (see
     # scripts/register_mcp_service_user.py) — no default password, must be
-    # supplied via env/`.env` so it never lands in source control.
+    # supplied via the environment or services/mcp/.env so it never lands in source control.
     mcp_service_username: str = "mcp-service"
     mcp_service_password: str
 
