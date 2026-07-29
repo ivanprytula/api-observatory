@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
-"""Generate and safely rotate local prod-like credentials in ``.env``.
+"""Generate local credentials for the Docker development stack.
 
-Copy ``.env.example`` to the ignored ``.env`` file first, then run:
+Copy ``.env.example`` to the ignored ``.env`` file first, then run ``just generate-secrets``.
+By default this generates all supported local values:
 
-    just generate-secrets
+* Ingestor and inference PostgreSQL passwords
+* Redis password
+* API bearer token
+* public and internal JWT signing secrets
 
-The command updates only supported secret keys, preserves non-secret settings
-and comments, restricts ``.env`` to the current user, and never prints secret
-values. Production receives the same environment-variable names from its
-infrastructure-owned secret delivery, not from this local file.
+Existing non-secret settings and comments are preserved. Running the command again rotates only
+these generated values, and migrates retired generic local names to the API_OBS_ namespace, so
+restart the local services afterwards. The resulting file is replaced atomically and permissioned
+as user-only (mode ``0600``); do not commit or share it. Production receives its process-level
+environment variables from infrastructure-owned secret delivery, not from this local file.
 """
 
 from __future__ import annotations
@@ -57,13 +62,34 @@ def api_token(length: int = 48) -> str:
 
 
 _SECRET_GENERATORS: dict[str, Callable[[], str]] = {
-    "POSTGRES_PASSWORD": db_password,
-    "INFERENCE_DB_PASSWORD": db_password,
-    "REDIS_PASSWORD": redis_password,
-    "JWT_SECRET": jwt_secret,
-    "API_V1_BEARER_TOKEN": api_token,
-    "INTERNAL_JWT_SECRET": lambda: jwt_secret(384),
+    "API_OBS_INGESTOR_DB_PASSWORD": db_password,
+    "API_OBS_INFERENCE_DB_PASSWORD": db_password,
+    "API_OBS_CACHE_PASSWORD": redis_password,
+    "API_OBS_JWT_SECRET": jwt_secret,
+    "API_OBS_API_V1_BEARER_TOKEN": api_token,
+    "API_OBS_INTERNAL_JWT_SECRET": lambda: jwt_secret(384),
 }
+_RETIRED_SECRET_KEYS = frozenset(
+    {
+        "POSTGRES_PASSWORD",
+        "INFERENCE_DB_PASSWORD",
+        "REDIS_PASSWORD",
+        "JWT_SECRET",
+        "API_V1_BEARER_TOKEN",
+        "INTERNAL_JWT_SECRET",
+    }
+)
+_RETIRED_LOCAL_SETTING_NAMES = {
+    "LOCAL_HTTPS": "API_OBS_LOCAL_HTTPS",
+    "CACHE_ENABLED": "API_OBS_CACHE_ENABLED",
+    "BROKER_ENABLED": "API_OBS_BROKER_ENABLED",
+    "OTEL_ENABLED": "API_OBS_OTEL_ENABLED",
+    "OPENAI_ENABLED": "API_OBS_OPENAI_ENABLED",
+    "ANTHROPIC_ENABLED": "API_OBS_ANTHROPIC_ENABLED",
+}
+_REMOVED_LOCAL_SETTING_NAMES = frozenset(
+    {"INFERENCE_ENABLED", "API_OBS_INFERENCE_ENABLED"}
+)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -78,44 +104,44 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--postgres",
         action="store_true",
-        help="Generate POSTGRES_PASSWORD only.",
+        help="Generate API_OBS_INGESTOR_DB_PASSWORD only.",
     )
     parser.add_argument(
         "--inference-db",
         action="store_true",
-        help="Generate INFERENCE_DB_PASSWORD only.",
+        help="Generate API_OBS_INFERENCE_DB_PASSWORD only.",
     )
     parser.add_argument(
         "--redis",
         action="store_true",
-        help="Generate REDIS_PASSWORD only.",
+        help="Generate API_OBS_CACHE_PASSWORD only.",
     )
     parser.add_argument(
         "--jwt",
         action="store_true",
-        help="Generate JWT_SECRET only.",
+        help="Generate API_OBS_JWT_SECRET only.",
     )
     parser.add_argument(
         "--api-token",
         action="store_true",
-        help="Generate API_V1_BEARER_TOKEN only.",
+        help="Generate API_OBS_API_V1_BEARER_TOKEN only.",
     )
     parser.add_argument(
         "--internal-jwt",
         action="store_true",
-        help="Generate INTERNAL_JWT_SECRET only.",
+        help="Generate API_OBS_INTERNAL_JWT_SECRET only.",
     )
     return parser.parse_args()
 
 
 def _selected_keys(args: argparse.Namespace) -> tuple[str, ...]:
     flags = {
-        "postgres": "POSTGRES_PASSWORD",
-        "inference_db": "INFERENCE_DB_PASSWORD",
-        "redis": "REDIS_PASSWORD",
-        "jwt": "JWT_SECRET",
-        "api_token": "API_V1_BEARER_TOKEN",
-        "internal_jwt": "INTERNAL_JWT_SECRET",
+        "postgres": "API_OBS_INGESTOR_DB_PASSWORD",
+        "inference_db": "API_OBS_INFERENCE_DB_PASSWORD",
+        "redis": "API_OBS_CACHE_PASSWORD",
+        "jwt": "API_OBS_JWT_SECRET",
+        "api_token": "API_OBS_API_V1_BEARER_TOKEN",
+        "internal_jwt": "API_OBS_INTERNAL_JWT_SECRET",
     }
     selected = tuple(env_var for flag, env_var in flags.items() if getattr(args, flag))
     if selected:
@@ -143,11 +169,29 @@ def _upsert_env_values(
     if not env_path.is_file():
         raise FileNotFoundError(env_path)
 
+    source_lines = env_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    existing_keys = {
+        key.strip()
+        for line in source_lines
+        for key, separator, _ in [line.partition("=")]
+        if separator
+    }
     replaced: set[str] = set()
     updated_lines: list[str] = []
-    for line in env_path.read_text(encoding="utf-8").splitlines(keepends=True):
-        key, separator, _ = line.partition("=")
+    for line in source_lines:
+        key, separator, value = line.partition("=")
         normalized_key = key.strip()
+        if separator and normalized_key in _RETIRED_SECRET_KEYS:
+            if updated_lines and _is_generation_comment(updated_lines[-1]):
+                updated_lines.pop()
+            continue
+        if separator and normalized_key in _REMOVED_LOCAL_SETTING_NAMES:
+            continue
+        if separator and normalized_key in _RETIRED_LOCAL_SETTING_NAMES:
+            namespaced_key = _RETIRED_LOCAL_SETTING_NAMES[normalized_key]
+            if namespaced_key not in existing_keys:
+                updated_lines.append(f"{namespaced_key}={value}")
+            continue
         if separator and normalized_key in values:
             if normalized_key not in replaced:
                 if updated_lines and _is_generation_comment(updated_lines[-1]):

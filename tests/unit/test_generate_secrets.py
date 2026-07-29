@@ -16,12 +16,12 @@ pytestmark = pytest.mark.unit
 
 _SCRIPT = Path(__file__).parents[2] / "scripts/tools/generate-secrets.py"
 _CORE_SECRET_KEYS = (
-    "POSTGRES_PASSWORD",
-    "INFERENCE_DB_PASSWORD",
-    "REDIS_PASSWORD",
-    "JWT_SECRET",
-    "API_V1_BEARER_TOKEN",
-    "INTERNAL_JWT_SECRET",
+    "API_OBS_INGESTOR_DB_PASSWORD",
+    "API_OBS_INFERENCE_DB_PASSWORD",
+    "API_OBS_CACHE_PASSWORD",
+    "API_OBS_JWT_SECRET",
+    "API_OBS_API_V1_BEARER_TOKEN",
+    "API_OBS_INTERNAL_JWT_SECRET",
 )
 _GENERATION_COMMENT = re.compile(
     r"^# Generated at \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2} UTC "
@@ -70,9 +70,12 @@ def test_generator_adds_core_credentials_without_exposing_them(tmp_path: Path) -
     assert "# Generic local settings" in env_path.read_text(encoding="utf-8")
     assert values["ENVIRONMENT"] == "development"
     assert all(key in values for key in _CORE_SECRET_KEYS)
-    assert values["POSTGRES_PASSWORD"] != values["INFERENCE_DB_PASSWORD"]
-    assert values["POSTGRES_PASSWORD"].isalnum()
-    assert values["INFERENCE_DB_PASSWORD"].isalnum()
+    assert (
+        values["API_OBS_INGESTOR_DB_PASSWORD"]
+        != values["API_OBS_INFERENCE_DB_PASSWORD"]
+    )
+    assert values["API_OBS_INGESTOR_DB_PASSWORD"].isalnum()
+    assert values["API_OBS_INFERENCE_DB_PASSWORD"].isalnum()
     comments = [
         line
         for line in env_path.read_text(encoding="utf-8").splitlines()
@@ -90,16 +93,17 @@ def test_generator_rotates_one_credential_without_duplicate_keys(
 ) -> None:
     env_path = tmp_path / ".env"
     env_path.write_text(
-        "CACHE_ENABLED=false\nREDIS_PASSWORD=old-value\n", encoding="utf-8"
+        "API_OBS_CACHE_ENABLED=false\nAPI_OBS_CACHE_PASSWORD=old-value\n",
+        encoding="utf-8",
     )
 
     result = _run_generator(tmp_path, "--redis")
 
     assert result.returncode == 0
     values = _env_values(env_path)
-    assert values["CACHE_ENABLED"] == "false"
-    assert values["REDIS_PASSWORD"] != "old-value"
-    assert env_path.read_text(encoding="utf-8").count("REDIS_PASSWORD=") == 1
+    assert values["API_OBS_CACHE_ENABLED"] == "false"
+    assert values["API_OBS_CACHE_PASSWORD"] != "old-value"
+    assert env_path.read_text(encoding="utf-8").count("API_OBS_CACHE_PASSWORD=") == 1
     assert any(
         _GENERATION_COMMENT.fullmatch(line)
         for line in env_path.read_text(encoding="utf-8").splitlines()
@@ -113,3 +117,56 @@ def test_generator_rejects_removed_unsupported_secret_flags(tmp_path: Path) -> N
 
     assert result.returncode == 2
     assert "unrecognized arguments: --session" in result.stderr
+
+
+def test_generator_removes_retired_generic_secret_names(tmp_path: Path) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "# Generated at 2026-01-01T00:00:00 UTC by scripts/tools/generate-secrets.py\n"
+        "POSTGRES_PASSWORD=old\nINFERENCE_DB_PASSWORD=old\nENVIRONMENT=development\n",
+        encoding="utf-8",
+    )
+
+    result = _run_generator(tmp_path)
+
+    assert result.returncode == 0
+    values = _env_values(env_path)
+    assert "POSTGRES_PASSWORD" not in values
+    assert "INFERENCE_DB_PASSWORD" not in values
+    assert "API_OBS_INGESTOR_DB_PASSWORD" in values
+    assert "API_OBS_INFERENCE_DB_PASSWORD" in values
+    assert "2026-01-01T00:00:00 UTC" not in env_path.read_text(encoding="utf-8")
+
+
+def test_generator_renames_retired_local_feature_settings(tmp_path: Path) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "CACHE_ENABLED=true\nBROKER_ENABLED=false\nLOCAL_HTTPS=true\n",
+        encoding="utf-8",
+    )
+
+    result = _run_generator(tmp_path, "--redis")
+
+    assert result.returncode == 0
+    values = _env_values(env_path)
+    assert values["API_OBS_CACHE_ENABLED"] == "true"
+    assert values["API_OBS_BROKER_ENABLED"] == "false"
+    assert values["API_OBS_LOCAL_HTTPS"] == "true"
+    assert "CACHE_ENABLED" not in values
+    assert "BROKER_ENABLED" not in values
+    assert "LOCAL_HTTPS" not in values
+
+
+def test_generator_removes_retired_inference_workflow_setting(tmp_path: Path) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "INFERENCE_ENABLED=true\nAPI_OBS_INFERENCE_ENABLED=true\n",
+        encoding="utf-8",
+    )
+
+    result = _run_generator(tmp_path, "--inference-db")
+
+    assert result.returncode == 0
+    values = _env_values(env_path)
+    assert "INFERENCE_ENABLED" not in values
+    assert "API_OBS_INFERENCE_ENABLED" not in values

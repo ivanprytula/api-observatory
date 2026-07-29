@@ -41,10 +41,10 @@ flowchart TB
     MCP["MCP server — services/mcp/\nFastMCP (stdio) — 11 tools\nsource/scorecard/drift/agent-run"]
     LLMClient["MCP client\n(Claude Desktop, etc.)"]
 
-    Postgres[("PostgreSQL 17 — db\nsource profiles, observations,\ndrift events, agent runs, scorecards,\nagent checkpoints (langgraph-checkpoint-postgres)")]
-    InferenceDB[("PostgreSQL 17 — inference-db\nindexed_documents (pgvector)\ndedicated instance, ADR-015")]
-    Cache[("Redis\ncache, pub/sub, rate-limit\noptional — CACHE_ENABLED")]
-    Broker[("Redpanda\nKafka-compatible\noptional — BROKER_ENABLED")]
+    Postgres[("PostgreSQL 17 — ingestor-db\napi_obs_ingestor\nsource profiles, observations,\ndrift events, agent runs, scorecards,\nagent checkpoints (langgraph-checkpoint-postgres)")]
+    InferenceDB[("PostgreSQL 17 — inference-db\napi_obs_inference\nindexed_documents (pgvector)\ndedicated instance, ADR-015")]
+    Cache[("Redis\ncache, pub/sub, rate-limit\noptional — API_OBS_CACHE_ENABLED")]
+    Broker[("Redpanda\nKafka-compatible\noptional — API_OBS_BROKER_ENABLED")]
 
     Client --> API
     Dashboard --> API
@@ -67,15 +67,15 @@ flowchart TB
 ```
 
 Core, always-on: Ingestor + PostgreSQL. Cache and Broker are optional and feature-flagged
-(`CACHE_ENABLED` / `BROKER_ENABLED`) — the ingestor fails open if either is unavailable.
+(`API_OBS_CACHE_ENABLED` / `API_OBS_BROKER_ENABLED`) — the ingestor fails open if either is unavailable.
 Inference is real as of Phase 2 of the AI-augmented observatory plan; per
 [ADR 015](adr/015-inference-dedicated-pgvector-postgres.md) it runs on its own dedicated Postgres
-instance (`inference-db`), not the ingestor's `db` — real per-service database ownership, not just
+instance (`inference-db`), not the ingestor's `ingestor-db` — real per-service database ownership, not just
 schema-level separation. The ingestor never reads inference's tables directly, only via the
 `/index` and `/search` HTTP contract in `services/ingestor/vector_search.py`.
 The LangGraph incident-triage agent (Phase 3) runs *inside* the ingestor process (not a separate
 container) — fire-and-forget triggered by `contract_drift.py` on critical/breaking `DriftEvent`s,
-checkpointed to the same `db` Postgres via `langgraph-checkpoint-postgres` so the human-in-the-loop
+checkpointed to the same `ingestor-db` Postgres via `langgraph-checkpoint-postgres` so the human-in-the-loop
 pause/resume survives process restarts. Fails open like everything else here: with no
 `ANTHROPIC_API_KEY` configured, drift detection and every other feature works exactly the same,
 the agent trigger just no-ops (`services/ingestor/agent/runner.py`).

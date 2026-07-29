@@ -44,16 +44,17 @@ services:
       - api-obs
 
   cache:
+    profiles: [cache]
     image: redis:7-alpine
     container_name: api-obs-cache
     # Local host port exposed on loopback only — ingestor connects via Docker internal network at redis://cache:6379
     ports:
       - "127.0.0.1:6379:6379"
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-cache_secret}
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-cache_secret}"]
+      REDIS_PASSWORD: ${API_OBS_CACHE_PASSWORD:-cache_secret}
+    command: ["redis-server", "--requirepass", "${API_OBS_CACHE_PASSWORD:-cache_secret}"]
     healthcheck:
-      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD:-cache_secret}', 'ping']
+      test: ['CMD', 'redis-cli', '-a', '${API_OBS_CACHE_PASSWORD:-cache_secret}', 'ping']
       interval: 5s
       timeout: 3s
       retries: 5
@@ -75,6 +76,7 @@ services:
       - api-obs
 
   broker:
+    profiles: [broker]
     image: redpandadata/redpanda:v24.1.1
     container_name: api-obs-broker
     command:
@@ -113,19 +115,27 @@ services:
   ingestor:
     build:
       context: .
+    image: api-obs/ingestor:local
     container_name: api-obs-ingestor
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:${API_OBS_INGESTOR_DB_PASSWORD:-postgres}@ingestor-db:5432/api_obs_ingestor
       BROKER_URL: broker:29092
-      CACHE_URL: redis://:${REDIS_PASSWORD:-cache_secret}@cache:6379/0
+      CACHE_URL: redis://:${API_OBS_CACHE_PASSWORD:-cache_secret}@cache:6379/0
+      CACHE_ENABLED: ${API_OBS_CACHE_ENABLED:-false}
       INFERENCE_URL: http://inference:8001
+      BROKER_ENABLED: ${API_OBS_BROKER_ENABLED:-false}
+      OPENAI_ENABLED: ${API_OBS_OPENAI_ENABLED:-false}
+      ANTHROPIC_ENABLED: ${API_OBS_ANTHROPIC_ENABLED:-false}
+      API_V1_BEARER_TOKEN: ${API_OBS_API_V1_BEARER_TOKEN:-}
+      JWT_SECRET: ${API_OBS_JWT_SECRET:-}
+      INTERNAL_JWT_SECRET: ${API_OBS_INTERNAL_JWT_SECRET:-}
       LOG_FORMAT: json
       SERVICE_VERSION: ${SERVICE_VERSION:-0.1.0}
       # Tracing on by default for the compose profile; spans export to the
       # Tempo collector (monitoring profile). Export failures are non-fatal
       # when monitoring is down. Override via .env.
-      OTEL_ENABLED: ${OTEL_ENABLED:-true}
+      OTEL_ENABLED: ${API_OBS_OTEL_ENABLED:-false}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
       # Matches container_name so Tempo's trace-to-logs tag mapping
       # (service.name -> Loki `container` label) resolves.
@@ -137,8 +147,10 @@ services:
         condition: service_healthy
       cache:
         condition: service_healthy
+        required: false
       broker:
         condition: service_healthy
+        required: false
     healthcheck:
       test: ['CMD', 'python', '-c', 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/readyz", timeout=3)']
       interval: 5s
@@ -199,9 +211,11 @@ services:
       - api-obs
 
   inference-db:
+    profiles: [inference]
     build:
       context: ./infra/database
       dockerfile: Dockerfile
+    image: api-obs/inference-db:local
     container_name: api-obs-inference-db
     environment:
       POSTGRES_USER: postgres
@@ -237,9 +251,11 @@ services:
       - api-obs
 
   inference:
+    profiles: [inference]
     build:
       context: .
       dockerfile: services/inference/Dockerfile
+    image: api-obs/inference:local
     container_name: api-obs-inference
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:${API_OBS_INFERENCE_DB_PASSWORD:-postgres}@inference-db:5432/api_obs_inference
@@ -278,6 +294,7 @@ services:
     build:
       context: .
       dockerfile: services/dashboard/Dockerfile
+    image: api-obs/dashboard:local
     container_name: api-obs-dashboard
     environment:
       INGESTOR_URL: http://ingestor:8000
@@ -385,7 +402,7 @@ services:
       - .:/repo
     security_opt: [no-new-privileges:true]
 
-  # ── Monitoring (optional; started via: just up-monitoring) ────────────────
+  # ── Monitoring (optional; started via: just dev-up-monitoring) ────────────
 
   prometheus:
     image: prom/prometheus:v3.2.1
@@ -604,21 +621,21 @@ services:
 # for inter-container communication.
 #
 # Services on `api-obs`:
-#   - db (PostgreSQL)
+#   - ingestor-db (PostgreSQL)
 #   - cache
 #   - broker (message broker)
 #   - ingestor (FastAPI microservice)
-#   - edge (HTTPS ingress proxy, started by default with `just up`)
-#   - prometheus, grafana, loki, promtail, tempo, alertmanager, mailpit (monitoring, optional via `just up-monitoring`)
+#   - edge (HTTPS ingress proxy, started explicitly with the `ingress` profile)
+#   - prometheus, grafana, loki, promtail, tempo, alertmanager, mailpit (monitoring, optional via `just dev-up-monitoring`)
 #   - floci-az (Azure emulator, optional via --profile azure)
 #   - floci-aws (AWS emulator, optional via --profile aws)
 #   - floci-gcp (GCP emulator, optional via --profile gcp)
 #
 # Host access:
-#   - edge:80, 443 → localhost:80, 443 — primary entrypoint (HTTPS via nginx)
+#   - edge:80, 443 → localhost:80, 443 — optional HTTPS ingress (via nginx)
 #   - ingestor:8000 → localhost:8000 — direct HTTP (debug only, not prod-like)
 #   - dashboard:8501 → localhost:8501 — direct HTTP (debug only, not prod-like)
-#   - db:5432 → localhost:5432
+#   - ingestor-db:5432 → localhost:5432
 #   - cache:6379 → localhost:6379 (loopback only; ingestor connects via Docker network at redis://cache:6379)
 #   - broker:9092 (Kafka), 8082 (HTTP) → localhost:9092, 8082
 #   - floci-az:4577 → 127.0.0.1:4577 (local only)

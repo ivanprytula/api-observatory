@@ -19,9 +19,9 @@ readonly INFERENCE_DB="api-obs-inference-db-${RUN_SUFFIX}"
 readonly INGESTOR_CONTAINER="api-obs-ingestor-${RUN_SUFFIX}"
 readonly INFERENCE_CONTAINER="api-obs-inference-${RUN_SUFFIX}"
 readonly DASHBOARD_CONTAINER="api-obs-dashboard-${RUN_SUFFIX}"
-readonly INGESTOR_IMAGE="api-observatory/ingestor:ci-smoke"
-readonly INFERENCE_IMAGE="api-observatory/inference:ci-smoke"
-readonly DASHBOARD_IMAGE="api-observatory/dashboard:ci-smoke"
+readonly INGESTOR_IMAGE="api-obs/ingestor:ci-smoke"
+readonly INFERENCE_IMAGE="api-obs/inference:ci-smoke"
+readonly DASHBOARD_IMAGE="api-obs/dashboard:ci-smoke"
 
 info() { echo "[INFO] $*" >&2; }
 success() { echo "[SUCCESS] $*" >&2; }
@@ -96,26 +96,26 @@ main() {
 
   docker network create "${NETWORK_NAME}" >/dev/null
   docker run --detach --name "${INGESTOR_DB}" --network "${NETWORK_NAME}" \
-    --env POSTGRES_DB=api_observatory --env POSTGRES_PASSWORD=postgres \
+    --env POSTGRES_DB=api_obs_ingestor --env POSTGRES_PASSWORD=postgres \
     --env POSTGRES_USER=postgres pgvector/pgvector:pg17-trixie >/dev/null
   docker run --detach --name "${INFERENCE_DB}" --network "${NETWORK_NAME}" \
-    --env POSTGRES_DB=inference --env POSTGRES_PASSWORD=postgres \
+    --env POSTGRES_DB=api_obs_inference --env POSTGRES_PASSWORD=postgres \
     --env POSTGRES_USER=postgres pgvector/pgvector:pg17-trixie >/dev/null
   wait_for_postgres "${INGESTOR_DB}"
   wait_for_postgres "${INFERENCE_DB}"
 
   docker run --rm --network "${NETWORK_NAME}" \
-    --env "DATABASE_URL=postgresql+asyncpg://postgres:postgres@${INGESTOR_DB}:5432/api_observatory" \
+    --env "DATABASE_URL=postgresql+asyncpg://postgres:postgres@${INGESTOR_DB}:5432/api_obs_ingestor" \
     "${INGESTOR_IMAGE}" alembic upgrade head
   docker run --rm --network "${NETWORK_NAME}" \
-    --env "DATABASE_URL=postgresql+asyncpg://postgres:postgres@${INFERENCE_DB}:5432/inference" \
+    --env "DATABASE_URL=postgresql+asyncpg://postgres:postgres@${INFERENCE_DB}:5432/api_obs_inference" \
     "${INFERENCE_IMAGE}" alembic upgrade head
 
   docker run --detach --name "${INFERENCE_CONTAINER}" --network "${NETWORK_NAME}" \
-    --env "DATABASE_URL=postgresql+asyncpg://postgres:postgres@${INFERENCE_DB}:5432/inference" \
+    --env "DATABASE_URL=postgresql+asyncpg://postgres:postgres@${INFERENCE_DB}:5432/api_obs_inference" \
     "${INFERENCE_IMAGE}" >/dev/null
   docker run --detach --name "${INGESTOR_CONTAINER}" --network "${NETWORK_NAME}" \
-    --env "DATABASE_URL=postgresql+asyncpg://postgres:postgres@${INGESTOR_DB}:5432/api_observatory" \
+    --env "DATABASE_URL=postgresql+asyncpg://postgres:postgres@${INGESTOR_DB}:5432/api_obs_ingestor" \
     --env CACHE_ENABLED=false --env BROKER_ENABLED=false --env MONGO_ENABLED=false \
     --env OTEL_ENABLED=false --env SENTRY_ENABLED=false \
     --env "INFERENCE_URL=http://${INFERENCE_CONTAINER}:8001" \
