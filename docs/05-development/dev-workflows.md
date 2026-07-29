@@ -140,6 +140,8 @@ language/tool rules do not need to be repeated here.
 
 ## Specialized Evidence
 
+- [Local stack walkthroughs](local-stack-walkthroughs.md) provide junior, middle, and senior
+  teach-back exercises for the core and extended runtime shapes.
 - API collections live under [`bruno/`](../../bruno/) and are exercised by the maintained recipe.
 - Authenticated k6 smoke ownership lives in the manual
   [`assurance.yml`](../../.github/workflows/assurance.yml) workflow and its script.

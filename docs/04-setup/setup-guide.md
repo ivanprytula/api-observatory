@@ -32,6 +32,9 @@ just test-smoke
 Run `just help-core` for the same focused command map after setup. It keeps cloud, Kubernetes,
 security, and emulator recipes out of the first-task workflow.
 
+After the quick start works, use the [local stack walkthroughs](../05-development/local-stack-walkthroughs.md)
+to trace core, tenant/migration, and extended-stack behavior at increasing depth.
+
 For first-use verification, use the dashboard at `http://127.0.0.1:8501`. The onboarding path does
 not require copying credentials or tokens into a terminal. Use the API docs and authenticated curl
 flows only when developing or testing an API-specific change.
