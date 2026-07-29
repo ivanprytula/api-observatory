@@ -370,7 +370,7 @@ exists — the app wraps the call in `try/except` and falls back to `os.environ`
 
 **Purpose**: Replace curl snippets in README/docs with a CLI-testable, version-controlled API collection.
 Bruno's `.bru` files are plain text (no binary JSON blobs), run locally without accounts/cloud, and serve as
-living documentation — clone repo, run `just api-test`, all endpoints verified.
+living documentation — clone repo, run `just test-api`, all endpoints verified.
 
 **Scope**: five collections covering all MVP endpoints.
 
@@ -389,9 +389,9 @@ living documentation — clone repo, run `just api-test`, all endpoints verified
 - `bruno/scorecards/collection.bru` — ProviderScorecard endpoints (list, get)
 - `bruno/websocket/collection.bru` — WebSocket connection test (wscat-like example)
 - `bruno/environments/local.bru` — env vars: `baseUrl`, `token` (optional), `source_id` (placeholder)
-- `Justfile` — add `api-test` recipe: `cd bruno && bru run . -r --env local`
+- `Justfile` — add `test-api` recipe: `cd bruno && bru run . -r --env local`
 - `docs/dev/bruno-collections.md` — how to install Bruno, run collections, add new requests
-- `README.md` — link to `docs/dev/bruno-collections.md`, replace curl snippets with `just api-test`
+- `README.md` — link to `docs/dev/bruno-collections.md`, replace curl snippets with `just test-api`
 
 **Key requests per collection** (each should be a real, working request against the running stack):
 
@@ -411,7 +411,7 @@ npm install -g @usebruno/cli    # or: npx @usebruno/cli
 docker compose up -d
 
 # Run all collections against the running stack
-just api-test
+just test-api
 # → all requests return 200/2xx
 # → output is human-readable (request name, status, response summary)
 
@@ -553,7 +553,7 @@ env -u DATABASE_URL_TEST uv run pytest tests/ services/ingestor/tests/ -q -m "in
 - `just probe-once` — run one full probe cycle manually
 - `just scorecard SOURCE_ID` — print current scorecard for a source
 - `just seed-demo` — seed 3 demo SourceProfiles (httpbin.org, jsonplaceholder.typicode.com, postman-echo.com)
-- `just api-test` — `cd bruno && bru run . -r --env local` (added Commit 8c)
+- `just test-api` — `cd bruno && bru run . -r --env local` (added Commit 8c)
 
 ---
 
@@ -640,7 +640,7 @@ docker compose down
 
 ```bash
 docker compose up -d && just seed-demo
-just api-test
+just test-api
 # → all requests pass (2xx responses)
 docker compose exec ingestor uv run pytest tests/ -q
 docker compose down
