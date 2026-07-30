@@ -86,9 +86,11 @@ class TestFetchFromExternalAPI:
         url = "https://jsonplaceholder.typicode.com/posts/1"
 
         # Patch random to always trigger the 10% failure case
-        with patch("random.random", return_value=0.05):  # 0.05 < 0.1 → fails
-            with pytest.raises(Exception, match="Simulated API failure"):
-                await fetch_from_external_api(url, simulate_failures=True)
+        with (
+            patch("random.random", return_value=0.05),
+            pytest.raises(Exception, match="Simulated API failure"),
+        ):  # 0.05 < 0.1 → fails
+            await fetch_from_external_api(url, simulate_failures=True)
 
 
 class TestFetchWithRetry:
@@ -207,13 +209,13 @@ class TestFetchWithRetry:
                 side_effect=mock_fetch,
             ),
             patch("services.ingestor.fetch.logger.info") as info_mock,
+            pytest.raises(httpx.ConnectError),
         ):
-            with pytest.raises(httpx.ConnectError):
-                await fetch_with_retry(
-                    url,
-                    max_retries=3,
-                    simulate_failures=False,
-                )
+            await fetch_with_retry(
+                url,
+                max_retries=3,
+                simulate_failures=False,
+            )
 
         # Check that attempt logging was emitted
         info_messages = [call.args[0] for call in info_mock.call_args_list]
@@ -284,15 +286,18 @@ class TestRetryWithRealWorldScenarios:
         async def mock_fetch(url, simulate_failures=False):
             raise timeout_exception
 
-        with patch(
-            "services.ingestor.fetch.fetch_from_external_api", side_effect=mock_fetch
+        with (
+            patch(
+                "services.ingestor.fetch.fetch_from_external_api",
+                side_effect=mock_fetch,
+            ),
+            pytest.raises(httpx.TimeoutException),
         ):
-            with pytest.raises(httpx.TimeoutException):
-                await fetch_with_retry(
-                    "https://example.invalid/slow-endpoint",
-                    max_retries=2,
-                    simulate_failures=False,
-                )
+            await fetch_with_retry(
+                "https://example.invalid/slow-endpoint",
+                max_retries=2,
+                simulate_failures=False,
+            )
 
     @pytest.mark.e2e
     async def test_concurrent_fetches_with_retry(self) -> None:

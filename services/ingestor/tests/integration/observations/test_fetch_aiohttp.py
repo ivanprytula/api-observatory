@@ -148,9 +148,9 @@ async def test_fetch_timeout_error_handling(cleanup_http_session) -> None:
             side_effect=timeout_fetch,
         ),
         patch("services.ingestor.fetch_aiohttp.asyncio.sleep", new_callable=AsyncMock),
+        pytest.raises(asyncio.TimeoutError),
     ):
-        with pytest.raises(asyncio.TimeoutError):
-            await fetch_with_retry(TEST_RESOURCE, max_retries=1)
+        await fetch_with_retry(TEST_RESOURCE, max_retries=1)
 
 
 @pytest.mark.integration
@@ -220,6 +220,6 @@ async def test_client_error_handling_aiohttp_style(cleanup_http_session) -> None
             side_effect=client_error_fetch,
         ),
         patch("services.ingestor.fetch_aiohttp.asyncio.sleep", new_callable=AsyncMock),
+        pytest.raises(aiohttp.ClientError),
     ):
-        with pytest.raises(aiohttp.ClientError):
-            await fetch_with_retry(TEST_RESOURCE, max_retries=2)
+        await fetch_with_retry(TEST_RESOURCE, max_retries=2)

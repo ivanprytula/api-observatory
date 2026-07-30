@@ -165,7 +165,7 @@ extend-exclude = ["alembic/versions"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = [
-  "SIM117",
+  # "SIM117",
   "B008",
 ] # Allow nested with statements and Depends() in defaults (FastAPI pattern)
 
