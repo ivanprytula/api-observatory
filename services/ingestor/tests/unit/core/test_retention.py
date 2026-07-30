@@ -14,6 +14,9 @@ from services.ingestor.jobs import archive_old_observations
 from services.ingestor.models import Observation, ObservationArchive
 
 
+pytestmark = pytest.mark.integration
+
+
 def _observation(
     source: str, timestamp: datetime, *, deleted: bool = False
 ) -> Observation:
@@ -34,7 +37,6 @@ async def _count(
     return int((await session.scalar(select(func.count()).select_from(model))) or 0)
 
 
-@pytest.mark.unit
 async def test_retention_dry_run_reports_eligible_rows_without_mutation(
     db: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -57,7 +59,6 @@ async def test_retention_dry_run_reports_eligible_rows_without_mutation(
     assert await _count(db, ObservationArchive) == 0
 
 
-@pytest.mark.unit
 async def test_retention_apply_requires_explicit_enabled_setting(
     db: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -74,7 +75,6 @@ async def test_retention_apply_requires_explicit_enabled_setting(
     assert await _count(db, ObservationArchive) == 0
 
 
-@pytest.mark.unit
 async def test_retention_copies_verifies_and_deletes_one_bounded_batch(
     db: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -104,7 +104,6 @@ async def test_retention_copies_verifies_and_deletes_one_bounded_batch(
     assert await _count(db, Observation) == 2
 
 
-@pytest.mark.unit
 async def test_retention_is_idempotent_after_a_successful_apply(
     db: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -123,7 +122,6 @@ async def test_retention_is_idempotent_after_a_successful_apply(
     assert await _count(db, ObservationArchive) == 1
 
 
-@pytest.mark.unit
 async def test_retention_skips_when_the_distributed_lock_is_held(
     db: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -42,8 +42,8 @@ The workflow skips image publication unless `AWS_IMAGE_PUBLISH_ENABLED` is exact
 `false` value is the safe default while AWS is being prepared. The workflow already requests
 `id-token: write` and uses `aws-actions/configure-aws-credentials` with `role-to-assume`.
 
-Trigger the workflow manually from a CI-green `develop` or `main` ref. Feature-branch publication
-is rejected. Routine CI never receives AWS credentials and never publishes images.
+Trigger the workflow manually from a CI-green `main` ref. Task-branch publication is rejected.
+Routine CI never receives AWS credentials and never publishes images.
 
 ## Local CLI Credentials
 

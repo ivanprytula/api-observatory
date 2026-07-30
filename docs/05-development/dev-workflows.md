@@ -1,7 +1,8 @@
 # Development Workflows
 
 The [`Justfile`](../../Justfile) is the command catalogue. This guide owns intent, proof selection,
-and stable development rules so command syntax is not duplicated in Markdown.
+and stable development rules so command syntax is not duplicated in Markdown. Branching, commits,
+pushes, and pull requests are owned by [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
 
 ## Development Loop
 
@@ -13,7 +14,7 @@ and stable development rules so command syntax is not duplicated in Markdown.
    needed.
    For extended mode, also run `just db-inference-migrate` and then `just dev-inference-ready`.
    Enable optional capabilities in `.env` before starting their explicit recipes; OpenTelemetry
-   requires `API_OBS_OTEL_ENABLED=true`, `docker compose restart ingestor dashboard`, and then
+   requires `API_OBS_OTEL_ENABLED=true`, `docker compose restart ingestor`, and then
    `just dev-up-monitoring`.
 3. Run the smallest focused test while iterating: `just test-unit` for isolated code or
    `just test-integration` for PostgreSQL/service behavior. When Docker is available, PostgreSQL
@@ -47,7 +48,7 @@ Use [setup](../04-setup/setup-guide.md) for runtime modes. The
 | Pure domain/helper | Unit test for success and failure behavior |
 | API/auth/tenant behavior | ASGI integration test including unauthorized/cross-tenant regression |
 | Model/schema | `just db-migrate` plus focused PostgreSQL integration tests; add downgrade/upgrade checks when migration compatibility is affected |
-| Cross-service contract | Producer behavior and shared-contract tests; add consumer tests only when a consumer service exists ([ADR 016](../02-architecture/adr/016-redpanda-consumer-service.md)) |
+| Cross-service contract | Producer, consumer, and shared-contract tests for every implemented process boundary ([ADR 016](../02-architecture/adr/016-redpanda-consumer-service.md)) |
 | Cache/broker/provider boundary | Dependency failure/recovery and fail-open/fail-closed assertion |
 | Query/performance | Captured workload and query plan in the performance worksheet |
 | Deployment interface | Machine-readable app/infra contract validator and image health checks |

@@ -23,7 +23,7 @@ API Observatory continuously checks the health and reliability of your external 
 ### Prerequisites
 
 - Docker Engine/Desktop with Compose v2
-- Python 3.14.6, `uv`, `just`, Git, and `curl`
+- The Python version selected by [`.python-version`](../../.python-version), plus `uv`, `just`, Git, and `curl`
 
 ### Run the Dashboard
 

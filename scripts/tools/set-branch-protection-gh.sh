@@ -2,7 +2,7 @@
 set -euo pipefail
 
 apply_changes="false"
-branches_csv="main,develop"
+branches_csv="main"
 repo=""
 
 die() {
@@ -17,7 +17,7 @@ info() {
 usage() {
 	cat <<'EOF'
 Usage:
-	set-branch-protection-gh.sh [--repo owner/name] [--branches main,develop] [--apply]
+	set-branch-protection-gh.sh [--repo owner/name] [--branches main] [--apply]
 
 Examples:
 	set-branch-protection-gh.sh
@@ -72,19 +72,16 @@ name="${repo#*/}"
 
 IFS=',' read -r -a branches <<<"$branches_csv"
 if [[ ${#branches[@]} -eq 0 ]]; then
-	die "No branches provided. Use --branches main,develop"
+	die "No branches provided. Use --branches main"
 fi
 
 # Keep check names aligned with current .github/workflows/ci.yml job names.
 # Format: "<workflow name> / <job display name>"
 #
-# Both protected branches use the same four visible CI gates. Manual assurance
-# and manual CD are intentionally excluded from merge requirements.
+# Protect one stable aggregate gate so internal CI jobs can evolve without
+# requiring branch-protection changes. Manual assurance and publication remain excluded.
 default_contexts_json='[
-	"CI / Quality",
-	"CI / Unit and contract tests",
-	"CI / PostgreSQL integration and migrations",
-	"CI / Deployable image smoke"
+	"CI / Merge gate"
 ]'
 
 for branch in "${branches[@]}"; do

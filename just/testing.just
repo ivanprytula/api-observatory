@@ -5,7 +5,7 @@ test-smoke base-url="http://127.0.0.1:8000" dashboard-url="http://127.0.0.1:8501
     bash scripts/smoke-test.sh {{base-url}} {{dashboard-url}}
 
 test-unit:
-    uv run pytest -m unit -q
+    cd "{{justfile_directory()}}" && uv run pytest tests/unit services/ingestor/tests/unit -m unit -q
 
 test-integration:
     uv run pytest -m integration -q

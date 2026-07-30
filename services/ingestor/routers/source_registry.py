@@ -287,8 +287,8 @@ async def source_health(source_id: int, db: DbDep, _: JwtDep) -> SourceHealthRes
     """Perform a live HEAD (or GET) request against the source URL.
 
     Returns reachability, HTTP status code, and measured round-trip latency.
-    The `sla_breach` flag is set when latency exceeds the profile's `sla_ms`
-    target (or 5 000 ms if unset).
+    The `sla_breach` flag is set when latency exceeds the profile's
+    `latency_threshold_ms` target (or 5 000 ms if unset).
 
     > **Note**: This endpoint makes a real outbound network call. Use sparingly
     > in automated tests to avoid rate-limiting the target source.

@@ -21,19 +21,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Cache uv
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
-
-      - name: Install uv
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
 
       - name: Export locked dependencies
         run: uv export --frozen --all-groups --no-hashes --format requirements-txt > requirements-audit.txt
@@ -143,19 +135,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Cache uv
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
-
-      - name: Install uv
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
 
       - name: Prepare service and disposable identity
         shell: bash
@@ -221,19 +205,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Cache uv
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
-
-      - name: Install uv
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
 
       - name: Run deterministic evaluation
         run: |

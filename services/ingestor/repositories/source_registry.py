@@ -238,7 +238,7 @@ async def probe_source_health(
     target_url = (
         f"{profile.base_url.rstrip('/')}/{profile.health_check_path.lstrip('/')}"
     )
-    threshold = SOURCE_HEALTH_UNHEALTHY_THRESHOLD_MS
+    threshold = profile.latency_threshold_ms or SOURCE_HEALTH_UNHEALTHY_THRESHOLD_MS
     start = time.perf_counter()
 
     try:

@@ -145,9 +145,9 @@ async def list_alert_policies(
             ),
             created_at=generated_at,
             metadata={
-                "source_type": source.source_type,
-                "owner_team": source.owner_team,
-                "sla_ms": source.sla_ms,
+                "base_url": source.base_url,
+                "probe_interval_seconds": source.probe_interval_seconds,
+                "latency_threshold_ms": source.latency_threshold_ms,
             },
         )
         for source in sources

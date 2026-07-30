@@ -13,9 +13,8 @@ pytestmark = pytest.mark.integration
 
 _SOURCE: dict[str, Any] = {
     "name": "reporting-test-source",
-    "url": "https://api.example.com/reporting",
-    "source_type": "rest",
-    "tags": ["Reporting", "Test"],
+    "base_url": "https://1.1.1.1",
+    "health_check_path": "/reporting",
 }
 
 _SCHEMA_V1: dict[str, Any] = {
@@ -33,7 +32,7 @@ _SCHEMA_V2_BREAKING: dict[str, Any] = {
 
 async def _create_source(client: AsyncClient, name: str) -> int:
     response = await client.post("/api/v1/sources", json={**_SOURCE, "name": name})
-    assert response.status_code == 201
+    assert response.status_code == 201, response.text
     return int(response.json()["id"])
 
 

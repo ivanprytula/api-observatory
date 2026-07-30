@@ -92,7 +92,9 @@ API and <http://127.0.0.1:8501> for the dashboard. HTTPS is an opt-in next step 
 security-specific testing; follow the setup guide to install certificates and enable the ingress
 profile. Use `just dev` for the fast HTTP hot-reload loop. Never commit the local `.env` created from it.
 
-For daily development and test selection, use [Development Workflows](docs/05-development/dev-workflows.md).
+For the complete task lifecycle from branch creation through pull request, use
+[Contributing](CONTRIBUTING.md). For proof selection, use
+[Development Workflows](docs/05-development/dev-workflows.md).
 
 ## Recruiter and Interview Tour
 

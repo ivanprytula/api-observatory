@@ -12,6 +12,8 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 GREEN='\033[0;32m'
 NC='\033[0m'
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+REQUIRED_PYTHON_VERSION="$(<"${PROJECT_ROOT}/.python-version")"
 
 # ─── Helper functions ─────────────────────────────────────────────────────────
 check_command() {
@@ -52,13 +54,13 @@ check_python_version() {
         python_bin="python3"
     fi
     if [[ -z "${python_bin}" ]]; then
-        echo -e "${RED}✗${NC} Python 3.14.6 ${RED}NOT FOUND${NC}"
+        echo -e "${RED}✗${NC} Python ${REQUIRED_PYTHON_VERSION} ${RED}NOT FOUND${NC}"
         return 1
     fi
     local version
     version="$(${python_bin} -c 'import platform; print(platform.python_version())')"
-    if [[ "${version}" != "3.14.6" ]]; then
-        echo -e "${RED}✗${NC} Python ${version}; this project requires 3.14.6"
+    if [[ "${version}" != "${REQUIRED_PYTHON_VERSION}" ]]; then
+        echo -e "${RED}✗${NC} Python ${version}; .python-version requires ${REQUIRED_PYTHON_VERSION}"
         return 1
     fi
     echo -e "${GREEN}✓${NC} Python ${version}"

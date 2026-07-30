@@ -31,7 +31,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
-from dotenv import load_dotenv
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -53,21 +52,9 @@ from sqlalchemy.pool import NullPool
 # (Removed module-level testcontainers startup to allow lazy provisioning)
 
 
-# Load .env file for local development (BEFORE app imports)
-#
-# Strategy (production-safe):
-# - Local dev: .env file exists → python-dotenv loads it
-# - CI/CD: .env file missing (not in repo) → load_dotenv is no-op
-#          Environment variables are injected by CI system (GitHub Actions, etc.)
-# - Deployed: .env file missing → load_dotenv is no-op
-#             Secrets injected by secrets manager (AWS Secrets Manager, HashiCorp Vault, etc.)
-#
-# Key: load_dotenv(..., override=False) means environment variables already set
-# (by CI or by the testcontainers block above) take precedence over .env.
-_env_file = Path(__file__).parent.parent / ".env"
-if _env_file.exists():
-    # Only load .env in development (when file exists locally)
-    load_dotenv(_env_file, override=False)
+# Tests consume only explicit process variables. Never load the developer's
+# private `.env`; local defaults below keep unit tests self-contained, while
+# integration jobs inject their database and cache endpoints deliberately.
 
 # Set testing environment BEFORE any app imports
 # This ensures the app loads with testing configuration.

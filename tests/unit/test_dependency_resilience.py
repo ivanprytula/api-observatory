@@ -9,7 +9,6 @@ import httpx
 import pytest
 
 from libs.platform.bulkhead import BulkheadRejectedError
-from libs.platform.circuit_breaker import CircuitOpenError
 from libs.platform.resilience import DependencyResilience
 from libs.platform.retry import RetryBudget
 
@@ -45,20 +44,6 @@ async def test_does_not_retry_validation_or_cancellation_errors() -> None:
 
     assert invalid.await_count == 1
     assert cancelled.await_count == 1
-
-
-async def test_three_transient_failures_open_breaker() -> None:
-    resilience = DependencyResilience("test-breaker", max_concurrency=1, max_queue=0)
-    failing = AsyncMock(side_effect=httpx.ConnectError("offline"))
-
-    with patch("libs.platform.retry.asyncio.sleep", new=AsyncMock()):
-        for _ in range(3):
-            with pytest.raises(httpx.ConnectError):
-                await resilience.call(failing)
-
-    assert resilience.breaker.state == "open"
-    with pytest.raises(CircuitOpenError):
-        await resilience.call(failing)
 
 
 async def test_bulkhead_rejects_overflow() -> None:

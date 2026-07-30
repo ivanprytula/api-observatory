@@ -8,33 +8,14 @@ historical agent prompts and are not setup instructions for new developers.
 ## Prerequisites
 
 The supported developer workstation is Linux (Ubuntu) or macOS with Docker Engine/Desktop and
-Compose v2, a running Docker daemon, Python 3.14.6, `uv`, `just`, Git, and `curl`. These are the
-only host dependencies required for the default application workflow. Run `just doctor` before
-creating `.env`; it checks the core tools and reports optional tooling as warnings.
+Compose v2, a running Docker daemon, the Python version selected by [`.python-version`](../../.python-version),
+`uv`, `just`, Git, and `curl`. Run `just doctor` before creating `.env`; it checks core tools and
+reports optional tooling as warnings.
 
-For work spanning the sibling `api-observatory-infra` repository, use this ownership-based split:
-
-| Work | Developer-machine dependencies |
-| --- | --- |
-| Application development and local Compose | Docker Engine/Desktop + Compose v2, Python 3.14.6, `uv`, `just`, Git, `curl` |
-| Local database inspection | `psql`, `pg_dump`, `pg_restore` |
-| Terraform or AWS infrastructure review | Terraform, TFLint, AWS CLI, `jq` |
-| AWS Stage 0 host bootstrap | Full Ansible installed with `pipx`, `ansible-lint`, collections from `api-observatory-infra/ansible/requirements.yml`, and AWS Session Manager plugin |
-| Kubernetes or emulator labs | Only when used: `kubectl`, Helm, k3d, or the relevant emulator |
-
-Install Ansible as an isolated operator tool, not into this application's `uv` environment. With
-the repositories checked out beside each other, install the infra collections with:
-
-```bash
-pipx install --include-deps ansible
-pipx install ansible-lint
-ansible-galaxy collection install -r ../api-observatory-infra/ansible/requirements.yml
-```
-
-Terraform, the PostgreSQL client tools, Ansible, AWS CLI, and the Session Manager plugin are optional
-for normal application work. They become required only when the task owns the corresponding
-infrastructure or operator action. Missing core application tools must be fixed before starting the
-local stack.
+Terraform, Ansible, cloud CLIs, Kubernetes tools, and database client utilities are not application
+onboarding requirements. Install them only for a task that owns that boundary, following the sibling
+infrastructure repository's
+[README](https://github.com/ivanprytula/api-observatory-infra/blob/main/README.md).
 
 Never read or commit a local `.env`. Copy the public, non-secret
 [`.env.example`](../../.env.example), then generate local credentials privately.
@@ -224,24 +205,9 @@ focused test suite.
 
 ## Runtime Shapes
 
-Start with the smallest working stack:
-
-```bash
-just dev-up
-```
-
-This starts PostgreSQL (`ingestor-db`), the ingestor API, and the dashboard. Redis and Redpanda are not
-started by default. The API is available at `http://127.0.0.1:8000`; the dashboard is at
-`http://127.0.0.1:8501`. Run `docker compose down` when finished.
-
-Stop without deleting data with:
-
-```bash
-docker compose stop
-```
-
-Use `docker compose down` when removing the local containers and network is desired. Do not add
-`--volumes` unless you intentionally want to delete local database data.
+Start with `just dev-up`; add only the profile needed by the task. Stop services without deleting data
+with `docker compose stop`, or remove containers and the network with `docker compose down`. Never add
+`--volumes` unless deleting local databases is intentional.
 
 `just db-reset --confirm DELETE` is disposable-demo tooling. It removes and recreates the ingestor
 PostgreSQL container and its local named volume, then starts only the core stack; Redis, Redpanda,
@@ -252,14 +218,7 @@ then `just db-migrate` and `just db-auto-init` when you need demo data.
 Before any destructive database operation, create and verify a manual backup with
 `bash infra/scripts/backup.sh`; do not proceed until the dump is known to be usable.
 
-The setup commands are intentionally explicit: `dev-wait-ready` checks API readiness, `db-migrate` applies
-Alembic migrations, `db-auto-init` requires that ready API and current migration head before creating the
-local admin/demo sources, and `test-smoke` verifies the API and dashboard. Repeat only the steps relevant
-to the change during daily development; do not rely on startup recipes to perform hidden waits, migrations,
-or seeding.
-
-Add only the capability a task needs. Inference uses its Compose profile, not an application feature
-flag:
+Startup does not hide readiness, migrations, or demo seeding. For inference work use:
 
 ```bash
 just dev-up-inference
@@ -269,62 +228,36 @@ just db-inference-migrate
 just dev-inference-ready
 ```
 
-For an end-to-end task that needs all optional integrations, set
-`API_OBS_CACHE_ENABLED=true` and `API_OBS_BROKER_ENABLED=true` in `.env`, then run
-`just dev-up-extended`. It enables the Compose `cache`, `broker`, and `inference` profiles.
-
-`db-inference-migrate` requires a healthy `inference-db`, then runs a disposable migration
-container. The inference API process does not need to be healthy yet. Both readiness checks are
-still required before using the full stack: `dev-wait-ready` proves the ingestor API, while
-`dev-inference-ready` proves the inference API.
-
-`dev-inference-ready` checks `http://127.0.0.1:8001/health`; `db-inference-migrate` applies the
-inference service's separate Alembic history. Neither command is run implicitly by either inference
-startup recipe.
+Both readiness recipes wait for `/readyz` for at most 60 seconds by default. Override the bound with
+`READY_TIMEOUT_SECONDS` when a slow machine needs more time. On failure they print Compose state and
+the owning service logs.
 
 | Capability | `.env` setting | Start command |
 | --- | --- | --- |
 | Redis integration | `API_OBS_CACHE_ENABLED=true` | Set the flag first, then `just dev-up-cache` |
 | Broker integration | `API_OBS_BROKER_ENABLED=true` | Set the flag first, then `just dev-up-broker` |
 | Inference and vector search | None | `just dev-up-inference` |
-| OpenTelemetry | `API_OBS_OTEL_ENABLED=true` | `docker compose restart ingestor dashboard`, then `just dev-up-monitoring` |
+| OpenTelemetry | `API_OBS_OTEL_ENABLED=true` | Restart `ingestor`, then run `just dev-up-monitoring` |
 | Full optional integration | `API_OBS_CACHE_ENABLED=true` and `API_OBS_BROKER_ENABLED=true` | `just dev-up-extended` |
 | HTTPS ingress | `API_OBS_LOCAL_HTTPS=true` | `bash scripts/setup/02-setup-local-https.sh` then `docker compose --profile ingress up -d --build` |
 | Full monitoring | `API_OBS_OTEL_ENABLED=true`, then restart application services | `just dev-up-monitoring` |
 
-After changing a cache, broker, or telemetry flag in `.env`, start the matching dependency recipe
-and restart only the ingestor so it receives the new values; the dashboard does not need to restart.
-Inference uses its Compose profile instead. Keep service URLs different for host processes
-(`127.0.0.1`) and Compose containers (`ingestor-db`, `cache`, `broker`, `inference`).
+After changing a cache, broker, or telemetry flag, restart the ingestor so it receives the new
+configuration. The broker carries general application events and the opt-in notification delivery
+consumer. Direct notification delivery remains the default; the
+[senior walkthrough](../05-development/local-stack-walkthroughs.md#senior-extended-dependencies-and-failure-boundaries)
+owns the explicit consumer startup path.
 
-Redpanda is currently a producer-only integration in the application: the ingestor publishes
-`observation.created` and `doc.scraped` events, but no production service in this repository
-consumes them yet. The partition/consumer-group example under
-[`labs/partitioning_sharding/`](../../labs/partitioning_sharding/) is an isolated learning lab,
-not part of the normal local stack. Enable the broker when you need to verify event publication
-or prepare that future consumer boundary; do not expect the dashboard or ingestor to drain a
-Redpanda topic today.
-
-OpenTelemetry is disabled by default. To collect local traces, set `API_OBS_OTEL_ENABLED=true` in `.env`,
-restart only the application services, and then run:
+OpenTelemetry is disabled by default. To collect local traces, enable it, restart the ingestor, and
+start monitoring:
 
 ```bash
-docker compose restart ingestor dashboard
+docker compose restart ingestor
 just dev-up-monitoring
 ```
 
 Starting the monitoring UI alone
 does not enable tracing in the application.
-
-| Setup | Containers | What it proves | Operational cost |
-| --- | --- | --- | --- |
-| `just dev-up` | PostgreSQL, ingestor, and dashboard | API, persistence, and user interface | Lowest |
-| `just dev-up-inference` | Core stack plus inference and its dedicated PostgreSQL database | Semantic search/RAG path | Moderate |
-| `just dev-up-extended` | Inference stack plus Redis and Redpanda | Full optional integration | Higher |
-| `just dev-up-monitoring` | Monitoring services added to an already-running stack | Focused local observability exercises | Highest |
-
-Choose the smallest shape that proves the behavior you are working on. Cache, broker, telemetry,
-AI, cloud emulators, backups, and notifications are opt-in capabilities, not baseline requirements.
 
 Cloud-emulator workflows are an intentional exception to the explicit local sequence:
 `cloud-sandbox-up` starts the selected emulator, applies migrations, and seeds disposable demo data

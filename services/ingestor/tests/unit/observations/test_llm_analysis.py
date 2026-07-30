@@ -24,7 +24,7 @@ def mock_observation():
     )
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 class TestLLMAnalysis:
     @patch("services.ingestor.routers.observations.settings")
     @patch("services.ingestor.routers.observations.get_observation_op")

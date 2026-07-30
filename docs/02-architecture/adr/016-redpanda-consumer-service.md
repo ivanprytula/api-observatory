@@ -9,10 +9,10 @@ proof. The internal operations server is deferred.
 
 ## Context
 
-The ingestor can publish `observation.created` and `doc.scraped` events to the optional
-Redpanda broker when `API_OBS_BROKER_ENABLED=true`. The application has no production consumer: the
-dashboard receives live updates through the ingestor's Redis Pub/Sub/WebSocket path, and the Kafka
-partition/consumer-group code is an isolated learning lab.
+Before this decision, the ingestor could publish `observation.created` and `doc.scraped` events to
+the optional Redpanda broker, but the application had no owned consumer process. The dashboard's
+Redis Pub/Sub/WebSocket path and the isolated partitioning lab did not provide durable notification
+delivery.
 
 Incident notifications currently run after the incident transaction commits. A process exit can
 lose the notification, failures have no durable retry state, and `last_notification_at` records an
@@ -108,8 +108,8 @@ The service is enabled only through the opt-in local broker profile. It shares t
 and broker configuration but does not start the ingestor API, scheduler, producer lifespan, cache
 Pub/Sub bridge, or agent runtime. It starts only the consumer process.
 
-Local Compose remains canonical and opt-in. AWS Stage 0 remains unchanged because its deployment
-contract does not currently require a broker.
+Local Compose remains canonical and opt-in. AWS Stage 0 can enable the same worker through the
+reviewed `broker` profile in the infrastructure image lock; direct delivery remains the default.
 
 ## Deferred Worker Health Interface
 

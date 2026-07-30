@@ -21,11 +21,35 @@ help-core:
 
 # Explicitly wait for the ingestor readiness endpoint after starting services.
 dev-wait-ready:
-    @until curl -fsS http://127.0.0.1:8000/readyz >/dev/null 2>&1; do sleep 1; done
+    #!/usr/bin/env bash
+    set -euo pipefail
+    timeout_seconds="${READY_TIMEOUT_SECONDS:-60}"
+    deadline=$((SECONDS + timeout_seconds))
+    until curl -fsS http://127.0.0.1:8000/readyz >/dev/null 2>&1; do
+        if ((SECONDS >= deadline)); then
+            echo "Ingestor was not ready after ${timeout_seconds}s." >&2
+            docker compose ps >&2
+            docker compose logs --tail=100 ingestor-db ingestor >&2
+            exit 1
+        fi
+        sleep 1
+    done
 
-# Explicit check for the optional inference service.
+# Wait for the optional inference service with the same bounded behavior.
 dev-inference-ready:
-    curl --fail http://127.0.0.1:8001/health
+    #!/usr/bin/env bash
+    set -euo pipefail
+    timeout_seconds="${READY_TIMEOUT_SECONDS:-60}"
+    deadline=$((SECONDS + timeout_seconds))
+    until curl -fsS http://127.0.0.1:8001/readyz >/dev/null 2>&1; do
+        if ((SECONDS >= deadline)); then
+            echo "Inference was not ready after ${timeout_seconds}s." >&2
+            docker compose ps >&2
+            docker compose logs --tail=100 inference-db inference >&2
+            exit 1
+        fi
+        sleep 1
+    done
 
 db-inference-migrate:
     #!/usr/bin/env bash

@@ -7,7 +7,8 @@ own an AWS runtime topology, deployment host, runtime secrets, or rollout mechan
 [`release/services.json`](../../release/services.json) is the portable release manifest. It defines
 the three deployable HTTP images and the immutable `tree-<full-tree-SHA>` tag convention. The
 manual image-publication workflow verifies the existing application CI checks before pushing those
-images to ECR; it does not deploy them.
+images to ECR. Its release metadata binds the Git commit to the tree identity and three resolved
+digests so infrastructure can validate the exact source contract; it does not deploy them.
 
 The infrastructure repository owns the selected environment image digests, Compose profile shape,
 runtime values, migration ordering, deployment/rollback, monitoring, backup, and cloud IAM. See

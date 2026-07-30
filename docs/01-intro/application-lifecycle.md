@@ -94,11 +94,14 @@ Passing configuration or a Terraform plan is not runtime proof. The statuses **C
 
 Application CI validates all three deployable images without publishing them. After exact-commit
 CI verification, manual CD builds immutable `tree-<SHA>` images for ingestor, inference, and
-dashboard. Infrastructure supplies ECR, EC2, local runtime storage, IAM, runtime values, and deployment mechanics.
+dashboard and publishes release metadata containing the source commit, source tree, and image
+digests. Infrastructure supplies ECR, EC2, local runtime storage, IAM, runtime values, and deployment mechanics.
 MCP is excluded because it is a locally spawned stdio process.
 
-AWS Stage 0 co-locates the three HTTP images on one EC2 Docker Compose platform. The contract is
-documented and statically validated, but no live deployment is claimed. A real release requires
+AWS Stage 0 co-locates the three HTTP images on one EC2 Docker Compose platform. It uses an in-place
+recreate with a coordinated image set and best-effort rollback; it is not rolling, blue/green,
+canary, or zero-downtime delivery. The contract is documented and statically validated, but no live
+deployment is claimed. A real release requires
 approval, health checks, migration compatibility, rollback proof, redacted evidence, and
 cost-aware teardown. Continue with the app
 [deployment contract](../07-deployment/app-repo-contract.md) and infra

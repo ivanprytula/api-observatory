@@ -6,18 +6,13 @@ truth.
 
 ## Branch and Review Flow
 
-Short-lived feature branches merge into `develop` through a pull request. A release-ready
-`develop` merges into `main` through another pull request. Pushes and pull requests targeting
-either protected branch run the same four CI jobs:
+Short-lived task branches merge into `main` through a pull request. The executable workflow owns its
+internal quality, test, migration, contract, and image-smoke jobs. Branch protection requires only
+the stable `CI / Merge gate`, which fails unless every internal requirement succeeds. This lets the
+job graph evolve without updating branch protection or release documentation.
 
-1. `Quality` validates boundaries, formatting, docs, focused types, action pins, and secrets.
-2. `Unit and contract tests` provides the fast behavior and OpenAPI contract gate.
-3. `PostgreSQL integration and migrations` validates both schemas and database-backed behavior.
-4. `Deployable image smoke` builds all three Stage 0 images, runs them as non-root, and checks
-   readiness without publishing them.
-
-Branch protection should require these four checks. CI does not authenticate to AWS or publish
-registry artifacts.
+CI does not authenticate to AWS or publish registry artifacts. Follow the exact branch, commit,
+push, and pull-request lifecycle in [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
 
 ## Manual Assurance
 
@@ -28,10 +23,11 @@ modes are being learned; they are not routine merge gates.
 
 ## Manual Image Publication
 
-[`publish-images.yml`](../../.github/workflows/publish-images.yml) accepts only a selected `develop`
-or `main` ref. It verifies that the exact commit passed all four CI jobs, requires the protected
+[`publish-images.yml`](../../.github/workflows/publish-images.yml) accepts only a selected `main`
+ref. It verifies that the exact commit passed the merge gate, requires the protected
 `aws-image-publish` environment, authenticates with GitHub OIDC, and publishes immutable
-`tree-<full-tree-SHA>` ECR images with their resolved digests. It does not deploy to EC2.
+`tree-<full-tree-SHA>` ECR images with their resolved digests. It uploads machine-readable release
+metadata containing the source commit, source tree, and three image digests. It does not deploy to EC2.
 Publication remains safely skipped unless `AWS_IMAGE_PUBLISH_ENABLED` is exactly `true` and all AWS
 variables are configured.
 
