@@ -32,7 +32,7 @@ jobs:
         run: |
           python3 scripts/ci/check_workspace_manifests.py
           python3 scripts/ci/check_service_boundaries.py
-          python3 scripts/validate_aws_deployment_contract.py
+          python3 scripts/validate_release_manifest.py
 
       - name: Validate workflow action references
         shell: bash
@@ -69,6 +69,7 @@ jobs:
         run: |
           uv run ruff check services libs scripts tests
           uv run ruff format --check services libs scripts tests
+          uv run bandit -c pyproject.toml -r services libs scripts
           uv run python scripts/ci/docs_quality_check.py
           uv run ty check \
             libs/platform \

@@ -1,0 +1,63 @@
+name: Publish immutable images
+
+on:
+  workflow_dispatch:
+
+permissions:
+  checks: read
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    if: >-
+      vars.AWS_IMAGE_PUBLISH_ENABLED == 'true' &&
+      vars.AWS_ECR_REGISTRY != '' && vars.AWS_ECR_PUBLISH_ROLE_ARN != '' &&
+      vars.AWS_REGION != '' &&
+      (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
+    environment: aws-image-publish
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Verify the selected commit passed application CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          checks=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?per_page=100")
+          for name in "Quality" "Unit and contract tests" "PostgreSQL integration and migrations" "Deployable image smoke"; do
+            result=$(jq -r --arg name "$name" '[.check_runs[] | select(.name == $name)][0].conclusion // "missing"' <<< "$checks")
+            [[ "$result" == success ]] || { echo "CI check '$name' is $result." >&2; exit 1; }
+          done
+
+      - id: tree
+        uses: ./.github/actions/resolve-tree-sha
+
+      - uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
+        with:
+          role-to-assume: ${{ vars.AWS_ECR_PUBLISH_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: api-observatory-image-publish
+
+      - uses: aws-actions/amazon-ecr-login@1629cc33a9521f764a4704d4d0387513918873b9 # v2.1.4
+
+      - name: Build and publish the portable release manifest
+        env:
+          REGISTRY: ${{ vars.AWS_ECR_REGISTRY }}
+          TREE_SHA: ${{ steps.tree.outputs.tree_sha }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r service; do
+            name=$(jq -r .name <<< "$service")
+            dockerfile=$(jq -r .dockerfile <<< "$service")
+            context=$(jq -r .build_context <<< "$service")
+            image="${REGISTRY}/api-observatory/${name}:tree-${TREE_SHA}"
+            docker build --file "$dockerfile" --tag "$image" "$context"
+            docker push "$image"
+            digest=$(aws ecr describe-images --repository-name "api-observatory/${name}" --image-ids imageTag="tree-${TREE_SHA}" --query 'imageDetails[0].imageDigest' --output text)
+            [[ "$digest" != None && -n "$digest" ]] || exit 1
+            echo "${name}=${REGISTRY}/api-observatory/${name}@${digest}" >> "$GITHUB_STEP_SUMMARY"
+          done < <(jq -c '.services[]' release/services.json)
+          echo "tree_sha=${TREE_SHA}" >> "$GITHUB_STEP_SUMMARY"

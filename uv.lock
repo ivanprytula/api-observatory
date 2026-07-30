@@ -273,6 +273,7 @@ dev = [
     { name = "aiosqlite", marker = "sys_platform == 'linux'" },
     { name = "azure-storage-blob", marker = "sys_platform == 'linux'" },
     { name = "azure-storage-queue", marker = "sys_platform == 'linux'" },
+    { name = "bandit", marker = "sys_platform == 'linux'" },
     { name = "fakeredis", marker = "sys_platform == 'linux'" },
     { name = "httpx", marker = "sys_platform == 'linux'" },
     { name = "locust", marker = "sys_platform == 'linux'" },
@@ -347,6 +348,7 @@ dev = [
     { name = "aiosqlite", specifier = ">=0.20.0" },
     { name = "azure-storage-blob", specifier = ">=12.20.0" },
     { name = "azure-storage-queue", specifier = ">=12.10.0" },
+    { name = "bandit", extras = ["toml"], specifier = ">=1.9.4" },
     { name = "fakeredis", specifier = ">=2.36.2" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "locust", specifier = ">=2.44.4" },
@@ -504,6 +506,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/84/7d/babb616eb1ed1ac5f13cbb336875fd91c9c6f8b1702bf2ff860b222cb833/azure_storage_queue-12.17.0.tar.gz", hash = "sha256:6eb108a88554be371feb2eba9715fa0e3f7baca7b3f00c19ec417fc7ce5b3834", size = 203777, upload-time = "2026-06-08T18:03:16.393Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8c/e3/6aee19df63974d87e55dc0ddf5bb18eb1022cd290b125a46792594a00673/azure_storage_queue-12.17.0-py3-none-any.whl", hash = "sha256:aaef08ee2613f84a3a85e60a059d29567361e5a2af455298bb0e529f0b47d5a1", size = 189526, upload-time = "2026-06-08T18:03:19.139Z" },
+]
+
+[[package]]
+name = "bandit"
+version = "1.9.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyyaml", marker = "sys_platform == 'linux'" },
+    { name = "rich", marker = "sys_platform == 'linux'" },
+    { name = "stevedore", marker = "sys_platform == 'linux'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/aa/c3/0cb80dfe0f3076e5da7e4c5ad8e57bac6ac357ff4a6406205501cade4965/bandit-1.9.4.tar.gz", hash = "sha256:b589e5de2afe70bd4d53fa0c1da6199f4085af666fde00e8a034f152a52cd628", size = 4242677, upload-time = "2026-02-25T06:44:15.503Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/05/a4/a26d5b25671d27e03afb5401a0be5899d94ff8fab6a698b1ac5be3ec29ef/bandit-1.9.4-py3-none-any.whl", hash = "sha256:f89ffa663767f5a0585ea075f01020207e966a9c0f2b9ef56a57c7963a3f6f8e", size = 134741, upload-time = "2026-02-25T06:44:13.694Z" },
 ]
 
 [[package]]
@@ -3452,6 +3468,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/cd/64/6debec8fc6e9abde0c7042145dc27a562bd1cd79350a55b80bf612a10ccb/starlette_testclient-0.4.1.tar.gz", hash = "sha256:9e993ffe12fab45606116257813986612262fe15c1bb6dc9e39cc68693ac1fc5", size = 12480, upload-time = "2024-04-29T10:54:28.503Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/25/44/f5209b889a344b1331a103aec4e9f906c7f67f9295fd287fdaa818179d95/starlette_testclient-0.4.1-py3-none-any.whl", hash = "sha256:dcf0eb237dc47f062ef5925f98330af46f67e547cb587119c9ae78c17ae6c1d1", size = 8143, upload-time = "2024-04-29T10:54:25.728Z" },
+]
+
+[[package]]
+name = "stevedore"
+version = "5.9.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d7/dd/04d56c2a5232358df41f3d0f0e31833d378b6c8ed7803a6b1b7867b0eba6/stevedore-5.9.0.tar.gz", hash = "sha256:abbd0af7a38a8bbb1d6adea2e35b17609cf004eaac323e88a8d8963640dd2b3c", size = 514850, upload-time = "2026-07-02T11:38:08.509Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/62/8d/008761f6e1000600e5303db30d05724bdcf3d2d186cbb59fac79b52e39ed/stevedore-5.9.0-py3-none-any.whl", hash = "sha256:e520945d4c257700eddc1eb1d79df04b2ea578eef185e0e3fa5b442fc848d3f7", size = 54463, upload-time = "2026-07-02T11:38:07.43Z" },
 ]
 
 [[package]]

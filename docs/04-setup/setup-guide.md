@@ -7,12 +7,34 @@ historical agent prompts and are not setup instructions for new developers.
 
 ## Prerequisites
 
-The supported developer workstation is Linux (Ubuntu) or macOS with Docker Engine/Desktop
-and Compose v2, a running Docker daemon, Python 3.14.6, `uv`, `just`, Git, and `curl`.
-Terraform and the host PostgreSQL client tools (`pg_dump`, `pg_restore`, and `psql`) are optional:
-install them only for cloud/IaC work or manual database operations. Run `just doctor` before
-creating `.env`; it checks the core tools and reports optional tooling as warnings. Missing core
-tools must be fixed before starting the local stack.
+The supported developer workstation is Linux (Ubuntu) or macOS with Docker Engine/Desktop and
+Compose v2, a running Docker daemon, Python 3.14.6, `uv`, `just`, Git, and `curl`. These are the
+only host dependencies required for the default application workflow. Run `just doctor` before
+creating `.env`; it checks the core tools and reports optional tooling as warnings.
+
+For work spanning the sibling `api-observatory-infra` repository, use this ownership-based split:
+
+| Work | Developer-machine dependencies |
+| --- | --- |
+| Application development and local Compose | Docker Engine/Desktop + Compose v2, Python 3.14.6, `uv`, `just`, Git, `curl` |
+| Local database inspection | `psql`, `pg_dump`, `pg_restore` |
+| Terraform or AWS infrastructure review | Terraform, TFLint, AWS CLI, `jq` |
+| AWS Stage 0 host bootstrap | Full Ansible installed with `pipx`, `ansible-lint`, collections from `api-observatory-infra/ansible/requirements.yml`, and AWS Session Manager plugin |
+| Kubernetes or emulator labs | Only when used: `kubectl`, Helm, k3d, or the relevant emulator |
+
+Install Ansible as an isolated operator tool, not into this application's `uv` environment. With
+the repositories checked out beside each other, install the infra collections with:
+
+```bash
+pipx install --include-deps ansible
+pipx install ansible-lint
+ansible-galaxy collection install -r ../api-observatory-infra/ansible/requirements.yml
+```
+
+Terraform, the PostgreSQL client tools, Ansible, AWS CLI, and the Session Manager plugin are optional
+for normal application work. They become required only when the task owns the corresponding
+infrastructure or operator action. Missing core application tools must be fixed before starting the
+local stack.
 
 Never read or commit a local `.env`. Copy the public, non-secret
 [`.env.example`](../../.env.example), then generate local credentials privately.

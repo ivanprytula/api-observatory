@@ -26,17 +26,17 @@ It runs dependency audit, CodeQL, advisory Trivy scans, the authenticated k6 bas
 offline agent evaluation. These exercises are intentionally manual while their results and failure
 modes are being learned; they are not routine merge gates.
 
-## Manual Stage 0 Deployment
+## Manual Image Publication
 
-[`cd-dev.yml`](../../.github/workflows/cd-dev.yml) accepts only a selected `develop` or `main` ref.
-It verifies that the exact commit passed all four CI jobs, requires the protected `aws-dev`
-environment, authenticates with GitHub OIDC, builds and publishes `tree-<full-tree-SHA>` images,
-resolves their ECR digests, and deploys the immutable references to EC2 through Systems Manager.
-The workflow remains safely skipped unless `AWS_CD_ENABLED` is exactly `true` and all AWS variables
-are configured.
+[`publish-images.yml`](../../.github/workflows/publish-images.yml) accepts only a selected `develop`
+or `main` ref. It verifies that the exact commit passed all four CI jobs, requires the protected
+`aws-image-publish` environment, authenticates with GitHub OIDC, and publishes immutable
+`tree-<full-tree-SHA>` ECR images with their resolved digests. It does not deploy to EC2.
+Publication remains safely skipped unless `AWS_IMAGE_PUBLISH_ENABLED` is exactly `true` and all AWS
+variables are configured.
 
-Tag-based release promotion is suspended until a live Stage 0 deploy, rollback, and teardown have
-been completed and recorded. No `latest` image is published.
+Promotion is an infra-repository PR that changes the environment image lock; no `latest` image is
+published.
 
 ## Evidence Boundary and Evolution
 

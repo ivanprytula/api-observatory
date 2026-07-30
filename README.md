@@ -113,7 +113,7 @@ For daily development and test selection, use [Development Workflows](docs/05-de
 | [`api-observatory-infra`](https://github.com/ivanprytula/api-observatory-infra) | Real-cloud Terraform/state, IAM, DNS/TLS, runtime secret delivery, cloud deployment workflows, and production-oriented monitoring assets |
 
 The machine-readable AWS Stage 0 service contract is
-[`infra/deployment/aws-stage0-services.json`](infra/deployment/aws-stage0-services.json). AWS is the
+[`release/services.json`](release/services.json). AWS is the
 primary portfolio direction; no completed live deployment is claimed.
 
 ## Evidence Status

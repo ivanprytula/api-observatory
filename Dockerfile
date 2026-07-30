@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-FROM python:3.14-slim@sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061 AS builder
+FROM python:3.14-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6 AS builder
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # uv — fast dependency installer
@@ -29,7 +29,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --no-dev --frozen --no-install-project --extra ai --extra tracing --extra messaging
 
 # Stage 2: Final image — slim, no build tools, non-root user
-FROM python:3.14-slim@sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061 AS runtime
+FROM python:3.14-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6 AS runtime
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /app
 
