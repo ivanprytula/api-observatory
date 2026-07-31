@@ -19,7 +19,10 @@ develop directly on `main`.
 
 For first-time local setup, follow the [setup guide](docs/04-setup/setup-guide.md). During normal
 development, use the smallest runtime and proof listed by
-[development workflows](docs/05-development/dev-workflows.md).
+[development workflows](docs/05-development/dev-workflows.md). For the current contributor workflow,
+the [canonical onboarding and delivery checklist](docs/05-development/onboarding-and-delivery-checklist.md)
+is the single source of truth for onboarding, task flow, PR readiness, and the app-to-infra release
+handoff.
 
 ## Prepare a Commit
 
@@ -57,17 +60,8 @@ manually before merging. Manual assurance and image publication are not routine 
 
 ## Cross-Repository Delivery
 
-When an app/infra contract changes:
-
-1. Merge the application PR first and let `main` CI succeed.
-2. Manually publish immutable application images only when the protected AWS gate is enabled.
-3. Download the resulting `release-metadata-<commit-SHA>` artifact.
-4. In `api-observatory-infra`, create a separate task branch from `main`, run
-   `just promote-images <artifact-path>`, review `images.lock.json`, and open an infra PR.
-5. After the infra merge gate succeeds, deployment remains a separately approved manual action.
-
-If the change affects published runtime images, the service contract, or deployment topology, do not
-proceed without a reviewed app `main` CI success, a published image metadata artifact, and a separate
-infra PR that updates `images.lock.json`.
+The app-to-infra release handoff is documented in the canonical checklist and the deployment
+contract, so this file intentionally avoids maintaining a second copy of those steps. Keep the app
+PR and infra PR separate, but follow the canonical checklist for the current promotion flow.
 
 Never describe a workflow, image, Terraform plan, or committed lock as a completed deployment.

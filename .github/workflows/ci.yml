@@ -18,8 +18,47 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
+  changes:
+    name: "Detect relevant changes"
+    runs-on: ubuntu-latest
+    outputs:
+      app: ${{ steps.filter.outputs.app }}
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Determine changed paths
+        id: filter
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          head="${{ github.event.pull_request.head.sha || github.sha }}"
+          if [[ -n "$base" && "$base" != "0000000000000000000000000000000000000000" ]]; then
+            git fetch --no-tags --depth=2 origin "$base" "$head" >/dev/null 2>&1 || true
+            changed_files=$(git diff --name-only "$base" "$head")
+          else
+            changed_files=$(git diff-tree --no-commit-id --name-only -r "$head")
+          fi
+          echo "$changed_files"
+          if echo "$changed_files" | grep -Eq '^(services/|libs/|tests/|alembic/|scripts/|pyproject.toml|uv.lock|Dockerfile|docker-compose[^/]*\.yml|release/|\.github/workflows/(ci|publish-images|assurance)\.yml)'; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+          fi
+          if echo "$changed_files" | grep -Eq '^(docs/|README\.md|CONTRIBUTING\.md|\.github/workflows/ci\.yml|\.github/workflows/publish-images\.yml|\.github/workflows/assurance\.yml|pyproject\.toml|uv\.lock)'; then
+            echo "docs=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs=false" >> "$GITHUB_OUTPUT"
+          fi
+
   quality:
     name: "Quality"
+    needs: [changes]
+    if: needs.changes.outputs.app == 'true' || needs.changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -89,6 +128,8 @@ jobs:
 
   unit:
     name: "Unit and contract tests"
+    needs: [changes]
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -117,6 +158,8 @@ jobs:
 
   integration:
     name: "PostgreSQL integration and migrations"
+    needs: [changes]
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     services:
@@ -217,7 +260,8 @@ jobs:
   image-smoke:
     name: "Deployable image smoke"
     runs-on: ubuntu-latest
-    needs: [quality, unit, integration]
+    needs: [changes, quality, unit, integration]
+    if: needs.changes.outputs.app == 'true'
     timeout-minutes: 35
     steps:
       - name: Checkout
@@ -229,8 +273,8 @@ jobs:
   merge-gate:
     name: "Merge gate"
     runs-on: ubuntu-latest
-    if: always()
-    needs: [quality, unit, integration, image-smoke]
+    if: always() && (needs.changes.outputs.app == 'true' || needs.changes.outputs.docs == 'true')
+    needs: [changes, quality, unit, integration, image-smoke]
     steps:
       - name: Require every application CI job
         env:
@@ -241,5 +285,5 @@ jobs:
         run: |
           set -euo pipefail
           for result in "$QUALITY_RESULT" "$UNIT_RESULT" "$INTEGRATION_RESULT" "$IMAGE_SMOKE_RESULT"; do
-            [[ "$result" == "success" ]] || exit 1
+            [[ "$result" == "success" || "$result" == "skipped" ]] || exit 1
           done
