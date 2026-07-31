@@ -439,6 +439,9 @@ __all__ = [
 # Auth schemas
 # ============================================================================
 
+ROLE_PATTERN = r"^(viewer|writer|operator|tenant_admin|admin)$"
+# Authorized role names for the RBAC policy.
+
 
 class UserCreate(BaseModel):
     """Request body for user registration."""
@@ -448,13 +451,19 @@ class UserCreate(BaseModel):
     password: str = Field(..., min_length=8, max_length=128)
     role: str = Field(
         "viewer",
-        pattern="^(viewer|writer|operator|tenant_admin|admin)$",
+        pattern=ROLE_PATTERN,
         description="Ignored on public registration; an administrator assigns roles.",
     )
     tenant_id: int | None = Field(
         None,
         description="Ignored on public registration; an administrator assigns tenants.",
     )
+
+
+class RoleAssignment(BaseModel):
+    """Request body for assigning a role to a user (internal endpoint)."""
+
+    role: str = Field(..., pattern=ROLE_PATTERN)
 
 
 class UserResponse(BaseModel):
