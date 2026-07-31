@@ -1,23 +1,26 @@
 meta {
-  name: Ingest snapshot v2 — drift trigger
+  name: Ingest snapshot v2 — observation 2/3
   type: http
-  seq: 5
+  seq: 7
 }
 
 post {
   url: {{baseUrl}}/api/v1/contracts/snapshots
   body: json
-  auth: none
+  auth: bearer
 }
 
 headers {
   Content-Type: application/json
-  Authorization: Bearer {{access_token}}
+}
+
+auth:bearer {
+  token: {{access_token}}
 }
 
 body:json {
   {
-    "source_id": {{source_id}},
+    "source_id": {{drift_source_id}},
     "payload_schema": {
       "userId": "integer",
       "id": "integer",
@@ -30,11 +33,5 @@ body:json {
 
 assert {
   res.status: eq 201
-  res.body.drift_event.event_type: eq breaking
-}
-
-script:post-response {
-  if (res.body.drift_event) {
-    bru.setEnvVar("drift_event_id", res.body.drift_event.id.toString());
-  }
+  res.body.drift_event: eq null
 }

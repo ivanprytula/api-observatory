@@ -1,0 +1,39 @@
+meta {
+  name: Create drift-demo source
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/sources
+  body: json
+  auth: bearer
+}
+
+headers {
+  Content-Type: application/json
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "name": "contract-drift-demo-{{$timestamp}}",
+    "base_url": "https://httpbin.org",
+    "health_check_path": "/get",
+    "probe_interval_seconds": 60,
+    "is_active": true
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+script:post-response {
+  if (res.body.id) {
+    bru.setEnvVar("drift_source_id", res.body.id.toString());
+  }
+}
