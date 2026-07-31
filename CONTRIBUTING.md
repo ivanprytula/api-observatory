@@ -6,7 +6,7 @@ requests even when they implement one cross-repository contract change.
 
 ## Start a Task
 
-Begin from an up-to-date protected branch and create a focused branch:
+Begin from an up-to-date `main` branch and create a focused branch:
 
 ```bash
 git switch main
@@ -51,8 +51,9 @@ git push -u origin HEAD
 gh pr create --base main --fill
 ```
 
-The stable required status is `CI / Merge gate`. Resolve review conversations and merge only after
-that gate succeeds. Manual assurance and image publication are not routine merge requirements.
+The maintainer policy is to merge only after `CI / Merge gate` succeeds and review conversations are
+resolved. GitHub does not currently enforce required checks or approvals, so verify that evidence
+manually before merging. Manual assurance and image publication are not routine merge requirements.
 
 ## Cross-Repository Delivery
 
@@ -64,5 +65,9 @@ When an app/infra contract changes:
 4. In `api-observatory-infra`, create a separate task branch from `main`, run
    `just promote-images <artifact-path>`, review `images.lock.json`, and open an infra PR.
 5. After the infra merge gate succeeds, deployment remains a separately approved manual action.
+
+If the change affects published runtime images, the service contract, or deployment topology, do not
+proceed without a reviewed app `main` CI success, a published image metadata artifact, and a separate
+infra PR that updates `images.lock.json`.
 
 Never describe a workflow, image, Terraform plan, or committed lock as a completed deployment.

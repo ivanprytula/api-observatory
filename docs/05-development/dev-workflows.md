@@ -4,6 +4,23 @@ The [`Justfile`](../../Justfile) is the command catalogue. This guide owns inten
 and stable development rules so command syntax is not duplicated in Markdown. Branching, commits,
 pushes, and pull requests are owned by [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
 
+## Canonical local workflow
+
+The canonical onboarding path uses the Docker Compose HTTP stack. For most app work, follow this
+sequence:
+
+```bash
+just doctor
+cp .env.example .env
+just generate-secrets
+just dev-up
+just dev-wait-ready
+just db-migrate
+```
+
+Use `just dev` only when you need the host-process hot-reload loop and already understand the
+Compose-first runtime contract.
+
 ## Development Loop
 
 1. Run `just doctor`, then choose the smallest runtime shape: `just dev-up` for core work,
@@ -110,6 +127,7 @@ under [`.github/workflows/`](../../.github/workflows/).
 | Integration (`just test-integration`) | Testcontainers PostgreSQL when Docker is available; Redis/Redpanda only for dependency-specific tests | Main application persistence, migrations, auth, concurrency, and service contracts |
 | Ingestor service tests (`uv run pytest services/ingestor/tests -q`) | Ingestor-owned fixtures; SQLite by default, testcontainers for PostgreSQL/Redis boundaries | API, persistence, probes, scheduling, and ingestor integrations |
 | Inference service tests (`uv run pytest services/inference/tests -q`) | Inference-owned fixtures and testcontainers PostgreSQL | Embeddings, retrieval, and inference service behavior |
+| MCP service tests (`uv run pytest services/mcp/tests -q --no-cov`) | Mocked HTTP transport and in-process FastMCP registry | Authentication lifecycle, ingestor client behavior, and tool registration |
 | Contract | In-process OpenAPI/shared schemas | Backward compatibility and protected-route behavior |
 | End-to-end (`just test-e2e`) | Running local stack; tests own their fixtures | Critical user path without relying on `just db-auto-init` |
 | Smoke (`just test-smoke`) | Running local stack | Critical health and observation path |
@@ -117,8 +135,8 @@ under [`.github/workflows/`](../../.github/workflows/).
 
 Shared fixtures live in [`tests/fixtures_shared.py`](../../tests/fixtures_shared.py). Root and
 ingestor `conftest.py` files re-export them; fixture logic should not be copied between trees.
-Each service keeps its own focused suite because its dependency boundary differs; MCP tests remain
-service-owned even though MCP is local-only.
+Each service keeps its own focused suite because its dependency boundary differs. MCP remains
+local-only, but its focused suite runs in the CI unit lane.
 
 ## Durable Engineering Rules
 

@@ -28,12 +28,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up uv and Python 3.14
+      - name: Set up uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
-          python-version: "3.14"
 
       - name: Sync workspace
         run: uv sync --frozen --all-packages --all-extras
@@ -108,11 +107,12 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Sync dependencies
-        run: uv sync --frozen --extra messaging --extra etl
+        run: uv sync --frozen --all-packages --extra messaging --extra etl
 
-      - name: Run unit and OpenAPI contract tests
+      - name: Run unit, MCP, and OpenAPI contract tests
         run: |
           uv run pytest tests/unit services/ingestor/tests/unit -q -m unit
+          uv run pytest services/mcp/tests -q --no-cov
           uv run pytest services/ingestor/tests/contract -q -m contract --no-cov
 
   integration:
