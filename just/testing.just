@@ -16,7 +16,7 @@ test-e2e:
 # Manual API collection workflow. It does not reset or seed the local database.
 # Prepare a disposable demo explicitly with `just db-reset --confirm DELETE` and `just db-auto-init` when needed.
 test-api:
-    cd "{{justfile_directory()}}/bruno" && bru run auth ops sources contracts scorecards websocket -r --env local --env-var "baseUrl=${BRUNO_BASE_URL:-http://127.0.0.1:8000}"
+    cd "{{justfile_directory()}}/bruno" && bru run auth ops sources contracts scorecards websocket -r --env local-dev --env-var "baseUrl=${BRUNO_BASE_URL:-http://127.0.0.1:8000}"
 
 test-load:
     #!/usr/bin/env bash

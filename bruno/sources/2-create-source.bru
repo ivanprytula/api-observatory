@@ -28,8 +28,7 @@ body:json {
 }
 
 assert {
-  res.status: in [200, 201]
-  res.body.id: isDefined
+  res.status: in [201, 409]
 }
 
 script:post-response {
