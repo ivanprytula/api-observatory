@@ -12,6 +12,9 @@ set -euo pipefail
 #   MAX_WAIT_SECONDS How long to wait for services (default: 120)
 #   LOCAL_API_SCHEME http or https (default: http)
 #   LOCAL_TLS_VERIFY false to pass -k for local HTTPS
+#   SMOKE_JWT       Override JWT for v1 API routes. When unset, a token is
+#                   minted locally from API_OBS_JWT_SECRET (.env) so the smoke
+#                   test can authenticate against the local or deployed stack.
 #
 # Exit 0 if all checks pass, 1 otherwise.
 
@@ -23,8 +26,35 @@ source "${PROJECT_ROOT}/scripts/daily/local-url.sh"
 BASE_URL="${1:-${BASE_URL:-$(local_api_base_url)}}"
 DASHBOARD_URL="${2:-${DASHBOARD_URL:-$(local_dashboard_url)}}"
 MAX_WAIT="${3:-${MAX_WAIT_SECONDS:-120}}"
+LOCAL_API_SCHEME="${LOCAL_API_SCHEME:-http}"
+LOCAL_TLS_VERIFY="${LOCAL_TLS_VERIFY:-true}"
 PASS=0
 FAIL=0
+
+CURL_TLS_FLAG=()
+if [ "$LOCAL_TLS_VERIFY" = "false" ]; then
+  CURL_TLS_FLAG=(-k)
+fi
+
+SMOKE_JWT="${SMOKE_JWT:-}"
+if [ -z "$SMOKE_JWT" ]; then
+  if [ -f "${PROJECT_ROOT}/.env" ]; then
+    set -a
+    # shellcheck source=/dev/null
+    source "${PROJECT_ROOT}/.env"
+    set +a
+    SMOKE_JWT="$(
+      cd "$PROJECT_ROOT"
+      JWT_SECRET="${API_OBS_JWT_SECRET:-}" uv run python -c \
+        'from services.ingestor.auth import create_jwt_token
+print(create_jwt_token("smoke-test", {"roles": ["admin"]}))'
+    )" || SMOKE_JWT=""
+  fi
+fi
+AUTH_ARGS=()
+if [ -n "$SMOKE_JWT" ]; then
+  AUTH_ARGS=(-H "Authorization: Bearer ${SMOKE_JWT}")
+fi
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -41,10 +71,14 @@ check() {
   if [ "$method" = "POST" ] && [ -n "$data" ]; then
     code=$(curl_local -s -o /dev/null -w "%{http_code}" -X POST \
       -H "Content-Type: application/json" \
+      "${AUTH_ARGS[@]}" \
+      "${CURL_TLS_FLAG[@]}" \
       -d "$data" \
       --max-time 10 "$url" 2>/dev/null || echo "000")
   else
     code=$(curl_local -s -o /dev/null -w "%{http_code}" -X GET \
+      "${AUTH_ARGS[@]}" \
+      "${CURL_TLS_FLAG[@]}" \
       --max-time 10 "$url" 2>/dev/null || echo "000")
   fi
 
@@ -92,7 +126,7 @@ check "GET /api/v1/sources" "$(local_api_url /api/v1/sources)"
 check "GET /health/jobs-metrics" "$(local_api_url /health/jobs-metrics)"
 
 # Create + list observation cycle
-OBS_PAYLOAD='{"source":"smoke-test","raw_data":{"test":true,"ts":'$(date +%s)'},"tags":["smoke"]}'
+OBS_PAYLOAD='{"source":"smoke-test","data":{"test":true,"ts":'$(date +%s)'},"tags":["smoke"]}'
 check "POST /api/v1/observations" "$(local_api_url /api/v1/observations)" "POST" "$OBS_PAYLOAD" "201"
 
 # List observations (paginated)
