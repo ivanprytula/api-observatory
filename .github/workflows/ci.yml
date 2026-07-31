@@ -108,7 +108,7 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Sync dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --extra messaging
 
       - name: Run unit and OpenAPI contract tests
         run: |
@@ -158,7 +158,7 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Sync workspace
-        run: uv sync --frozen --all-packages
+        run: uv sync --frozen --all-packages --extra messaging
 
       - name: Create isolated migration and inference databases
         run: |
