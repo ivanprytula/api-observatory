@@ -1,0 +1,30 @@
+meta {
+  name: Create Source probe-ok
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/api/v1/sources
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "name": "probe-ok",
+    "base_url": "https://httpbin.org",
+    "health_check_path": "/get",
+    "probe_interval_seconds": 10,
+    "latency_threshold_ms": 2000,
+    "is_active": true
+  }
+}
+
+assert {
+  res.status: in [201, 409]
+}

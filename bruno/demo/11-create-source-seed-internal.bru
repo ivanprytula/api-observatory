@@ -1,0 +1,29 @@
+meta {
+  name: Create Source seed-internal
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/v1/sources
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "name": "seed-internal",
+    "base_url": "https://httpbin.org",
+    "health_check_path": "/get",
+    "probe_interval_seconds": 60,
+    "is_active": true
+  }
+}
+
+assert {
+  res.status: in [201, 409]
+}
