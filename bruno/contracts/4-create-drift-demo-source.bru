@@ -1,7 +1,7 @@
 meta {
-  name: Create Source
+  name: Create drift-demo source
   type: http
-  seq: 2
+  seq: 4
 }
 
 post {
@@ -20,19 +20,20 @@ auth:bearer {
 
 body:json {
   {
-    "name": "httpbin-3",
+    "name": "contract-drift-demo-{{$timestamp}}",
     "base_url": "https://httpbin.org",
     "health_check_path": "/get",
-    "probe_interval_seconds": 10
+    "probe_interval_seconds": 60,
+    "is_active": true
   }
 }
 
 assert {
-  res.status: in [201, 409]
+  res.status: eq 201
 }
 
 script:post-response {
-  if (res.status === 201) {
-    bru.setEnvVar("source_id", res.body.id.toString());
+  if (res.body.id) {
+    bru.setEnvVar("drift_source_id", res.body.id.toString());
   }
 }

@@ -1,0 +1,29 @@
+meta {
+  name: Create Source jsonplaceholder
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/sources
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "name": "jsonplaceholder",
+    "base_url": "https://jsonplaceholder.typicode.com",
+    "health_check_path": "/posts/1",
+    "probe_interval_seconds": 10,
+    "is_active": true
+  }
+}
+
+assert {
+  res.status: in [201, 409]
+}

@@ -25,7 +25,6 @@ path:
 - `daily/05-reset-test-db.sh` — manual testcontainers cleanup.
 - `refresh-sandbox-claude.sh` — local Codex/Claude sandbox documentation refresh.
 - `setup/03-bootstrap-k3d.sh` — optional Kubernetes lab bootstrap.
-- `testing/04-gateway-smoke.sh` — local ingress smoke test.
 - `testing/05-service-discovery-dns.sh` — Compose/DNS topology check.
 - `testing/06-architecture-principles-guard.sh` — broader manual architecture guard.
 - `testing/test_logging_formats.py` — logging-format demonstration.

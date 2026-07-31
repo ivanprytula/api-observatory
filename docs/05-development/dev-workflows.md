@@ -163,7 +163,9 @@ language/tool rules do not need to be repeated here.
 
 - [Local stack walkthroughs](local-stack-walkthroughs.md) provide junior, middle, and senior
   teach-back exercises for the core and extended runtime shapes.
-- API collections live under [`bruno/`](../../bruno/) and are exercised by the maintained recipe.
+- API collections live under [`bruno/`](../../bruno/) and are exercised by the maintained recipe;
+  [`bruno/demo/`](../../bruno/demo/) reproduces the `just db-auto-init` seed (register, promote,
+  example sources) and its payloads are copy-pasteable JSON.
 - Authenticated k6 smoke ownership lives in the manual
   [`assurance.yml`](../../.github/workflows/assurance.yml) workflow and its script.
 - Contract versioning is owned by [`libs/contracts`](../../libs/contracts/) and
