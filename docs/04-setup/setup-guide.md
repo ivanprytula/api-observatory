@@ -50,6 +50,14 @@ with the local demo account `admin` / `admin123`. These credentials are disposab
 fixtures created by the seed recipe; never use them outside a local demo database. The same account
 can authenticate API requests through `POST /api/v1/auth/token` when an API-specific task needs it.
 
+`db-auto-init` drives the committed Bruno collection under [`bruno/demo/`](../../bruno/demo/):
+register → login → promote `admin` to the `admin` role through the internal-auth endpoint
+(`POST /api/v1/auth/users/{username}/role`) → re-login → create the example sources. The role
+promotion needs a short-lived internal service JWT, minted by `just db-internal-token` and pasted
+into the `internal_token` environment variable when running the requests manually in the Bruno app,
+Postman, or SwaggerUI. The demo source payloads are also tracked as plain JSON under
+[`bruno/demo/payloads/`](../../bruno/demo/payloads/) for copy-paste into any API client.
+
 Treat these as two separate dashboard states:
 
 - **Empty dashboard:** confirms the UI and service wiring start correctly; no login or demo data is

@@ -11,8 +11,10 @@ images to ECR. Its release metadata binds the Git commit to the tree identity an
 digests so infrastructure can validate the exact source contract; it does not deploy them.
 
 The infrastructure repository owns the selected environment image digests, Compose profile shape,
-runtime values, migration ordering, deployment/rollback, monitoring, backup, and cloud IAM. See
-its [deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md).
+runtime values, migration ordering, deployment/rollback, monitoring, backup, and cloud IAM. It
+uses a simple promotion model of `dev`, `stage`, and `prod-like` lanes, with `aws-dev` as the only
+active concrete target today. See its [deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md)
+and [promotion model](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/promotion-model.md).
 
 Local Compose files remain application-owned so a developer can run and test the complete stack
 without cloning infrastructure code.

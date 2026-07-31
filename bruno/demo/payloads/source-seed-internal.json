@@ -1,0 +1,7 @@
+{
+  "name": "seed-internal",
+  "base_url": "https://httpbin.org",
+  "health_check_path": "/get",
+  "probe_interval_seconds": 60,
+  "is_active": true
+}

@@ -1,0 +1,7 @@
+{
+  "name": "httpbin",
+  "base_url": "https://httpbin.org",
+  "health_check_path": "/get",
+  "probe_interval_seconds": 10,
+  "is_active": true
+}

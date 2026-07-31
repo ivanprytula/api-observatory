@@ -6,6 +6,8 @@ from unittest.mock import patch
 import pytest
 from httpx import AsyncClient
 
+from libs.platform.auth import generate_internal_token
+
 
 pytestmark = pytest.mark.integration
 
@@ -18,6 +20,9 @@ _REGISTER_URL = "/api/v1/auth/register"
 _TOKEN_URL = "/api/v1/auth/token"
 _ME_URL = "/api/v1/auth/me"
 _LOGOUT_URL = "/api/v1/auth/logout"
+_ROLE_URL = "/api/v1/auth/users/{username}/role"
+
+_INTERNAL_SECRET = "test-internal-secret-for-integration-tests"
 
 _USER: dict[str, str] = {
     "username": "testuser",
@@ -159,3 +164,96 @@ async def test_logout_returns_204(session_id: str | None, client: AsyncClient) -
         assert resp.status_code == 204
 
     await fake.aclose()
+
+
+# ---------------------------------------------------------------------------
+# Role assignment (internal service-to-service)
+# ---------------------------------------------------------------------------
+
+
+async def _internal_headers() -> dict[str, str]:
+    token = generate_internal_token("test-service")
+    return {"Authorization": f"Bearer {token}"}
+
+
+async def test_assign_role_with_internal_token(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Internal JWT can promote a registered viewer to admin."""
+    monkeypatch.setenv("INTERNAL_JWT_SECRET", _INTERNAL_SECRET)
+    await client.post(_REGISTER_URL, json=_USER)
+
+    resp = await client.post(
+        _ROLE_URL.format(username=_USER["username"]),
+        json={"role": "admin"},
+        headers=await _internal_headers(),
+    )
+    assert resp.status_code == 200
+    data: dict[str, Any] = resp.json()
+    assert data["role"] == "admin"
+    assert data["username"] == _USER["username"]
+
+    # Login now returns an admin JWT claim.
+    login = await client.post(
+        _TOKEN_URL,
+        data=_form_data(_USER["username"], _USER["password"]),
+    )
+    assert login.status_code == 200
+
+
+async def test_assign_role_missing_internal_token_returns_401(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Role assignment without an internal JWT is rejected."""
+    monkeypatch.setenv("INTERNAL_JWT_SECRET", _INTERNAL_SECRET)
+    await client.post(_REGISTER_URL, json=_USER)
+
+    resp = await client.post(
+        _ROLE_URL.format(username=_USER["username"]),
+        json={"role": "admin"},
+    )
+    assert resp.status_code == 401
+
+
+async def test_assign_role_invalid_internal_token_returns_401(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A tampered internal JWT is rejected."""
+    monkeypatch.setenv("INTERNAL_JWT_SECRET", _INTERNAL_SECRET)
+    await client.post(_REGISTER_URL, json=_USER)
+
+    resp = await client.post(
+        _ROLE_URL.format(username=_USER["username"]),
+        json={"role": "admin"},
+        headers={"Authorization": "Bearer invalid.internal.token"},
+    )
+    assert resp.status_code == 401
+
+
+async def test_assign_role_unknown_user_returns_404(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Role assignment for a missing user returns 404."""
+    monkeypatch.setenv("INTERNAL_JWT_SECRET", _INTERNAL_SECRET)
+
+    resp = await client.post(
+        _ROLE_URL.format(username="ghost"),
+        json={"role": "admin"},
+        headers=await _internal_headers(),
+    )
+    assert resp.status_code == 404
+
+
+async def test_assign_role_invalid_role_returns_422(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Roles outside the RBAC allow-list are rejected by validation."""
+    monkeypatch.setenv("INTERNAL_JWT_SECRET", _INTERNAL_SECRET)
+    await client.post(_REGISTER_URL, json=_USER)
+
+    resp = await client.post(
+        _ROLE_URL.format(username=_USER["username"]),
+        json={"role": "superuser"},
+        headers=await _internal_headers(),
+    )
+    assert resp.status_code == 422

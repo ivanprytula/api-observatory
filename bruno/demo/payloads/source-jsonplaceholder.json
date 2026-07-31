@@ -1,0 +1,7 @@
+{
+  "name": "jsonplaceholder",
+  "base_url": "https://jsonplaceholder.typicode.com",
+  "health_check_path": "/posts/1",
+  "probe_interval_seconds": 10,
+  "is_active": true
+}
