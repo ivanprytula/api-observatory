@@ -4,7 +4,7 @@ description: >-
   (tree-<sha>). Requires the repo to already be checked out.
 outputs:
   tree_sha:
-    description: "7-character git tree SHA"
+    description: "Full Git tree SHA"
     value: ${{ steps.resolve.outputs.tree_sha }}
 runs:
   using: "composite"
@@ -13,5 +13,5 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        TREE_SHA=$(git rev-parse HEAD^{tree} | cut -c1-7)
+        TREE_SHA=$(git rev-parse HEAD^{tree})
         echo "tree_sha=${TREE_SHA}" >> "$GITHUB_OUTPUT"

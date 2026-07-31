@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.ingestor.main import app
 from services.ingestor.security import api_keys as _api_keys_module
+
+
+pytestmark = pytest.mark.integration
 
 
 # ---------------------------------------------------------------------------

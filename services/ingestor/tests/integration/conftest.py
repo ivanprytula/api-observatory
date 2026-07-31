@@ -1,6 +1,1 @@
-"""Integration test configuration — applies marker to all tests in this tree."""
-
-import pytest
-
-
-pytestmark = pytest.mark.integration
+"""Shared fixtures for the ingestor integration test tree."""

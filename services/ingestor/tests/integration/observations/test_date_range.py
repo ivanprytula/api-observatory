@@ -66,7 +66,7 @@ class TestDateRangeQueries:
         )
 
         assert len(results) == 2
-        assert all(r.source == "api-prod" for r in results)
+        assert all(r.source == "api-prod" for r in results), results
 
     async def test_get_observations_by_date_range_excludes_end_boundary(
         self, db: AsyncSession

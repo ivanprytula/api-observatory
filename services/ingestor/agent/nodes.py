@@ -10,32 +10,46 @@ the existing `services.ingestor.notifications` module — no new mechanisms.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from typing import Any, cast
 
 
 try:
-    from langgraph.types import interrupt
+    from langgraph.types import interrupt as langgraph_interrupt
 except ModuleNotFoundError:
-    interrupt = None  # ty:ignore[invalid-assignment]
+    langgraph_interrupt: Callable[[Any], Any] | None = None
 
+from libs.platform.llm_metrics import record_llm_usage
+from libs.platform.resilience import DependencyResilience
+from libs.platform.retry import RetryBudget
 from services.ingestor import notifications
 from services.ingestor import vector_search as vs_bridge
 from services.ingestor.agent.llm import get_chat_model
 from services.ingestor.agent.schemas import DraftAnalysis, SeverityClassification
 from services.ingestor.agent.state import AgentState
+from services.ingestor.config import settings
 from services.ingestor.constants import NOTIFICATION_SEVERITY_WARNING
 
 
 logger = logging.getLogger(__name__)
 
 _INCIDENT_COLLECTION = "incidents"
+_llm_resilience = DependencyResilience(
+    "llm",
+    max_concurrency=4,
+    max_queue=4,
+    retry_budget=RetryBudget(max_retry_tokens=10, window_seconds=60),
+)
 
 
 async def classify_severity(state: AgentState) -> dict:
     """The LLM's independent severity read — a trust-calibration signal
     against the rule-based `DriftEvent.severity` that triggered this run."""
-    model = get_chat_model(deep=False).with_structured_output(SeverityClassification)
-    result: SeverityClassification = await model.ainvoke(
-        [
+    result = await _invoke_structured_model(
+        model=get_chat_model(deep=False),
+        schema=SeverityClassification,
+        model_name=settings.anthropic_model,
+        messages=[
             {
                 "role": "system",
                 "content": (
@@ -52,13 +66,36 @@ async def classify_severity(state: AgentState) -> dict:
                     f"Event type: {state['event_type']}"
                 ),
             },
-        ]
+        ],
     )
     return {
         "llm_severity": result.severity,
         "llm_severity_reasoning": result.reasoning,
         "llm_agrees_with_rule": result.agrees_with_rule_based,
     }
+
+
+async def _invoke_structured_model[
+    StructuredResponse: (SeverityClassification, DraftAnalysis)
+](
+    *,
+    model: Any,
+    schema: type[StructuredResponse],
+    model_name: str,
+    messages: list[dict[str, str]],
+) -> StructuredResponse:
+    """Invoke a structured model while retaining raw provider metadata."""
+    structured_model = model.with_structured_output(schema, include_raw=True)
+    response = await _llm_resilience.call(structured_model.ainvoke, messages)
+    parsing_error = response["parsing_error"]
+    if parsing_error is not None:
+        raise parsing_error
+
+    record_llm_usage(model=model_name, response=response["raw"])
+    result = response["parsed"]
+    if result is None:
+        raise RuntimeError("LLM structured output was empty.")
+    return cast("StructuredResponse", result)
 
 
 async def retrieve_similar_incidents(state: AgentState) -> dict:
@@ -105,9 +142,11 @@ async def draft_analysis(state: AgentState) -> dict:
         "\n---\n".join(item.get("text", "") for item in state["retrieved_context"])
         or "No similar prior incidents found."
     )
-    model = get_chat_model(deep=True).with_structured_output(DraftAnalysis)
-    result: DraftAnalysis = await model.ainvoke(
-        [
+    result = await _invoke_structured_model(
+        model=get_chat_model(deep=True),
+        schema=DraftAnalysis,
+        model_name=settings.anthropic_model_deep,
+        messages=[
             {
                 "role": "system",
                 "content": (
@@ -125,7 +164,7 @@ async def draft_analysis(state: AgentState) -> dict:
                     f"Similar prior incidents:\n{context_text}"
                 ),
             },
-        ]
+        ],
     )
     return {
         "root_cause_hypothesis": result.root_cause_hypothesis,
@@ -138,7 +177,9 @@ async def human_review(state: AgentState) -> dict:
     """Pause for human approval — LangGraph `interrupt()`, checkpointed to
     Postgres. Resumes with `{"approve": bool, "reviewer_user_id": int | None}`
     via `POST /api/v1/agent/runs/{run_id}/resume`."""
-    decision = interrupt(
+    if langgraph_interrupt is None:
+        raise RuntimeError("LangGraph is not installed; human review is unavailable.")
+    decision = langgraph_interrupt(
         {
             "agent_run_id": state["agent_run_id"],
             "root_cause_hypothesis": state["root_cause_hypothesis"],

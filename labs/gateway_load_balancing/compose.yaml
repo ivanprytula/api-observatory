@@ -1,0 +1,40 @@
+name: api-observatory-gateway-lab
+
+services:
+  replica-a:
+    image: python:3.14.4-slim
+    environment:
+      REPLICA_ID: replica-a
+    command: ["python", "/lab/replica_server.py"]
+    volumes:
+      - ./replica_server.py:/lab/replica_server.py:ro
+    stop_grace_period: 5s
+
+  replica-b:
+    image: python:3.14.4-slim
+    environment:
+      REPLICA_ID: replica-b
+    command: ["python", "/lab/replica_server.py"]
+    volumes:
+      - ./replica_server.py:/lab/replica_server.py:ro
+    stop_grace_period: 5s
+
+  replica-c:
+    image: python:3.14.4-slim
+    environment:
+      REPLICA_ID: replica-c
+    command: ["python", "/lab/replica_server.py"]
+    volumes:
+      - ./replica_server.py:/lab/replica_server.py:ro
+    stop_grace_period: 5s
+
+  edge:
+    image: nginx:1.27-alpine
+    depends_on:
+      - replica-a
+      - replica-b
+      - replica-c
+    ports:
+      - "127.0.0.1:18080:8080"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro

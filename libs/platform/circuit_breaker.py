@@ -44,6 +44,11 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def _attach_circuit_breaker(function: Any, breaker: Any) -> None:
+    """Expose decorator state for diagnostics without widening call signatures."""
+    function._circuit_breaker = breaker
+
+
 class CircuitState(Enum):
     CLOSED = "closed"
     OPEN = "open"
@@ -83,11 +88,13 @@ class CircuitBreaker:
         recovery_timeout: float = 60.0,
         half_open_successes: int = 1,
         time_func: Callable[[], float] = time.monotonic,
+        is_failure: Callable[[BaseException], bool] | None = None,
     ) -> None:
         self._failure_threshold = int(failure_threshold)
         self._recovery_timeout = float(recovery_timeout)
         self._half_open_successes = int(half_open_successes)
         self._time_func = time_func
+        self._is_failure = is_failure or (lambda _exc: True)
 
         self._lock = asyncio.Lock()
         self._state: CircuitState = CircuitState.CLOSED
@@ -125,7 +132,7 @@ class CircuitBreaker:
     async def __aexit__(self, exc_type, exc_value, tb) -> bool | None:
         if exc_type is None:
             await self._observation_success()
-        else:
+        elif exc_value is not None and self._is_failure(exc_value):
             await self._observation_failure()
         return False
 
@@ -312,7 +319,7 @@ def circuit_breaker(
 
     def decorator(func: Callable) -> Callable:
         breaker = _CircuitBreaker(
-            name=func.__qualname__,
+            name=getattr(func, "__qualname__", "unnamed_circuit"),
             failure_threshold=failure_threshold,
             recovery_timeout=recovery_timeout,
         )
@@ -322,7 +329,7 @@ def circuit_breaker(
             return await breaker.call(func, *args, **kwargs)
 
         # Expose the breaker instance for inspection / testing
-        wrapper._circuit_breaker = breaker  # type: ignore[attr-defined]
+        _attach_circuit_breaker(wrapper, breaker)
         return wrapper
 
     return decorator

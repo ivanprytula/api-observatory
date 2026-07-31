@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-FROM python:3.14-slim@sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061 AS builder
+FROM python:3.14-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6 AS builder
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # uv — fast dependency installer
@@ -21,11 +21,15 @@ ENV UV_COMPILE_BYTECODE=1 \
 # Install deps first (better layer caching)
 # --extra ai: the LangGraph incident-triage agent (Phase 3) and /analyze's RAG
 # path are core ingestor features, not optional demos — install their deps.
+# --extra tracing: OTel SDK + OTLP exporter; without it setup_tracing() degrades
+# to a no-op and spans/trace_id correlation are silently lost (post-MVP Phase 0).
+# --extra messaging: the opt-in Redpanda notification-consumer command shares
+# this image and imports aiokafka without starting the FastAPI lifespan.
 COPY pyproject.toml uv.lock ./
-RUN uv sync --no-dev --frozen --no-install-project --extra ai
+RUN uv sync --no-dev --frozen --no-install-project --extra ai --extra tracing --extra messaging
 
 # Stage 2: Final image — slim, no build tools, non-root user
-FROM python:3.14-slim@sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061 AS runtime
+FROM python:3.14-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6 AS runtime
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /app
 
@@ -59,5 +63,5 @@ USER appuser
 # Port for FastAPI
 EXPOSE 8000
 
-# Run database migrations and start the FastAPI server
+# Migrations run as an explicit pre-rollout Compose command; this image only serves traffic.
 CMD ["uvicorn", "services.ingestor.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

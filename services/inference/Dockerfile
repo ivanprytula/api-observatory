@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-FROM python:3.14-slim@sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061 AS builder
+FROM python:3.14-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6 AS builder
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # uv — fast dependency installer
@@ -19,7 +19,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libpq-dev=17.10-0+deb13u1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install inference-specific deps (fastapi + sqlalchemy + pgvector + fastembed)
+# Install inference-specific deps, including the shared tracing helper's OTel dependencies.
 COPY services/inference/pyproject.toml .
 RUN uv sync --no-dev --no-install-project
 
@@ -32,7 +32,7 @@ RUN HF_HUB_DISABLE_XET=1 /app/.venv/bin/python -c \
     "from fastembed import TextEmbedding; TextEmbedding(model_name='BAAI/bge-small-en-v1.5')"
 
 # Stage 2: slim production image
-FROM python:3.14-slim@sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061 AS runtime
+FROM python:3.14-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6 AS runtime
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /app
 
@@ -56,6 +56,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     HF_HUB_DISABLE_XET=1
 
 COPY --chown=appuser:appgroup services/__init__.py ./services/
+COPY --chown=appuser:appgroup libs/ ./libs/
 COPY --chown=appuser:appgroup services/inference/alembic.ini ./alembic.ini
 COPY --chown=appuser:appgroup services/inference/alembic/ ./alembic/
 COPY --chown=appuser:appgroup services/inference/ ./services/inference/
@@ -67,4 +68,4 @@ EXPOSE 8001
 HEALTHCHECK --interval=5s --timeout=3s --retries=5 --start-period=10s \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')" || exit 1
 
-CMD ["sh", "-c", "alembic upgrade head && uvicorn services.inference.main:app --host 0.0.0.0 --port 8001"]
+CMD ["uvicorn", "services.inference.main:app", "--host", "0.0.0.0", "--port", "8001"]

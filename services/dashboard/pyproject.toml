@@ -3,6 +3,9 @@ name = "dashboard"
 version = "0.1.0"
 description = "Streamlit UI dashboard for API Observatory"
 requires-python = ">=3.14"
+authors = [{ name = "Ivan Prytula", email = "ivanprytula.dev@gmail.com" }]
+maintainers = [{ name = "Ivan Prytula", email = "ivanprytula.dev@gmail.com" }]
+license = "Apache-2.0"
 dependencies = [
   "streamlit>=1.45.0",
   "httpx>=0.28.1",

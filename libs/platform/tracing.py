@@ -1,11 +1,11 @@
 """OpenTelemetry distributed tracing setup.
 
-Wires the TracerProvider with an OTLP gRPC exporter (Jaeger all-in-one or
+Wires the TracerProvider with an OTLP gRPC exporter (Grafana Tempo or
 any OTLP collector) and auto-instruments FastAPI.
 
 Usage (from app/main.py lifespan):
 
-    from services.ingestor.core.tracing import setup_tracing
+    from libs.platform.tracing import setup_tracing
     setup_tracing(
         app,
         endpoint=settings.otel_exporter_otlp_endpoint,
@@ -52,8 +52,8 @@ def setup_tracing(
 
     Args:
         app: The FastAPI application instance to instrument.
-        endpoint: OTLP gRPC endpoint URL (e.g., http://jaeger:4317).
-        service_name: Name shown in the Jaeger service dropdown.
+        endpoint: OTLP gRPC endpoint URL (e.g., http://tempo:4317).
+        service_name: Name shown in the trace backend's service dropdown.
     """
     global _initialized
     if _initialized:
@@ -108,7 +108,7 @@ def get_trace_id() -> str | None:
     - The span context is invalid (e.g., no-op tracer)
 
     Used by log formatters to inject trace_id into structured log output
-    so log observations can be correlated with Jaeger traces.
+    so log lines can be correlated with traces in Grafana Tempo.
     """
     try:
         from opentelemetry import trace
@@ -117,6 +117,6 @@ def get_trace_id() -> str | None:
         ctx = span.get_span_context()
         if ctx.is_valid:
             return format(ctx.trace_id, "032x")
-    except ImportError, AttributeError, TypeError, ValueError:
+    except (ImportError, AttributeError, TypeError, ValueError):
         return None
     return None

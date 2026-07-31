@@ -1,0 +1,227 @@
+name: Manual Assurance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manual-assurance-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  python-deps:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Export locked dependencies
+        run: uv export --frozen --all-groups --no-hashes --format requirements-txt > requirements-audit.txt
+
+      - name: Run pip-audit
+        uses: pypa/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266 # v1.1.0
+        with:
+          inputs: requirements-audit.txt
+          ignore-vulns: |
+            PYSEC-2026-161
+            CVE-2026-34993
+            CVE-2026-47265
+            CVE-2026-54283
+            CVE-2026-54282
+            PYSEC-2026-179
+            PYSEC-2026-175
+            PYSEC-2026-177
+            PYSEC-2026-178
+
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
+        with:
+          languages: python
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
+        with:
+          upload: always
+          category: /language:python
+
+  image-security:
+    name: Image scan (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: ingestor
+            dockerfile: Dockerfile
+          - service: inference
+            dockerfile: services/inference/Dockerfile
+          - service: dashboard
+            dockerfile: services/dashboard/Dockerfile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build image locally
+        env:
+          IMAGE: assurance-${{ matrix.service }}:scan
+        run: docker build --file "${{ matrix.dockerfile }}" --tag "${IMAGE}" .
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: assurance-${{ matrix.service }}:scan
+          format: table
+          ignore-unfixed: true
+          scanners: vuln
+          vuln-type: os,library
+          severity: MEDIUM,HIGH,CRITICAL
+          exit-code: "0"
+
+  performance-smoke:
+    name: Authenticated performance smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17-trixie
+        env:
+          POSTGRES_DB: api_obs_ingestor_performance
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_ingestor_performance
+      CACHE_ENABLED: "false"
+      BROKER_ENABLED: "false"
+      MONGO_ENABLED: "false"
+      OTEL_ENABLED: "false"
+      SENTRY_ENABLED: "false"
+      ENVIRONMENT: testing
+      LOG_FORMAT: json
+      BASE_URL: http://127.0.0.1:8000
+      VUS: "3"
+      DURATION: 20s
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Prepare service and disposable identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv sync --frozen
+          uv run alembic upgrade head
+          k6_password="$(openssl rand -hex 16)"
+          echo "::add-mask::${k6_password}"
+          echo "K6_USERNAME=k6ci${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
+          echo "K6_PASSWORD=${k6_password}" >> "$GITHUB_ENV"
+          mkdir -p "${RUNNER_TEMP}/performance-smoke"
+          nohup uv run uvicorn services.ingestor.main:app --host 127.0.0.1 --port 8000 \
+            > "${RUNNER_TEMP}/performance-smoke/ingestor.log" 2>&1 &
+          echo "$!" > "${RUNNER_TEMP}/performance-smoke/ingestor.pid"
+
+      - name: Wait for ingestor health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for _ in {1..30}; do
+            if curl --fail --silent --show-error "${BASE_URL}/health" >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          tail -n 200 "${RUNNER_TEMP}/performance-smoke/ingestor.log" || true
+          exit 1
+
+      - name: Run k6 smoke
+        run: |
+          docker run --rm --network host \
+            --volume "${GITHUB_WORKSPACE}:/work:ro" \
+            --volume "${RUNNER_TEMP}/performance-smoke:/artifacts" \
+            --env BASE_URL --env K6_USERNAME --env K6_PASSWORD --env VUS --env DURATION \
+            grafana/k6:2.0.0 run \
+            --summary-export=/artifacts/k6-summary.json \
+            /work/scripts/load/k6-ci-smoke.js
+
+      - name: Stop ingestor
+        if: always()
+        shell: bash
+        run: |
+          pid_file="${RUNNER_TEMP}/performance-smoke/ingestor.pid"
+          if [[ -f "${pid_file}" ]]; then
+            kill "$(cat "${pid_file}")" || true
+          fi
+
+      - name: Upload performance evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: performance-smoke-${{ github.run_id }}
+          path: ${{ runner.temp }}/performance-smoke
+          if-no-files-found: warn
+          retention-days: 14
+
+  agent-eval:
+    name: Offline agent evaluation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Run deterministic evaluation
+        run: |
+          uv sync --frozen
+          uv run python scripts/eval/run-agent-eval.py \
+            --output "${RUNNER_TEMP}/agent-eval/agent-eval-report.json"
+
+      - name: Upload evaluation evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: agent-eval-report
+          path: ${{ runner.temp }}/agent-eval/agent-eval-report.json
+          if-no-files-found: warn
+          retention-days: 14

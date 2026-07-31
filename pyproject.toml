@@ -6,11 +6,11 @@ authors = [{ name = "Ivan Prytula", email = "ivanprytula.dev@gmail.com" }]
 maintainers = [{ name = "Ivan Prytula", email = "ivanprytula.dev@gmail.com" }]
 dependencies = [
   "fastapi>=0.139.0",
-  "uvicorn[standard]>=0.45.0",
+  "uvicorn[standard]>=0.51.0",
   "slowapi>=0.1.10",
   "sqlalchemy[asyncio]>=2.0.50",
   "asyncpg>=0.30.0",
-  "psycopg[binary]>=3.2",
+  "psycopg[binary]>=3.3.4",
   "pydantic[email]>=2.13.3",
   "pydantic-settings>=2.14.2",
   "python-json-logger>=4.1.0",
@@ -25,7 +25,7 @@ dependencies = [
   "websockets>=14.0",
   "python-multipart>=0.0.27",
 ]
-description = "API health observatory — async FastAPI service for monitoring API reliability, drift detection, and scorecard reporting"
+description = "API observability platform — multi-service system for monitoring API reliability, drift detection, semantic search, and scorecard reporting"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICEN[CS]E.*"]
@@ -100,6 +100,7 @@ dev = [
   "fakeredis>=2.36.2",                      # in-memory redis for tests
   # Pre-commit hooks & linting
   "pre-commit>=4.5.1",
+  "bandit[toml]>=1.9.4",
   "ruff>=0.15.20",
   # Load testing
   "locust>=2.44.4",
@@ -111,6 +112,7 @@ dev = [
   "pip-audit>=2.10.1",
   "azure-storage-blob>=12.20.0",              # E2E tests against floci-az Blob/Queue
   "azure-storage-queue>=12.10.0",
+  "schemathesis>=4.0,<5",
 ]
 
 [tool.pytest.ini_options]
@@ -125,6 +127,7 @@ filterwarnings = [
 markers = [
   "unit: Fast, isolated unit tests (no I/O, no DB)",
   "integration: Tests that touch DB/ASGI client",
+  "contract: In-process OpenAPI contract tests (no external services)",
   "e2e: End-to-end or long-running tests (skipped by default)",
   "azure: floci-az Azure emulator dependent tests",
   "browser: Browser-based tests using Playwright (may require system dependencies)",
@@ -156,13 +159,15 @@ directory = "htmlcov"
 
 [tool.ruff]
 line-length = 88
-target-version = "py314"
+# Keep formatter output compatible with the CI boundary parser. Ruff's py314
+# formatter emits the unparenthesized multi-exception syntax from PEP 758.
+target-version = "py313"
 extend-exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = [
-  "SIM117",
+  # "SIM117",
   "B008",
 ] # Allow nested with statements and Depends() in defaults (FastAPI pattern)
 
@@ -174,15 +179,14 @@ max-doc-length = 100
 max-line-length = 100
 
 [[tool.ty.overrides]]
-include = ["services/ingestor", "tests"]
-
-[tool.ty.rules]
-unresolved-attribute = "ignore"
+include = ["tests", "services/*/tests", "labs"]
 
 [tool.ty.overrides.rules]
-unresolved-attribute = "ignore"
+# Tests and learning labs intentionally use dynamic fixtures, optional extras, and mocks.
+# Keep application type checks actionable instead of maintaining local stub trees.
 invalid-argument-type = "ignore"
-# invalid-assignment = "ignore"
+invalid-assignment = "ignore"
+unresolved-attribute = "ignore"
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv", "venv"]

@@ -13,6 +13,8 @@ from __future__ import annotations
 from libs.contracts.schemas_dashboard import (
     CompatibilityReportResponse,
     ContractSnapshotResponse,
+    DependencyIncidentListResponse,
+    DependencyIncidentResponse,
     DriftEventListResponse,
     DriftEventResponse,
     DriftTypeChange,
@@ -29,6 +31,8 @@ from libs.contracts.schemas_dashboard import (
 __all__ = [
     "CompatibilityReportResponse",
     "ContractSnapshotResponse",
+    "DependencyIncidentListResponse",
+    "DependencyIncidentResponse",
     "DriftEventResponse",
     "DriftEventListResponse",
     "DriftTypeChange",

@@ -16,7 +16,6 @@ paths = [
   ".local-dev/",
   "docs/",
   ".github/prompts/",
-  ".github/hooks/secrets-scanner/",
   ".secrets.baseline",
   "scripts/testing/",
   "setup/",

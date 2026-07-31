@@ -101,6 +101,7 @@ def exponential_backoff(
     max_delay: float = 60.0,
     jitter: bool = True,
     retry_budget: RetryBudget | None = None,
+    retry_if: Callable[[BaseException], bool] | None = None,
 ) -> Callable[[F], F]:
     """Decorator for exponential backoff with optional jitter on async functions.
 
@@ -122,6 +123,8 @@ def exponential_backoff(
     """
 
     def decorator(func: F) -> F:
+        function_name = getattr(func, "__name__", "unnamed_operation")
+
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             last_exception = None
@@ -134,20 +137,20 @@ def exponential_backoff(
                 except Exception as e:
                     last_exception = e
 
-                    if attempt < max_retries:
+                    if attempt < max_retries and (retry_if is None or retry_if(e)):
                         if retry_budget is not None:
                             budget_allowed = await retry_budget.consume_retry()
                             if not budget_allowed:
                                 logger.error(
                                     "retry_budget_exhausted",
                                     extra={
-                                        "function": func.__name__,
+                                        "function": function_name,
                                         "attempt": attempt + 1,
                                         "max_retries": max_retries + 1,
                                     },
                                 )
                                 raise RetryBudgetExceededError(
-                                    f"Retry budget exhausted for {func.__name__}"
+                                    f"Retry budget exhausted for {function_name}"
                                 ) from e
 
                         delay = min(base_delay * (2**attempt), max_delay)
@@ -158,7 +161,7 @@ def exponential_backoff(
                         logger.warning(
                             "retry_attempt",
                             extra={
-                                "function": func.__name__,
+                                "function": function_name,
                                 "attempt": attempt + 1,
                                 "max_retries": max_retries + 1,
                                 "delay_seconds": delay,
@@ -170,11 +173,12 @@ def exponential_backoff(
                         logger.error(
                             "retry_exhausted",
                             extra={
-                                "function": func.__name__,
-                                "total_attempts": max_retries + 1,
+                                "function": function_name,
+                                "total_attempts": attempt + 1,
                                 "error": str(last_exception),
                             },
                         )
+                        raise
 
             assert last_exception is not None
             raise last_exception

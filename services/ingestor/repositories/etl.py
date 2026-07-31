@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from services.ingestor.api_schemas.etl import (
     ETLPreviewRequest,
     ETLPreviewResponse,
@@ -11,10 +13,10 @@ from services.ingestor.api_schemas.etl import (
 
 def preview_etl_transform(payload: ETLPreviewRequest) -> ETLPreviewResponse:
     """Run a bounded ETL preview for a small observation batch."""
-    from services.ingestor.transformations.tabular import TabularETLEngine
+    from services.ingestor.transformations.tabular import ETLBackend, TabularETLEngine
 
     result = TabularETLEngine.preview(
-        backend=payload.backend,  # ty: ignore[arg-type]
+        backend=cast("ETLBackend", payload.backend),
         observations=payload.observations,
         rename_columns=payload.rename_columns,
         select_columns=payload.select_columns,

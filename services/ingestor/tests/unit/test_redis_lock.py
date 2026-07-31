@@ -56,10 +56,9 @@ async def test_lock_key_uses_prefix() -> None:
 
 
 async def test_different_locks_are_independent() -> None:
-    async with redis_lock("lock_a") as a:
-        async with redis_lock("lock_b") as b:
-            assert a is True
-            assert b is True
+    async with redis_lock("lock_a") as a, redis_lock("lock_b") as b:
+        assert a is True
+        assert b is True
 
 
 async def test_yields_true_when_no_client(monkeypatch: pytest.MonkeyPatch) -> None:

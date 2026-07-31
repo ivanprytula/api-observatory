@@ -59,7 +59,7 @@ async def validate_source_base_url(base_url: str, *, allow_http: bool = False) -
     except socket.gaierror:
         raise ValueError("base_url hostname could not be resolved.") from None
 
-    resolved_ips = {info[4][0] for info in infos if info[4]}
+    resolved_ips = {str(info[4][0]) for info in infos if info[4]}
 
     if not resolved_ips:
         raise ValueError("base_url hostname could not be resolved.")
@@ -70,7 +70,7 @@ async def validate_source_base_url(base_url: str, *, allow_http: bool = False) -
 
 
 async def create_source_profile(
-    db: AsyncSession, payload: SourceProfileCreate
+    db: AsyncSession, payload: SourceProfileCreate, *, tenant_id: int | None = None
 ) -> SourceProfile:
     """Insert a new source profile row and return it fully hydrated.
 
@@ -90,6 +90,10 @@ async def create_source_profile(
         health_check_path=payload.health_check_path,
         probe_interval_seconds=payload.probe_interval_seconds,
         is_active=payload.is_active,
+        tenant_id=tenant_id,
+        latency_threshold_ms=payload.latency_threshold_ms,
+        incident_failure_threshold=payload.incident_failure_threshold,
+        incident_cooldown_seconds=payload.incident_cooldown_seconds,
     )
     db.add(profile)
     await db.commit()
@@ -234,7 +238,7 @@ async def probe_source_health(
     target_url = (
         f"{profile.base_url.rstrip('/')}/{profile.health_check_path.lstrip('/')}"
     )
-    threshold = SOURCE_HEALTH_UNHEALTHY_THRESHOLD_MS
+    threshold = profile.latency_threshold_ms or SOURCE_HEALTH_UNHEALTHY_THRESHOLD_MS
     start = time.perf_counter()
 
     try:

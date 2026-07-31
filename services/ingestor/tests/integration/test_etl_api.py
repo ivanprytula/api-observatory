@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import pytest
 from httpx import AsyncClient
+
+
+pytestmark = pytest.mark.integration
 
 
 _OBSERVATIONS = [
@@ -51,7 +55,9 @@ class TestETLPreviewApi:
         body = response.json()
         assert body["backend_used"] == "pandas"
         assert body["row_count"] == 2
-        assert all(item["provider"] == "alpha" for item in body["observations"])
+        assert all(item["provider"] == "alpha" for item in body["observations"]), body[
+            "observations"
+        ]
 
     async def test_preview_transform_with_dask_returns_501(
         self, client: AsyncClient

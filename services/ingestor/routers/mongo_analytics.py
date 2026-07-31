@@ -8,14 +8,34 @@ Exposes the two aggregation pipelines from ``storage.mongo``:
 
 from __future__ import annotations
 
-from typing import Any
+import importlib
+from typing import Any, Protocol, cast
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query, status
 
-from services.ingestor.storage.mongo import (
-    ingestion_volume_by_hour,
-    source_volume_with_recent_docs,
-)
+
+class MongoAnalyticsStorage(Protocol):
+    """Optional Mongo aggregation adapter used by these legacy endpoints."""
+
+    async def ingestion_volume_by_hour(
+        self, *, source: str | None, limit_hours: int
+    ) -> list[dict[str, Any]]: ...
+
+    async def source_volume_with_recent_docs(
+        self, *, top_n_sources: int, docs_per_source: int
+    ) -> list[dict[str, Any]]: ...
+
+
+def _mongo_storage() -> MongoAnalyticsStorage:
+    """Load the optional adapter only for a request that needs it."""
+    try:
+        module = importlib.import_module("services.ingestor.storage.mongo")
+    except ModuleNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Mongo analytics are not available in this environment.",
+        ) from exc
+    return cast(MongoAnalyticsStorage, module)
 
 
 router = APIRouter(prefix="/api/v1/mongo", tags=["mongo-analytics"])
@@ -55,7 +75,9 @@ async def get_ingestion_volume(
     Returns:
         List of ``{"hour": "2024-01-15T10:00:00", "count": 42}`` dicts.
     """
-    return await ingestion_volume_by_hour(source=source, limit_hours=hours)
+    return await _mongo_storage().ingestion_volume_by_hour(
+        source=source, limit_hours=hours
+    )
 
 
 @router.get(
@@ -89,4 +111,6 @@ async def get_source_volume(
     Returns:
         List of ``{"source": "hn", "count": 412, "recent_docs": [...]}`` dicts.
     """
-    return await source_volume_with_recent_docs(top_n_sources=top, docs_per_source=docs)
+    return await _mongo_storage().source_volume_with_recent_docs(
+        top_n_sources=top, docs_per_source=docs
+    )

@@ -72,7 +72,7 @@ async def connect_pubsub(cache_url: str) -> None:
     """
     global _pubsub_client
     _pubsub_client = Redis.from_url(cache_url, decode_responses=True)
-    await _pubsub_client.ping()  # ty: ignore[invalid-await]
+    await _pubsub_client.ping()
     logger.info("pubsub_connected", extra={"url": cache_url})
 
 

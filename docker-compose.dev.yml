@@ -3,17 +3,18 @@
 # bind mounts (ignores __pycache__/, .venv/, etc.). uvicorn --reload / Streamlit
 # poll watcher restart the process on file change automatically.
 # Dependency file changes (pyproject.toml, uv.lock) trigger a full image rebuild.
-# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --watch
+# Advanced core watcher:
+# docker compose -f docker-compose.yml -f docker-compose.dev.yml up --watch --build ingestor-db ingestor dashboard
 
 services:
-  db:
+  ingestor-db:
     volumes:
       # Named volume so `docker compose down` (without `-v`) preserves Postgres
       # data across restarts — lets local data accumulate for indexing/
       # perf-tuning practice instead of resetting to empty on every `up`.
       # Dev-only: the base docker-compose.yml stays cloud-deploy-ready, where
       # a managed Postgres (Azure Flexible Server / RDS) owns persistence.
-      - postgres_data:/var/lib/postgresql/data
+      - ingestor_postgres_data:/var/lib/postgresql/data
     deploy:
       resources:
         reservations:
@@ -22,10 +23,20 @@ services:
         limits:
           cpus: '2.0'          # Generous for debugging
           memory: '2G'         # No memory pressure
+    healthcheck:
+      interval: 30s
+
+  cache:
+    healthcheck:
+      interval: 30s
+
+  broker:
+    healthcheck:
+      interval: 30s
 
   inference-db:
     volumes:
-      # Same rationale as db's postgres_data above — dev-only persistence.
+      # Same rationale as ingestor-db's ingestor_postgres_data above — dev-only persistence.
       - inference_postgres_data:/var/lib/postgresql/data
     deploy:
       resources:
@@ -35,11 +46,17 @@ services:
         limits:
           cpus: '1.0'          # Generous for debugging
           memory: '512M'
+    healthcheck:
+      interval: 30s
 
   ingestor:
     command: >
       sh -c "alembic upgrade head && uvicorn services.ingestor.main:app
       --host 0.0.0.0 --port 8000 --reload"
+    environment:
+      LOG_LEVEL: WARNING
+    healthcheck:
+      interval: 30s
     develop:
       watch:
         - action: sync
@@ -88,6 +105,16 @@ services:
         - action: rebuild
           path: services/dashboard/pyproject.toml
 
+  inference:
+    healthcheck:
+      interval: 30s
+
+  edge:
+    healthcheck:
+      interval: 30s
+
 volumes:
-  postgres_data:
+  ingestor_postgres_data:
+    name: api-obs-ingestor-postgres-data
   inference_postgres_data:
+    name: api-obs-inference-postgres-data

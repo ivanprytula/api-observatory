@@ -5,7 +5,7 @@ from __future__ import annotations
 import queue
 import threading
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any
+from typing import Any, Literal
 
 import streamlit as st
 from services.dashboard.core.auth import AuthManager
@@ -80,7 +80,9 @@ class StreamlitUIAdapter:
         st.metric(label, value, delta)
 
     def render_dataframe(
-        self, rows: Sequence[Mapping[str, Any]], width: int | str = "stretch"
+        self,
+        rows: Sequence[Mapping[str, Any]],
+        width: int | Literal["stretch", "content"] = "stretch",
     ) -> None:
         st.dataframe(list(rows), width=width)
 
@@ -99,11 +101,11 @@ class StreamlitUIAdapter:
         pass
 
     @property
-    def ws_messages(self) -> list[dict]:
+    def ws_messages(self) -> list[dict[str, Any]]:
         return self._session.get("ws_messages", [])
 
     @ws_messages.setter
-    def ws_messages(self, value: list[dict]) -> None:
+    def ws_messages(self, value: list[dict[str, Any]]) -> None:
         self._session.ws_messages = value
 
     @property
@@ -119,7 +121,7 @@ class StreamlitUIAdapter:
         return _ensure_ws_runtime()["stop"]
 
     @property
-    def ws_buffer(self) -> queue.Queue:
+    def ws_buffer(self) -> queue.Queue[dict[str, Any]]:
         return _ensure_ws_runtime()["buf"]
 
     @property
@@ -130,11 +132,11 @@ class StreamlitUIAdapter:
         _ensure_ws_runtime()["thread"] = thread
 
     @property
-    def probe_results(self) -> dict:
+    def probe_results(self) -> dict[int, dict[str, Any]]:
         return self._session.get("probe_results", {})
 
     @probe_results.setter
-    def probe_results(self, value: dict) -> None:
+    def probe_results(self, value: dict[int, dict[str, Any]]) -> None:
         self._session.probe_results = value
 
     @property

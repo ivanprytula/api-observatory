@@ -97,7 +97,7 @@ class JobScheduler:
     def job(
         self,
         name: str,
-        trigger: CronTrigger | IntervalTrigger,
+        trigger: CronTrigger | IntervalTrigger | None,
         max_retries: int = 3,
         timeout_seconds: int | None = None,
         tags: set[str] | None = None,

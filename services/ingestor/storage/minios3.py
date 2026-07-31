@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from importlib import import_module
 from io import BytesIO
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 
 try:
@@ -27,6 +27,22 @@ except ModuleNotFoundError:
 
         def __init__(self, *_args: object, **_kwargs: object) -> None:
             pass
+
+
+class _ObjectResponse(Protocol):
+    def read(self) -> bytes: ...
+
+
+class _MinioClient(Protocol):
+    def put_object(
+        self, bucket: str, object_name: str, data: BytesIO, length: int
+    ) -> Any: ...
+
+    def get_object(self, bucket: str, object_name: str) -> _ObjectResponse: ...
+
+    def bucket_exists(self, bucket: str) -> bool: ...
+
+    def make_bucket(self, bucket: str) -> Any: ...
 
 
 if TYPE_CHECKING:
@@ -51,7 +67,10 @@ class MinIOClient:
             access_key: MinIO access key.
             secret_key: MinIO secret key.
         """
-        self.client = Minio(endpoint, access_key=access_key, secret_key=secret_key)
+        self.client = cast(
+            "_MinioClient",
+            Minio(endpoint, access_key=access_key, secret_key=secret_key),
+        )
         self.endpoint = endpoint
 
     async def backup_raw_payload(

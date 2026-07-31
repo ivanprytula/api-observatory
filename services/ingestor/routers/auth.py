@@ -29,9 +29,9 @@ from services.ingestor.auth import (
     verify_refresh_token,
 )
 from services.ingestor.config import settings
-from services.ingestor.constants import API_V1_PREFIX, AUTH_LOGIN_RATE_LIMIT
+from services.ingestor.constants import API_V1_PREFIX
 from services.ingestor.database import get_db
-from services.ingestor.rate_limiting import limiter
+from services.ingestor.rate_limiting_token_bucket import enforce_public_v1_token_bucket
 from services.ingestor.repositories.observations import (
     create_user,
     get_user_by_username,
@@ -40,7 +40,11 @@ from services.ingestor.repositories.observations import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix=f"{API_V1_PREFIX}/auth", tags=["auth"])
+router = APIRouter(
+    prefix=f"{API_V1_PREFIX}/auth",
+    tags=["auth"],
+    dependencies=[Depends(enforce_public_v1_token_bucket)],
+)
 
 type DbDep = Annotated[AsyncSession, Depends(get_db)]
 type JwtDep = Annotated[dict[str, Any], Depends(verify_jwt_token)]
@@ -69,8 +73,8 @@ async def register(body: UserCreate, db: DbDep) -> UserResponse:
             username=body.username,
             email=body.email,
             password_hash=password_hash,
-            role=body.role,
-            tenant_id=body.tenant_id,
+            role="viewer",
+            tenant_id=None,
         )
     except IntegrityError:
         raise HTTPException(
@@ -82,7 +86,6 @@ async def register(body: UserCreate, db: DbDep) -> UserResponse:
 
 
 @router.post("/token", response_model=TokenResponse)
-@limiter.limit(AUTH_LOGIN_RATE_LIMIT)
 async def login(
     request: Request,
     form: Annotated[OAuth2PasswordRequestForm, Depends()],
@@ -94,7 +97,7 @@ async def login(
     Also creates a Cache-backed session and sets a session cookie.
 
     Args:
-        request: Raw FastAPI request (required by slowapi).
+        request: Raw FastAPI request used to set a secure session cookie.
         form: OAuth2 form with username + password fields.
         db: Injected async database session.
 
@@ -204,9 +207,7 @@ async def logout(
 
 
 @router.post("/refresh", response_model=TokenResponse)
-@limiter.limit(AUTH_LOGIN_RATE_LIMIT)
 async def refresh(
-    request: Request,
     body: RefreshRequest,
     db: DbDep,
 ) -> TokenResponse:
@@ -216,7 +217,6 @@ async def refresh(
     immediately and a new one is issued, preventing replay attacks.
 
     Args:
-        request: Raw FastAPI request (required by slowapi).
         body: JSON body with refresh_token field.
         db: Injected async database session.
 

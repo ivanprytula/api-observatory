@@ -1,0 +1,88 @@
+name: Publish immutable images
+
+on:
+  workflow_dispatch:
+
+permissions:
+  checks: read
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    if: >-
+      vars.AWS_IMAGE_PUBLISH_ENABLED == 'true' &&
+      vars.AWS_ECR_REGISTRY != '' && vars.AWS_ECR_PUBLISH_ROLE_ARN != '' &&
+      vars.AWS_REGION != '' &&
+      github.ref == 'refs/heads/main'
+    environment: aws-image-publish
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Verify the selected commit passed application CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          checks=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?per_page=100")
+          result=$(jq -r '[.check_runs[] | select(.name == "Merge gate")][0].conclusion // "missing"' <<< "$checks")
+          [[ "$result" == success ]] || { echo "CI check 'Merge gate' is $result." >&2; exit 1; }
+
+      - id: tree
+        uses: ./.github/actions/resolve-tree-sha
+
+      - uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
+        with:
+          role-to-assume: ${{ vars.AWS_ECR_PUBLISH_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: api-observatory-image-publish
+
+      - uses: aws-actions/amazon-ecr-login@1629cc33a9521f764a4704d4d0387513918873b9 # v2.1.4
+
+      - id: release
+        name: Build images and release metadata
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          REGISTRY: ${{ vars.AWS_ECR_REGISTRY }}
+          TREE_SHA: ${{ steps.tree.outputs.tree_sha }}
+        run: |
+          set -euo pipefail
+          metadata_path="${RUNNER_TEMP}/release-metadata.json"
+          jq -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg commit_sha "$COMMIT_SHA" \
+            --arg tree_sha "$TREE_SHA" \
+            '{schema_version: 1, source_repository: $repository, source_commit_sha: $commit_sha, source_tree_sha: $tree_sha, images: {}}' \
+            > "$metadata_path"
+          while IFS= read -r service; do
+            name=$(jq -r .name <<< "$service")
+            dockerfile=$(jq -r .dockerfile <<< "$service")
+            context=$(jq -r .build_context <<< "$service")
+            repository="api-observatory/${name}"
+            image="${REGISTRY}/${repository}:tree-${TREE_SHA}"
+            docker build --file "$dockerfile" --tag "$image" "$context"
+            docker push "$image"
+            digest=$(aws ecr describe-images --repository-name "$repository" --image-ids imageTag="tree-${TREE_SHA}" --query 'imageDetails[0].imageDigest' --output text)
+            [[ "$digest" != None && -n "$digest" ]] || exit 1
+            jq \
+              --arg name "$name" \
+              --arg repository "$repository" \
+              --arg digest "$digest" \
+              '.images[$name] = {repository: $repository, digest: $digest}' \
+              "$metadata_path" > "${metadata_path}.tmp"
+            mv "${metadata_path}.tmp" "$metadata_path"
+            echo "${name}=${REGISTRY}/${repository}@${digest}" >> "$GITHUB_STEP_SUMMARY"
+          done < <(jq -c '.services[]' release/services.json)
+          jq -e '.images | length == 3' "$metadata_path" >/dev/null
+          echo "tree_sha=${TREE_SHA}" >> "$GITHUB_STEP_SUMMARY"
+          echo "metadata_path=${metadata_path}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload release metadata
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-metadata-${{ github.sha }}
+          path: ${{ steps.release.outputs.metadata_path }}
+          if-no-files-found: error
+          retention-days: 30

@@ -2,7 +2,7 @@
 
 Mirrors `services.ingestor.database`'s pattern (own Base, own engine) —
 deliberately not shared: `inference` runs on its own dedicated Postgres
-instance (`inference-db`, see ADR 015), not the ingestor's `db`.
+instance (`inference-db`, see ADR 015), not the ingestor's `ingestor-db`.
 """
 
 from collections.abc import AsyncGenerator

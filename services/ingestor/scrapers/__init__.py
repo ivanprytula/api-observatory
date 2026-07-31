@@ -126,10 +126,10 @@ class ScraperFactory:
     requires registering it here, not changing router or storage code.
     """
 
-    _registry: dict[str, type] = {}
+    _registry: dict[str, type[Scraper]] = {}
 
     @classmethod
-    def register(cls, name: str, klass: type) -> None:
+    def register(cls, name: str, klass: type[Scraper]) -> None:
         """Register a scraper class under a source name."""
         cls._registry[name] = klass
 
@@ -169,20 +169,20 @@ def _register_scrapers() -> None:
     try:
         from services.ingestor.scrapers.html_scraper import HtmlScraper
     except ModuleNotFoundError:
-        HtmlScraper = None
+        pass
+    else:
+        ScraperFactory.register("hn", HtmlScraper)
 
     try:
         from services.ingestor.scrapers.browser_scraper import BrowserScraper
     except ModuleNotFoundError:
-        BrowserScraper = None
+        pass
+    else:
+        ScraperFactory.register("playwright", BrowserScraper)
 
     from services.ingestor.scrapers.http_scraper import HttpScraper
 
     ScraperFactory.register("jsonplaceholder", HttpScraper)
-    if HtmlScraper is not None:
-        ScraperFactory.register("hn", HtmlScraper)
-    if BrowserScraper is not None:
-        ScraperFactory.register("playwright", BrowserScraper)
 
 
 _register_scrapers()

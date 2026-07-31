@@ -4,11 +4,12 @@ as. Idempotent — safe to re-run; treats a 409 (username/email already taken)
 as success.
 
 Usage:
-    MCP_SERVICE_PASSWORD='<strong-password>' \
+    (
+        set -a
+        source services/mcp/.env
+        set +a
         uv run python scripts/register_mcp_service_user.py
-
-    # Or pass the password explicitly (avoid this in shared shell history):
-    uv run python scripts/register_mcp_service_user.py --password '<strong-password>'
+    )
 
 Requires the ingestor to be running and reachable at $INGESTOR_URL
 (default http://localhost:8000).

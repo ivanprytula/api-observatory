@@ -49,7 +49,7 @@ docs {
   "list agent runs" endpoint yet (Phase 4/5) — find the new run's ID via:
 
   ```bash
-  docker compose exec -T db psql -U postgres -d api_observatory -c \
+  docker compose exec -T ingestor-db psql -U postgres -d api_obs_ingestor -c \
     "SELECT id, status FROM agent_runs ORDER BY id DESC LIMIT 1;"
   ```
 

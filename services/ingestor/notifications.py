@@ -3,33 +3,43 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import httpx
 
+from libs.contracts.events import NotificationDeliveryRequestedV1
+from libs.platform.resilience import DependencyResilience
 from services.ingestor.config import settings
 from services.ingestor.constants import (
     NOTIFICATION_SEVERITY_INFO,
     NOTIFICATION_SEVERITY_WARNING,
 )
+from services.ingestor.models import NotificationDelivery
 
 
 logger = logging.getLogger(__name__)
 
 NotificationChannel = Literal["slack", "telegram", "webhook", "email"]
 
+_notification_resilience = DependencyResilience(
+    "notifications",
+    max_concurrency=10,
+    max_queue=10,
+)
+
 
 def _parse_channels(raw: str) -> list[NotificationChannel]:
     values = [v.strip().lower() for v in raw.split(",") if v.strip()]
-    valid: set[str] = {"slack", "telegram", "webhook", "email"}
+    valid = {"slack", "telegram", "webhook", "email"}
     channels: list[NotificationChannel] = []
     for value in values:
         if value in valid:
-            channels.append(value)  # type: ignore[arg-type]
+            channels.append(cast("NotificationChannel", value))
     return channels
 
 
-def _default_channels() -> list[NotificationChannel]:
+def configured_notification_channels() -> list[NotificationChannel]:
+    """Return the validated channel names selected by configuration."""
     return _parse_channels(settings.notification_default_channels)
 
 
@@ -61,7 +71,7 @@ async def dispatch_notification_event(
             "detail": "notifications disabled",
         }
 
-    selected = channels or _default_channels()
+    selected = channels or configured_notification_channels()
     results: list[dict[str, str]] = []
 
     for channel in selected:
@@ -104,6 +114,26 @@ async def dispatch_notification_event(
     }
 
 
+async def deliver_notification_channel(
+    delivery: NotificationDelivery,
+    request: NotificationDeliveryRequestedV1,
+) -> str:
+    """Deliver one durable channel attempt through the existing provider adapters."""
+    return await _dispatch_to_channel(
+        channel=cast("NotificationChannel", delivery.channel),
+        event=f"dependency_incident.{request.payload.trigger_type}",
+        message=request.payload.summary,
+        severity=request.payload.severity,
+        context={
+            "incident_id": request.payload.incident_id,
+            "source_id": request.payload.source_id,
+            "tenant_id": request.payload.tenant_id,
+            "occurrence_count": request.payload.occurrence_count,
+            "guidance": request.payload.guidance,
+        },
+    )
+
+
 async def notify_background_task_failed(
     *,
     task_id: str,
@@ -127,6 +157,24 @@ async def notify_background_task_failed(
 
 
 async def _dispatch_to_channel(
+    *,
+    channel: NotificationChannel,
+    event: str,
+    message: str,
+    severity: str,
+    context: dict[str, Any],
+) -> str:
+    return await _notification_resilience.call(
+        _dispatch_to_channel_unprotected,
+        channel=channel,
+        event=event,
+        message=message,
+        severity=severity,
+        context=context,
+    )
+
+
+async def _dispatch_to_channel_unprotected(
     *,
     channel: NotificationChannel,
     event: str,

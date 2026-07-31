@@ -54,6 +54,28 @@ observations_upsert_conflicts_total = Counter(
     documentation="Number of upsert requests that hit an existing observation (conflict resolved).",
     labelnames=["mode"],
 )
+
+retention_runs_total = Counter(
+    name="pipeline_retention_runs_total",
+    documentation="Observation retention invocations by outcome.",
+    labelnames=["outcome"],
+)
+
+retention_observations_archived_total = Counter(
+    name="pipeline_retention_observations_archived_total",
+    documentation="Observations copied into the retention archive.",
+)
+
+retention_observations_deleted_total = Counter(
+    name="pipeline_retention_observations_deleted_total",
+    documentation="Verified archived observations removed from the hot table.",
+)
+
+dependency_incident_transitions_total = Counter(
+    name="pipeline_dependency_incident_transitions_total",
+    documentation="Dependency incident lifecycle transitions by trigger.",
+    labelnames=["trigger_type", "transition"],
+)
 # Incremented when upsert detects a (source, timestamp) conflict.
 #
 # Labels:

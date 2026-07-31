@@ -5,10 +5,13 @@ Tests Motor async client interactions: insert, find, update, delete operations.
 
 import pytest
 
-from services.ingestor.storage.mongo import (
-    find_by_source,
-    insert_scraped_doc,
+
+mongo = pytest.importorskip(
+    "services.ingestor.storage.mongo",
+    reason="Mongo storage is not part of the active runtime",
 )
+find_by_source = mongo.find_by_source
+insert_scraped_doc = mongo.insert_scraped_doc
 
 
 @pytest.mark.unit
@@ -53,7 +56,7 @@ async def test_find_by_source() -> None:
         # Find by source
         docs = await find_by_source(source="hn", limit=10)
         assert len(docs) >= 2
-        assert all(doc["source"] == "hn" for doc in docs)
+        assert all(doc["source"] == "hn" for doc in docs), docs
     except RuntimeError as e:
         if "MongoDB client not connected" in str(e):
             pytest.skip("MongoDB not available")

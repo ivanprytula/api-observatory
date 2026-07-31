@@ -96,6 +96,13 @@ async def disconnect_producer() -> None:
     logger.info("kafka_producer_disconnected")
 
 
+async def publish_event_bytes(topic: str, value: bytes) -> None:
+    """Publish one durable outbox value or fail if the producer is unavailable."""
+    if _producer is None:
+        raise RuntimeError("Kafka producer is not connected.")
+    await _send_to_kafka(topic, value)
+
+
 # ---------------------------------------------------------------------------
 # Publisher
 # ---------------------------------------------------------------------------

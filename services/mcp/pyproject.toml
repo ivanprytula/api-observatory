@@ -3,6 +3,9 @@ name = "mcp-server"
 version = "0.1.0"
 description = "MCP server exposing the observatory's source/scorecard/drift-event/agent-run toolset to LLM clients (Phase 5 of the AI-augmented observatory plan)"
 requires-python = ">=3.14"
+authors = [{ name = "Ivan Prytula", email = "ivanprytula.dev@gmail.com" }]
+maintainers = [{ name = "Ivan Prytula", email = "ivanprytula.dev@gmail.com" }]
+license = "Apache-2.0"
 dependencies = [
   "fastmcp>=2.0.0",
   "httpx>=0.28.1",

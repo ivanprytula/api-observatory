@@ -2,6 +2,7 @@
 
 import asyncio
 
+import httpx
 import pytest
 
 from libs.platform.bulkhead import (
@@ -9,6 +10,8 @@ from libs.platform.bulkhead import (
     BulkheadRejectedError,
     bulkhead,
 )
+from libs.platform.circuit_breaker import CircuitOpenError
+from libs.platform.resilience import DependencyResilience
 from libs.platform.retry import (
     RetryBudget,
     RetryBudgetExceededError,
@@ -107,3 +110,29 @@ async def test_bulkhead_decorator_uses_shared_limiter() -> None:
 
     unblock.set()
     assert await task == "done"
+
+
+@pytest.mark.unit
+async def test_dependency_resilience_opens_breaker_after_three_failed_attempts() -> (
+    None
+):
+    """Each transient attempt should count before a retry is considered."""
+    resilience = DependencyResilience(
+        "attempt-counting-test",
+        max_concurrency=1,
+        max_queue=0,
+    )
+    attempts = 0
+
+    async def unavailable() -> None:
+        nonlocal attempts
+        attempts += 1
+        raise httpx.ConnectError("inference unavailable")
+
+    with pytest.raises(httpx.ConnectError):
+        await resilience.call(unavailable)
+    with pytest.raises(CircuitOpenError):
+        await resilience.call(unavailable)
+
+    assert attempts == 3
+    assert resilience.breaker.is_open is True

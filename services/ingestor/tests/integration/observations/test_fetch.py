@@ -125,9 +125,9 @@ async def test_fetch_timeout_error_handling(cleanup_http_client) -> None:
             "services.ingestor.fetch.fetch_from_external_api", side_effect=timeout_fetch
         ),
         patch("services.ingestor.fetch.asyncio.sleep", new_callable=AsyncMock),
+        pytest.raises(httpx.TimeoutException),
     ):
-        with pytest.raises(httpx.TimeoutException):
-            await fetch_with_retry(TEST_POST_URL, max_retries=1)
+        await fetch_with_retry(TEST_POST_URL, max_retries=1)
 
 
 @pytest.mark.integration
@@ -150,7 +150,7 @@ async def test_concurrent_fetches(cleanup_http_client) -> None:
 
         # All should succeed
         assert len(results) == 5
-        assert all(r["title"].startswith("Post") for r in results)
+        assert all(r["title"].startswith("Post") for r in results), results
 
 
 @pytest.mark.integration

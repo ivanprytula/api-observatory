@@ -6,8 +6,10 @@ to its respective rendering model.
 
 from __future__ import annotations
 
+import queue
+import threading
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from services.dashboard.core.auth import AuthManager
 
@@ -58,7 +60,9 @@ class UIAdapter(Protocol):
         """Render a metric card."""
 
     def render_dataframe(
-        self, rows: Sequence[Mapping[str, Any]], width: str = "stretch"
+        self,
+        rows: Sequence[Mapping[str, Any]],
+        width: int | Literal["stretch", "content"] = "stretch",
     ) -> None:
         """Render a tabular data view."""
 
@@ -67,6 +71,51 @@ class UIAdapter(Protocol):
 
     def clear_cache(self) -> None:
         """Clear any framework-level data cache."""
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Read UI session state."""
+
+    def set(self, key: str, value: Any) -> None:
+        """Write UI session state."""
+
+    def setdefault(self, key: str, default: Any = None) -> Any:
+        """Set a session value when it is absent."""
+
+    @property
+    def ws_messages(self) -> list[dict[str, Any]]:
+        """Buffered WebSocket messages."""
+
+    @ws_messages.setter
+    def ws_messages(self, value: list[dict[str, Any]]) -> None: ...
+
+    @property
+    def ws_connected(self) -> bool:
+        """Whether the live WebSocket view is enabled."""
+
+    @ws_connected.setter
+    def ws_connected(self, value: bool) -> None: ...
+
+    @property
+    def ws_stop_event(self) -> threading.Event:
+        """Signal used to stop the WebSocket worker."""
+
+    @property
+    def ws_buffer(self) -> queue.Queue[dict[str, Any]]:
+        """Queue shared with the WebSocket worker."""
+
+    @property
+    def ws_thread(self) -> threading.Thread | None:
+        """Current WebSocket worker thread."""
+
+    def set_ws_thread(self, thread: threading.Thread | None) -> None:
+        """Store the current WebSocket worker thread."""
+
+    @property
+    def probe_results(self) -> dict[int, dict[str, Any]]:
+        """Latest per-source probe results."""
+
+    @probe_results.setter
+    def probe_results(self, value: dict[int, dict[str, Any]]) -> None: ...
 
     def header(self, text: str) -> None:
         """Render a section header."""

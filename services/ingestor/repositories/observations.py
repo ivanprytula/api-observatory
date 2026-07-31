@@ -246,7 +246,7 @@ def _decode_cursor(cursor: str | None) -> tuple[int, datetime | None] | None:
         ts_str = data.get("timestamp")
         timestamp = datetime.fromisoformat(ts_str) if ts_str else None
         return (observation_id, timestamp)
-    except ValueError, KeyError, json.JSONDecodeError:
+    except (ValueError, KeyError, json.JSONDecodeError):
         return None
 
 

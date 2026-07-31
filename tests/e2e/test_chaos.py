@@ -3,7 +3,7 @@
 Skip by default; enable with --run-chaos.
 
 Requires:
-  - docker compose up -d db cache broker ingestor dashboard
+  - docker compose up -d ingestor-db ingestor
   - Run with: pytest tests/e2e/test_chaos.py --run-chaos
 """
 
@@ -17,14 +17,7 @@ import pytest
 
 BASE_URL = "http://localhost:8000"
 
-
-def pytest_addoption(parser: pytest.Parser) -> None:
-    parser.addoption(
-        "--run-chaos",
-        action="store_true",
-        default=False,
-        help="Run chaos tests that kill/restart Docker containers",
-    )
+pytestmark = pytest.mark.e2e
 
 
 @pytest.fixture(autouse=True)
@@ -50,23 +43,22 @@ def _wait_for_readyz(timeout: int = 120) -> bool:
     return False
 
 
-@pytest.mark.parametrize("scenario", ["kill", "db", "kafka"])
-def test_chaos_scenario(scenario: str) -> None:
+def test_postgresql_blackout() -> None:
     """Inject a chaos fault and verify the service recovers.
 
-    Each scenario:
-    1. Runs infra/scripts/chaos.sh <scenario> with CHAOS_DURATION=15
-    2. Waits for /readyz to return 200 (up to 90s)
+    Runs the current PostgreSQL blackout exercise with CHAOS_DURATION=15,
+    asserts readiness degraded during the outage, then waits for recovery.
     """
     env = {**subprocess.os.environ, "CHAOS_DURATION": "15"}
     proc = subprocess.run(
-        ["bash", "infra/scripts/chaos.sh", scenario],
+        ["bash", "infra/scripts/chaos.sh", "db"],
         env=env,
         capture_output=True,
         text=True,
     )
     assert proc.returncode == 0, f"chaos.sh failed: {proc.stderr}"
+    assert "Readiness degraded while PostgreSQL was unavailable" in proc.stdout
 
     assert _wait_for_readyz(timeout=90), (
-        f"Service did not recover after {scenario} chaos"
+        "Service did not recover after PostgreSQL blackout"
     )

@@ -2,8 +2,9 @@
 
 This module exists as a side-by-side comparison with v1 (*the "before"*).
 
-  v1  POST /api/v1/observations           — fixed-window, IP-based (slowapi default)
-  v2  POST /api/v2/observations/token-bucket   — token bucket (burst-tolerant)
+  v1  POST /api/v1/observations           — token bucket (production policy)
+  v2  POST /api/v2/observations/fixed-window   — fixed-window comparison
+  v2  POST /api/v2/observations/token-bucket   — in-memory token-bucket comparison
   v2  POST /api/v2/observations/sliding-window — exact sliding window
   v2  POST /api/v2/observations/jwt       — JWT-protected (auth example)
 
@@ -63,6 +64,7 @@ from services.ingestor.constants import (
     TOKEN_BUCKET_REFILL_PER_SEC,
     UPSERT_MODE_IDEMPOTENT,
     UPSERT_MODE_STRICT,
+    V1_RATE_LIMIT,
 )
 from services.ingestor.database import get_db
 from services.ingestor.metrics import (
@@ -70,6 +72,7 @@ from services.ingestor.metrics import (
     observations_created_total,
     observations_upsert_conflicts_total,
 )
+from services.ingestor.rate_limiting import limiter
 from services.ingestor.rate_limiting_advanced import (
     SlidingWindowLimiter,
     TokenBucketLimiter,
@@ -201,6 +204,29 @@ def _rl_headers(strategy: str, limit: int, remaining: float | int) -> dict[str, 
         "X-RateLimit-Limit": str(limit),
         "X-RateLimit-Remaining": str(int(remaining)),
     }
+
+
+# ---------------------------------------------------------------------------
+# Fixed-window endpoint
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/fixed-window",
+    response_model=ObservationResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create observation — fixed-window rate limit",
+    responses={**_R422, **_R429},
+)
+@limiter.limit(V1_RATE_LIMIT)
+async def create_observation_fixed_window(
+    request: Request,
+    body: ObservationRequest,
+    db: DbDep,
+) -> ObservationResponse:
+    """Preserve the former v1 fixed-window policy as a learning comparison."""
+    observation = await create_observation(db, body)
+    return ObservationResponse.model_validate(observation)
 
 
 # ---------------------------------------------------------------------------

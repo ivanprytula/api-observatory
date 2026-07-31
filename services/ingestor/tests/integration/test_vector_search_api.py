@@ -4,13 +4,113 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import services.ingestor.vector_search as vector_search
+from libs.platform.bulkhead import BulkheadRejectedError
+from libs.platform.circuit_breaker import CircuitOpenError
 from services.ingestor.api_schemas.observations import ObservationRequest
 from services.ingestor.repositories import observations as crud
+
+
+pytestmark = pytest.mark.integration
+
+
+@pytest.mark.parametrize(
+    "error",
+    [BulkheadRejectedError("queue full"), CircuitOpenError("circuit open")],
+)
+async def test_vector_search_health_returns_503_for_resilience_rejection(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+) -> None:
+    async def _rejected_health() -> dict[str, Any]:
+        raise error
+
+    monkeypatch.setattr(vector_search, "get_vector_search_health", _rejected_health)
+
+    response = await client.get("/api/v1/vector-search/health")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "AI gateway temporarily unavailable"
+
+
+@pytest.mark.parametrize(
+    "error",
+    [BulkheadRejectedError("queue full"), CircuitOpenError("circuit open")],
+)
+async def test_vector_search_query_returns_503_for_resilience_rejection(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+) -> None:
+    async def _rejected_search(**_kwargs: Any) -> dict[str, Any]:
+        raise error
+
+    monkeypatch.setattr(vector_search, "search_observation_documents", _rejected_search)
+
+    response = await client.post(
+        "/api/v1/vector-search/query", json={"query": "fault proof", "top_k": 1}
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "AI gateway temporarily unavailable"
+
+
+@pytest.mark.parametrize(
+    "error",
+    [BulkheadRejectedError("queue full"), CircuitOpenError("circuit open")],
+)
+async def test_vector_search_index_returns_503_for_resilience_rejection(
+    client: AsyncClient,
+    db: AsyncSession,
+    observation_timestamp,
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+) -> None:
+    observation = await crud.create_observation(
+        db,
+        ObservationRequest(
+            source="vector-rejection",
+            timestamp=observation_timestamp,
+            data={"summary": "fault proof"},
+            tags=["semantic"],
+        ),
+    )
+
+    async def _rejected_index(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        raise error
+
+    monkeypatch.setattr(vector_search, "index_observation_documents", _rejected_index)
+
+    response = await client.post(
+        "/api/v1/vector-search/index/observations",
+        json={"observation_ids": [observation.id]},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "AI gateway temporarily unavailable"
+
+
+async def test_vector_search_query_keeps_transport_failures_as_502(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _failed_search(**_kwargs: Any) -> dict[str, Any]:
+        raise httpx.ConnectError("offline")
+
+    monkeypatch.setattr(vector_search, "search_observation_documents", _failed_search)
+
+    response = await client.post(
+        "/api/v1/vector-search/query", json={"query": "offline", "top_k": 1}
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "AI gateway search failed"
 
 
 @pytest.mark.integration

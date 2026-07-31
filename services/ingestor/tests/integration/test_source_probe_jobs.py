@@ -18,6 +18,9 @@ from services.ingestor.jobs import run_source_contract_snapshot, run_source_prob
 from services.ingestor.models import ContractSnapshot, DriftEvent, SourceProfile
 
 
+pytestmark = pytest.mark.integration
+
+
 def _make_profile(
     source_id: int = 1,
     base_url: str = "https://api.example.com",
@@ -111,7 +114,7 @@ class TestRunSourceProbe:
                 return_value=mock_client,
             ),
             patch(
-                "services.ingestor.jobs.observation_health_sample",
+                "services.ingestor.jobs.record_health_sample",
                 new_callable=AsyncMock,
             ) as mock_persist,
         ):
@@ -140,7 +143,7 @@ class TestRunSourceProbe:
                 "services.ingestor.jobs._get_source_probe_breaker",
             ) as mock_breaker_fn,
             patch(
-                "services.ingestor.jobs.observation_health_sample",
+                "services.ingestor.jobs.record_health_sample",
                 new_callable=AsyncMock,
             ) as mock_persist,
         ):
@@ -168,7 +171,7 @@ class TestRunSourceProbe:
                 "services.ingestor.jobs._get_source_probe_breaker",
             ) as mock_breaker_fn,
             patch(
-                "services.ingestor.jobs.observation_health_sample",
+                "services.ingestor.jobs.record_health_sample",
                 new_callable=AsyncMock,
             ) as mock_persist,
         ):
@@ -217,7 +220,7 @@ class TestRunSourceProbe:
                 "services.ingestor.jobs._get_source_probe_breaker",
             ) as mock_breaker_fn,
             patch(
-                "services.ingestor.jobs.observation_health_sample",
+                "services.ingestor.jobs.record_health_sample",
                 new_callable=AsyncMock,
             ),
         ):

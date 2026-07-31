@@ -15,6 +15,7 @@ from services.ingestor.repositories.contract_drift import (
     _fingerprint,
     _flatten_schema,
     _severity,
+    _structure_fingerprint,
     _summary,
 )
 
@@ -37,12 +38,17 @@ class TestFingerprint:
     def test_empty_dict_is_stable(self) -> None:
         assert _fingerprint({}) == _fingerprint({})
 
+    def test_structure_fingerprint_ignores_observed_values(self) -> None:
+        first = _flatten_schema({"id": 1, "status": "ok"})
+        second = _flatten_schema({"id": 99, "status": "degraded"})
+        assert _structure_fingerprint(first) == _structure_fingerprint(second)
+
 
 @pytest.mark.unit
 class TestFlattenSchema:
     def test_flat_dict(self) -> None:
         flat = _flatten_schema({"id": 1, "name": "ok"})
-        assert flat == {"id": "integer", "name": "string"}
+        assert flat == {"id": "number", "name": "string"}
 
     def test_nested_dict_flattens_with_dot_notation(self) -> None:
         flat = _flatten_schema({"payload": {"temp": 20.5, "region": "eu"}})
@@ -54,13 +60,50 @@ class TestFlattenSchema:
         flat = _flatten_schema({"missing": None})
         assert flat["missing"] == "null"
 
-    def test_bool_typed_before_integer(self) -> None:
+    def test_bool_typed_before_number(self) -> None:
         flat = _flatten_schema({"flag": True})
         assert flat["flag"] == "boolean"
+
+    def test_integer_and_fractional_numbers_share_json_number_type(self) -> None:
+        integer = _flatten_schema({"amount": 1})
+        fractional = _flatten_schema({"amount": 1.5})
+        assert integer == fractional == {"amount": "number"}
 
     def test_list_value_typed_as_array(self) -> None:
         flat = _flatten_schema({"items": [1, 2, 3]})
         assert flat["items"] == "array"
+        assert flat["items[]"] == "number"
+
+    def test_object_array_unions_observed_element_fields(self) -> None:
+        flat = _flatten_schema(
+            {"items": [{"id": 1, "name": "first"}, {"id": 2, "price": 9.5}]}
+        )
+        assert flat == {
+            "items": "array",
+            "items[]": "object",
+            "items[].id": "number",
+            "items[].name": "string",
+            "items[].price": "number",
+        }
+
+    def test_mixed_element_types_form_deterministic_union(self) -> None:
+        first = _flatten_schema({"items": [1, "one", None]})
+        second = _flatten_schema({"items": [None, "one", 1]})
+        assert first == second
+        assert first["items[]"] == "null|number|string"
+
+    def test_nested_arrays_use_repeated_wildcards(self) -> None:
+        flat = _flatten_schema({"groups": [[{"id": 1}]]})
+        assert flat["groups"] == "array"
+        assert flat["groups[]"] == "array"
+        assert flat["groups[][]"] == "object"
+        assert flat["groups[][].id"] == "number"
+
+    def test_array_analysis_stops_after_twenty_elements(self) -> None:
+        elements = [{f"field_{index}": index} for index in range(21)]
+        flat = _flatten_schema({"items": elements})
+        assert "items[].field_19" in flat
+        assert "items[].field_20" not in flat
 
     def test_empty_nested_object_only_observations_parent(self) -> None:
         flat = _flatten_schema({"meta": {}})
@@ -71,23 +114,23 @@ class TestFlattenSchema:
 @pytest.mark.unit
 class TestDiffContract:
     def test_no_diff_returns_empty_collections(self) -> None:
-        schema = {"id": "integer", "name": "string"}
+        schema = {"id": "number", "name": "string"}
         added, removed, changed = _diff_contract(schema, schema)
         assert added == []
         assert removed == []
         assert changed == {}
 
     def test_added_field_detected(self) -> None:
-        prev = {"id": "integer"}
-        curr = {"id": "integer", "email": "string"}
+        prev = {"id": "number"}
+        curr = {"id": "number", "email": "string"}
         added, removed, changed = _diff_contract(prev, curr)
         assert added == ["email"]
         assert removed == []
         assert changed == {}
 
     def test_removed_field_detected(self) -> None:
-        prev = {"id": "integer", "legacy": "string"}
-        curr = {"id": "integer"}
+        prev = {"id": "number", "legacy": "string"}
+        curr = {"id": "number"}
         added, removed, changed = _diff_contract(prev, curr)
         assert added == []
         assert removed == ["legacy"]
@@ -102,12 +145,52 @@ class TestDiffContract:
         assert changed == {"status": {"from_type": "string", "to_type": "object"}}
 
     def test_results_are_sorted(self) -> None:
-        prev = {"z": "string", "a": "integer"}
+        prev = {"z": "string", "a": "number"}
         curr = {"z": "object", "b": "number"}
         added, removed, changed = _diff_contract(prev, curr)
         assert added == ["b"]
         assert removed == ["a"]
         assert list(changed.keys()) == ["z"]
+
+    def test_null_is_distinct_from_missing(self) -> None:
+        present_null = _flatten_schema({"comment": None})
+        missing = _flatten_schema({})
+        added, removed, changed = _diff_contract(present_null, missing)
+        assert added == []
+        assert removed == ["comment"]
+        assert changed == {}
+
+    def test_concrete_to_null_is_a_type_change(self) -> None:
+        concrete = _flatten_schema({"comment": "available"})
+        present_null = _flatten_schema({"comment": None})
+        added, removed, changed = _diff_contract(concrete, present_null)
+        assert added == []
+        assert removed == []
+        assert changed == {"comment": {"from_type": "string", "to_type": "null"}}
+
+    def test_array_element_field_addition_is_detected(self) -> None:
+        baseline = _flatten_schema({"items": [{"id": 1}]})
+        current = _flatten_schema({"items": [{"id": 1, "price": 9.5}]})
+        added, removed, changed = _diff_contract(baseline, current)
+        assert added == ["items[].price"]
+        assert removed == []
+        assert changed == {}
+
+    def test_array_element_field_removal_is_detected(self) -> None:
+        baseline = _flatten_schema({"items": [{"id": 1, "price": 9.5}]})
+        current = _flatten_schema({"items": [{"id": 1}]})
+        added, removed, changed = _diff_contract(baseline, current)
+        assert added == []
+        assert removed == ["items[].price"]
+        assert changed == {}
+
+    def test_empty_array_is_inconclusive_for_element_removals(self) -> None:
+        baseline = _flatten_schema({"items": [{"id": 1, "price": 9.5}]})
+        current = _flatten_schema({"items": []})
+        added, removed, changed = _diff_contract(baseline, current)
+        assert added == []
+        assert removed == []
+        assert changed == {}
 
 
 @pytest.mark.unit

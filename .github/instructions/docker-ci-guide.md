@@ -100,7 +100,9 @@ GitHub Actions (ci.yml) triggers
 
 - [ ] **Dockerfile (multi-stage)**
 
-**Tip:** For Python-heavy CI, prefer using the prebuilt CI image `ghcr.io/${{ github.repository_owner }}/data-pipeline-ci` to ensure interpreter parity and faster runs. See [docs/ci/prebuilt-ci-image.md](docs/ci/prebuilt-ci-image.md) for build/pin/rollback steps.
+**Tip:** For Python-heavy CI, use the pinned `uv` setup and `uv sync --frozen` on hosted
+runners. Add a prebuilt image only after measuring that setup time warrants its separate build,
+scan, publishing, and digest-rotation lifecycle.
 
   ```dockerfile
   FROM python:3.12-slim as builder
@@ -198,20 +200,10 @@ GitHub Actions (ci.yml) triggers
     push-ecr:
       runs-on: ubuntu-latest
       if: github.ref == 'refs/heads/main'
+  ```
 
-
-  Tip: For maintainers, consider running the `lint` and `test` jobs inside the prebuilt CI image instead of using `actions/setup-python` on each job. Example:
-
-```yaml
-lint:
-  container:
-    image: ghcr.io/${{ github.repository_owner }}/data-pipeline-ci:latest
-  steps:
-    - uses: actions/checkout@<sha>
-    - run: uv run ruff check .
-```
-
-This reduces per-job setup time and guarantees Python 3.14 parity for cp314 wheels.
+Tip: For maintainers, keep the standard hosted runner plus pinned `uv` setup unless timing
+data shows that a separately built CI image provides enough benefit to justify its ownership.
 
 ```yaml
       needs: docker-build

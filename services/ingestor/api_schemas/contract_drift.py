@@ -10,6 +10,7 @@ are not consumed by the dashboard.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -39,8 +40,8 @@ class ContractSnapshotCreate(BaseModel):
     payload_schema: dict[str, Any] = Field(
         ...,
         description=(
-            "Observed payload-schema sample. Nested objects are allowed and will be "
-            "flattened internally for drift comparison."
+            "Observed payload-schema sample. Nested objects and bounded array element "
+            "shapes are flattened internally for drift comparison."
         ),
     )
     schema_version: str | None = Field(
@@ -62,8 +63,48 @@ class ContractSnapshotIngestResponse(BaseModel):
     drift_event: DriftEventResponse | None
 
 
+class ContractBaselineAcceptRequest(BaseModel):
+    """Explicit operator acceptance of the source's current candidate contract."""
+
+    candidate_snapshot_id: int | None = Field(
+        None,
+        ge=1,
+        description="Current candidate snapshot to accept; defaults to the latest candidate.",
+    )
+    acceptance_note: str | None = Field(
+        None,
+        max_length=CONTRACT_SNAPSHOT_NOTE_MAX,
+        description="Optional audit context for why this contract became accepted.",
+    )
+
+
+class ContractBaselineResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    source_id: int
+    tenant_id: int | None
+    baseline_snapshot_id: int
+    promoted_from_baseline_id: int | None
+    version: int
+    status: str
+    accepted_by: str
+    accepted_at: datetime
+    acceptance_note: str | None
+    superseded_at: datetime | None
+    candidate_snapshot_id: int | None
+    candidate_observation_count: int
+    candidate_drift_event_id: int | None
+    candidate_first_seen_at: datetime | None
+    candidate_last_seen_at: datetime | None
+    created_at: datetime
+    updated_at: datetime | None
+
+
 __all__ = [
     "CompatibilityReportResponse",
+    "ContractBaselineAcceptRequest",
+    "ContractBaselineResponse",
     "ContractSnapshotCreate",
     "ContractSnapshotIngestResponse",
     "ContractSnapshotListResponse",

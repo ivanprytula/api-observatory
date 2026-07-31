@@ -15,9 +15,13 @@ Two access patterns:
 
 from __future__ import annotations
 
+import builtins
+from collections.abc import Mapping
 from typing import Any
 
 from libs.contracts.schemas_dashboard import (
+    DependencyIncidentListResponse,
+    DependencyIncidentResponse,
     DriftEventResponse,
     ObservationListResponse,
     ObservationResponse,
@@ -61,6 +65,15 @@ def _raise_on_error(response: Any, context: str) -> None:
             )
 
 
+def _expect_mapping(
+    data: dict[str, Any] | list[Any], context: str
+) -> Mapping[str, Any]:
+    """Return an object response or expose an unexpected response shape."""
+    if not isinstance(data, dict):
+        raise DashboardApiError(f"Expected an object response for {context}")
+    return data
+
+
 # ---------------------------------------------------------------------------
 # Resource classes
 # ---------------------------------------------------------------------------
@@ -72,7 +85,9 @@ class SourcesResource:
     def __init__(self, client: SyncClient) -> None:
         self._c = client
 
-    def list(self, token: str = "", limit: int = 50) -> list[SourceProfileResponse]:
+    def list(
+        self, token: str = "", limit: int = 50
+    ) -> builtins.list[SourceProfileResponse]:
         data = self._c.request(
             "GET", "/api/v1/sources", params={"limit": limit}, token=token
         )
@@ -81,7 +96,7 @@ class SourcesResource:
 
     def get(self, source_id: int, token: str = "") -> SourceProfileResponse:
         data = self._c.request("GET", f"/api/v1/sources/{source_id}", token=token)
-        return SourceProfileResponse(**data)
+        return SourceProfileResponse(**_expect_mapping(data, "source"))
 
     def create(
         self,
@@ -101,7 +116,7 @@ class SourcesResource:
         }
         try:
             data = self._c.request("POST", "/api/v1/sources", token=token, json=payload)
-            return SourceProfileResponse(**data)
+            return SourceProfileResponse(**_expect_mapping(data, "create source"))
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 409:
                 raise DashboardApiError(
@@ -133,7 +148,7 @@ class SourcesResource:
         data = self._c.request(
             "PATCH", f"/api/v1/sources/{source_id}", token=token, json=payload
         )
-        return SourceProfileResponse(**data)
+        return SourceProfileResponse(**_expect_mapping(data, "update source"))
 
     def delete(self, source_id: int, token: str = "") -> None:
         resp = self._c.request_raw(
@@ -148,7 +163,7 @@ class SourcesResource:
         data = self._c.request(
             "GET", f"/api/v1/sources/{source_id}/health", token=token
         )
-        return SourceHealthResponse(**data)
+        return SourceHealthResponse(**_expect_mapping(data, "source health"))
 
 
 class ObservationsResource:
@@ -171,13 +186,13 @@ class ObservationsResource:
         data = self._c.request(
             "GET", "/api/v1/observations", token=token, params=params
         )
-        return ObservationListResponse(**data)
+        return ObservationListResponse(**_expect_mapping(data, "observations"))
 
     def get(self, observation_id: int, token: str = "") -> ObservationResponse:
         data = self._c.request(
             "GET", f"/api/v1/observations/{observation_id}", token=token
         )
-        return ObservationResponse(**data)
+        return ObservationResponse(**_expect_mapping(data, "observation"))
 
 
 class ScorecardsResource:
@@ -190,7 +205,7 @@ class ScorecardsResource:
         data = self._c.request(
             "GET", "/api/v1/scorecards", token=token, params={"limit": limit}
         )
-        return ScorecardListResponse(**data)
+        return ScorecardListResponse(**_expect_mapping(data, "scorecards"))
 
 
 class DriftResource:
@@ -201,7 +216,7 @@ class DriftResource:
 
     def list(
         self, source_id: int, token: str = "", limit: int = 20
-    ) -> list[DriftEventResponse]:
+    ) -> builtins.list[DriftEventResponse]:
         data = self._c.request(
             "GET",
             f"/api/v1/contracts/sources/{source_id}/drift-events",
@@ -212,14 +227,50 @@ class DriftResource:
         return [DriftEventResponse(**item) for item in items]
 
 
+class IncidentsResource:
+    """Tenant-scoped dependency incidents."""
+
+    def __init__(self, client: SyncClient) -> None:
+        self._c = client
+
+    def list(
+        self,
+        token: str = "",
+        *,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> DependencyIncidentListResponse:
+        params: dict[str, Any] = {"limit": limit}
+        if status is not None:
+            params["status"] = status
+        data = self._c.request("GET", "/api/v1/incidents", token=token, params=params)
+        return DependencyIncidentListResponse(**_expect_mapping(data, "incidents"))
+
+    def acknowledge(
+        self, incident_id: int, token: str = ""
+    ) -> DependencyIncidentResponse:
+        data = self._c.request(
+            "POST", f"/api/v1/incidents/{incident_id}/acknowledge", token=token
+        )
+        return DependencyIncidentResponse(
+            **_expect_mapping(data, "acknowledge incident")
+        )
+
+    def resolve(self, incident_id: int, token: str = "") -> DependencyIncidentResponse:
+        data = self._c.request(
+            "POST", f"/api/v1/incidents/{incident_id}/resolve", token=token
+        )
+        return DependencyIncidentResponse(**_expect_mapping(data, "resolve incident"))
+
+
 class HealthResource:
     """Liveness + readiness + scheduler health."""
 
     def __init__(self, client: SyncClient) -> None:
         self._c = client
 
-    def probes(self) -> dict[str, dict]:
-        results: dict[str, dict] = {}
+    def probes(self) -> dict[str, dict[str, Any]]:
+        results: dict[str, dict[str, Any]] = {}
         for label, url_part in (
             ("liveness (/health)", "/health"),
             ("readiness (/readyz)", "/readyz"),
@@ -231,8 +282,9 @@ class HealthResource:
                 results[label] = {"status_code": None, "body": None, "error": str(exc)}
         return results
 
-    def scheduler_jobs(self) -> dict:
-        return self._c.request("GET", "/health/jobs-metrics")
+    def scheduler_jobs(self) -> Mapping[str, Any]:
+        data = self._c.request("GET", "/health/jobs-metrics")
+        return _expect_mapping(data, "scheduler jobs")
 
 
 class MetricsResource:
@@ -253,24 +305,27 @@ class AuthResource:
     def __init__(self, client: SyncClient) -> None:
         self._c = client
 
-    def register(self, username: str, email: str, password: str) -> dict:
-        return self._c.request(
+    def register(self, username: str, email: str, password: str) -> Mapping[str, Any]:
+        data = self._c.request(
             "POST",
             "/api/v1/auth/register",
             json={"username": username, "email": email, "password": password},
         )
+        return _expect_mapping(data, "register")
 
-    def login(self, username: str, password: str) -> dict:
-        return self._c.request(
+    def login(self, username: str, password: str) -> Mapping[str, Any]:
+        data = self._c.request(
             "POST",
             "/api/v1/auth/token",
             json={"username": username, "password": password},
         )
+        return _expect_mapping(data, "login")
 
-    def refresh(self, refresh_token: str) -> dict:
-        return self._c.request(
+    def refresh(self, refresh_token: str) -> Mapping[str, Any]:
+        data = self._c.request(
             "POST", "/api/v1/auth/refresh", json={"refresh_token": refresh_token}
         )
+        return _expect_mapping(data, "refresh")
 
 
 # ---------------------------------------------------------------------------
@@ -287,6 +342,7 @@ class API:
         self.observations = ObservationsResource(c)
         self.scorecards = ScorecardsResource(c)
         self.drift = DriftResource(c)
+        self.incidents = IncidentsResource(c)
         self.health = HealthResource(c)
         self.metrics = MetricsResource(c)
         self.auth = AuthResource(c)
@@ -382,7 +438,7 @@ def fetch_health_status(timeout: float | None = None) -> dict[str, dict]:
     return api.health.probes()
 
 
-def fetch_scheduler_jobs(timeout: float | None = None) -> dict:
+def fetch_scheduler_jobs(timeout: float | None = None) -> Mapping[str, Any]:
     return api.health.scheduler_jobs()
 
 

@@ -45,7 +45,6 @@ hooks:
   project_hook_root: .github/hooks/
   available:
     - governance-audit
-    - secrets-scanner
     - tool-guardian
 
 stack:

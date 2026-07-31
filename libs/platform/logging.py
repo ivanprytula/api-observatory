@@ -36,7 +36,7 @@ class _ServiceJsonFormatter(JsonFormatter):
     def add_fields(
         self,
         log_data: dict[str, Any],
-        observation: logging.LogObservation,
+        observation: logging.LogRecord,
         message_dict: dict[str, Any],
     ) -> None:  # ty:ignore[invalid-method-override]
         super().add_fields(log_data, observation, message_dict)

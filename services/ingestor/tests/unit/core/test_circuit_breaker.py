@@ -14,10 +14,48 @@ import asyncio
 import pytest
 
 from libs.platform.circuit_breaker import (
+    CircuitBreaker,
     CircuitOpenError,
     CircuitState,
     circuit_breaker,
 )
+
+
+class FakeTime:
+    def __init__(self, start: float = 0.0) -> None:
+        self.t = float(start)
+
+    def now(self) -> float:
+        return self.t
+
+    def advance(self, seconds: float) -> None:
+        self.t += seconds
+
+
+@pytest.mark.unit
+async def test_direct_breaker_recovers_with_injected_clock() -> None:
+    """The concrete breaker transitions without waiting on wall-clock time."""
+    clock = FakeTime()
+    breaker = CircuitBreaker(
+        failure_threshold=1,
+        recovery_timeout=5,
+        half_open_successes=1,
+        time_func=clock.now,
+    )
+
+    async def fail() -> None:
+        raise RuntimeError("boom")
+
+    async def succeed() -> str:
+        return "ok"
+
+    with pytest.raises(RuntimeError, match="boom"):
+        await breaker.call(fail)
+    assert breaker.is_open
+
+    clock.advance(6)
+    assert await breaker.call(succeed) == "ok"
+    assert breaker.is_closed
 
 
 @pytest.mark.unit

@@ -11,18 +11,30 @@ not import the ingestor's internals, and never bypasses its JWT auth.
 
 ## One-time setup
 
-1. Start the ingestor (`docker compose up -d db cache broker ingestor`, or
-   `uv run uvicorn services.ingestor.main:app --port 8000` for a lighter loop).
-2. Register the service account (idempotent — safe to re-run):
+1. Start the ingestor (`just dev-up`, or
+   `uv run uvicorn services.ingestor.main:app --port 8000` for a lighter loop). The MCP process is
+   local stdio only; it is not a Compose service.
+2. Create the ignored MCP configuration, restrict it to your user, and choose a strong local
+   password:
    ```bash
-   MCP_SERVICE_PASSWORD='<choose-a-strong-password>' \
-     uv run python scripts/register_mcp_service_user.py
+   cp services/mcp/.env.example services/mcp/.env
+   chmod 600 services/mcp/.env
    ```
-3. Create `services/mcp/.env`:
-   ```
+   Edit `services/mcp/.env`:
+   ```dotenv
    INGESTOR_URL=http://localhost:8000
    MCP_SERVICE_USERNAME=mcp-service
-   MCP_SERVICE_PASSWORD=<the same password from step 2>
+   MCP_SERVICE_PASSWORD=<choose-a-strong-password>
+   ```
+3. Register the service account (idempotent — safe to re-run) in a subshell. The password stays
+   out of shell history and the parent shell remains unchanged:
+   ```bash
+   (
+     set -a
+     source services/mcp/.env
+     set +a
+     uv run python scripts/register_mcp_service_user.py
+   )
    ```
 
 ## Run it
@@ -33,6 +45,7 @@ uv run python -m services.mcp.main
 
 Runs over stdio by default and blocks until the client (or you, via Ctrl+C)
 disconnects — this is expected; it's not a long-running network server in v1.
+It reads the same ignored `services/mcp/.env` file automatically.
 
 ## Connect Claude Desktop
 

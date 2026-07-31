@@ -19,13 +19,15 @@ from services.ingestor.models import AgentRun
 
 
 if TYPE_CHECKING:
+    from langchain_core.runnables.config import RunnableConfig
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
     from langgraph.graph.state import CompiledStateGraph
+    from psycopg import AsyncConnection
     from psycopg_pool import AsyncConnectionPool
 
 logger = logging.getLogger(__name__)
 
-_pool: AsyncConnectionPool | None = None
+_pool: AsyncConnectionPool[AsyncConnection[dict[str, Any]]] | None = None
 _checkpointer: AsyncPostgresSaver | None = None
 _graph: CompiledStateGraph | None = None
 
@@ -58,6 +60,7 @@ async def start_agent_checkpointer() -> None:
 
     try:
         from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+        from psycopg.rows import dict_row
         from psycopg_pool import AsyncConnectionPool
 
         from services.ingestor.agent.graph import build_graph
@@ -67,10 +70,10 @@ async def start_agent_checkpointer() -> None:
         )
         return
 
-    _pool = AsyncConnectionPool(
+    _pool = AsyncConnectionPool[AsyncConnection[dict[str, Any]]](
         conninfo=_sync_db_url(),
         max_size=5,
-        kwargs={"autocommit": True, "prepare_threshold": 0},
+        kwargs={"autocommit": True, "prepare_threshold": 0, "row_factory": dict_row},
         open=False,
     )
     await _pool.open()
@@ -107,7 +110,7 @@ async def run_agent_for_observation(agent_run_id: int) -> None:
             return
 
         await _set_status(agent_run_id, "running")
-        config = {"configurable": {"thread_id": str(agent_run_id)}}
+        config: RunnableConfig = {"configurable": {"thread_id": str(agent_run_id)}}
         result = await _graph.ainvoke(initial_state, config=config)
         await _sync_agent_run(agent_run_id, result)
     except Exception as exc:
@@ -128,7 +131,7 @@ async def resume_agent_run(
 
     from langgraph.types import Command
 
-    config = {"configurable": {"thread_id": str(agent_run_id)}}
+    config: RunnableConfig = {"configurable": {"thread_id": str(agent_run_id)}}
     try:
         result = await _graph.ainvoke(
             Command(resume={"approve": approve, "reviewer_user_id": reviewer_user_id}),

@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     Index,
@@ -103,6 +104,12 @@ class OutboxEvent(Base, TimestampMixin):
         Index("ix_outbox_events_aggregate", "aggregate_type", "aggregate_id"),
         Index("ix_outbox_events_tenant_id", "tenant_id"),
         Index("ix_outbox_events_idempotency_key", "idempotency_key", unique=True),
+        Index(
+            "ix_outbox_events_publish_due",
+            "published_at",
+            "next_attempt_at",
+            "lease_expires_at",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -115,6 +122,9 @@ class OutboxEvent(Base, TimestampMixin):
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     publish_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_error: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    claim_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
 
 class InboxConsumption(Base, TimestampMixin):
@@ -127,8 +137,18 @@ class InboxConsumption(Base, TimestampMixin):
             "message_id",
             name="uq_inbox_consumptions_consumer_message",
         ),
+        CheckConstraint(
+            "status IN ('processing', 'completed', "
+            "'completed_with_dead_letters', 'dead_letter')",
+            name="ck_inbox_consumptions_status",
+        ),
         Index("ix_inbox_consumptions_consumer_name", "consumer_name"),
         Index("ix_inbox_consumptions_processed_at", "processed_at"),
+        Index(
+            "ix_inbox_consumptions_claim",
+            "status",
+            "lease_expires_at",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -136,9 +156,76 @@ class InboxConsumption(Base, TimestampMixin):
     message_id: Mapped[str] = mapped_column(String(255), nullable=False)
     event_type: Mapped[str] = mapped_column(String(128), nullable=False)
     payload: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
-    processed_at: Mapped[datetime] = mapped_column(
-        DateTime, default=_utcnow, nullable=False
+    status: Mapped[str] = mapped_column(
+        String(32), default="processing", nullable=False
     )
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_error_category: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_error_detail: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class NotificationDelivery(Base, TimestampMixin):
+    """Durable per-channel delivery, retry, and terminal outcome state."""
+
+    __tablename__ = "notification_deliveries"
+    __table_args__ = (
+        UniqueConstraint(
+            "message_id",
+            "channel",
+            name="uq_notification_deliveries_message_channel",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'processing', 'retry_scheduled', "
+            "'delivered', 'dead_letter')",
+            name="ck_notification_deliveries_status",
+        ),
+        CheckConstraint(
+            "attempt_count >= 0 AND attempt_count <= 3",
+            name="ck_notification_deliveries_attempt_count",
+        ),
+        Index(
+            "ix_notification_deliveries_retry_due",
+            "status",
+            "next_attempt_at",
+            "lease_expires_at",
+        ),
+        Index(
+            "ix_notification_deliveries_tenant_created",
+            "tenant_id",
+            "created_at",
+        ),
+        Index(
+            "ix_notification_deliveries_source_created",
+            "source_id",
+            "created_at",
+        ),
+        Index("ix_notification_deliveries_incident_id", "incident_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    inbox_consumption_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    message_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    incident_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    tenant_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    event_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    severity: Mapped[str] = mapped_column(String(32), nullable=False)
+    channel: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    claim_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    first_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    dead_lettered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    provider_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    last_error_category: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_error_detail: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
 
 class Observation(Base, TimestampMixin):
@@ -167,6 +254,33 @@ class Observation(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<Observation id={self.id} source={self.source!r}>"
+
+
+class ObservationArchive(Base):
+    """Warm-tier copy of an observation removed from the hot table."""
+
+    __tablename__ = "observations_archive"
+    __table_args__ = (
+        Index("ix_observations_archive_timestamp", "timestamp"),
+        Index("ix_observations_archive_archived_at", "archived_at"),
+        Index("ix_observations_archive_tenant_id", "tenant_id"),
+    )
+
+    # The original ID remains the primary key, making copy verification idempotent.
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source: Mapped[str] = mapped_column(String(255), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    raw_data: Mapped[dict] = mapped_column(JSON, nullable=False)
+    tags: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    processed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    tenant_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    archived_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, nullable=False
+    )
 
 
 class User(Base, TimestampMixin):
@@ -231,6 +345,7 @@ class SourceProfile(Base, TimestampMixin):
             "is_active",
             postgresql_where=text("is_active = true"),
         ),
+        Index("ix_source_profiles_tenant_id", "tenant_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -243,10 +358,67 @@ class SourceProfile(Base, TimestampMixin):
         Integer, default=60, nullable=False
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    tenant_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    latency_threshold_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    incident_failure_threshold: Mapped[int] = mapped_column(
+        Integer, default=2, nullable=False
+    )
+    incident_cooldown_seconds: Mapped[int] = mapped_column(
+        Integer, default=900, nullable=False
+    )
     # Timestamps from TimestampMixin: created_at, updated_at, deleted_at
 
     def __repr__(self) -> str:
         return f"<SourceProfile id={self.id} name={self.name!r}>"
+
+
+class DependencyIncident(Base, TimestampMixin):
+    """Tenant-scoped lifecycle for an actionable dependency failure.
+
+    ``active_key`` is populated while an incident is open or acknowledged and
+    cleared on resolution. Its unique index makes concurrent duplicate opens
+    fail safely while allowing a later incident with the same fingerprint.
+    """
+
+    __tablename__ = "dependency_incidents"
+    __table_args__ = (
+        Index("ix_dependency_incidents_tenant_status", "tenant_id", "status"),
+        Index("ix_dependency_incidents_source_status", "source_id", "status"),
+        Index("ix_dependency_incidents_last_seen_at", "last_seen_at"),
+        Index("ix_dependency_incidents_active_key", "active_key", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    tenant_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    trigger_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(255), nullable=False)
+    active_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="open", nullable=False)
+    severity: Mapped[str] = mapped_column(String(32), nullable=False)
+    summary: Mapped[str] = mapped_column(String(1024), nullable=False)
+    guidance: Mapped[str] = mapped_column(String(2048), nullable=False)
+    trigger_details: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    occurrence_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, nullable=False
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, nullable=False
+    )
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    acknowledged_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    resolved_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last_notification_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<DependencyIncident id={self.id} source_id={self.source_id} "
+            f"trigger_type={self.trigger_type!r} status={self.status!r}>"
+        )
 
 
 class ContractSnapshot(Base, TimestampMixin):
@@ -275,8 +447,67 @@ class ContractSnapshot(Base, TimestampMixin):
         )
 
 
+class ContractBaseline(Base, TimestampMixin):
+    """Versioned accepted contract baseline and its current candidate state."""
+
+    __tablename__ = "contract_baselines"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_id",
+            "version",
+            name="uq_contract_baselines_source_version",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'superseded')",
+            name="ck_contract_baselines_status",
+        ),
+        Index("ix_contract_baselines_source_status", "source_id", "status"),
+        Index("ix_contract_baselines_tenant_status", "tenant_id", "status"),
+        Index("ix_contract_baselines_baseline_snapshot", "baseline_snapshot_id"),
+        Index("ix_contract_baselines_active_key", "active_key", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    tenant_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    baseline_snapshot_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    promoted_from_baseline_id: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
+    active_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    accepted_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    accepted_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, nullable=False
+    )
+    acceptance_note: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    candidate_snapshot_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    candidate_schema_fingerprint: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    candidate_observation_count: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    candidate_drift_event_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    candidate_first_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
+    candidate_last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<ContractBaseline id={self.id} source_id={self.source_id} "
+            f"version={self.version} status={self.status!r}>"
+        )
+
+
 class DriftEvent(Base, TimestampMixin):
-    """Detected schema drift between two consecutive contract snapshots."""
+    """Confirmed schema drift from an accepted baseline to a candidate snapshot."""
 
     __tablename__ = "drift_events"
     __table_args__ = (

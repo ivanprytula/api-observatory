@@ -493,7 +493,9 @@ async def test_archive_observation(client: AsyncClient) -> None:
         await client.get(f"/api/v1/observations/{observation_id}")
     ).status_code == 404
     listing = (await client.get("/api/v1/observations")).json()
-    assert all(rec["id"] != observation_id for rec in listing["observations"])
+    assert all(rec["id"] != observation_id for rec in listing["observations"]), listing[
+        "observations"
+    ]
 
 
 @pytest.mark.integration

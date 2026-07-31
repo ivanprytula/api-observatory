@@ -82,12 +82,14 @@ async def client_with_background_workers(
     )
 
     try:
-        async with app.router.lifespan_context(app):
-            async with AsyncClient(
+        async with (
+            app.router.lifespan_context(app),
+            AsyncClient(
                 transport=ASGITransport(app=app),
                 base_url="http://test",
-            ) as client:
-                yield client
+            ) as client,
+        ):
+            yield client
     finally:
         settings.background_workers_enabled = old_enabled
         settings.background_worker_count = old_count

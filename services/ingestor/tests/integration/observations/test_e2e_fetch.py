@@ -86,9 +86,11 @@ class TestFetchFromExternalAPI:
         url = "https://jsonplaceholder.typicode.com/posts/1"
 
         # Patch random to always trigger the 10% failure case
-        with patch("random.random", return_value=0.05):  # 0.05 < 0.1 → fails
-            with pytest.raises(Exception, match="Simulated API failure"):
-                await fetch_from_external_api(url, simulate_failures=True)
+        with (
+            patch("random.random", return_value=0.05),
+            pytest.raises(Exception, match="Simulated API failure"),
+        ):  # 0.05 < 0.1 → fails
+            await fetch_from_external_api(url, simulate_failures=True)
 
 
 class TestFetchWithRetry:
@@ -207,13 +209,13 @@ class TestFetchWithRetry:
                 side_effect=mock_fetch,
             ),
             patch("services.ingestor.fetch.logger.info") as info_mock,
+            pytest.raises(httpx.ConnectError),
         ):
-            with pytest.raises(httpx.ConnectError):
-                await fetch_with_retry(
-                    url,
-                    max_retries=3,
-                    simulate_failures=False,
-                )
+            await fetch_with_retry(
+                url,
+                max_retries=3,
+                simulate_failures=False,
+            )
 
         # Check that attempt logging was emitted
         info_messages = [call.args[0] for call in info_mock.call_args_list]
@@ -223,6 +225,7 @@ class TestFetchWithRetry:
 class TestHttpClientLifecycle:
     """Tests for HTTP client creation and cleanup."""
 
+    @pytest.mark.integration
     async def test_get_http_client_creates_client(self) -> None:
         """get_http_client creates a new AsyncClient on first call."""
         client = await get_http_client()
@@ -230,6 +233,7 @@ class TestHttpClientLifecycle:
         assert isinstance(client, httpx.AsyncClient)
         assert client.is_closed is False
 
+    @pytest.mark.integration
     async def test_get_http_client_reuses_same_client(self) -> None:
         """get_http_client returns the same client for the same event loop."""
         client1 = await get_http_client()
@@ -237,6 +241,7 @@ class TestHttpClientLifecycle:
 
         assert client1 is client2  # Same object
 
+    @pytest.mark.integration
     async def test_close_http_client_closes_the_client(self) -> None:
         """close_http_client closes the client for the current loop."""
         client = await get_http_client()
@@ -247,6 +252,7 @@ class TestHttpClientLifecycle:
         # After close, the client should be closed
         assert client.is_closed is True
 
+    @pytest.mark.integration
     async def test_close_http_client_is_idempotent(self) -> None:
         """close_http_client can be called multiple times safely."""
         await get_http_client()
@@ -257,6 +263,7 @@ class TestHttpClientLifecycle:
         # Second close (should not raise)
         await close_http_client()
 
+    @pytest.mark.integration
     async def test_close_all_http_clients_closes_all(self) -> None:
         """close_all_http_clients closes clients from all loops."""
         # Create first client in current loop
@@ -279,15 +286,18 @@ class TestRetryWithRealWorldScenarios:
         async def mock_fetch(url, simulate_failures=False):
             raise timeout_exception
 
-        with patch(
-            "services.ingestor.fetch.fetch_from_external_api", side_effect=mock_fetch
+        with (
+            patch(
+                "services.ingestor.fetch.fetch_from_external_api",
+                side_effect=mock_fetch,
+            ),
+            pytest.raises(httpx.TimeoutException),
         ):
-            with pytest.raises(httpx.TimeoutException):
-                await fetch_with_retry(
-                    "https://example.invalid/slow-endpoint",
-                    max_retries=2,
-                    simulate_failures=False,
-                )
+            await fetch_with_retry(
+                "https://example.invalid/slow-endpoint",
+                max_retries=2,
+                simulate_failures=False,
+            )
 
     @pytest.mark.e2e
     async def test_concurrent_fetches_with_retry(self) -> None:
@@ -305,5 +315,5 @@ class TestRetryWithRealWorldScenarios:
 
         # All should succeed
         assert len(results) == 5
-        assert all(isinstance(r, dict) for r in results)
-        assert all(r["id"] == 1 for r in results)
+        assert all(isinstance(r, dict) for r in results), results
+        assert all(r["id"] == 1 for r in results), results

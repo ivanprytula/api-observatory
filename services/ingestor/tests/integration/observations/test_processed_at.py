@@ -135,6 +135,8 @@ class TestProcessedAtTimestamp:
 
         # Their processed_at should be different
         assert observations[0].processed_at != observations[1].processed_at
+        assert observations[0].processed_at is not None
+        assert observations[1].processed_at is not None
         assert observations[0].processed_at < observations[1].processed_at
 
     async def test_get_observation_returns_correct_processed_at(

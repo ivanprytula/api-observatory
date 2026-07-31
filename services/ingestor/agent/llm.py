@@ -36,7 +36,7 @@ def get_chat_model(*, deep: bool = False) -> ChatAnthropic:
 
     model = settings.anthropic_model_deep if deep else settings.anthropic_model
     return ChatAnthropic(
-        model=model,
+        model_name=model,
         api_key=settings.anthropic_api_key,
         timeout=60.0,
         max_retries=2,

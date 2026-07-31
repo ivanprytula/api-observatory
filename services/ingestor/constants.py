@@ -38,11 +38,13 @@ SOURCE_MIN_LENGTH: int = 1
 TAGS_MAX_COUNT: int = 10
 
 # ---------------------------------------------------------------------------
-# Rate limiting — v1 fixed-window (slowapi)
+# Rate limiting — v1 production token bucket and learning-lab fixed window
 # ---------------------------------------------------------------------------
 V1_RATE_LIMIT: str = "1000/minute"
 HEALTH_RATE_LIMIT: str = "100/minute"
-AUTH_LOGIN_RATE_LIMIT: str = "10/minute"  # brute-force protection for /auth/token
+AUTH_LOGIN_RATE_LIMIT: str = "10/minute"  # learning-lab fixed-window comparison
+V1_TOKEN_BUCKET_CAPACITY: int = 1000
+V1_TOKEN_BUCKET_REFILL_PER_SEC: float = 1000 / 60
 
 # ---------------------------------------------------------------------------
 # Rate limiting — v2 token bucket
@@ -102,6 +104,7 @@ CONTRACT_COMPATIBILITY_MAX_SCORE: float = 100.0
 CONTRACT_PENALTY_ADDED_FIELD: float = 2.0
 CONTRACT_PENALTY_REMOVED_FIELD: float = 20.0
 CONTRACT_PENALTY_TYPE_CHANGE: float = 15.0
+CONTRACT_BASELINE_CONFIRMATION_POLLS: int = 3
 
 # ---------------------------------------------------------------------------
 # Insight Engine
@@ -177,6 +180,13 @@ VECTOR_SEARCH_DEFAULT_TOP_K: int = 5
 VECTOR_SEARCH_MAX_TOP_K: int = 25
 VECTOR_SEARCH_HTTP_TIMEOUT_SECONDS_DEFAULT: int = 10
 VECTOR_SEARCH_DEFAULT_COLLECTION: str = "observations"
+
+# ---------------------------------------------------------------------------
+# Retention (Phase 3A)
+# ---------------------------------------------------------------------------
+RETENTION_DAYS_DEFAULT: int = 30
+RETENTION_BATCH_SIZE_DEFAULT: int = 1000
+RETENTION_BATCH_SIZE_MAX: int = 10_000
 # ---------------------------------------------------------------------------
 # Scrapers (Phase 3)
 # ---------------------------------------------------------------------------

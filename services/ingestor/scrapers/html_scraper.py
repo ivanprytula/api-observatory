@@ -11,12 +11,16 @@ Demonstrates:
 from __future__ import annotations
 
 import asyncio
+import importlib
 import logging
+from typing import Any
 
 import httpx
-from bs4 import BeautifulSoup
 
 from services.ingestor.scrapers import BloomFilter, ScrapedItem
+
+
+BeautifulSoup: Any = importlib.import_module("bs4").BeautifulSoup
 
 
 logger = logging.getLogger(__name__)

@@ -3,12 +3,31 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
+from libs.platform.resilience import DependencyResilience
+from libs.platform.retry import RetryBudget
 from services.ingestor.config import settings
 from services.ingestor.fetch import get_http_client
 from services.ingestor.models import Observation
+
+
+inference_resilience = DependencyResilience(
+    "inference",
+    max_concurrency=10,
+    max_queue=10,
+    retry_budget=RetryBudget(max_retry_tokens=10, window_seconds=60),
+)
+
+
+async def _request_inference(
+    request: Callable[..., Awaitable[Any]], url: str, **kwargs: Any
+) -> Any:
+    """Issue one inference request and classify HTTP failures inside resilience."""
+    response = await request(url, **kwargs)
+    response.raise_for_status()
+    return response
 
 
 def build_observation_search_document(observation: Observation) -> dict[str, Any]:
@@ -42,7 +61,9 @@ async def index_observation_documents(
     """Send observation documents to the AI gateway indexing endpoint."""
     collection_name = collection or settings.vector_search_collection
     client = await get_http_client()
-    response = await client.post(
+    response = await inference_resilience.call(
+        _request_inference,
+        client.post,
         f"{settings.inference_url.rstrip('/')}/index",
         json={
             "collection": collection_name,
@@ -53,8 +74,6 @@ async def index_observation_documents(
         },
         timeout=settings.vector_search_http_timeout_seconds,
     )
-    response.raise_for_status()
-
     body = response.json()
     if not isinstance(body, dict):
         raise ValueError("AI gateway returned a non-object index response")
@@ -70,7 +89,9 @@ async def search_observation_documents(
     """Query the AI gateway semantic-search endpoint for indexed observations."""
     collection_name = collection or settings.vector_search_collection
     client = await get_http_client()
-    response = await client.post(
+    response = await inference_resilience.call(
+        _request_inference,
+        client.post,
         f"{settings.inference_url.rstrip('/')}/search",
         json={
             "query": query,
@@ -80,8 +101,6 @@ async def search_observation_documents(
         },
         timeout=settings.vector_search_http_timeout_seconds,
     )
-    response.raise_for_status()
-
     body = response.json()
     if not isinstance(body, dict):
         raise ValueError("AI gateway returned a non-object search response")
@@ -91,12 +110,12 @@ async def search_observation_documents(
 async def get_vector_search_health() -> dict[str, Any]:
     """Read AI gateway health for the product-facing bridge."""
     client = await get_http_client()
-    response = await client.get(
+    response = await inference_resilience.call(
+        _request_inference,
+        client.get,
         f"{settings.inference_url.rstrip('/')}/health",
         timeout=settings.vector_search_http_timeout_seconds,
     )
-    response.raise_for_status()
-
     body = response.json()
     if not isinstance(body, dict):
         raise ValueError("AI gateway returned a non-object health response")

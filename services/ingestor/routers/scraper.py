@@ -5,7 +5,9 @@ Flow: scrape → MongoDB → Kafka event (fail-open on both)
 
 from __future__ import annotations
 
+import importlib
 import logging
+from typing import Protocol, cast
 
 from fastapi import APIRouter, HTTPException, status
 
@@ -15,10 +17,24 @@ from services.ingestor.constants import API_V1_PREFIX
 from services.ingestor.scrapers import ScraperFactory, ScraperTimeoutError
 
 
-try:
-    from services.ingestor.storage import mongo
-except ImportError:
-    mongo = None
+class MongoDocumentStorage(Protocol):
+    """Optional Mongo adapter used by the legacy scrape endpoint."""
+
+    async def insert_scraped_doc(
+        self, *, source: str, url: str, title: str, content: str
+    ) -> object: ...
+
+
+def _mongo_storage() -> MongoDocumentStorage:
+    """Load the optional Mongo adapter only when this legacy endpoint is used."""
+    try:
+        module = importlib.import_module("services.ingestor.storage.mongo")
+    except ModuleNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Mongo storage is not available in this environment.",
+        ) from exc
+    return cast(MongoDocumentStorage, module)
 
 
 logger = logging.getLogger(__name__)
@@ -79,11 +95,7 @@ async def scrape_source(source: str, limit: int = 20) -> ScrapeResponse:
     logger.info("scrape_complete", extra={"source": source, "count": len(items)})
 
     stored = 0
-    if mongo is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Mongo storage is not available in this environment.",
-        )
+    mongo = _mongo_storage()
 
     for item in items:
         try:

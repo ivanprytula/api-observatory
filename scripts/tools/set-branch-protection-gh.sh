@@ -2,7 +2,7 @@
 set -euo pipefail
 
 apply_changes="false"
-branches_csv="main,develop"
+branches_csv="main"
 repo=""
 
 die() {
@@ -17,7 +17,7 @@ info() {
 usage() {
 	cat <<'EOF'
 Usage:
-	set-branch-protection-gh.sh [--repo owner/name] [--branches main,develop] [--apply]
+	set-branch-protection-gh.sh [--repo owner/name] [--branches main] [--apply]
 
 Examples:
 	set-branch-protection-gh.sh
@@ -72,35 +72,20 @@ name="${repo#*/}"
 
 IFS=',' read -r -a branches <<<"$branches_csv"
 if [[ ${#branches[@]} -eq 0 ]]; then
-	die "No branches provided. Use --branches main,develop"
+	die "No branches provided. Use --branches main"
 fi
 
 # Keep check names aligned with current .github/workflows/ci.yml job names.
 # Format: "<workflow name> / <job display name>"
 #
-# Requiring only ci-gate is intentional: it is the aggregate gate job that
-# verifies every upstream job (lint, action-ref-validation, unit-tests,
-# python-deps, docker-build, docker-scan-security, codeql, integration-tests)
-# passed. Listing individual jobs here would require updating this script every
-# time the CI DAG changes.
-default_contexts_develop_json='[
-	"CI / CI gate (all checks passed)"
-]'
-
-# main additionally requires the secrets scan (runs on every PR/push).
-# Note: security.yml is schedule-only and never runs on PRs, so it is
-# intentionally excluded from required checks.
-default_contexts_main_json='[
-	"CI / CI gate (all checks passed)",
-	"Security Secrets Lite / Secrets Scan (changed lines)"
+# Protect one stable aggregate gate so internal CI jobs can evolve without
+# requiring branch-protection changes. Manual assurance and publication remain excluded.
+default_contexts_json='[
+	"CI / Merge gate"
 ]'
 
 for branch in "${branches[@]}"; do
-	if [[ "$branch" == "main" ]]; then
-		contexts_json="$default_contexts_main_json"
-	else
-		contexts_json="$default_contexts_develop_json"
-	fi
+	contexts_json="$default_contexts_json"
 
 	payload="$(jq -n \
 		--argjson contexts "$contexts_json" \

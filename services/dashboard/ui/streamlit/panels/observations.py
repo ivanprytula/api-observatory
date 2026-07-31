@@ -43,7 +43,7 @@ def use_observations_page(
             "observations": resp.observations,
             "pagination": resp.pagination,
         }
-    except httpx.HTTPStatusError, DashboardApiError:
+    except (httpx.HTTPStatusError, DashboardApiError):
         return {"observations": [], "pagination": None}
 
 

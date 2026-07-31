@@ -1,43 +1,46 @@
 # Application CI/CD
 
+The delivery path is intentionally small enough for one maintainer to run and explain end to end.
 Workflow YAML under [`.github/workflows/`](../../.github/workflows/) is the executable source of
-truth. This page explains gate intent and ownership without duplicating job steps or command
-syntax.
+truth.
 
-## Quality Gates
+## Branch and Review Flow
 
-The main CI workflow runs lint, formatting, type, unit, contract, security, dependency, image, and
-documentation checks according to the changed path and workflow trigger. Slow integration and
-smoke work is explicitly gated. The workflow files and branch protection settings decide which
-jobs block a merge.
+Short-lived task branches merge into `main` through a pull request. The executable workflow owns its
+internal quality, test, migration, contract, and image-smoke jobs. Branch protection requires only
+the stable `CI / Merge gate`, which fails unless every internal requirement succeeds. This lets the
+job graph evolve without updating branch protection or release documentation.
 
-## Workflow Ownership
+CI does not authenticate to AWS or publish registry artifacts. Follow the exact branch, commit,
+push, and pull-request lifecycle in [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
 
-| Workflow | Responsibility |
-| --- | --- |
-| [`ci.yml`](../../.github/workflows/ci.yml) | Main quality gates, tests, contracts, and candidate images |
-| [`security.yml`](../../.github/workflows/security.yml) | Security analysis and dependency/image evidence |
-| [`security-secrets-lite.yml`](../../.github/workflows/security-secrets-lite.yml) | Blocking secrets scan |
-| [`pip-audit.yml`](../../.github/workflows/pip-audit.yml) | Scheduled/manual dependency audit |
-| [`release.yml`](../../.github/workflows/release.yml) | Immutable candidate promotion |
-| [`cd-dev.yml`](../../.github/workflows/cd-dev.yml) | Approved AWS Stage 0 deployment through SSM |
+## Manual Assurance
 
-## Artifact and Identity Contract
+[`assurance.yml`](../../.github/workflows/assurance.yml) is explicit `workflow_dispatch` evidence.
+It runs dependency audit, CodeQL, advisory Trivy scans, the authenticated k6 baseline, and the
+offline agent evaluation. These exercises are intentionally manual while their results and failure
+modes are being learned; they are not routine merge gates.
 
-CI builds ingestor, inference, and dashboard candidates tagged `tree-<SHA>`. Release promotion
-reuses those candidates rather than rebuilding or publishing `latest`. AWS workflows use GitHub
-OIDC and remain skipped until `AWS_CD_ENABLED=true`, the required variables, and the protected
-environment exist. The
-[OIDC setup](github-secrets-setup.md) owns role and variable expectations; the
-[deployment contract](../07-deployment/app-repo-contract.md) owns image names, ports, health
-behavior, and environment interfaces.
+## Manual Image Publication
 
-## Delivery Evidence
+[`publish-images.yml`](../../.github/workflows/publish-images.yml) accepts only a selected `main`
+ref. It verifies that the exact commit passed the merge gate, requires the protected
+`aws-image-publish` environment, authenticates with GitHub OIDC, and publishes immutable
+`tree-<full-tree-SHA>` ECR images with their resolved digests. It uploads machine-readable release
+metadata containing the source commit, source tree, and three image digests. It does not deploy to EC2.
+Publication remains safely skipped unless `AWS_IMAGE_PUBLISH_ENABLED` is exactly `true` and all AWS
+variables are configured.
 
-Workflow YAML and infrastructure configuration are **Decision** evidence. A completed deployment
-claim requires an approved live run with retained image identity, health/readiness, migration,
-smoke, rollback, and teardown evidence. Use the sibling
-[infra deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md)
-for platform preparation and recovery boundaries.
-- [Dev Workflows](../05-development/dev-workflows.md) — local testing commands
-- [Policies](../05-development/policies.md) — merge/release gates
+Promotion is an infra-repository PR that changes the environment image lock; no `latest` image is
+published.
+
+## Evidence Boundary and Evolution
+
+Workflow configuration and local validation are **Decision** evidence. A deployment claim requires
+a completed, approved run with image identity, migrations, readiness, smoke, rollback, and teardown
+evidence. Local Compose remains canonical. Fargate or Kubernetes becomes relevant only after the VM
+path is understood and a measured availability, scaling, or ownership trigger justifies the next
+operational layer.
+
+Use the [OIDC setup](github-secrets-setup.md) for identity and variable requirements and the
+[deployment contract](../07-deployment/app-repo-contract.md) for service interfaces.

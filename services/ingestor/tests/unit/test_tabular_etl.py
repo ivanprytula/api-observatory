@@ -47,7 +47,9 @@ class TestTabularETLEngine:
         )
         assert result.backend_used == "pandas"
         assert result.row_count == 2
-        assert all(item["provider"] == "alpha" for item in result.observations)
+        assert all(item["provider"] == "alpha" for item in result.observations), (
+            result.observations
+        )
 
     def test_dask_preview_is_blocked(self) -> None:
         with pytest.raises(UnsupportedETLBackendError):

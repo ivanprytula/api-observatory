@@ -148,28 +148,28 @@ Use `gh` directly — it natively supports vars, secrets, and environment-scoped
 
 ```bash
 # Repository variable
-gh variable set AWS_REGION --body "eu-central-1" --repo ivanp/api-observatory
+gh variable set AWS_REGION --body "eu-central-1" --repo ivanprytula/api-observatory
 
 # Environment variable
-gh variable set ECS_CLUSTER_NAME --env dev --body "data-zoo-dev" --repo ivanp/api-observatory
+gh variable set ECS_CLUSTER_NAME --env dev --body "data-zoo-dev" --repo ivanprytula/api-observatory
 
 # Repository secret
-gh secret set AWS_ACCOUNT_ID --body "123456789012" --repo ivanp/api-observatory
+gh secret set AWS_ACCOUNT_ID --body "123456789012" --repo ivanprytula/api-observatory
 
 # Environment secret (value from local env var of same name)
-gh secret set SENTRY_AUTH_TOKEN --env prod --repo ivanp/api-observatory
+gh secret set SENTRY_AUTH_TOKEN --env prod --repo ivanprytula/api-observatory
 
 # OIDC subject template customization
 gh api --method PUT \
   -H "Accept: application/vnd.github+json" \
-"/repos/ivanp/api-observatory/actions/oidc/customization/sub" \
+"/repos/ivanprytula/api-observatory/actions/oidc/customization/sub" \
   -f use_default=false \
   -f "include_claim_keys[]=repo" \
   -f "include_claim_keys[]=context"
 
 # OIDC template show/reset
-gh api "/repos/ivanp/api-observatory/actions/oidc/customization/sub"
-gh api --method PUT "/repos/ivanp/api-observatory/actions/oidc/customization/sub" \
+gh api "/repos/ivanprytula/api-observatory/actions/oidc/customization/sub"
+gh api --method PUT "/repos/ivanprytula/api-observatory/actions/oidc/customization/sub" \
   -f use_default=true
 ```
 

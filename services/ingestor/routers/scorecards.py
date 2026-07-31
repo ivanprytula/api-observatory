@@ -25,11 +25,8 @@ from services.ingestor.constants import (
     SCORECARD_SLO_MIN_PCT,
 )
 from services.ingestor.database import get_db
-from services.ingestor.repositories.scorecards import (
-    get_scorecard,
-    list_scorecards,
-    observation_health_sample,
-)
+from services.ingestor.incident_lifecycle import record_health_sample
+from services.ingestor.repositories.scorecards import get_scorecard, list_scorecards
 
 
 router = APIRouter(prefix=f"{API_V1_PREFIX}/scorecards", tags=["scorecards"])
@@ -66,7 +63,12 @@ async def create_health_sample(
     represents a single synthetic or real request made to the provider:
     its latency, whether it succeeded, and optional HTTP status and region.
     """
-    return await observation_health_sample(db, payload)
+    try:
+        return await record_health_sample(db, payload)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from None
 
 
 @router.get(

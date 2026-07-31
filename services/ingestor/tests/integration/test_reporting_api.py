@@ -4,14 +4,17 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from httpx import AsyncClient
+
+
+pytestmark = pytest.mark.integration
 
 
 _SOURCE: dict[str, Any] = {
     "name": "reporting-test-source",
-    "url": "https://api.example.com/reporting",
-    "source_type": "rest",
-    "tags": ["Reporting", "Test"],
+    "base_url": "https://1.1.1.1",
+    "health_check_path": "/reporting",
 }
 
 _SCHEMA_V1: dict[str, Any] = {
@@ -29,7 +32,7 @@ _SCHEMA_V2_BREAKING: dict[str, Any] = {
 
 async def _create_source(client: AsyncClient, name: str) -> int:
     response = await client.post("/api/v1/sources", json={**_SOURCE, "name": name})
-    assert response.status_code == 201
+    assert response.status_code == 201, response.text
     return int(response.json()["id"])
 
 
@@ -44,15 +47,16 @@ async def _seed_breaking_drift(client: AsyncClient, source_id: int) -> None:
     )
     assert first.status_code == 201
 
-    second = await client.post(
-        "/api/v1/contracts/snapshots",
-        json={
-            "source_id": source_id,
-            "schema_version": "v2",
-            "payload_schema": _SCHEMA_V2_BREAKING,
-        },
-    )
-    assert second.status_code == 201
+    for _ in range(3):
+        candidate = await client.post(
+            "/api/v1/contracts/snapshots",
+            json={
+                "source_id": source_id,
+                "schema_version": "v2",
+                "payload_schema": _SCHEMA_V2_BREAKING,
+            },
+        )
+        assert candidate.status_code == 201
 
 
 class TestReportingApi:

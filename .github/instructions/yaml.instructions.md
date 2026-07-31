@@ -201,7 +201,7 @@ jobs:
 - Set explicit `python-version`.
 - Define services in `services` block (over separate containers).
 - Use meaningful job names (`test`, `lint`, `deploy`).
- - For Python-heavy CI jobs, consider using the prebuilt CI image `ghcr.io/${{ github.repository_owner }}/data-pipeline-ci` (via `container.image`) to guarantee Python 3.14 parity and faster job startup. See `docs/ci/prebuilt-ci-image.md` for build and pinning instructions.
+- For Python-heavy CI jobs, use the repository's pinned `uv` setup and `uv sync --frozen`; add a prebuilt CI image only when measured setup time justifies its separate lifecycle.
 
 ---
 

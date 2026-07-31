@@ -1,6 +1,7 @@
 """App settings (async stack)."""
 
 import secrets
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -10,6 +11,9 @@ from services.ingestor.constants import (
     BACKGROUND_WORKER_COUNT_DEFAULT,
     BACKGROUND_WORKER_QUEUE_SIZE_DEFAULT,
     NOTIFICATION_HTTP_TIMEOUT_SECONDS_DEFAULT,
+    RETENTION_BATCH_SIZE_DEFAULT,
+    RETENTION_BATCH_SIZE_MAX,
+    RETENTION_DAYS_DEFAULT,
     SCRAPER_HTTP_TIMEOUT_SECONDS_DEFAULT,
     VECTOR_SEARCH_DEFAULT_COLLECTION,
     VECTOR_SEARCH_HTTP_TIMEOUT_SECONDS_DEFAULT,
@@ -27,7 +31,7 @@ class Settings(BaseSettings):
     # REQUIRED: Must be set via DATABASE_URL environment variable
     # ============ Database ============
     database_url: str = Field(
-        default="postgresql+asyncpg://localhost:5432/api_observatory",
+        default="postgresql+asyncpg://localhost:5432/api_obs_ingestor",
         description="PostgreSQL connection string (asyncpg driver)",
     )
 
@@ -62,6 +66,39 @@ class Settings(BaseSettings):
     log_level: str = Field(
         default="INFO",
         description="Global logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL",
+    )
+
+    request_timeout_seconds: int = Field(
+        default=30,
+        ge=1,
+        le=300,
+        description="Maximum total duration for one HTTP request.",
+    )
+
+    auth_demo_routes_enabled: bool = Field(
+        default=False,
+        description="Mount the non-production v2 and credential-issuer learning routes.",
+    )
+
+    rls_enabled: bool = Field(
+        default=False,
+        description="Enforce PostgreSQL tenant row-level security for observations.",
+    )
+
+    retention_enabled: bool = Field(
+        default=False,
+        description="Permit destructive observation archival when explicitly requested.",
+    )
+    retention_days: int = Field(
+        default=RETENTION_DAYS_DEFAULT,
+        ge=1,
+        description="Archive observations older than this event-age window.",
+    )
+    retention_batch_size: int = Field(
+        default=RETENTION_BATCH_SIZE_DEFAULT,
+        ge=1,
+        le=RETENTION_BATCH_SIZE_MAX,
+        description="Maximum observations moved by one retention invocation.",
     )
 
     trusted_hosts: str = Field(
@@ -200,7 +237,7 @@ class Settings(BaseSettings):
     )
 
     mongo_db_name: str = Field(
-        default="api_observatory",
+        default="api_obs_ingestor",
         description="MongoDB database name",
     )
 
@@ -218,14 +255,14 @@ class Settings(BaseSettings):
     otel_exporter_otlp_endpoint: str = Field(
         default="http://localhost:4317",
         description=(
-            "OTLP gRPC endpoint for trace export (e.g., http://jaeger:4317). "
+            "OTLP gRPC endpoint for trace export (e.g., http://tempo:4317). "
             "Matches the standard OTel SDK env var OTEL_EXPORTER_OTLP_ENDPOINT."
         ),
     )
 
     otel_service_name: str = Field(
         default="ingestor",
-        description="Service name shown in Jaeger / OTel collector UI.",
+        description="Service name shown in Grafana Tempo / OTel collector UI.",
     )
 
     # ============ Sentry (error tracking) ============
@@ -289,6 +326,14 @@ class Settings(BaseSettings):
     notifications_enabled: bool = Field(
         default=False,
         description="Enable notification dispatching for operational events.",
+    )
+
+    notification_delivery_mode: Literal["direct", "broker"] = Field(
+        default="direct",
+        description=(
+            "Deliver notifications directly after commit or enqueue them transactionally "
+            "for the broker consumer."
+        ),
     )
 
     notification_default_channels: str = Field(

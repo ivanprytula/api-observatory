@@ -169,8 +169,11 @@ async def list_cohort_reports(
             )
             breaking_rate = (breaking_count / sample_size) * 100.0
 
-        if source.sla_ms:
-            avg_sla_gap_ms = max(0.0, source.sla_ms * (1.0 - (avg_compat / 100.0)))
+        if source.latency_threshold_ms:
+            avg_sla_gap_ms = max(
+                0.0,
+                source.latency_threshold_ms * (1.0 - (avg_compat / 100.0)),
+            )
         else:
             avg_sla_gap_ms = 0.0
 
@@ -360,11 +363,11 @@ async def get_cost_value_chart(
       event.  Breaking calls still cost money but deliver no usable observation.
     - **cost_per_insight_usd**: total spend divided by the number of drift
       events generated — each event is one actionable schema-change insight.
-    - Team rollups aggregate both dimensions across all sources belonging
-      to the same ``owner_team``.
+    - Team rollups use the ``unassigned`` group until source ownership becomes
+      part of the active source-registry contract.
 
-    Sources without a configured ``cost_per_call_usd`` contribute zero cost
-    but are still included so callers can see call volume and insight counts.
+    The active source-registry contract does not collect per-call cost, so
+    sources contribute zero cost but remain visible for volume and insight counts.
     """
     cutoff = _cutoff_utc_naive(days)
 
@@ -440,7 +443,7 @@ async def get_cost_value_chart(
         successful_observations = total_calls - breaking_calls
         insights = insights_by_source.get(source.id, 0)
 
-        unit_cost = source.cost_per_call_usd or 0.0
+        unit_cost = 0.0
         total_cost = round(unit_cost * total_calls, 6)
 
         cost_per_observation: float | None = None
@@ -455,7 +458,7 @@ async def get_cost_value_chart(
             CostValueRow(
                 source_id=source.id,
                 source_name=source.name,
-                owner_team=source.owner_team,
+                owner_team=None,
                 cost_per_call_usd=unit_cost,
                 total_calls=total_calls,
                 total_cost_usd=total_cost,
@@ -629,7 +632,7 @@ async def get_freshness_sla(
             FreshnessSourceRow(
                 source_id=src.id,
                 source_name=src.name,
-                owner_team=src.owner_team,
+                owner_team=None,
                 last_snapshot_at=last_at,
                 age_seconds=age_s,
                 sla_threshold_seconds=threshold_seconds,
