@@ -751,6 +751,30 @@ async def get_user_by_username(session: AsyncSession, username: str) -> User | N
     return result.scalar_one_or_none()
 
 
+async def update_user_role(
+    session: AsyncSession,
+    username: str,
+    role: str,
+) -> User | None:
+    """Assign a new role to a user.
+
+    Args:
+        session: Active async database session.
+        username: Username of the target user.
+        role: Role to assign (must match the RBAC policy allow-list).
+
+    Returns:
+        Updated User ORM instance or None if the user was not found.
+    """
+    user = await get_user_by_username(session, username)
+    if user is None:
+        return None
+    user.role = role
+    await session.commit()
+    await session.refresh(user)
+    return user
+
+
 async def get_user_by_id(session: AsyncSession, user_id: int) -> User | None:
     """Fetch an active user by primary key.
 

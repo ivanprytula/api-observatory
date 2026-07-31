@@ -1,0 +1,8 @@
+{
+  "name": "probe-ok",
+  "base_url": "https://httpbin.org",
+  "health_check_path": "/get",
+  "probe_interval_seconds": 10,
+  "latency_threshold_ms": 2000,
+  "is_active": true
+}

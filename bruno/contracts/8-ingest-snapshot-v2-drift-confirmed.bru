@@ -1,0 +1,43 @@
+meta {
+  name: Ingest snapshot v2 — drift confirmed
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/v1/contracts/snapshots
+  body: json
+  auth: bearer
+}
+
+headers {
+  Content-Type: application/json
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "source_id": {{drift_source_id}},
+    "payload_schema": {
+      "userId": "integer",
+      "id": "integer",
+      "body": "string"
+    },
+    "schema_version": "2.0.0",
+    "snapshot_note": "After migration — title field removed"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.drift_event.event_type: eq breaking
+}
+
+script:post-response {
+  if (res.body.drift_event) {
+    bru.setEnvVar("drift_event_id", res.body.drift_event.id.toString());
+  }
+}

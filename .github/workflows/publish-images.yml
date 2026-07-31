@@ -79,6 +79,41 @@ jobs:
           echo "tree_sha=${TREE_SHA}" >> "$GITHUB_STEP_SUMMARY"
           echo "metadata_path=${metadata_path}" >> "$GITHUB_OUTPUT"
 
+      - name: Warn when cross-repo promotion token is not configured
+        env:
+          PROMOTION_TOKEN: ${{ secrets.INFRA_PROMOTION_TOKEN }}
+        if: env.PROMOTION_TOKEN == ''
+        run: echo "::warning::INFRA_PROMOTION_TOKEN is not set; skip auto-promotion and use the manual promote-images flow in api-observatory-infra."
+
+      - name: Trigger infra release promotion
+        env:
+          PROMOTION_TOKEN: ${{ secrets.INFRA_PROMOTION_TOKEN }}
+          GH_TOKEN: ${{ secrets.INFRA_PROMOTION_TOKEN }}
+          COMMIT_SHA: ${{ github.sha }}
+          TREE_SHA: ${{ steps.tree.outputs.tree_sha }}
+        if: env.PROMOTION_TOKEN != ''
+        run: |
+          set -euo pipefail
+          metadata_path="${{ steps.release.outputs.metadata_path }}"
+          [[ -s "$metadata_path" ]] || { echo "Release metadata was not produced." >&2; exit 1; }
+          target_repo="${GITHUB_REPOSITORY_OWNER}/api-observatory-infra"
+          payload=$(jq -c \
+            --arg event_type "app-release-published" \
+            --arg source_repository "$GITHUB_REPOSITORY" \
+            --arg source_commit_sha "$COMMIT_SHA" \
+            --arg source_tree_sha "$TREE_SHA" \
+            --arg promotion_target "dev" \
+            --arg environment_name "aws-dev" \
+            --argjson images "$(jq -c '.images' "$metadata_path")" \
+            '{event_type: $event_type, client_payload: {source_repository: $source_repository, source_commit_sha: $source_commit_sha, source_tree_sha: $source_tree_sha, promotion_target: $promotion_target, environment_name: $environment_name, images: $images}}')
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "/repos/${target_repo}/dispatches" \
+            --input - \
+            <<< "$payload"
+
       - name: Upload release metadata
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

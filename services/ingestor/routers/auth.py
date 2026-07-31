@@ -12,9 +12,11 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from libs.platform.auth import InternalAuthDep
 from services.ingestor.api_schemas.observations import (
     LogoutRequest,
     RefreshRequest,
+    RoleAssignment,
     TokenResponse,
     UserCreate,
     UserResponse,
@@ -35,6 +37,7 @@ from services.ingestor.rate_limiting_token_bucket import enforce_public_v1_token
 from services.ingestor.repositories.observations import (
     create_user,
     get_user_by_username,
+    update_user_role,
 )
 
 
@@ -82,6 +85,43 @@ async def register(body: UserCreate, db: DbDep) -> UserResponse:
             detail="Username or email already registered.",
         ) from None
     logger.info("user_registered", extra={"username": body.username})
+    return UserResponse.model_validate(user)
+
+
+@router.post("/users/{username}/role", response_model=UserResponse)
+async def assign_role(
+    username: str,
+    body: RoleAssignment,
+    db: DbDep,
+    claims: InternalAuthDep,
+) -> UserResponse:
+    """Assign a role to a user (internal service-to-service only).
+
+    Public registration always creates a ``viewer``; roles are assigned here
+    through the internal-auth channel so the caller must present a valid
+    service JWT signed with INTERNAL_JWT_SECRET.
+
+    Args:
+        username: Target user to update.
+        body: RoleAssignment payload with the new role.
+        db: Injected async database session.
+        claims: Verified internal service claims (dependency injection).
+
+    Returns:
+        200 UserResponse with the updated role.
+        401 if the internal JWT is missing or invalid.
+        404 if the target user does not exist.
+    """
+    user = await update_user_role(db, username, body.role)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+    logger.info(
+        "user_role_assigned",
+        extra={"username": username, "role": body.role, "by_service": claims.sub},
+    )
     return UserResponse.model_validate(user)
 
 

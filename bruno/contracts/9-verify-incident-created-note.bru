@@ -1,7 +1,7 @@
 meta {
   name: Verify Incident Auto-Created (note)
   type: http
-  seq: 6
+  seq: 9
 }
 
 get {
@@ -13,9 +13,18 @@ get {
 docs {
   # Verifying the AgentRun incident trigger
 
-  Request 5 ("Ingest snapshot v2 — drift trigger") removes the `title` field,
-  which makes `event_type == "breaking"`. Per
-  `docs/.plans/ai-augmented-observatory-agent-mcp.md` Phase 1, that
+  Requests 4-8 demonstrate confirmed contract drift on a fresh
+  `contract-drift-demo-<timestamp>` source:
+
+  - `4` creates the source (a new one per run, so the demo is deterministic
+    without resetting volumes) and stores its id as `drift_source_id`.
+  - `5` ingests the v1 schema — the first snapshot auto-becomes the baseline.
+  - `6`, `7`, `8` ingest the v2 schema (the `title` field removed). Drift is
+    only confirmed after `CONTRACT_BASELINE_CONFIRMATION_POLLS = 3` identical
+    observations, so `6` and `7` return `drift_event: null` and the breaking
+    event fires on `8` (`event_type == "breaking"`, `removed_fields: ["title"]`).
+
+  Per `docs/.plans/ai-augmented-observatory-agent-mcp.md` Phase 1, that
   auto-creates an `Observation` (`tags: ["incident", severity]`) + a
   `pending` `AgentRun`, in the same transaction as the drift event.
 

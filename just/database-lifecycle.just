@@ -31,27 +31,6 @@ _cloud-sandbox-infra:
     docker compose up -d ingestor-db cache broker ingestor dashboard
     until docker compose exec -T ingestor-db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
 
-_db-get-token:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    API_BASE_URL="${API_BASE_URL:-http://127.0.0.1:8000}"
-    TOKEN_URL="${API_BASE_URL%/}/api/v1/auth/token"
-    for attempt in 1 2 3; do
-        set +e
-        HTTP_CODE=$(curl -s -o /tmp/get_token_body.$$ -w "%{http_code}" -X POST "$TOKEN_URL" -H 'Content-Type: application/x-www-form-urlencoded' -d 'username=admin&password=admin123')
-        CURL_EXIT=$?
-        BODY=$(cat /tmp/get_token_body.$$ 2>/dev/null || true)
-        rm -f /tmp/get_token_body.$$
-        set -e
-        if [ "$CURL_EXIT" -eq 0 ] && [ "$HTTP_CODE" = "200" ] && [ -n "$BODY" ]; then
-            TOKEN=$(printf '%s' "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('access_token',''))" 2>/dev/null || true)
-            if [ -n "$TOKEN" ]; then printf '%s\n' "$TOKEN"; exit 0; fi
-        fi
-        sleep $((attempt * 2))
-    done
-    echo "ERROR: failed to obtain auth token after 3 attempts" >&2
-    exit 1
-
 db-auto-init:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -65,7 +44,31 @@ db-auto-init:
         echo "Database migrations are not current. Run 'just db-migrate' first." >&2
         exit 1
     fi
-    curl -sf -X POST "${API_BASE_URL}/api/v1/auth/register" -H 'Content-Type: application/json' -d '{"username":"admin","password":"admin123","email":"admin@example.com","role":"admin"}' >/dev/null 2>&1 || true
-    TOKEN=$(just _db-get-token)
-    BASE_URL="${API_BASE_URL}" bash .local-dev/scripts/seed-sources.sh "$TOKEN" .local-dev/payloads/source-*.json
-    echo "auto-init complete — probe sources run every 10s"
+    PROJECT_ROOT="{{justfile_directory()}}"
+    if [[ ! -f "${PROJECT_ROOT}/.env" ]]; then
+        echo "auto-init: ${PROJECT_ROOT}/.env not found — run 'just generate-secrets' first" >&2
+        exit 1
+    fi
+    INTERNAL_TOKEN="$(just db-internal-token)"
+    cd "${PROJECT_ROOT}/bruno" && bru run demo -r --env local-dev --env-var "baseUrl=${API_BASE_URL}" --env-var "internal_token=${INTERNAL_TOKEN}"
+    echo "auto-init complete — admin/admin123 is a real admin; probe sources run every 10s"
+
+# Print a short-lived internal service JWT (60s TTL) for pasting into the
+# Bruno `internal_token` env var or the SwaggerUI Authorize dialog.
+db-internal-token:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    PROJECT_ROOT="{{justfile_directory()}}"
+    if [[ ! -f "${PROJECT_ROOT}/.env" ]]; then
+        echo "internal-token: ${PROJECT_ROOT}/.env not found — run 'just generate-secrets' first" >&2
+        exit 1
+    fi
+    set -a
+    # shellcheck source=/dev/null
+    source "${PROJECT_ROOT}/.env"
+    set +a
+    if [[ -z "${API_OBS_INTERNAL_JWT_SECRET:-}" ]]; then
+        echo "internal-token: API_OBS_INTERNAL_JWT_SECRET is empty in .env" >&2
+        exit 1
+    fi
+    cd "${PROJECT_ROOT}" && INTERNAL_JWT_SECRET="${API_OBS_INTERNAL_JWT_SECRET}" uv run python -c 'from libs.platform.auth import generate_internal_token; print(generate_internal_token("local-dev-seed"))'

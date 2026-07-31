@@ -34,7 +34,7 @@ from services.ingestor.auth import (
     verify_docs_credentials,
 )
 from services.ingestor.config import settings
-from services.ingestor.constants import HEALTH_RATE_LIMIT
+from services.ingestor.constants import APP_DESCRIPTION, HEALTH_RATE_LIMIT
 from services.ingestor.core.background_workers import (
     BackgroundTaskStatus,
     BackgroundWorkerPool,
@@ -534,26 +534,7 @@ app = FastAPI(
         for url in settings.openapi_servers.split(",")
         if url.strip()
     ],
-    description=(
-        "Async data pipeline platform built on FastAPI, SQLAlchemy 2.0, and asyncpg.\n\n"
-        "The API now spans authenticated observation ingestion, advanced rate-limiting demos, "
-        "analytics, scraping, vector search, background processing, notifications, "
-        "Mongo-backed aggregations, agent workflows, source registry management, "
-        "contract drift detection, operational insights, subscriptions, reporting, "
-        "ETL previews, tenant-aware API keys, WebSocket event streaming, and health probes.\n\n"
-        "Current security controls include session and JWT authentication, tenant-aware "
-        "API keys with scoped permissions and revocation, protected API docs, baseline "
-        "security headers, and rate limiting on sensitive endpoints.\n\n"
-        "**Representative endpoints:**\n"
-        "- `POST /api/v1/observations` — core observation creation w/ fixed-window rate limiting\n"
-        "- `POST /api/v2/observations/token-bucket` — burst-tolerant token-bucket limiter\n"
-        "- `POST /api/v2/observations/sliding-window` — exact sliding-window limiter\n"
-        "- `POST /api/v1/api-keys` — issue scoped tenant API keys\n"
-        "- `GET /api/v1/source-registry` — manage external source profiles\n"
-        "- `GET /api/v1/contract-drift/events` — inspect compatibility drift signals\n"
-        "- `GET /api/v1/insights` — retrieve operational recommendations and anomalies\n"
-        "- `GET /ws/observations` — subscribe to real-time observation events"
-    ),
+    description=APP_DESCRIPTION,
     lifespan=lifespan,
     openapi_tags=_OPENAPI_TAGS,
     docs_url=None if settings.docs_username else "/docs",

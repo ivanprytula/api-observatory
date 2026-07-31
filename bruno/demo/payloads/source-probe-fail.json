@@ -1,0 +1,8 @@
+{
+  "name": "probe-fail",
+  "base_url": "https://httpbin.org",
+  "health_check_path": "/status/500",
+  "probe_interval_seconds": 10,
+  "latency_threshold_ms": 100,
+  "is_active": true
+}

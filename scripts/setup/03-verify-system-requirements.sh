@@ -48,7 +48,10 @@ check_command_warning() {
 
 check_python_version() {
     local python_bin=""
-    if command -v python3.14 &>/dev/null; then
+    if command -v uv &>/dev/null \
+        && uv python find "${REQUIRED_PYTHON_VERSION}" >/dev/null 2>&1; then
+        python_bin="$(uv python find "${REQUIRED_PYTHON_VERSION}")"
+    elif command -v python3.14 &>/dev/null; then
         python_bin="python3.14"
     elif command -v python3 &>/dev/null; then
         python_bin="python3"

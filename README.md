@@ -94,9 +94,11 @@ profile. For normal onboarding, use `just dev-up`. `just dev` is an alternative 
 hot-reload loop for experienced contributors; it is not the canonical default. Never commit the
 local `.env` created from it.
 
-For the complete task lifecycle from branch creation through pull request, use
-[Contributing](CONTRIBUTING.md). For proof selection, use
-[Development Workflows](docs/05-development/dev-workflows.md).
+The README stays intentionally high-level. Use [Contributing](CONTRIBUTING.md) for branch and PR
+conventions, [Development Workflows](docs/05-development/dev-workflows.md) for proof selection,
+and the [Canonical Onboarding and Delivery Checklist](docs/05-development/onboarding-and-delivery-checklist.md)
+as the single source of truth for onboarding, task flow, PR readiness, and the app-to-infra
+release handoff.
 
 ## Recruiter and Interview Tour
 

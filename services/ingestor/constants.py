@@ -250,6 +250,38 @@ ABUSE_IP_MAX_LEN: int = 64
 ABUSE_NOTES_MAX_LEN: int = 1024
 
 # ---------------------------------------------------------------------------
+# OpenAPI / Swagger project description — single source of truth.
+# Keep this description accurate when routers or representative endpoints change;
+# main.py renders it verbatim in the OpenAPI schema.
+# ---------------------------------------------------------------------------
+APP_DESCRIPTION: str = (
+    "API Observatory — a Python backend platform for detecting when a third-party "
+    "API becomes unavailable, slow, or contract-incompatible before that failure "
+    "reaches an application's users.\n\n"
+    "Built on FastAPI, SQLAlchemy 2.0, and asyncpg, the API spans authenticated "
+    "observation ingestion with rate limiting, "
+    "analytics, vector search, background processing, notifications, "
+    "agent workflows, source registry management, "
+    "contract drift detection, dependency incident lifecycle, provider scorecards, "
+    "abuse detection, operational insights, subscriptions, reporting, "
+    "ETL previews, tenant-aware API keys, WebSocket event streaming, and health probes.\n\n"
+    "Current security controls include session and JWT authentication, tenant-aware "
+    "API keys with scoped permissions and revocation, protected API docs, baseline "
+    "security headers, and rate limiting on sensitive endpoints.\n\n"
+    "**Representative endpoints:**\n"
+    "- `POST /api/v1/observations` — core observation creation w/ fixed-window rate limiting\n"
+    "- `POST /api/v1/api-keys` — issue scoped tenant API keys\n"
+    "- `GET /api/v1/sources` — manage external source profiles\n"
+    "- `GET /api/v1/contracts/sources/{source_id}/drift-events` — inspect\n"
+    "  compatibility drift signals\n"
+    "- `GET /api/v1/incidents` — tenant-scoped dependency incident lifecycle\n"
+    "- `GET /api/v1/scorecards` — provider reliability scorecards\n"
+    "- `GET /api/v1/insights/recommendations` — retrieve operational recommendations\n"
+    "- `GET /api/v1/analytics/summary` — aggregate analytics over observations\n"
+    "- `GET /ws/observations/stream` — subscribe to real-time observation events"
+)
+
+# ---------------------------------------------------------------------------
 # Provider Scorecards (BI feature 7.1)
 # ---------------------------------------------------------------------------
 SCORECARD_DEFAULT_DAYS: int = 7
