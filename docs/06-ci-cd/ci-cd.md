@@ -7,9 +7,10 @@ truth.
 ## Branch and Review Flow
 
 Short-lived task branches merge into `main` through a pull request. The executable workflow owns its
-internal quality, test, migration, contract, and image-smoke jobs. Branch protection requires only
-the stable `CI / Merge gate`, which fails unless every internal requirement succeeds. This lets the
-job graph evolve without updating branch protection or release documentation.
+internal quality, test, migration, contract, and image-smoke jobs. The stable `CI / Merge gate` fails
+unless every internal requirement succeeds. Repository settings intentionally do not enforce checks
+or approvals yet, so waiting for that gate is a maintainer policy rather than a GitHub restriction.
+The stable gate lets the internal job graph evolve without updating release documentation.
 
 CI does not authenticate to AWS or publish registry artifacts. Follow the exact branch, commit,
 push, and pull-request lifecycle in [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
@@ -33,6 +34,21 @@ variables are configured.
 
 Promotion is an infra-repository PR that changes the environment image lock; no `latest` image is
 published.
+
+## Cross-Repository Contract Change
+
+When a change affects published images, the runtime service contract, or deployment topology:
+
+1. Merge the application PR into `main` and wait for the internal `CI / Merge gate` to succeed.
+2. Publish immutable `tree-<SHA>` images with `publish-images.yml`.
+3. Download the resulting `release-metadata-<commit-SHA>` artifact.
+4. In `api-observatory-infra`, create a separate task branch from `main`, run
+   `just promote-images <artifact-path>`, review the generated `images.lock.json`, and open an
+   infra PR.
+5. After infra CI passes, manually dispatch the approved Stage 0 deployment workflow in the infra
+   repo.
+
+Do not describe a lock-file change, Terraform plan, or published image as a completed deployment.
 
 ## Evidence Boundary and Evolution
 

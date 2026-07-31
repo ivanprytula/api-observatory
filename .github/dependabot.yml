@@ -10,7 +10,7 @@ updates:
     directory: "/"
     schedule:
       interval: monthly
-    target-branch: develop
+    target-branch: main
     open-pull-requests-limit: 3
     reviewers:
       - ivanprytula
@@ -47,7 +47,7 @@ updates:
       day: tuesday
       time: "03:00"  # 3 AM UTC
       timezone: "UTC"
-    target-branch: develop
+    target-branch: main
     open-pull-requests-limit: 5
     reviewers:
       - ivanprytula
@@ -75,7 +75,7 @@ updates:
       day: wednesday
       time: "03:00"  # 3 AM UTC
       timezone: "UTC"
-    target-branch: develop
+    target-branch: main
     open-pull-requests-limit: 5
     reviewers:
       - ivanprytula

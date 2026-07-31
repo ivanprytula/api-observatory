@@ -1,100 +1,63 @@
-# ADR 007: Migration Runner vs Sidecar for Cloud Deploys
-
-Track: C — Architecture and Platform Strategy
-
+# ADR 007: One-Shot Migration Runner
 
 ## Status
 
-Proposed
-
-## Date
-
-2026-04-24
+Accepted on 2026-07-31. This decision supersedes the earlier proposed ECS/Fargate-specific wording.
 
 ## Context
 
-Phase 7 introduces cloud deployment on ECS Fargate. Database migrations must run before service rollout and must not execute from FastAPI app startup.
+Alembic is authoritative for persistent local and deployment databases. Migrations must complete
+before a changed application image serves traffic, but they must not run from FastAPI startup or
+from one sidecar per replica. Those alternatives create duplicate execution, ordering, and rollback
+ambiguity.
 
-The roadmap policy now defines a strict split:
+Local Docker Compose is canonical. AWS Stage 0 uses the same application images on one EC2 Compose
+host, with a separate optional inference database.
 
-- Alembic is authoritative for persistent-local and production-like environments.
-- create_all is allowed only in explicitly ephemeral-local contexts.
-- Migration failure blocks rollout.
+## Decision
 
-We need a deployment-time execution model for Alembic in production-like environments.
+Run each selected service's migration command once as an explicit blocking step before application
+replacement:
 
-## Decision Drivers
+```bash
+docker compose run --rm --no-deps ingestor alembic upgrade head
+docker compose --profile inference run --rm --no-deps inference \
+  alembic -c services/inference/alembic.ini upgrade head
+```
 
-- Safety: avoid double-runs, race conditions, and partial rollout.
-- Operational clarity: one observable migration step per release.
-- Rollback control: explicit app rollback and controlled downgrade path.
-- Compatibility with CI migration gate and revision checks.
+The inference command runs only when the reviewed `inference` profile is enabled. Migration failure
+stops delivery before `docker compose up -d` replaces application containers.
 
-## Options
-
-### Option A: One-shot migration runner task (recommended candidate)
-
-Run a dedicated task/job before service rollout:
-
-- Build image
-- Run alembic upgrade head once
-- Verify current revision at head
-- Roll ECS services
-
-Pros:
-
-- Single, explicit execution point.
-- Easy to make blocking and observable in pipeline.
-- Prevents app startup from carrying migration responsibility.
-
-Cons:
-
-- Requires deployment orchestration step.
-- Needs idempotency and lock protection in runner execution.
-
-### Option B: Sidecar migration container per service deploy
-
-Bundle migration behavior into sidecar container attached to service rollout.
-
-Pros:
-
-- Co-locates migration artifact with service release unit.
-- Potentially simpler packaging for some teams.
-
-Cons:
-
-- Higher risk of repeated or concurrent migration attempts.
-- Harder to reason about global execution ordering.
-- More complex failure handling across rolling updates.
-
-## Current Recommendation
-
-Prefer Option A (one-shot migration runner) for Phase 7 implementation.
+CI independently proves fresh upgrade, current-head checks, and the supported downgrade/upgrade
+path. Application changes use expand/contract sequencing so the previous and next image sets remain
+compatible during best-effort rollback.
 
 ## Consequences
 
-Positive:
+Benefits:
 
-- Clear separation of schema migration from app lifecycle.
-- Stronger deploy gate semantics.
-- Better auditability of migration step outcome.
+- one explicit and observable migration execution per selected database;
+- the same image and Alembic configuration are used locally and during Stage 0 delivery;
+- application startup remains focused on serving traffic;
+- no sidecar, leader election, or replica coordination is required.
 
-Negative:
+Costs and limits:
 
-- Additional pipeline orchestration logic.
-- Requires explicit runbook ownership.
+- deployment orchestration owns migration ordering;
+- a successful schema upgrade is not automatically reversible;
+- image rollback cannot safely undo a breaking migration;
+- future replicas or managed orchestration must retain a single migration owner.
 
-## Validation Criteria
+## Validation
 
-- Fresh database: upgrade head succeeds.
-- Idempotency path: downgrade base then upgrade head succeeds in CI.
-- Schema object checks pass (extensions, views, partitions, indexes).
-- Deployment dry run executes migration task successfully before rollout.
+- Application CI validates ingestor and inference migrations against isolated PostgreSQL databases.
+- Local onboarding runs `just db-migrate` through the configured ingestor container.
+- The infra rollout runs selected migrations before application replacement and aborts on failure.
+- Rollback documentation requires backward-compatible migrations across both image sets.
 
-## Related References
+## References
 
-- .github/prompts/plan-dataZooPlatform.prompt.md
-- .github/workflows/ci.yml
-- alembic/env.py
-- Gotchas reference
-- Decisions document
+- [Application CI](../../../.github/workflows/ci.yml)
+- [Local database lifecycle](../../../just/database-lifecycle.just)
+- [AWS Stage 0 rollout](https://github.com/ivanprytula/api-observatory-infra/blob/main/deployment/aws-stage0/rollout.sh)
+- [AWS Stage 0 deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md)

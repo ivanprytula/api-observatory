@@ -16,7 +16,7 @@ db-reset confirmation_flag="" confirmation="":
     echo "stack reset — run 'just dev-wait-ready' before using it"
 
 db-migrate:
-    uv run alembic upgrade head
+    docker compose run --rm --no-deps ingestor alembic upgrade head
 
 _cloud-sandbox-seed:
     #!/usr/bin/env bash
@@ -61,7 +61,7 @@ db-auto-init:
         echo "API is not ready at ${API_BASE_URL}. Run 'just dev-wait-ready' first." >&2
         exit 1
     fi
-    if ! uv run alembic current --check-heads > /dev/null; then
+    if ! docker compose run --rm --no-deps ingestor alembic current --check-heads > /dev/null; then
         echo "Database migrations are not current. Run 'just db-migrate' first." >&2
         exit 1
     fi

@@ -90,7 +90,9 @@ infrastructure-owned secret delivery. The [`Justfile`](Justfile) owns the execut
 `just dev-up` is the default HTTP containerized workflow: use <http://127.0.0.1:8000/api/docs> for the
 API and <http://127.0.0.1:8501> for the dashboard. HTTPS is an opt-in next step for proxy and
 security-specific testing; follow the setup guide to install certificates and enable the ingress
-profile. Use `just dev` for the fast HTTP hot-reload loop. Never commit the local `.env` created from it.
+profile. For normal onboarding, use `just dev-up`. `just dev` is an alternative host-process
+hot-reload loop for experienced contributors; it is not the canonical default. Never commit the
+local `.env` created from it.
 
 For the complete task lifecycle from branch creation through pull request, use
 [Contributing](CONTRIBUTING.md). For proof selection, use
