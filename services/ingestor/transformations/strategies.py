@@ -74,7 +74,7 @@ class CSVObservationValidator(ObservationValidationStrategy):
             if price < 0:
                 return False, "Price must be >= 0"
             return True, None
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             return False, "Price must be numeric (int/float/string)"
 
     async def _validate_timestamp(self, value: object) -> tuple[bool, str | None]:

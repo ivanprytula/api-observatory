@@ -28,11 +28,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up uv and Python 3.14
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          python-version: "3.14"
+
+      - name: Sync workspace
+        run: uv sync --frozen --all-packages --all-extras
+
       - name: Validate workspace and service boundaries
         run: |
-          python3 scripts/ci/check_workspace_manifests.py
-          python3 scripts/ci/check_service_boundaries.py
-          python3 scripts/validate_release_manifest.py
+          uv run python scripts/ci/check_workspace_manifests.py
+          uv run python scripts/ci/check_service_boundaries.py
+          uv run python scripts/validate_release_manifest.py
 
       - name: Validate workflow action references
         shell: bash
@@ -50,15 +60,6 @@ jobs:
 
       - name: Lint GitHub Actions workflows
         uses: rhysd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca # v1.7.12
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-
-      - name: Sync workspace
-        run: uv sync --frozen --all-packages --all-extras
 
       - name: Lint, format, docs, and type checks
         run: |

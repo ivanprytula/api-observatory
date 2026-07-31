@@ -117,6 +117,6 @@ def get_trace_id() -> str | None:
         ctx = span.get_span_context()
         if ctx.is_valid:
             return format(ctx.trace_id, "032x")
-    except ImportError, AttributeError, TypeError, ValueError:
+    except (ImportError, AttributeError, TypeError, ValueError):
         return None
     return None

@@ -170,7 +170,7 @@ async def run_source_contract_snapshot(
         )
         response.raise_for_status()
         payload = response.json()
-    except CircuitOpenError, httpx.HTTPError, ValueError:
+    except (CircuitOpenError, httpx.HTTPError, ValueError):
         return {"source_id": source_id, "skipped": True, "reason": "fetch_failed"}
 
     if not isinstance(payload, dict):

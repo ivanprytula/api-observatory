@@ -31,7 +31,7 @@ from services.dashboard.ui.protocols import UIAdapter
 def use_sources(token: str = "") -> dict:
     try:
         sources = api.sources.list(token=token)
-    except httpx.HTTPStatusError, DashboardApiError:
+    except (httpx.HTTPStatusError, DashboardApiError):
         sources = []
     return {"sources": sources}
 
@@ -39,7 +39,7 @@ def use_sources(token: str = "") -> dict:
 def use_queue_retry_metrics() -> dict:
     try:
         metrics = fetch_prometheus_metrics()
-    except httpx.HTTPStatusError, DashboardApiError:
+    except (httpx.HTTPStatusError, DashboardApiError):
         metrics = ""
     return {
         "dlq_depth": parse_metric_value(metrics, "dead_letter_queue_depth") or 0,

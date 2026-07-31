@@ -77,7 +77,7 @@ class TenantMiddleware:
             if tenant_id_raw:
                 try:
                     tenant_id = int(tenant_id_raw)
-                except TypeError, ValueError:
+                except (TypeError, ValueError):
                     logger.warning(
                         "invalid_tenant_header", extra={"value": tenant_id_raw}
                     )

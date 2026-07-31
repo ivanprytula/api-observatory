@@ -84,7 +84,7 @@ def parse_explain_output(explain_output: Any) -> dict[str, Any]:
             "nodes": nodes,
             "uses_index": uses_index,
         }
-    except json.JSONDecodeError, KeyError, TypeError:
+    except (json.JSONDecodeError, KeyError, TypeError):
         return {
             "planning_ms": None,
             "execution_ms": None,

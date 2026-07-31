@@ -36,7 +36,7 @@ def use_source_by_id(token: str = "", source_id: int = 0) -> dict:
         for s in sources:
             if s.id == source_id:
                 return {"source": s}
-    except httpx.HTTPStatusError, DashboardApiError:
+    except (httpx.HTTPStatusError, DashboardApiError):
         pass
     return {"source": None}
 

@@ -159,7 +159,9 @@ directory = "htmlcov"
 
 [tool.ruff]
 line-length = 88
-target-version = "py314"
+# Keep formatter output compatible with the CI boundary parser. Ruff's py314
+# formatter emits the unparenthesized multi-exception syntax from PEP 758.
+target-version = "py313"
 extend-exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
