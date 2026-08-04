@@ -70,29 +70,7 @@ for exact boundaries and status.
 
 ## Quick Start
 
-Create the ignored local configuration file, then generate its private credentials before selecting
-a workflow:
-
-```bash
-just doctor
-cp .env.example .env
-just generate-secrets
-just dev-up
-```
-
-This starts the default HTTP stack. For readiness, migrations, optional demo initialization, smoke
-verification, and extended services, continue with the [Setup Guide](docs/04-setup/setup-guide.md).
-
-The committed [`.env.example`](.env.example) contains public development settings only. The local
-generator writes real credentials to `.env`; production injects the same names through
-infrastructure-owned secret delivery. The [`Justfile`](Justfile) owns the executable workflows.
-
-`just dev-up` is the default HTTP containerized workflow: use <http://127.0.0.1:8000/api/docs> for the
-API and <http://127.0.0.1:8501> for the dashboard. HTTPS is an opt-in next step for proxy and
-security-specific testing; follow the setup guide to install certificates and enable the ingress
-profile. For normal onboarding, use `just dev-up`. `just dev` is an alternative host-process
-hot-reload loop for experienced contributors; it is not the canonical default. Never commit the
-local `.env` created from it.
+Run `just doctor` to check your workstation, then follow the [Canonical Onboarding and Delivery Checklist](docs/05-development/onboarding-and-delivery-checklist.md) for the full setup sequence. The [`Justfile`](Justfile) owns all executable workflows.
 
 The README stays intentionally high-level. Use [Contributing](CONTRIBUTING.md) for branch and PR
 conventions, [Development Workflows](docs/05-development/dev-workflows.md) for proof selection,

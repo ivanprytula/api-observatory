@@ -15,7 +15,7 @@ from services.ingestor.repositories.observations import (
 )
 
 
-@pytest.mark.integration
+@pytest.mark.demo
 class TestNPlusOneCRUD:
     """Test the two CRUD functions: naive (N+1) and optimized (1 query)."""
 
@@ -169,7 +169,7 @@ class TestNPlusOneCRUD:
         assert observation_to_delete.id not in optimized_ids
 
 
-@pytest.mark.integration
+@pytest.mark.demo
 class TestNPlusOneEndpoint:
     """Test the GET /api/v2/observations/n-plus-one-demo endpoint."""
 

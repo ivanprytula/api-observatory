@@ -20,17 +20,7 @@ API Observatory continuously checks the health and reliability of your external 
 
 ## Quick Start [Core]
 
-### Prerequisites
-
-- Docker Engine/Desktop with Compose v2
-- The Python version selected by [`.python-version`](../../.python-version), plus `uv`, `just`, Git, and `curl`
-
-### Run the Dashboard
-
-Use the [Justfile](../../Justfile) targets `dev-up`, `db-migrate`, and optional `db-auto-init`; the executable definitions
-remain there. See the [Setup Guide](../04-setup/setup-guide.md) for supported local modes.
-
-Open `http://127.0.0.1:8501` to access the dashboard.
+Follow the [Canonical Onboarding and Delivery Checklist](../05-development/onboarding-and-delivery-checklist.md) for setup. Then open `http://127.0.0.1:8501` to access the dashboard.
 
 An empty dashboard confirms that the UI is running. Protected actions such as source management
 require the authenticated local demo state; run `just db-auto-init` when following the populated walkthrough.
@@ -78,12 +68,8 @@ Get rolling-window reliability metrics for any API:
 
 The rolling-window endpoint is `GET /api/v1/scorecards/{source_id}?days=7`.
 
-### API Reference
-
-- `POST /api/v1/scorecards/samples` — record a probe result
-- `GET /api/v1/scorecards/{source_id}?days=1-90&slo_target_pct=90-100` — query scorecard
-- `GET /api/v1/scorecards?source_id=...&limit=...` — list scorecards
-
+Full API details live in the [OpenAPI UI](http://127.0.0.1:8000/docs) and
+[`services/ingestor/routers/scorecards.py`](../../services/ingestor/routers/scorecards.py).
 Scorecards use a single PostgreSQL `PERCENTILE_CONT` query — no materialization.
 
 ---
@@ -99,10 +85,8 @@ When APIs change their response structure, the system detects and classifies the
 
 Drift events stream to your dashboard in real-time via WebSocket.
 
-### API
-
-- `POST /api/v1/contracts/snapshots` — submit a schema snapshot
-- `GET /api/v1/contracts/sources/{source_id}/drift` — list drift events
+Full API details live in the [OpenAPI UI](http://127.0.0.1:8000/docs) and
+[`services/ingestor/routers/contract_drift.py`](../../services/ingestor/routers/contract_drift.py).
 
 ---
 
@@ -110,20 +94,9 @@ Drift events stream to your dashboard in real-time via WebSocket.
 
 Real-time event stream at `WS /ws/observations/stream?token=<bearer_token>`.
 
-### Message Types
-
-| Type | Meaning |
-|------|---------|
-| `observation.created` | New ingestion |
-| `drift.detected` | Contract change detected |
-| `job.progress` | Background job progress (0-1) |
-| `ping` | 30s keepalive |
-
-Connection behavior is implemented by the dashboard client under
+Message types, connection behavior, and close codes are implemented by the dashboard client under
 [`services/dashboard/`](../../services/dashboard/) and verified by the ingestor WebSocket tests;
-keep client syntax with those executable consumers rather than copying it into this guide.
-
-Close codes: 4001 (missing token), 4003 (invalid token).
+see the [OpenAPI UI](http://127.0.0.1:8000/docs) for the full WebSocket schema.
 
 ---
 

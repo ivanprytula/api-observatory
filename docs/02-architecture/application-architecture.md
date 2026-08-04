@@ -67,25 +67,8 @@ flowchart TB
 ```
 
 Core, always-on: Ingestor + PostgreSQL. Cache and Broker are optional and feature-flagged
-(`API_OBS_CACHE_ENABLED` / `API_OBS_BROKER_ENABLED`) — the ingestor fails open if either is unavailable.
-Inference is real as of Phase 2 of the AI-augmented observatory plan; per
-[ADR 015](adr/015-inference-dedicated-pgvector-postgres.md) it runs on its own dedicated Postgres
-instance (`inference-db`), not the ingestor's `ingestor-db` — real per-service database ownership, not just
-schema-level separation. The ingestor never reads inference's tables directly, only via the
-`/index` and `/search` HTTP contract in `services/ingestor/vector_search.py`.
-The LangGraph incident-triage agent (Phase 3) runs *inside* the ingestor process (not a separate
-container) — fire-and-forget triggered by `contract_drift.py` on critical/breaking `DriftEvent`s,
-checkpointed to the same `ingestor-db` Postgres via `langgraph-checkpoint-postgres` so the human-in-the-loop
-pause/resume survives process restarts. Fails open like everything else here: with no
-`ANTHROPIC_API_KEY` configured, drift detection and every other feature works exactly the same,
-the agent trigger just no-ops (`services/ingestor/agent/runner.py`).
-The MCP server (Phase 5) is deliberately *not* another always-on container: it's a local process
-an MCP client spawns per session over stdio, with no port and no docker-compose entry (see
-`docs/07-deployment/app-repo-contract.md`'s Health & Probes note). It never imports the ingestor's
-internals — every tool call is a real authenticated HTTP request, logged in as a dedicated
-`mcp-service` account via the actual `/api/v1/auth/token` flow (`services/mcp/auth_client.py`),
-the same way any other API client authenticates. This dogfoods Phase 4's JWT auth rather than
-bypassing it, and keeps the two processes independently deployable.
+(`API_OBS_CACHE_ENABLED` / `API_OBS_BROKER_ENABLED`). Inference, the agent, and MCP are real
+components; see the Containers diagram for their boundaries and ownership.
 
 ## Router / Feature Map
 
@@ -147,3 +130,101 @@ contract rather than duplicating topology documentation.
   a new external dependency (new datastore, new outbound integration).
 - **Feature moves from deferred → active** (roadmap phase advances): flip its Status cell and
   drop the "why deferred" note.
+
+## Data Flow Diagrams
+
+### Core Observation Lifecycle
+
+```mermaid
+sequenceDiagram
+    participant C as Client/Probe
+    participant I as Ingestor API
+    participant P as Probe Scheduler
+    participant PG as PostgreSQL
+    participant D as Dashboard
+
+    C->>I: POST /api/v1/observations (health sample)
+    I->>PG: INSERT observation (tenant-scoped)
+    PG-->>I: observation_id
+    I-->>C: 201 Created
+
+    P->>I: GET /api/v1/sources/{id}/health
+    I->>PG: SELECT source + latest observations
+    PG-->>I: source + observations
+    I-->>P: health scorecard
+
+    D->>I: GET /api/v1/scorecards/{source_id}?days=7
+    I->>PG: PERCENTILE_CONT window query
+    PG-->>I: scorecard
+    I-->>D: JSON scorecard
+```
+
+### Incident Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Open: Health sample breaches SLO
+    Open --> Acknowledged: Admin /api/v1/incidents/{id}/acknowledge
+    Acknowledged --> Resolved: Auto/heal /api/v1/incidents/{id}/resolve
+    Resolved --> Closed: Retention window expires
+    Open --> Resolved: Quick heal
+    Acknowledged --> Open: Re-open if still breaching
+
+    note right of Open: Deduplication key = source_id + incident_type + fingerprint
+    note right of Resolved: RLS scopes to tenant; admin can read global
+```
+
+### Auth Flow (JWT)
+
+```mermaid
+sequenceDiagram
+    participant U as User/Client
+    participant I as Ingestor API
+    participant DB as PostgreSQL
+
+    U->>I: POST /api/v1/auth/token (username + password)
+    I->>DB: Verify user hash + role
+    DB-->>I: user + role + tenant_id
+    I-->>U: JWT access_token (30m) + refresh_token
+
+    U->>I: GET /api/v1/observations (Bearer {token})
+    I->>I: verify_jwt_token → claims
+    I->>DB: SELECT ... WHERE tenant_id = claims.tenant_id
+    DB-->>I: observations
+    I-->>U: 200 OK
+```
+
+### Contract Drift Flow
+
+```mermaid
+flowchart LR
+    A[Source Registry] --> B[HTTP Probe]
+    B --> C{Response JSON}
+    C -->|OK| D[Store Snapshot]
+    C -->|Drift| E[Create DriftEvent]
+    E --> F{Severity}
+    F -->|critical/breaking| G[LangGraph Agent]
+    F -->|low/medium| H[Incident Lifecycle]
+    G --> I[AI Triage + Human-in-the-Loop]
+    I --> H
+    H --> J[Notification Outbox]
+    J --> K[WebSocket / Email]
+    D --> L[Baseline Accept]
+    L --> M[Compatibility Check]
+```
+
+### Source Registry & Probe Scheduling
+
+```mermaid
+flowchart LR
+    A[POST /api/v1/sources] --> B{Validation}
+    B -->|SSRF check| C[Store Source]
+    C --> D[Alembic Scheduler]
+    D --> E{Source.probe_interval}
+    E -->|10s default| F[GET /api/v1/sources/{id}/health]
+    F --> G{HTTP 2xx?}
+    G -->|Yes| H[Upsert Observation]
+    G -->|No| I[Create DependencyIncident]
+    H --> J[Update Scorecard]
+    I --> K[WebSocket Notification]
+```

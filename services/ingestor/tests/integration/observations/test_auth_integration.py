@@ -18,13 +18,11 @@ from services.ingestor.auth import verify_jwt_token
 from services.ingestor.main import app
 
 
-pytestmark = pytest.mark.integration
-
-
 async def _viewer_claims() -> dict[str, str]:
     return {"sub": "viewer-user", "role": "viewer"}
 
 
+@pytest.mark.demo
 class TestSessionAuth:
     """Tests for session-based auth routes."""
 
@@ -179,6 +177,7 @@ class TestSessionAuth:
         assert admin_response.status_code == 204
 
 
+@pytest.mark.demo
 class TestBearerTokenAuth:
     """Tests for bearer token auth routes.
 
@@ -204,6 +203,7 @@ class TestBearerTokenAuth:
         assert response.json()["created"] == 1
 
 
+@pytest.mark.integration
 class TestProtectedDocs:
     """Tests for documentation endpoints.
 
@@ -235,6 +235,7 @@ class TestProtectedDocs:
         assert "redoc" in response.text.lower() or "openapi" in response.text.lower()
 
 
+@pytest.mark.integration
 class TestRateLimitHandler:
     """Tests for rate limit exceeded handler."""
 
@@ -250,6 +251,7 @@ class TestRateLimitHandler:
         assert "id" in response.json()
 
 
+@pytest.mark.integration
 class TestJwtAuthOnCoreRoutes:
     """Phase 4: the core (non-teaching) CRUD/analyze routes now require a
     writer/admin JWT for writes and any authenticated JWT for reads. The
@@ -323,6 +325,7 @@ class TestJwtAuthOnCoreRoutes:
         assert response.status_code == 403
 
 
+@pytest.mark.integration
 class TestSecurityHeaders:
     """Baseline security headers should be attached by middleware."""
 
