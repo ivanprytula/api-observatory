@@ -44,12 +44,18 @@ jobs:
             changed_files=$(git diff-tree --no-commit-id --name-only -r "$head")
           fi
           echo "$changed_files"
-          if echo "$changed_files" | grep -Eq '^(services/|libs/|tests/|alembic/|scripts/|pyproject.toml|uv.lock|Dockerfile|docker-compose[^/]*\.yml|release/|\.github/workflows/(ci|publish-images|assurance)\.yml)'; then
+          app_paths_regex='^(services/|libs/|tests/|alembic/|scripts/|pyproject.toml|uv.lock|'
+          app_paths_regex+='\.python-version|Dockerfile|docker-compose[^/]*\.yml|release/'
+          app_paths_regex+='|\.github/workflows/(ci|publish-images|assurance)\.yml)'
+          if echo "$changed_files" | grep -Eq "$app_paths_regex"; then
             echo "app=true" >> "$GITHUB_OUTPUT"
           else
             echo "app=false" >> "$GITHUB_OUTPUT"
           fi
-          if echo "$changed_files" | grep -Eq '^(docs/|README\.md|CONTRIBUTING\.md|\.github/workflows/ci\.yml|\.github/workflows/publish-images\.yml|\.github/workflows/assurance\.yml|pyproject\.toml|uv\.lock)'; then
+          docs_paths_regex='^(docs/|README\.md|CONTRIBUTING\.md|\.github/workflows/ci\.yml|'
+          docs_paths_regex+='\.github/workflows/publish-images\.yml|\.github/workflows/assurance\.yml|'
+          docs_paths_regex+='pyproject\.toml|uv\.lock|\.python-version)'
+          if echo "$changed_files" | grep -Eq "$docs_paths_regex"; then
             echo "docs=true" >> "$GITHUB_OUTPUT"
           else
             echo "docs=false" >> "$GITHUB_OUTPUT"

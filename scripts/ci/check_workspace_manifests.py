@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -11,8 +12,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT_MANIFEST = REPO_ROOT / "pyproject.toml"
 LOCKFILE = REPO_ROOT / "uv.lock"
+PYTHON_VERSION_FILE = REPO_ROOT / ".python-version"
 REQUIRED_METADATA = ("authors", "maintainers", "license")
 SERVICE_NAME_OVERRIDES = {"mcp": "mcp-server"}
+PYTHON_MINOR = re.compile(r"^\d+\.\d+$")
+PYTHON_IMAGE = re.compile(r"^FROM python:(\d+\.\d+)-", re.MULTILINE)
 
 
 def load_toml(path: Path) -> dict:
@@ -22,11 +26,27 @@ def load_toml(path: Path) -> dict:
 
 def main() -> int:
     errors: list[str] = []
+    python_minor = PYTHON_VERSION_FILE.read_text(encoding="utf-8").strip()
+    if not PYTHON_MINOR.fullmatch(python_minor):
+        errors.append(".python-version must contain a major.minor selector")
     root = load_toml(ROOT_MANIFEST)
     workspace = root.get("tool", {}).get("uv", {}).get("workspace", {})
     workspace_members = set(workspace.get("members", []))
 
     service_manifests = sorted((REPO_ROOT / "services").glob("*/pyproject.toml"))
+    dockerfiles = [REPO_ROOT / "Dockerfile"]
+    dockerfiles.extend(manifest.parent / "Dockerfile" for manifest in service_manifests)
+    for dockerfile in dockerfiles:
+        if not dockerfile.is_file():
+            continue
+        image_versions = set(
+            PYTHON_IMAGE.findall(dockerfile.read_text(encoding="utf-8"))
+        )
+        if image_versions and image_versions != {python_minor}:
+            errors.append(
+                f"{dockerfile.relative_to(REPO_ROOT)}: Python base image must use "
+                f"{python_minor}, found {sorted(image_versions)}"
+            )
     expected_members = {
         path.parent.relative_to(REPO_ROOT).as_posix() for path in service_manifests
     }

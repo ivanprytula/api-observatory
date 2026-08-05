@@ -20,6 +20,18 @@ infrastructure repository's
 Never read or commit a local `.env`. Copy the public, non-secret
 [`.env.example`](../../.env.example), then generate local credentials privately.
 
+### Runtime and dependency maintenance
+
+`.python-version` specifies the supported Python minor series (`3.14`), allowing `uv` to use the
+latest compatible patch release without a repository edit. Dependabot opens weekly `uv` and GitHub
+Actions update PRs; review the compatible group and each major upgrade while the change is small.
+
+When a new Python minor is adopted, change `.python-version` in this repository and the sibling
+infrastructure repository in the same maintenance slice, then run `uv lock --upgrade` and the
+relevant CI suites. The `requires-python` lower bounds describe compatibility, so do not raise them
+without deciding to drop an older supported runtime. App CI also requires every Python Docker base
+image to match `.python-version`.
+
 ## 1. Canonical onboarding path
 
 Use this path for first-time setup or when returning to the repository after a long gap:
