@@ -14,13 +14,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from sqlalchemy.exc import IntegrityError
 
+from services.ingestor.api_schemas.observations import ObservationRequest
 from services.ingestor.models import User, UserTenant
 from services.ingestor.repositories.observations import (
     _apply_tenant_filter,
     _decode_cursor,
     _encode_cursor,
     add_tenant_to_user,
+    create_observations_batch_naive,
     create_user,
+    get_observations,
+    get_observations_by_date_range,
+    get_observations_cursor_paginated,
     get_user_by_id,
     get_user_by_username,
     has_tenant_access,
@@ -320,3 +325,204 @@ class TestAddTenantToUser:
         assert res is existing
         assert existing.deleted_at is None
         mock_session.commit.assert_awaited()
+
+
+# ---------------------------------------------------------------------------
+# create_observations_batch_naive
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestCreateObservationsBatchNaive:
+    async def test_empty_returns_empty(self) -> None:
+        result = await create_observations_batch_naive(MagicMock(), [])
+        assert result == []
+
+    async def test_inserts_and_refreshes_each(self) -> None:
+        mock_session = MagicMock()
+        mock_session.add_all = MagicMock()
+        mock_session.commit = AsyncMock()
+        mock_session.refresh = AsyncMock()
+        mock_session.tenant_id = None
+
+        with patch(
+            "services.ingestor.repositories.observations.get_tenant_id",
+            return_value=42,
+        ):
+            reqs = [
+                ObservationRequest(
+                    source="s1", timestamp="2024-01-01T00:00:00", data={}, tags=[]
+                ),
+                ObservationRequest(
+                    source="s2", timestamp="2024-01-01T00:01:00", data={}, tags=[]
+                ),
+            ]
+            results = await create_observations_batch_naive(mock_session, reqs)
+
+        assert len(results) == 2
+        mock_session.add_all.assert_called_once()
+        assert mock_session.refresh.await_count == 2
+
+
+# ---------------------------------------------------------------------------
+# get_observations
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestGetObservations:
+    async def test_returns_paginated_results(self) -> None:
+        mock_session = MagicMock()
+        count_result = MagicMock()
+        count_result.scalar_one.return_value = 5
+        data_result = MagicMock()
+        obs_list = [MagicMock(), MagicMock()]
+        data_result.scalars.return_value.all.return_value = obs_list
+        call_count = {"n": 0}
+
+        async def execute_side_effect(stmt):
+            call_count["n"] += 1
+            return count_result if call_count["n"] == 1 else data_result
+
+        mock_session.execute = AsyncMock(side_effect=execute_side_effect)
+
+        with patch(
+            "services.ingestor.repositories.observations.get_user_role",
+            return_value="admin",
+        ):
+            observations, total = await get_observations(
+                mock_session, skip=0, limit=10, source="api"
+            )
+
+        assert len(observations) == 2
+        assert total == 5
+
+    async def test_no_source_filter(self) -> None:
+        mock_session = MagicMock()
+        count_result = MagicMock()
+        count_result.scalar_one.return_value = 0
+        data_result = MagicMock()
+        data_result.scalars.return_value.all.return_value = []
+        mock_session.execute = AsyncMock(side_effect=[count_result, data_result])
+
+        with patch(
+            "services.ingestor.repositories.observations.get_user_role",
+            return_value="admin",
+        ):
+            observations, total = await get_observations(mock_session)
+
+        assert observations == []
+        assert total == 0
+
+
+# ---------------------------------------------------------------------------
+# get_observations_cursor_paginated
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestGetObservationsCursorPaginated:
+    async def test_first_page_no_cursor(self) -> None:
+        mock_session = MagicMock()
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = [MagicMock(), MagicMock()]
+        mock_session.execute = AsyncMock(return_value=result)
+
+        with patch(
+            "services.ingestor.repositories.observations.get_user_role",
+            return_value="admin",
+        ):
+            (
+                observations,
+                next_cursor,
+                has_more,
+            ) = await get_observations_cursor_paginated(mock_session, limit=5)
+
+        assert len(observations) == 2
+        assert has_more is False
+        assert next_cursor is None
+
+    async def test_fewer_than_limit_no_next_cursor(self) -> None:
+        mock_session = MagicMock()
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = [MagicMock()]
+        mock_session.execute = AsyncMock(return_value=result)
+
+        with patch(
+            "services.ingestor.repositories.observations.get_user_role",
+            return_value="admin",
+        ):
+            (
+                observations,
+                next_cursor,
+                has_more,
+            ) = await get_observations_cursor_paginated(mock_session, limit=10)
+
+        assert has_more is False
+        assert next_cursor is None
+
+    async def test_cursor_decodes_and_filters(self) -> None:
+        mock_session = MagicMock()
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = []
+        mock_session.execute = AsyncMock(return_value=result)
+
+        cursor = _encode_cursor(42, datetime(2025, 1, 1, 12, 0, 0))
+
+        with patch(
+            "services.ingestor.repositories.observations.get_user_role",
+            return_value="admin",
+        ):
+            (
+                observations,
+                next_cursor,
+                has_more,
+            ) = await get_observations_cursor_paginated(
+                mock_session, cursor=cursor, limit=10
+            )
+
+        assert observations == []
+
+
+# ---------------------------------------------------------------------------
+# get_observations_by_date_range
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestGetObservationsByDateRange:
+    async def test_returns_filtered_list(self) -> None:
+        mock_session = MagicMock()
+        result = MagicMock()
+        obs_list = [MagicMock(), MagicMock()]
+        result.scalars.return_value.all.return_value = obs_list
+        mock_session.execute = AsyncMock(return_value=result)
+
+        start = datetime(2025, 1, 1)
+        end = datetime(2025, 1, 2)
+
+        with patch(
+            "services.ingestor.repositories.observations.get_user_role",
+            return_value="admin",
+        ):
+            observations = await get_observations_by_date_range(
+                mock_session, start=start, end=end, source="api"
+            )
+
+        assert len(observations) == 2
+
+    async def test_no_source_filter(self) -> None:
+        mock_session = MagicMock()
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = []
+        mock_session.execute = AsyncMock(return_value=result)
+
+        with patch(
+            "services.ingestor.repositories.observations.get_user_role",
+            return_value="admin",
+        ):
+            observations = await get_observations_by_date_range(
+                mock_session, datetime(2025, 1, 1), datetime(2025, 1, 2)
+            )
+
+        assert observations == []
