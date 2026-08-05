@@ -2,7 +2,7 @@
 #    uv export --frozen --all-groups --no-hashes --format requirements-txt
 aiohappyeyeballs==2.7.1 ; sys_platform == 'linux'
     # via aiohttp
-aiohttp==3.14.1 ; sys_platform == 'linux'
+aiohttp==3.14.3 ; sys_platform == 'linux'
     # via api-observatory
 aiokafka==0.14.0 ; sys_platform == 'linux'
     # via api-observatory
@@ -13,11 +13,11 @@ alembic==1.18.5 ; sys_platform == 'linux'
     # via api-observatory
 altair==6.2.2 ; sys_platform == 'linux'
     # via streamlit
-annotated-doc==0.0.4 ; sys_platform == 'linux'
+annotated-doc==0.0.5 ; sys_platform == 'linux'
     # via fastapi
-annotated-types==0.7.0 ; sys_platform == 'linux'
+annotated-types==0.8.0 ; sys_platform == 'linux'
     # via pydantic
-anyio==4.14.1 ; sys_platform == 'linux'
+anyio==4.14.2 ; sys_platform == 'linux'
     # via
     #   httpx
     #   openai
@@ -30,7 +30,7 @@ argon2-cffi==25.1.0 ; sys_platform == 'linux'
     # via api-observatory
 argon2-cffi-bindings==25.1.0 ; sys_platform == 'linux'
     # via argon2-cffi
-asgiref==3.11.1 ; sys_platform == 'linux'
+asgiref==3.12.1 ; sys_platform == 'linux'
     # via opentelemetry-instrumentation-asgi
 async-timeout==5.0.1 ; sys_platform == 'linux'
     # via aiokafka
@@ -49,9 +49,9 @@ blinker==1.9.0 ; sys_platform == 'linux'
     #   streamlit
 boolean-py==5.0 ; sys_platform == 'linux'
     # via license-expression
-boto3==1.43.39 ; sys_platform == 'linux'
+boto3==1.43.62 ; sys_platform == 'linux'
     # via api-observatory
-botocore==1.43.39 ; sys_platform == 'linux'
+botocore==1.43.62 ; sys_platform == 'linux'
     # via
     #   boto3
     #   s3transfer
@@ -59,22 +59,22 @@ brotli==1.2.0 ; sys_platform == 'linux'
     # via geventhttpclient
 cachecontrol==0.14.4 ; sys_platform == 'linux'
     # via pip-audit
-cachetools==7.1.4 ; sys_platform == 'linux'
+cachetools==7.1.7 ; sys_platform == 'linux'
     # via streamlit
-certifi==2026.6.17 ; sys_platform == 'linux'
+certifi==2026.7.22 ; sys_platform == 'linux'
     # via
     #   geventhttpclient
     #   httpcore
     #   httpx
     #   requests
     #   sentry-sdk
-cffi==2.0.0 ; sys_platform == 'linux'
+cffi==2.1.0 ; sys_platform == 'linux'
     # via
     #   argon2-cffi-bindings
     #   pyzmq
 cfgv==3.5.0 ; sys_platform == 'linux'
     # via pre-commit
-charset-normalizer==3.4.7 ; sys_platform == 'linux'
+charset-normalizer==3.4.9 ; sys_platform == 'linux'
     # via requests
 click==8.4.2 ; sys_platform == 'linux'
     # via
@@ -83,7 +83,7 @@ click==8.4.2 ; sys_platform == 'linux'
     #   uvicorn
 configargparse==1.7.5 ; sys_platform == 'linux'
     # via locust
-coverage==7.14.3 ; sys_platform == 'linux'
+coverage==7.15.2 ; sys_platform == 'linux'
     # via pytest-cov
 cyclonedx-python-lib==11.11.0 ; sys_platform == 'linux'
     # via pip-audit
@@ -97,16 +97,16 @@ distro==1.9.0 ; sys_platform == 'linux'
     # via openai
 dnspython==2.8.0 ; sys_platform == 'linux'
     # via email-validator
-docker==7.1.0 ; sys_platform == 'linux'
+docker==7.2.0 ; sys_platform == 'linux'
     # via testcontainers
 email-validator==2.3.0 ; sys_platform == 'linux'
     # via pydantic
-fakeredis==2.36.2 ; sys_platform == 'linux'
-fastapi==0.139.0 ; sys_platform == 'linux'
+fakeredis==2.37.0 ; sys_platform == 'linux'
+fastapi==0.141.1 ; sys_platform == 'linux'
     # via
     #   api-observatory
     #   sentry-sdk
-filelock==3.29.4 ; sys_platform == 'linux'
+filelock==3.32.2 ; sys_platform == 'linux'
     # via
     #   cachecontrol
     #   python-discovery
@@ -132,17 +132,17 @@ geventhttpclient==2.3.9 ; sys_platform == 'linux'
     # via locust
 gitdb==4.0.12 ; sys_platform == 'linux'
     # via gitpython
-gitpython==3.1.50 ; sys_platform == 'linux'
+gitpython==3.1.57 ; sys_platform == 'linux'
     # via streamlit
 googleapis-common-protos==1.75.0 ; sys_platform == 'linux'
     # via
     #   opentelemetry-exporter-otlp-proto-grpc
     #   opentelemetry-exporter-otlp-proto-http
-greenlet==3.5.3 ; sys_platform == 'linux'
+greenlet==3.5.4 ; sys_platform == 'linux'
     # via
     #   gevent
     #   sqlalchemy
-grpcio==1.81.1 ; sys_platform == 'linux'
+grpcio==1.83.0 ; sys_platform == 'linux'
     # via opentelemetry-exporter-otlp-proto-grpc
 h11==0.16.0 ; sys_platform == 'linux'
     # via
@@ -194,7 +194,7 @@ license-expression==30.4.4 ; sys_platform == 'linux'
     # via cyclonedx-python-lib
 limits==5.8.0 ; sys_platform == 'linux'
     # via slowapi
-locust==2.44.4 ; sys_platform == 'linux'
+locust==2.46.3 ; sys_platform == 'linux'
 mako==1.3.12 ; sys_platform == 'linux'
     # via
     #   alembic
@@ -217,18 +217,18 @@ multidict==6.7.1 ; sys_platform == 'linux'
     # via
     #   aiohttp
     #   yarl
-narwhals==2.23.0 ; sys_platform == 'linux'
+narwhals==2.24.0 ; sys_platform == 'linux'
     # via altair
 nodeenv==1.10.0 ; sys_platform == 'linux'
     # via pre-commit
-numpy==2.5.0 ; sys_platform == 'linux'
+numpy==2.5.1 ; sys_platform == 'linux'
     # via
     #   pandas
     #   pydeck
     #   streamlit
-openai==2.44.0 ; sys_platform == 'linux'
+openai==2.52.0 ; sys_platform == 'linux'
     # via api-observatory
-opentelemetry-api==1.43.0 ; sys_platform == 'linux'
+opentelemetry-api==1.44.0 ; sys_platform == 'linux'
     # via
     #   opentelemetry-exporter-otlp-proto-grpc
     #   opentelemetry-exporter-otlp-proto-http
@@ -238,45 +238,45 @@ opentelemetry-api==1.43.0 ; sys_platform == 'linux'
     #   opentelemetry-instrumentation-sqlalchemy
     #   opentelemetry-sdk
     #   opentelemetry-semantic-conventions
-opentelemetry-exporter-otlp==1.43.0 ; sys_platform == 'linux'
+opentelemetry-exporter-otlp==1.44.0 ; sys_platform == 'linux'
     # via api-observatory
-opentelemetry-exporter-otlp-proto-common==1.43.0 ; sys_platform == 'linux'
+opentelemetry-exporter-otlp-proto-common==1.44.0 ; sys_platform == 'linux'
     # via
     #   opentelemetry-exporter-otlp-proto-grpc
     #   opentelemetry-exporter-otlp-proto-http
-opentelemetry-exporter-otlp-proto-grpc==1.43.0 ; sys_platform == 'linux'
+opentelemetry-exporter-otlp-proto-grpc==1.44.0 ; sys_platform == 'linux'
     # via opentelemetry-exporter-otlp
-opentelemetry-exporter-otlp-proto-http==1.43.0 ; sys_platform == 'linux'
+opentelemetry-exporter-otlp-proto-http==1.44.0 ; sys_platform == 'linux'
     # via opentelemetry-exporter-otlp
-opentelemetry-instrumentation==0.64b0 ; sys_platform == 'linux'
+opentelemetry-instrumentation==0.65b0 ; sys_platform == 'linux'
     # via
     #   opentelemetry-instrumentation-asgi
     #   opentelemetry-instrumentation-fastapi
     #   opentelemetry-instrumentation-sqlalchemy
-opentelemetry-instrumentation-asgi==0.64b0 ; sys_platform == 'linux'
+opentelemetry-instrumentation-asgi==0.65b0 ; sys_platform == 'linux'
     # via opentelemetry-instrumentation-fastapi
-opentelemetry-instrumentation-fastapi==0.64b0 ; sys_platform == 'linux'
+opentelemetry-instrumentation-fastapi==0.65b0 ; sys_platform == 'linux'
     # via api-observatory
-opentelemetry-instrumentation-sqlalchemy==0.64b0 ; sys_platform == 'linux'
+opentelemetry-instrumentation-sqlalchemy==0.65b0 ; sys_platform == 'linux'
     # via api-observatory
-opentelemetry-proto==1.43.0 ; sys_platform == 'linux'
+opentelemetry-proto==1.44.0 ; sys_platform == 'linux'
     # via
     #   opentelemetry-exporter-otlp-proto-common
     #   opentelemetry-exporter-otlp-proto-grpc
     #   opentelemetry-exporter-otlp-proto-http
-opentelemetry-sdk==1.43.0 ; sys_platform == 'linux'
+opentelemetry-sdk==1.44.0 ; sys_platform == 'linux'
     # via
     #   api-observatory
     #   opentelemetry-exporter-otlp-proto-grpc
     #   opentelemetry-exporter-otlp-proto-http
-opentelemetry-semantic-conventions==0.64b0 ; sys_platform == 'linux'
+opentelemetry-semantic-conventions==0.65b0 ; sys_platform == 'linux'
     # via
     #   opentelemetry-instrumentation
     #   opentelemetry-instrumentation-asgi
     #   opentelemetry-instrumentation-fastapi
     #   opentelemetry-instrumentation-sqlalchemy
     #   opentelemetry-sdk
-opentelemetry-util-http==0.64b0 ; sys_platform == 'linux'
+opentelemetry-util-http==0.65b0 ; sys_platform == 'linux'
     # via
     #   opentelemetry-instrumentation-asgi
     #   opentelemetry-instrumentation-fastapi
@@ -293,20 +293,20 @@ packaging==26.2 ; sys_platform == 'linux'
     #   pip-requirements-parser
     #   pytest
     #   streamlit
-pandas==3.0.3 ; sys_platform == 'linux'
+pandas==3.0.5 ; sys_platform == 'linux'
     # via
     #   api-observatory
     #   streamlit
 pillow==12.3.0 ; sys_platform == 'linux'
     # via streamlit
-pip==26.1.2 ; sys_platform == 'linux'
+pip==26.2 ; sys_platform == 'linux'
     # via pip-api
 pip-api==0.0.34 ; sys_platform == 'linux'
     # via pip-audit
 pip-audit==2.10.1 ; sys_platform == 'linux'
 pip-requirements-parser==32.0.1 ; sys_platform == 'linux'
     # via pip-audit
-platformdirs==4.10.0 ; sys_platform == 'linux'
+platformdirs==4.11.0 ; sys_platform == 'linux'
     # via
     #   pip-audit
     #   python-discovery
@@ -315,16 +315,16 @@ pluggy==1.6.0 ; sys_platform == 'linux'
     # via
     #   pytest
     #   pytest-cov
-polars==1.42.1 ; sys_platform == 'linux'
+polars==1.43.2 ; sys_platform == 'linux'
     # via api-observatory
-polars-runtime-32==1.42.1 ; sys_platform == 'linux'
+polars-runtime-32==1.43.2 ; sys_platform == 'linux'
     # via polars
-polars-runtime-compat==1.42.1 ; sys_platform == 'linux'
+polars-runtime-compat==1.43.2 ; sys_platform == 'linux'
     # via polars
-pre-commit==4.6.0 ; sys_platform == 'linux'
-prometheus-client==0.25.0 ; sys_platform == 'linux'
+pre-commit==4.6.1 ; sys_platform == 'linux'
+prometheus-client==0.26.0 ; sys_platform == 'linux'
     # via prometheus-fastapi-instrumentator
-prometheus-fastapi-instrumentator==8.0.2 ; sys_platform == 'linux'
+prometheus-fastapi-instrumentator==8.1.0 ; sys_platform == 'linux'
     # via api-observatory
 propcache==0.5.2 ; sys_platform == 'linux'
     # via
@@ -357,7 +357,7 @@ pydantic-core==2.47.0 ; sys_platform == 'linux'
     # via pydantic
 pydantic-settings==2.14.2 ; sys_platform == 'linux'
     # via api-observatory
-pydeck==0.9.2 ; sys_platform == 'linux'
+pydeck==0.9.3 ; sys_platform == 'linux'
     # via streamlit
 pygments==2.20.0 ; sys_platform == 'linux'
     # via
@@ -378,7 +378,7 @@ python-dateutil==2.9.0.post0 ; sys_platform == 'linux'
     # via
     #   botocore
     #   pandas
-python-discovery==1.4.2 ; sys_platform == 'linux'
+python-discovery==1.5.1 ; sys_platform == 'linux'
     # via virtualenv
 python-dotenv==1.2.2 ; sys_platform == 'linux'
     # via
@@ -386,7 +386,7 @@ python-dotenv==1.2.2 ; sys_platform == 'linux'
     #   pydantic-settings
     #   testcontainers
     #   uvicorn
-python-engineio==4.13.3 ; sys_platform == 'linux'
+python-engineio==4.13.4 ; sys_platform == 'linux'
     # via
     #   locust
     #   python-socketio
@@ -404,7 +404,7 @@ pyyaml==6.0.3 ; sys_platform == 'linux'
     #   uvicorn
 pyzmq==27.1.0 ; sys_platform == 'linux'
     # via locust
-redis==8.0.1 ; sys_platform == 'linux'
+redis==8.1.0 ; sys_platform == 'linux'
     # via
     #   api-observatory
     #   fakeredis
@@ -428,10 +428,10 @@ rpds-py==2026.6.3 ; sys_platform == 'linux'
     # via
     #   jsonschema
     #   referencing
-ruff==0.15.20 ; sys_platform == 'linux'
-s3transfer==0.19.0 ; sys_platform == 'linux'
+ruff==0.16.1 ; sys_platform == 'linux'
+s3transfer==0.19.2 ; sys_platform == 'linux'
     # via boto3
-sentry-sdk==2.64.0 ; sys_platform == 'linux'
+sentry-sdk==2.66.1 ; sys_platform == 'linux'
     # via api-observatory
 simple-websocket==1.1.0 ; sys_platform == 'linux'
     # via python-engineio
@@ -456,13 +456,13 @@ starlette==1.3.1 ; sys_platform == 'linux'
     #   fastapi
     #   prometheus-fastapi-instrumentator
     #   streamlit
-streamlit==1.58.0 ; sys_platform == 'linux'
+streamlit==1.60.0 ; sys_platform == 'linux'
     # via api-observatory
 structlog==26.1.0 ; sys_platform == 'linux'
     # via api-observatory
 tenacity==9.1.4 ; sys_platform == 'linux'
     # via streamlit
-testcontainers==4.14.2 ; sys_platform == 'linux'
+testcontainers==4.15.0 ; sys_platform == 'linux'
     # via testcontainers-floci
 testcontainers-floci==0.1.1 ; sys_platform == 'linux'
 toml==0.10.2 ; sys_platform == 'linux'
@@ -471,10 +471,10 @@ tomli==2.4.1 ; sys_platform == 'linux'
     # via pip-audit
 tomli-w==1.2.0 ; sys_platform == 'linux'
     # via pip-audit
-tqdm==4.68.3 ; sys_platform == 'linux'
+tqdm==4.70.0 ; sys_platform == 'linux'
     # via openai
-ty==0.0.56 ; sys_platform == 'linux'
-typing-extensions==4.15.0 ; sys_platform == 'linux'
+ty==0.0.65 ; sys_platform == 'linux'
+typing-extensions==4.16.0 ; sys_platform == 'linux'
     # via
     #   aiokafka
     #   alembic
@@ -510,13 +510,13 @@ urllib3==2.7.0 ; sys_platform == 'linux'
     #   requests
     #   sentry-sdk
     #   testcontainers
-uvicorn==0.49.0 ; sys_platform == 'linux'
+uvicorn==0.52.1 ; sys_platform == 'linux'
     # via
     #   api-observatory
     #   streamlit
 uvloop==0.22.1 ; platform_python_implementation != 'PyPy' and sys_platform == 'linux'
     # via uvicorn
-virtualenv==21.5.1 ; sys_platform == 'linux'
+virtualenv==21.7.1 ; sys_platform == 'linux'
     # via pre-commit
 watchdog==6.0.0 ; sys_platform == 'linux'
     # via streamlit
@@ -535,7 +535,7 @@ werkzeug==3.1.8 ; sys_platform == 'linux'
     #   flask-cors
     #   flask-login
     #   locust
-wrapt==2.2.2 ; sys_platform == 'linux'
+wrapt==2.3.0 ; sys_platform == 'linux'
     # via
     #   deprecated
     #   opentelemetry-instrumentation
@@ -543,7 +543,7 @@ wrapt==2.2.2 ; sys_platform == 'linux'
     #   testcontainers
 wsproto==1.3.2 ; sys_platform == 'linux'
     # via simple-websocket
-yarl==1.24.2 ; sys_platform == 'linux'
+yarl==1.24.5 ; sys_platform == 'linux'
     # via aiohttp
 zope-event==6.2 ; sys_platform == 'linux'
     # via gevent
