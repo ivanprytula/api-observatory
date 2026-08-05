@@ -9,9 +9,49 @@ updates:
   - package-ecosystem: uv
     directory: "/"
     schedule:
-      interval: monthly
+      interval: weekly
+      day: monday
+      time: "03:00"
+      timezone: "UTC"
     target-branch: main
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 10
+    reviewers:
+      - ivanprytula
+    assignees:
+      - ivanprytula
+    labels:
+      - "dependencies"
+      - "python.uv"
+      - "type/dependency"
+      - "area/python-packages"
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    pull-request-branch-name:
+      separator: "/"
+    rebase-strategy: auto
+    versioning-strategy: auto
+    groups:
+      uv-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Dashboard has an independently locked uv project.
+  - package-ecosystem: uv
+    directory: "/services/dashboard"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "03:00"
+      timezone: "UTC"
+    target-branch: main
+    open-pull-requests-limit: 10
     reviewers:
       - ivanprytula
     assignees:
