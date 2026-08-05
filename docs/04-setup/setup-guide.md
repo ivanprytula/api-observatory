@@ -1,7 +1,8 @@
 # Setup Guide
 
-Local Docker Compose is the canonical runtime. The [`Justfile`](../../Justfile) owns command syntax;
-this guide explains which mode to choose, what it proves, and where configuration lives.
+Local Docker Compose is the canonical runtime. The [`Justfile`](../../Justfile) owns supported named
+recipe syntax; this guide explains which mode to choose, what it proves, and where native commands
+are clearer.
 The Docker-first `just dev-up` flow is the official onboarding path. Files under `.github/prompts/` are
 historical agent prompts and are not setup instructions for new developers.
 
@@ -117,9 +118,15 @@ matching namespaced database/password pair: `5432` / `api_obs_ingestor` /
 `API_OBS_INFERENCE_DB_PASSWORD` for inference. Obtain the password from your ignored `.env`; never
 paste it into documentation, shell history, or committed client configuration.
 
-For an interactive local terminal session, explicitly select the service with `just db-psql ingestor`
-or `just db-psql inference`. Cloud database operations behind a VPN use native `psql` with an
-infrastructure-supplied `DATABASE_URL`; the local helper deliberately cannot target cloud hosts.
+For an interactive local terminal session, use the explicit local Compose service:
+
+```bash
+docker compose exec ingestor-db psql -U postgres -d api_obs_ingestor
+docker compose exec inference-db psql -U postgres -d api_obs_inference
+```
+
+These commands target the active local Compose project. Cloud database operations behind a VPN use
+native `psql` with an infrastructure-supplied `DATABASE_URL`.
 
 ## Service Map
 
@@ -204,6 +211,21 @@ does not enable tracing in the application.
 Cloud-emulator workflows are an intentional exception to the explicit local sequence:
 `cloud-sandbox-up` starts the selected emulator, applies migrations, and seeds disposable demo data
 in one command. Do not use it for retained observations or real API sources.
+
+### Terraform Sandbox Commands
+
+Use Terraform directly from the explicit local sandbox directory so the planned action remains
+visible. For example:
+
+```bash
+cd infra/terraform/environments/aws-sandbox
+terraform init
+terraform validate
+terraform plan
+```
+
+These directories are local learning environments. Real AWS Stage 0 provisioning, apply, rollback,
+and teardown remain infra-owned and require the separately approved delivery gate.
 
 ## Optional Local Capabilities
 

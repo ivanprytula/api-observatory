@@ -165,7 +165,7 @@ PostgreSQL.
    curl --fail http://127.0.0.1:8000/health
    curl --fail http://127.0.0.1:8000/readyz
    docker compose ps
-   just db-psql ingestor
+   docker compose exec ingestor-db psql -U postgres -d api_obs_ingestor
    ```
 
    In `psql`, check `SELECT version_num FROM alembic_version;` and inspect the observation rows

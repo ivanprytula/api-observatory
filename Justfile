@@ -6,7 +6,6 @@
 # Concern-specific commands live in the imported files below.
 import? 'just/cloud.just'
 import? 'just/security.just'
-import? 'just/database.just'
 import? 'just/testing.just'
 import? 'just/database-lifecycle.just'
 import? 'just/kubernetes.just'

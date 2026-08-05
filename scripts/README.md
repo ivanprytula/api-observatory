@@ -1,3 +1,3 @@
 # Repository scripts
 
-Scripts are invoked by `just` recipes. See `just --list` for available targets. Specialized flags live in the imported `just/*.just` files.
+Most scripts back named `just` workflows. Run one directly only when its owning documentation says to; setup, backup/restore, and specialized tool scripts retain their documented native commands and flags.

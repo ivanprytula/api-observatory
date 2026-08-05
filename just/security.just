@@ -7,25 +7,17 @@ sec-trivy-image image="api-observatory:local":
         --exit-code 1 {{image}}
     echo "No CRITICAL CVEs detected"
 
-sec-gitleaks scope="repo":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ "{{ scope }}" = "staged" ]; then
-        echo "=== Gitleaks: scanning staged changes (via pre-commit) ==="
-        uv run pre-commit run gitleaks
-    elif [ "{{ scope }}" = "repo" ]; then
-        echo "=== Gitleaks: scanning full repo (Docker) ==="
-        docker compose --profile security run --rm gitleaks detect --verbose --config /repo/.gitleaks.toml
-    else
-        echo "Usage: just sec-gitleaks [repo|staged]" >&2
-        exit 1
-    fi
+sec-gitleaks-staged:
+    uv run pre-commit run gitleaks
+
+sec-gitleaks-repo:
+    docker compose --profile security run --rm gitleaks detect --verbose --config /repo/.gitleaks.toml
 
 sec-pip-audit:
     uv run python scripts/ci/pip_audit_wrapper.py
 
-sec-hadolint target="/repo/Dockerfile /repo/services/dashboard/Dockerfile /repo/infra/database/Dockerfile":
-    docker compose --profile security run --rm hadolint {{target}}
+sec-hadolint:
+    docker compose --profile security run --rm hadolint /repo/Dockerfile /repo/services/dashboard/Dockerfile /repo/infra/database/Dockerfile
 
 sec-checkov:
     docker compose --profile security run --rm checkov --directory /repo/infra/ --compact --soft-fail

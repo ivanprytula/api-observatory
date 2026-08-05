@@ -1,14 +1,12 @@
-# Cloud/Terraform command facade.
-#
-# These names keep cloud work visibly separate from the core local workflow while
-# preserving the existing recipe implementations during the migration.
+# Cloud emulator and Terraform-diagram helpers.
 
 # Cloud development loops:
 #   CLOUD=azure just cloud-sandbox-up    # Azure emulator (floci-az)
 #   CLOUD=aws   just cloud-sandbox-up    # AWS emulator (floci-aws)
 #   CLOUD=gcp   just cloud-sandbox-up    # GCP emulator (floci-gcp)
 #   CLOUD=aws   just cloud-sandbox-dev   # hot-reload against AWS emulator
-#   TF_ENV=aws-sandbox just cloud-tf plan # Terraform against emulator
+# Terraform sandbox work intentionally uses native commands from the explicit
+# environment directory; see docs/04-setup/setup-guide.md.
 #
 # Emulators start only when cloud-shaped APIs are explicitly needed.
 # `cloud-sandbox-up` intentionally includes migration and demo seeding because this
@@ -155,57 +153,6 @@ cloud-preflight:
         *)  echo "FAIL: Unknown CLOUD=${CLOUD}. Use: azure, aws, gcp" >&2; exit 1 ;;
     esac
     echo "=== ${CLOUD} preflight passed ==="
-
-# Unified Terraform runner — resolves the environment from TF_ENV.
-cloud-tf cmd:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    ENV="${TF_ENV:-azure-sandbox}"
-    CMD="{{cmd}}"
-    DIR="infra/terraform/environments/${ENV}"
-    if [ ! -d "$DIR" ]; then
-        echo "FAIL: Terraform environment directory not found: ${DIR}" >&2
-        echo "  Available: $(ls infra/terraform/environments/)" >&2
-        exit 1
-    fi
-    cd "$DIR"
-    case "$CMD" in
-        init)
-            BACKEND_CFG=$(ls backend.*.hcl 2>/dev/null | head -1)
-            if [ -n "${BACKEND_CFG:-}" ]; then
-                terraform init -reconfigure -upgrade -backend-config="$BACKEND_CFG"
-            else
-                terraform init -reconfigure -upgrade
-            fi
-            ;;
-        validate) terraform validate ;;
-        plan)
-            export TF_IN_AUTOMATION=1
-            terraform plan -input=false -var-file=terraform.tfvars -out=tfplan
-            ;;
-        apply) terraform apply tfplan ;;
-        show) terraform show ;;
-        destroy) terraform destroy -auto-approve -var-file=terraform.tfvars ;;
-        fresh)
-            just cloud-tf init
-            just cloud-tf plan
-            just cloud-tf apply
-            ;;
-        *) echo "Usage: just cloud-tf <init|validate|plan|apply|show|destroy|fresh>"; exit 1 ;;
-    esac
-
-# Destroy Terraform-managed resources with confirmation prompt.
-cloud-tf-destroy:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    ENV="${TF_ENV:-azure-sandbox}"
-    EXPECTED="yes-i-really-want-to-destroy-${ENV}"
-    read -r -p "DANGER: Type '${EXPECTED}' to destroy ${ENV} infra: " CONFIRM
-    if [ "$CONFIRM" != "$EXPECTED" ]; then
-        echo "Aborted."
-        exit 1
-    fi
-    just cloud-tf destroy
 
 # Render Terraform architecture diagrams with Terravision.
 cloud-tf-diagram format="png":

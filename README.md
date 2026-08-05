@@ -70,7 +70,7 @@ for exact boundaries and status.
 
 ## Quick Start
 
-Run `just doctor` to check your workstation, then follow the [Canonical Onboarding and Delivery Checklist](docs/05-development/onboarding-and-delivery-checklist.md) for the full setup sequence. The [`Justfile`](Justfile) owns all executable workflows.
+Run `just doctor` to check your workstation, then follow the [Canonical Onboarding and Delivery Checklist](docs/05-development/onboarding-and-delivery-checklist.md) for the full setup sequence. The [`Justfile`](Justfile) owns supported named workflows; use the documented native Compose, Alembic, Terraform, and `psql` commands for boundary-specific work.
 
 The README stays intentionally high-level. Use [Contributing](CONTRIBUTING.md) for branch and PR
 conventions, [Development Workflows](docs/05-development/dev-workflows.md) for proof selection,

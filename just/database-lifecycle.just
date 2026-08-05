@@ -24,13 +24,6 @@ _cloud-sandbox-seed:
     until curl -sf http://127.0.0.1:8000/health > /dev/null 2>&1; do sleep 1; done
     just db-auto-init
 
-_cloud-sandbox-infra:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    just floci-az-up
-    docker compose up -d ingestor-db cache broker ingestor dashboard
-    until docker compose exec -T ingestor-db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
-
 db-auto-init:
     #!/usr/bin/env bash
     set -euo pipefail
