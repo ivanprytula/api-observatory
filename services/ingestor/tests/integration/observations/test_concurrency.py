@@ -29,7 +29,7 @@ _BASE_PAYLOAD = {
 # ---------------------------------------------------------------------------
 # TestAsyncGather: Concurrent Enrich Requests
 # ---------------------------------------------------------------------------
-@pytest.mark.integration
+@pytest.mark.demo
 class TestAsyncGather:
     """Test asyncio.gather concurrency for enrich endpoint.
 
@@ -125,7 +125,7 @@ class TestAsyncGather:
 # ---------------------------------------------------------------------------
 # TestRaceConditionHandling: Concurrent Upsert
 # ---------------------------------------------------------------------------
-@pytest.mark.integration
+@pytest.mark.demo
 class TestRaceConditionHandling:
     """Test race condition handling for upsert endpoint.
 

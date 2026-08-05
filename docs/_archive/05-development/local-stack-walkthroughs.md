@@ -13,20 +13,9 @@ Do not paste values from `.env` into terminals, notes, or committed files. Do no
 Goal: prove that the smallest local system is running, then follow one write/read path into
 PostgreSQL.
 
-1. Prepare and start the canonical core stack. The first three commands are one-time workstation
-   setup; do not overwrite an existing local `.env`.
+Complete the [Canonical Onboarding and Delivery Checklist](onboarding-and-delivery-checklist.md) first. Then trace the core stack:
 
-   ```bash
-   just doctor
-   cp .env.example .env
-   just generate-secrets
-   just dev-up
-   just dev-wait-ready
-   just db-migrate
-   just test-smoke
-   ```
-
-2. Observe the process, dependency, and data boundaries.
+1. On the core stack, observe the process, dependency, and data boundaries.
 
    ```bash
    curl --fail http://127.0.0.1:8000/health
@@ -36,9 +25,9 @@ PostgreSQL.
    ```
 
    In `psql`, check `SELECT version_num FROM alembic_version;` and inspect the observation rows
-   created by the smoke exercise. Exit with `\\q`.
+   created by the smoke exercise. Exit with `\q`.
 
-3. Open <http://127.0.0.1:8000/api/docs> and <http://127.0.0.1:8501>. `/health` proves the web
+2. Open <http://127.0.0.1:8000/api/docs> and <http://127.0.0.1:8501>. `/health` proves the web
    process is alive; `/readyz` also verifies its required database path. The smoke test is the
    evidence that an observation can be written and read through the running API, so it deliberately
    leaves a small local row behind.

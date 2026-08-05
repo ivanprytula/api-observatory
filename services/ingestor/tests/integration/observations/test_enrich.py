@@ -43,7 +43,7 @@ async def _create_observations(client: AsyncClient, n: int) -> list[int]:
 # ---------------------------------------------------------------------------
 # Happy path
 # ---------------------------------------------------------------------------
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_enrich_happy_path(client: AsyncClient) -> None:
     """All observations enriched successfully — enriched_count == len(observation_ids)."""
     ids = await _create_observations(client, 3)
@@ -69,7 +69,7 @@ async def test_enrich_happy_path(client: AsyncClient) -> None:
         assert result["error"] is None
 
 
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_enrich_single_observation(client: AsyncClient) -> None:
     """Single observation enriched returns 200 with 1 result."""
     ids = await _create_observations(client, 1)
@@ -90,7 +90,7 @@ async def test_enrich_single_observation(client: AsyncClient) -> None:
 # ---------------------------------------------------------------------------
 # Partial failures
 # ---------------------------------------------------------------------------
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_enrich_partial_failure(client: AsyncClient) -> None:
     """Some observations fail — failed ones appear with enriched=False, others succeed."""
     ids = await _create_observations(client, 4)
@@ -121,7 +121,7 @@ async def test_enrich_partial_failure(client: AsyncClient) -> None:
         assert f["external_title"] is None
 
 
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_enrich_all_fail(client: AsyncClient) -> None:
     """All enrichments fail — endpoint still returns 200 with failed_count = n."""
     ids = await _create_observations(client, 2)
@@ -145,7 +145,7 @@ async def test_enrich_all_fail(client: AsyncClient) -> None:
 # ---------------------------------------------------------------------------
 # Missing / unknown observation IDs
 # ---------------------------------------------------------------------------
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_enrich_nonexistent_observations(client: AsyncClient) -> None:
     """Non-existent observation IDs are returned with enriched=False and 'not found' error."""
     with patch(
@@ -163,7 +163,7 @@ async def test_enrich_nonexistent_observations(client: AsyncClient) -> None:
         assert "not found" in result["error"].lower()
 
 
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_enrich_mixed_existing_and_missing(client: AsyncClient) -> None:
     """Mix of real and missing IDs — missing ones fail, real ones succeed."""
     ids = await _create_observations(client, 2)
@@ -185,7 +185,7 @@ async def test_enrich_mixed_existing_and_missing(client: AsyncClient) -> None:
 # ---------------------------------------------------------------------------
 # Concurrency verification
 # ---------------------------------------------------------------------------
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_enrich_respects_semaphore_limit(client: AsyncClient) -> None:
     """Concurrent inflight count never exceeds ENRICH_SEMAPHORE_LIMIT."""
     ids = await _create_observations(client, ENRICH_SEMAPHORE_LIMIT + 5)
@@ -219,14 +219,14 @@ async def test_enrich_respects_semaphore_limit(client: AsyncClient) -> None:
 # ---------------------------------------------------------------------------
 # Request validation
 # ---------------------------------------------------------------------------
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_enrich_empty_list_rejected(client: AsyncClient) -> None:
     """Empty observation_ids list is rejected with 422."""
     r = await client.post(_URL, json={"observation_ids": []})
     assert r.status_code == 422
 
 
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_enrich_too_many_ids_rejected(client: AsyncClient) -> None:
     """More than ENRICH_MAX_IDS observation IDs are rejected with 422."""
     r = await client.post(
@@ -235,7 +235,7 @@ async def test_enrich_too_many_ids_rejected(client: AsyncClient) -> None:
     assert r.status_code == 422
 
 
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_enrich_missing_body_rejected(client: AsyncClient) -> None:
     """Missing request body is rejected with 422."""
     r = await client.post(_URL, json={})
@@ -245,7 +245,7 @@ async def test_enrich_missing_body_rejected(client: AsyncClient) -> None:
 # ---------------------------------------------------------------------------
 # Response shape verification
 # ---------------------------------------------------------------------------
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_enrich_response_shape(client: AsyncClient) -> None:
     """Verify complete EnrichResponse shape is returned."""
     ids = await _create_observations(client, 2)

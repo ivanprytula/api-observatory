@@ -30,7 +30,7 @@ _BASE_PAYLOAD = {
 # ---------------------------------------------------------------------------
 # Happy path — first insert
 # ---------------------------------------------------------------------------
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_upsert_creates_new_observation(client: AsyncClient) -> None:
     """First upsert with a unique key returns 201 and created=True."""
     r = await client.post(_URL, json=_BASE_PAYLOAD)
@@ -45,7 +45,7 @@ async def test_upsert_creates_new_observation(client: AsyncClient) -> None:
 # ---------------------------------------------------------------------------
 # Idempotent repeat — same key returns existing observation
 # ---------------------------------------------------------------------------
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_upsert_idempotent_repeat_returns_200(client: AsyncClient) -> None:
     """Second upsert with same source+timestamp returns 200, same observation ID."""
     r1 = await client.post(_URL, json=_BASE_PAYLOAD)
@@ -59,7 +59,7 @@ async def test_upsert_idempotent_repeat_returns_200(client: AsyncClient) -> None
     assert body2["observation"]["id"] == original_id
 
 
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_upsert_idempotent_repeat_returns_same_observation_data(
     client: AsyncClient,
 ) -> None:
@@ -72,7 +72,7 @@ async def test_upsert_idempotent_repeat_returns_same_observation_data(
 # ---------------------------------------------------------------------------
 # Different key → new observation
 # ---------------------------------------------------------------------------
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_upsert_different_source_creates_new_observation(
     client: AsyncClient,
 ) -> None:
@@ -84,7 +84,7 @@ async def test_upsert_different_source_creates_new_observation(
     assert r1.json()["observation"]["id"] != r2.json()["observation"]["id"]
 
 
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_upsert_different_timestamp_creates_new_observation(
     client: AsyncClient,
 ) -> None:
@@ -101,7 +101,7 @@ async def test_upsert_different_timestamp_creates_new_observation(
 # ---------------------------------------------------------------------------
 # Strict mode
 # ---------------------------------------------------------------------------
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_upsert_strict_mode_first_insert_returns_201(
     client: AsyncClient,
 ) -> None:
@@ -113,7 +113,7 @@ async def test_upsert_strict_mode_first_insert_returns_201(
     assert r.json()["mode"] == "strict"
 
 
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_upsert_strict_mode_conflict_returns_409(client: AsyncClient) -> None:
     """Strict mode duplicate returns 409 Conflict with existing_id in detail."""
     payload = {**_BASE_PAYLOAD, "source": "strict-sensor-2"}
@@ -132,7 +132,7 @@ async def test_upsert_strict_mode_conflict_returns_409(client: AsyncClient) -> N
 # ---------------------------------------------------------------------------
 # Race condition demo — concurrent upserts with same key
 # ---------------------------------------------------------------------------
-@pytest.mark.integration
+@pytest.mark.demo
 @pytest.mark.skip(
     reason=(
         "Race condition demo requires per-request DB sessions. "
@@ -171,7 +171,7 @@ async def test_upsert_concurrent_same_key_one_wins(client: AsyncClient) -> None:
     assert id1 == id2, f"Duplicate observations created: {id1} != {id2}"
 
 
-@pytest.mark.integration
+@pytest.mark.demo
 @pytest.mark.skip(
     reason=(
         "Race condition demo requires per-request DB sessions. "
@@ -195,7 +195,7 @@ async def test_upsert_race_strict_mode_one_201_one_409(client: AsyncClient) -> N
 # ---------------------------------------------------------------------------
 # Invalid mode parameter
 # ---------------------------------------------------------------------------
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_upsert_invalid_mode_returns_422(client: AsyncClient) -> None:
     """Unknown mode value → 422 Unprocessable Entity (query param validation)."""
     r = await client.post(_URL, params={"mode": "overwrite"}, json=_BASE_PAYLOAD)
@@ -205,7 +205,7 @@ async def test_upsert_invalid_mode_returns_422(client: AsyncClient) -> None:
 # ---------------------------------------------------------------------------
 # Field validations still apply
 # ---------------------------------------------------------------------------
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_upsert_localhost_source_rejected(client: AsyncClient) -> None:
     """Upsert inherits ObservationRequest validators — localhost is still rejected."""
     r = await client.post(
@@ -215,7 +215,7 @@ async def test_upsert_localhost_source_rejected(client: AsyncClient) -> None:
     assert r.status_code == 422
 
 
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_upsert_response_schema_shape(client: AsyncClient) -> None:
     """Response contains required keys: observation, created, mode."""
     r = await client.post(_URL, json=_BASE_PAYLOAD)

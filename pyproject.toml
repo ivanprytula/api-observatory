@@ -119,7 +119,7 @@ dev = [
 testpaths = ["tests", "services/ingestor/tests"]
 asyncio_mode = "auto"
 # Limit coverage collection to the package under test to avoid "module X was never imported" warnings
-addopts = "--cov=services/ingestor --cov-report=term-missing --cov-report=html -q -m 'not e2e'"
+addopts = "--cov=services/ingestor --cov-report=term-missing --cov-report=html -q -m 'not e2e and not demo'"
 filterwarnings = [
   "ignore::DeprecationWarning:slowapi",
   "ignore::DeprecationWarning:fastapi.routing",
@@ -127,6 +127,7 @@ filterwarnings = [
 markers = [
   "unit: Fast, isolated unit tests (no I/O, no DB)",
   "integration: Tests that touch DB/ASGI client",
+  "demo: Demo/learning feature tests (v2 routes, session auth examples)",
   "contract: In-process OpenAPI contract tests (no external services)",
   "e2e: End-to-end or long-running tests (skipped by default)",
   "azure: floci-az Azure emulator dependent tests",

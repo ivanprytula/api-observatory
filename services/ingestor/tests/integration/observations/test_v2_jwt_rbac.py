@@ -8,7 +8,7 @@ from httpx import AsyncClient
 from tests.shared.payloads import OBSERVATION_API
 
 
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_v2_jwt_create_requires_writer_or_admin_role(client: AsyncClient) -> None:
     """JWT writer role is accepted for /api/v2/observations/jwt."""
     token_resp = await client.post(
@@ -25,7 +25,7 @@ async def test_v2_jwt_create_requires_writer_or_admin_role(client: AsyncClient) 
     assert create_resp.status_code == 201
 
 
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_v2_jwt_create_denies_viewer_role(client: AsyncClient) -> None:
     """JWT viewer role is rejected with 403 on write endpoint."""
     import services.ingestor.auth as auth_module

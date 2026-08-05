@@ -3,14 +3,18 @@
 
 # Open an explicit local service database; cloud access uses native psql with a
 # separately supplied DATABASE_URL so this helper cannot target cloud hosts.
-db-psql service:
+db-psql service query="":
     #!/usr/bin/env bash
     set -euo pipefail
+    if [[ -z "{{query}}" ]]; then
+        echo "Usage: just db-psql <service> <query>" >&2
+        exit 1
+    fi
     case "{{service}}" in
-        ingestor) docker compose exec ingestor-db psql -U postgres -d api_obs_ingestor ;;
-        inference) docker compose exec inference-db psql -U postgres -d api_obs_inference ;;
+        ingestor) docker compose exec ingestor-db psql -U postgres -d api_obs_ingestor -c "{{query}}" ;;
+        inference) docker compose exec inference-db psql -U postgres -d api_obs_inference -c "{{query}}" ;;
         *)
-            echo "Choose a local database: just db-psql ingestor|inference" >&2
+            echo "Choose a local database: just db-psql ingestor|inference <query>" >&2
             exit 2
             ;;
     esac

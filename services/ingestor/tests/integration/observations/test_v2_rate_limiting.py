@@ -38,7 +38,7 @@ async def _reset_v2_limiters() -> None:
 # ---------------------------------------------------------------------------
 # Token bucket — happy path
 # ---------------------------------------------------------------------------
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_v2_token_bucket_create_observation(client: AsyncClient) -> None:
     """POST to token-bucket endpoint creates a observation (201)."""
     r = await client.post(_TOKEN_BUCKET_URL, json=_OBSERVATION)
@@ -49,7 +49,7 @@ async def test_v2_token_bucket_create_observation(client: AsyncClient) -> None:
     assert "id" in body
 
 
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_v2_token_bucket_response_headers(client: AsyncClient) -> None:
     """Token-bucket response includes rate-limit headers."""
     r = await client.post(_TOKEN_BUCKET_URL, json=_OBSERVATION)
@@ -60,7 +60,7 @@ async def test_v2_token_bucket_response_headers(client: AsyncClient) -> None:
     assert "X-RateLimit-Remaining" in r.headers
 
 
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_v2_token_bucket_rate_limited(client: AsyncClient) -> None:
     """Exhaust token bucket → 429 with Retry-After header."""
     # Drain the bucket (capacity = TOKEN_BUCKET_CAPACITY)
@@ -79,7 +79,7 @@ async def test_v2_token_bucket_rate_limited(client: AsyncClient) -> None:
     assert r.headers["X-RateLimit-Strategy"] == "token-bucket"
 
 
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_v2_token_bucket_validation_422(client: AsyncClient) -> None:
     """Invalid payload → 422 (validation runs before rate limiting)."""
     r = await client.post(_TOKEN_BUCKET_URL, json={"source": "localhost"})
@@ -90,7 +90,7 @@ async def test_v2_token_bucket_validation_422(client: AsyncClient) -> None:
 # ---------------------------------------------------------------------------
 # Sliding window — happy path
 # ---------------------------------------------------------------------------
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_v2_sliding_window_create_observation(client: AsyncClient) -> None:
     """POST to sliding-window endpoint creates a observation (201)."""
     r = await client.post(_SLIDING_WINDOW_URL, json=_OBSERVATION)
@@ -101,7 +101,7 @@ async def test_v2_sliding_window_create_observation(client: AsyncClient) -> None
     assert "id" in body
 
 
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_v2_sliding_window_response_headers(client: AsyncClient) -> None:
     """Sliding-window response includes rate-limit headers."""
     r = await client.post(_SLIDING_WINDOW_URL, json=_OBSERVATION)
@@ -112,7 +112,7 @@ async def test_v2_sliding_window_response_headers(client: AsyncClient) -> None:
     assert "X-RateLimit-Remaining" in r.headers
 
 
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_v2_sliding_window_rate_limited(client: AsyncClient) -> None:
     """Exhaust sliding window → 429 with Retry-After header."""
     # Fill the window (limit = SLIDING_WINDOW_LIMIT)
@@ -131,7 +131,7 @@ async def test_v2_sliding_window_rate_limited(client: AsyncClient) -> None:
     assert r.headers["X-RateLimit-Strategy"] == "sliding-window"
 
 
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_v2_sliding_window_remaining_decrements(client: AsyncClient) -> None:
     """Remaining count decreases with each request."""
     r1 = await client.post(_SLIDING_WINDOW_URL, json=_OBSERVATION)

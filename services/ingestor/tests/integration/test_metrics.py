@@ -171,7 +171,7 @@ async def test_batch_size_histogram_has_sample_after_batch_insert(
 # ---------------------------------------------------------------------------
 # Upsert conflict counter
 # ---------------------------------------------------------------------------
-@pytest.mark.integration
+@pytest.mark.demo
 async def test_upsert_conflict_counter_increments_on_idempotent_duplicate(
     client: AsyncClient,
     db: AsyncSession,

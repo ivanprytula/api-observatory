@@ -5,77 +5,11 @@ this guide explains which mode to choose, what it proves, and where configuratio
 The Docker-first `just dev-up` flow is the official onboarding path. Files under `.github/prompts/` are
 historical agent prompts and are not setup instructions for new developers.
 
-## Prerequisites
-
-The supported developer workstation is Linux (Ubuntu) or macOS with Docker Engine/Desktop and
-Compose v2, a running Docker daemon, the Python version selected by [`.python-version`](../../.python-version),
-`uv`, `just`, Git, and `curl`. Run `just doctor` before creating `.env`; it checks core tools and
-reports optional tooling as warnings.
-
-Terraform, Ansible, cloud CLIs, Kubernetes tools, and database client utilities are not application
-onboarding requirements. Install them only for a task that owns that boundary, following the sibling
-infrastructure repository's
-[README](https://github.com/ivanprytula/api-observatory-infra/blob/main/README.md).
-
-Never read or commit a local `.env`. Copy the public, non-secret
-[`.env.example`](../../.env.example), then generate local credentials privately.
+Prerequisites are covered in the [Canonical Onboarding and Delivery Checklist](../05-development/onboarding-and-delivery-checklist.md).
 
 ## Quick Start
 
-```bash
-just doctor
-cp .env.example .env
-just generate-secrets
-just dev-up
-just dev-wait-ready
-just db-migrate
-just test-smoke
-```
-
-Run `just help-core` for the same focused command map after setup. It keeps cloud, Kubernetes,
-security, and emulator recipes out of the first-task workflow.
-
-After the quick start works, use the [local stack walkthroughs](../05-development/local-stack-walkthroughs.md)
-to trace core, tenant/migration, and extended-stack behavior at increasing depth.
-
-For first-use verification, use the dashboard at `http://127.0.0.1:8501`. The onboarding path does
-not require copying credentials or tokens into a terminal. Use the API docs and authenticated curl
-flows only when developing or testing an API-specific change.
-
-The dashboard starts successfully with an empty database. Run `just db-auto-init` only when you want the
-local admin account and example sources for a populated demo walkthrough.
-
-For the authenticated demo path, run `just db-auto-init`, open the dashboard, and use the Login tab
-with the local demo account `admin` / `admin123`. These credentials are disposable development
-fixtures created by the seed recipe; never use them outside a local demo database. The same account
-can authenticate API requests through `POST /api/v1/auth/token` when an API-specific task needs it.
-
-`db-auto-init` drives the committed Bruno collection under [`bruno/demo/`](../../bruno/demo/):
-register → login → promote `admin` to the `admin` role through the internal-auth endpoint
-(`POST /api/v1/auth/users/{username}/role`) → re-login → create the example sources. The role
-promotion needs a short-lived internal service JWT, minted by `just db-internal-token` and pasted
-into the `internal_token` environment variable when running the requests manually in the Bruno app,
-Postman, or SwaggerUI. The demo source payloads are also tracked as plain JSON under
-[`bruno/demo/payloads/`](../../bruno/demo/payloads/) for copy-paste into any API client.
-
-Treat these as two separate dashboard states:
-
-- **Empty dashboard:** confirms the UI and service wiring start correctly; no login or demo data is
-  required.
-- **Authenticated dashboard:** required for source management and other protected actions; run
-  `just db-auto-init` for the local demo admin/source setup before using those features.
-
-`just test-smoke` deliberately creates a small observation and leaves it in the local database so
-the write/read path is proven. Treat that data as persistent developer data; use
-`just db-reset --confirm DELETE` only for disposable demo environments.
-
-`just generate-secrets` creates or rotates the local prod-like passwords and tokens in `.env` without
-printing them. The [`Justfile`](../../Justfile) owns the remaining executable workflows.
-
-`just dev-up` is the default HTTP workflow. Use `http://127.0.0.1:8000/api/docs` for the OpenAPI UI and
-`http://127.0.0.1:8501` for the dashboard. HTTPS is a later, opt-in verification step for proxy,
-cookie, redirect, WebSocket, and security-header testing: run
-`bash scripts/setup/02-setup-local-https.sh`, then start the `ingress` profile as documented below.
+Follow the [Canonical Onboarding and Delivery Checklist](../05-development/onboarding-and-delivery-checklist.md) for the complete first-time setup sequence. This guide explains which mode to choose, what it proves, and where configuration lives.
 
 ## Supported Local Modes
 
@@ -253,7 +187,7 @@ the owning service logs.
 After changing a cache, broker, or telemetry flag, restart the ingestor so it receives the new
 configuration. The broker carries general application events and the opt-in notification delivery
 consumer. Direct notification delivery remains the default; the
-[senior walkthrough](../05-development/local-stack-walkthroughs.md#senior-extended-dependencies-and-failure-boundaries)
+[senior walkthrough](../05-development/dev-workflows.md#senior-extended-dependencies-and-failure-boundaries)
 owns the explicit consumer startup path.
 
 OpenTelemetry is disabled by default. To collect local traces, enable it, restart the ingestor, and

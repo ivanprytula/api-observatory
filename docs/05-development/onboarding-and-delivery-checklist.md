@@ -5,11 +5,26 @@ and the app-to-infra release handoff. When a contributor workflow changes, updat
 and then link to it from the README, contributing guide, and deployment docs rather than copying the
 same instructions into multiple places.
 
+## 0. Prerequisites
+
+The supported developer workstation is Linux (Ubuntu) or macOS with Docker Engine/Desktop and
+Compose v2, a running Docker daemon, the Python version selected by [`.python-version`](../../.python-version),
+`uv`, `just`, Git, and `curl`. Run `just doctor` before creating `.env`; it checks core tools and
+reports optional tooling as warnings.
+
+Terraform, Ansible, cloud CLIs, Kubernetes tools, and database client utilities are not application
+onboarding requirements. Install them only for a task that owns that boundary, following the sibling
+infrastructure repository's
+[README](https://github.com/ivanprytula/api-observatory-infra/blob/main/README.md).
+
+Never read or commit a local `.env`. Copy the public, non-secret
+[`.env.example`](../../.env.example), then generate local credentials privately.
+
 ## 1. Canonical onboarding path
 
 Use this path for first-time setup or when returning to the repository after a long gap:
 
-1. Review the app [README](../../README.md) and the [setup guide](../04-setup/setup-guide.md).
+1. Review the app [README](../../README.md).
 2. Run `just doctor`.
 3. Copy `.env.example` to `.env` and generate local secrets with `just generate-secrets`.
 4. Start the default stack with `just dev-up`.
