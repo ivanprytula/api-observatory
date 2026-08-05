@@ -221,7 +221,7 @@ flowchart LR
     B -->|SSRF check| C[Store Source]
     C --> D[Alembic Scheduler]
     D --> E{Source.probe_interval}
-    E -->|10s default| F[GET /api/v1/sources/{id}/health]
+    E -->|10s default| F[GET /api/v1/sources/1/health]
     F --> G{HTTP 2xx?}
     G -->|Yes| H[Upsert Observation]
     G -->|No| I[Create DependencyIncident]
