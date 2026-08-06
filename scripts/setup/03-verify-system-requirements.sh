@@ -15,6 +15,18 @@ NC='\033[0m'
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 REQUIRED_PYTHON_VERSION="$(<"${PROJECT_ROOT}/.python-version")"
 
+# Workstation baselines. These are minimum CLI versions, not dependency
+# versions; keep them conservative so Ubuntu 22.04/macOS installations remain
+# supported while still covering the commands used by this repository.
+MIN_DOCKER_VERSION="20.10.0"
+MIN_COMPOSE_VERSION="2.20.0"
+MIN_UV_VERSION="0.4.0"
+MIN_JUST_VERSION="1.0.0"
+MIN_GIT_VERSION="2.30.0"
+MIN_CURL_VERSION="7.81.0"
+MIN_POSTGRES_TOOLS_VERSION="15.0"
+MIN_MONGO_TOOLS_VERSION="100.8.0"
+
 # ─── Helper functions ─────────────────────────────────────────────────────────
 check_command() {
     if command -v "$1" &>/dev/null; then
@@ -26,14 +38,66 @@ check_command() {
     fi
 }
 
-check_docker_compose() {
-    if docker compose version &>/dev/null 2>&1; then
-        echo -e "${GREEN}✓${NC} docker compose (v2 - bundled with Docker)"
+extract_version() {
+    sed -nE 's/[^0-9]*([0-9]+(\.[0-9]+){1,3}).*/\1/p' | head -n1
+}
+
+version_at_least() {
+    local actual="$1"
+    local minimum="$2"
+    local actual_part minimum_part
+    local -a actual_parts minimum_parts
+    IFS='.' read -r -a actual_parts <<< "${actual}"
+    IFS='.' read -r -a minimum_parts <<< "${minimum}"
+    for ((index = 0; index < ${#minimum_parts[@]}; index++)); do
+        actual_part="${actual_parts[index]:-0}"
+        minimum_part="${minimum_parts[index]:-0}"
+        if ((10#${actual_part} > 10#${minimum_part})); then
+            return 0
+        fi
+        if ((10#${actual_part} < 10#${minimum_part})); then
+            return 1
+        fi
+    done
+    return 0
+}
+
+check_version() {
+    local label="$1"
+    local minimum="$2"
+    local raw="$3"
+    local actual
+    actual="$(printf '%s\n' "${raw}" | extract_version)"
+    if [[ -z "${actual}" ]]; then
+        echo -e "${RED}✗${NC} ${label} version could not be parsed from: ${raw}"
+        return 1
+    fi
+    if ! version_at_least "${actual}" "${minimum}"; then
+        echo -e "${RED}✗${NC} ${label} ${actual}; requires >= ${minimum}"
+        return 1
+    fi
+    echo -e "${GREEN}✓${NC} ${label} ${actual} (>= ${minimum})"
+}
+
+check_optional_version() {
+    local command_name="$1"
+    local minimum="$2"
+    local raw
+    if ! command -v "${command_name}" &>/dev/null; then
+        echo -e "${YELLOW}⚠${NC} ${command_name} not found (optional: install the matching client tools)"
         return 0
-    else
+    fi
+    raw="$(${command_name} --version 2>&1 | head -n1)"
+    check_version "${command_name}" "${minimum}" "${raw}" || true
+}
+
+check_docker_compose() {
+    local raw
+    if ! raw="$(docker compose version 2>&1)"; then
         echo -e "${RED}✗${NC} Docker Compose v2 ${RED}NOT FOUND${NC} (install Docker Engine/Desktop with Compose v2)"
         return 1
     fi
+    check_version "Docker Compose" "${MIN_COMPOSE_VERSION}" "${raw}"
 }
 
 check_command_warning() {
@@ -62,8 +126,13 @@ check_python_version() {
     fi
     local version
     version="$(${python_bin} -c 'import platform; print(platform.python_version())')"
-    if [[ "${version}" != "${REQUIRED_PYTHON_VERSION}" ]]; then
-        echo -e "${RED}✗${NC} Python ${version}; .python-version requires ${REQUIRED_PYTHON_VERSION}"
+    # .python-version selects a supported minor series (for example, 3.14),
+    # while the interpreter reports its installed patch version (for example,
+    # 3.14.6). Compare the same major.minor value instead of requiring an
+    # exact patch-level match.
+    local version_series="${version%.*}"
+    if [[ "${version_series}" != "${REQUIRED_PYTHON_VERSION}" ]]; then
+        echo -e "${RED}✗${NC} Python ${version}; .python-version requires ${REQUIRED_PYTHON_VERSION}.x"
         return 1
     fi
     echo -e "${GREEN}✓${NC} Python ${version}"
@@ -79,17 +148,42 @@ echo ""
 FAILED=0
 
 echo "Core Development Tools:"
-check_command "docker" "docker" || ((FAILED++))
+if command -v docker &>/dev/null; then
+    check_version "Docker" "${MIN_DOCKER_VERSION}" "$(docker --version 2>&1)" || ((++FAILED))
+else
+    echo -e "${RED}✗${NC} docker NOT FOUND (install docker)"
+    ((++FAILED))
+fi
 if command -v docker &>/dev/null && ! docker info &>/dev/null 2>&1; then
     echo -e "${RED}✗${NC} Docker daemon is not running (start Docker, then rerun just doctor)"
-    ((FAILED++))
+    ((++FAILED))
 fi
-check_docker_compose || ((FAILED++))
-check_python_version || ((FAILED++))
-check_command "uv" "uv" || ((FAILED++))
-check_command "just" "just" || ((FAILED++))
-check_command "git" "git" || ((FAILED++))
-check_command "curl" "curl" || ((FAILED++))
+check_docker_compose || ((++FAILED))
+check_python_version || ((++FAILED))
+if command -v uv &>/dev/null; then
+    check_version "uv" "${MIN_UV_VERSION}" "$(uv --version 2>&1)" || ((++FAILED))
+else
+    echo -e "${RED}✗${NC} uv NOT FOUND (install uv)"
+    ((++FAILED))
+fi
+if command -v just &>/dev/null; then
+    check_version "just" "${MIN_JUST_VERSION}" "$(just --version 2>&1)" || ((++FAILED))
+else
+    echo -e "${RED}✗${NC} just NOT FOUND (install just)"
+    ((++FAILED))
+fi
+if command -v git &>/dev/null; then
+    check_version "git" "${MIN_GIT_VERSION}" "$(git --version 2>&1)" || ((++FAILED))
+else
+    echo -e "${RED}✗${NC} git NOT FOUND (install git)"
+    ((++FAILED))
+fi
+if command -v curl &>/dev/null; then
+    check_version "curl" "${MIN_CURL_VERSION}" "$(curl --version 2>&1 | head -n1)" || ((++FAILED))
+else
+    echo -e "${RED}✗${NC} curl NOT FOUND (install curl)"
+    ((++FAILED))
+fi
 
 echo ""
 echo "Cloud / Infrastructure as Code (Optional):"
@@ -97,11 +191,11 @@ check_command_warning "terraform" "terraform (install: https://www.terraform.io/
 
 echo ""
 echo "Database Backup/Restore (Optional):"
-check_command_warning "pg_dump" "postgresql client tools" || true
-check_command_warning "pg_restore" "postgresql client tools" || true
-check_command_warning "psql" "postgresql client tools" || true
-check_command_warning "mongodump" "mongodb-tools" || true
-check_command_warning "mongorestore" "mongodb-tools" || true
+check_optional_version "pg_dump" "${MIN_POSTGRES_TOOLS_VERSION}"
+check_optional_version "pg_restore" "${MIN_POSTGRES_TOOLS_VERSION}"
+check_optional_version "psql" "${MIN_POSTGRES_TOOLS_VERSION}"
+check_optional_version "mongodump" "${MIN_MONGO_TOOLS_VERSION}"
+check_optional_version "mongorestore" "${MIN_MONGO_TOOLS_VERSION}"
 
 echo ""
 echo "Chaos Testing (Optional but recommended):"
@@ -124,7 +218,7 @@ echo "════════════════════════�
 echo ""
 
 if command -v python3 &>/dev/null; then
-    echo "Python:          $(python3 --version)"
+    echo "System Python:    $(python3 --version)"
 fi
 
 if command -v uv &>/dev/null; then

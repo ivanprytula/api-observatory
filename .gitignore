@@ -194,6 +194,7 @@ docker-compose.override.yml
 !infra/terraform/**/*.tfvars.example
 
 # Ansible
+.ansible/
 vault.yml
 vault.yml.enc
 group_vars/*

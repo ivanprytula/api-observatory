@@ -23,32 +23,36 @@ dev-wait-ready:
     #!/usr/bin/env bash
     set -euo pipefail
     timeout_seconds="${READY_TIMEOUT_SECONDS:-60}"
-    deadline=$((SECONDS + timeout_seconds))
-    until curl -fsS http://127.0.0.1:8000/readyz >/dev/null 2>&1; do
-        if ((SECONDS >= deadline)); then
-            echo "Ingestor was not ready after ${timeout_seconds}s." >&2
-            docker compose ps >&2
-            docker compose logs --tail=100 ingestor-db ingestor >&2
-            exit 1
-        fi
-        sleep 1
-    done
+    if curl --fail --silent --show-error \
+        --connect-timeout 2 --max-time 5 \
+        --retry "${timeout_seconds}" --retry-delay 1 \
+        --retry-max-time "${timeout_seconds}" --retry-all-errors \
+        http://127.0.0.1:8000/readyz >/dev/null; then
+        echo "Ingestor ready: http://127.0.0.1:8000"
+    else
+        echo "Ingestor was not ready after ${timeout_seconds}s." >&2
+        docker compose ps >&2
+        docker compose logs --tail=100 ingestor-db ingestor >&2
+        exit 1
+    fi
 
 # Wait for the optional inference service with the same bounded behavior.
 dev-inference-ready:
     #!/usr/bin/env bash
     set -euo pipefail
     timeout_seconds="${READY_TIMEOUT_SECONDS:-60}"
-    deadline=$((SECONDS + timeout_seconds))
-    until curl -fsS http://127.0.0.1:8001/readyz >/dev/null 2>&1; do
-        if ((SECONDS >= deadline)); then
-            echo "Inference was not ready after ${timeout_seconds}s." >&2
-            docker compose ps >&2
-            docker compose logs --tail=100 inference-db inference >&2
-            exit 1
-        fi
-        sleep 1
-    done
+    if curl --fail --silent --show-error \
+        --connect-timeout 2 --max-time 5 \
+        --retry "${timeout_seconds}" --retry-delay 1 \
+        --retry-max-time "${timeout_seconds}" --retry-all-errors \
+        http://127.0.0.1:8001/readyz >/dev/null; then
+        echo "Inference ready: http://127.0.0.1:8001"
+    else
+        echo "Inference was not ready after ${timeout_seconds}s." >&2
+        docker compose ps >&2
+        docker compose logs --tail=100 inference-db inference >&2
+        exit 1
+    fi
 
 db-inference-migrate:
     #!/usr/bin/env bash

@@ -32,8 +32,7 @@ contract. No live production operation is claimed.
 2. Schedule health and response-shape probes.
 3. Calculate uptime, latency percentiles, and error-budget signals.
 4. Detect breaking response-contract changes.
-5. Stream or dispatch operational signals and optionally enrich serious drift with reviewed AI
-   analysis.
+5. Stream or dispatch operational signals and optionally enrich serious drift with reviewed AI analysis.
 
 The standing product example is a solo SaaS developer monitoring payment, authentication, email,
 AI, or data dependencies. This context explains engineering choices; customer acquisition, billing,
