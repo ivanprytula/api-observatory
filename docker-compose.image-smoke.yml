@@ -10,9 +10,6 @@ services:
       POSTGRES_USER: postgres
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres']
-      interval: 5s
-      timeout: 3s
-      retries: 12
 
   inference-db:
     image: pgvector/pgvector:pg17-trixie
@@ -22,9 +19,6 @@ services:
       POSTGRES_USER: postgres
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres']
-      interval: 5s
-      timeout: 3s
-      retries: 12
 
   ingestor:
     build:
@@ -51,9 +45,6 @@ services:
         condition: service_healthy
     healthcheck:
       test: ['CMD', 'python', '-c', 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/readyz", timeout=3)']
-      interval: 5s
-      timeout: 3s
-      retries: 12
 
   inference:
     build:
@@ -74,9 +65,6 @@ services:
         condition: service_healthy
     healthcheck:
       test: ['CMD', 'python', '-c', 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8001/readyz", timeout=3)']
-      interval: 5s
-      timeout: 3s
-      retries: 12
 
   dashboard:
     build:
@@ -93,6 +81,3 @@ services:
         condition: service_healthy
     healthcheck:
       test: ['CMD', 'python', '-c', 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8501/_stcore/health", timeout=3)']
-      interval: 5s
-      timeout: 3s
-      retries: 12

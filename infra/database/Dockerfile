@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1.4
 # pgvector/pgvector:pg17-trixie — postgres:17 with pgvector pre-installed on newer Debian.
-# No PostGIS; no manual compilation required.
-# Digest pinning: update monthly via docs/setup/digest-update-runbook.md
+# no manual compilation required.
+# Base-image digests are updated with scripts/update-base-image-digest.sh.
 
-FROM pgvector/pgvector:pg17-trixie
+FROM pgvector/pgvector:pg17-trixie@sha256:a74b9af952f5609c090120bf938b0c8bca56c33ed9fb05643fd9fceec52c4a08
 
 RUN apt-get update \
 	&& apt-get upgrade -y --no-install-recommends \

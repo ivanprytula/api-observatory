@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-FROM python:3.14-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6 AS builder
+FROM python:3.14-slim@sha256:a7fb1e634c4a578f9e0bd6327f11a3cde11b7a9395f48e24360c0988bcc5c2bc AS builder
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # uv — fast dependency installer
@@ -32,7 +32,7 @@ RUN HF_HUB_DISABLE_XET=1 /app/.venv/bin/python -c \
     "from fastembed import TextEmbedding; TextEmbedding(model_name='BAAI/bge-small-en-v1.5')"
 
 # Stage 2: slim production image
-FROM python:3.14-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6 AS runtime
+FROM python:3.14-slim@sha256:a7fb1e634c4a578f9e0bd6327f11a3cde11b7a9395f48e24360c0988bcc5c2bc AS runtime
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /app
 

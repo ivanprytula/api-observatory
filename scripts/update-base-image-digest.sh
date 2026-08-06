@@ -3,15 +3,19 @@ set -o errexit
 set -o pipefail
 set -o nounset
 
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+readonly PROJECT_ROOT
 
-readonly IMAGE="python:3.14-slim"
-readonly DOCKERFILES=(
+readonly PYTHON_IMAGE="python:3.14-slim"
+readonly PGVECTOR_IMAGE="pgvector/pgvector:pg17-trixie"
+readonly PYTHON_DOCKERFILES=(
   "Dockerfile"
   "services/inference/Dockerfile"
   "services/dashboard/Dockerfile"
 )
+readonly PGVECTOR_DOCKERFILES=("infra/database/Dockerfile")
 
 info()    { echo "[INFO]    $*" >&2; }
 success() { echo "[SUCCESS] $*" >&2; }
@@ -19,9 +23,10 @@ error()   { echo "[ERROR]   $*" >&2; exit 1; }
 
 # Fetch the current digest for the image
 fetch_digest() {
+  local image="$1"
   local raw
-  raw="$(docker buildx imagetools inspect "${IMAGE}" 2>/dev/null)" \
-    || error "Failed to inspect ${IMAGE}. Is Docker running and buildx available?"
+  raw="$(docker buildx imagetools inspect "${image}" 2>/dev/null)" \
+    || error "Failed to inspect ${image}. Is Docker running and buildx available?"
 
   local digest
   digest="$(echo "${raw}" | grep -m1 '^Name:' -A5 | grep 'Digest:' | awk '{print $2}')"
@@ -31,46 +36,59 @@ fetch_digest() {
     digest="$(echo "${raw}" | grep -m1 'sha256:[a-f0-9]\{64\}' -o)"
   fi
 
-  [[ -n "${digest}" ]] || error "Could not parse digest from imagetools output."
+  [[ -n "${digest}" ]] || error "Could not parse digest for ${image} from imagetools output."
   echo "${digest}"
 }
 
-main() {
-  cd "${PROJECT_ROOT}"
-
-  info "Inspecting ${IMAGE} ..."
+update_dockerfiles() {
+  local image="$1"
+  shift
   local new_digest
-  new_digest="$(fetch_digest)"
-  info "Current digest: ${new_digest}"
+  new_digest="$(fetch_digest "${image}")"
+  info "Current ${image} digest: ${new_digest}"
 
-  local updated=0
-  for df in "${DOCKERFILES[@]}"; do
+  local df old_digest
+  for df in "$@"; do
     if [[ ! -f "${df}" ]]; then
       info "Skipping ${df} (not found)"
       continue
     fi
 
-    # Detect whichever sha256 digest is currently in the file
-    local old_digest
-    old_digest="$(grep -o 'sha256:[a-f0-9]\{64\}' "${df}" | head -1 || true)"
+    # Detect an existing digest on the matching FROM line.
+    old_digest="$(grep -E -m1 -o "^FROM ${image}@sha256:[a-f0-9]{64}" "${df}" \
+      | grep -E -o 'sha256:[a-f0-9]{64}' || true)"
 
-    if [[ -z "${old_digest}" ]]; then
-      info "No digest found in ${df}, skipping"
+    if [[ -n "${old_digest}" ]]; then
+      if [[ "${old_digest}" == "${new_digest}" ]]; then
+        info "${df}: already up to date (${new_digest})"
+        continue
+      fi
+
+      sed -i -E "s#^FROM ${image}@sha256:[a-f0-9]{64}#FROM ${image}@${new_digest}#" "${df}"
+    elif grep -Eq "^FROM ${image}([[:space:]]|$)" "${df}"; then
+      # Add a digest when the matching FROM line is currently tag-only.
+      sed -i -E "s#^FROM ${image}([[:space:]]|$)#FROM ${image}@${new_digest}\1#" "${df}"
+    else
+      info "Skipping ${df} (no FROM ${image} line found)"
       continue
     fi
 
-    if [[ "${old_digest}" == "${new_digest}" ]]; then
-      info "${df}: already up to date (${new_digest})"
-      continue
-    fi
-
-    sed -i "s|${old_digest}|${new_digest}|g" "${df}"
-    success "${df}: ${old_digest} → ${new_digest}"
-    (( updated++ )) || true
+    success "${df}: ${old_digest:-unPinned} → ${new_digest}"
+    (( ++updated ))
   done
+}
+
+main() {
+  cd "${PROJECT_ROOT}"
+
+  local updated=0
+  info "Inspecting ${PYTHON_IMAGE} ..."
+  update_dockerfiles "${PYTHON_IMAGE}" "${PYTHON_DOCKERFILES[@]}"
+  info "Inspecting ${PGVECTOR_IMAGE} ..."
+  update_dockerfiles "${PGVECTOR_IMAGE}" "${PGVECTOR_DOCKERFILES[@]}"
 
   if (( updated == 0 )); then
-    info "All Dockerfiles already use the current digest."
+    info "All tracked base-image digests are current."
   else
     success "Updated ${updated} Dockerfile(s)."
   fi
