@@ -8,12 +8,13 @@ truth.
 
 Short-lived task branches merge into `main` through a pull request. The executable workflow owns its
 internal quality, test, migration, contract, and image-smoke jobs. The stable `CI / Merge gate` fails
-unless every internal requirement succeeds. Repository settings intentionally do not enforce checks
-or approvals yet, so waiting for that gate is a maintainer policy rather than a GitHub restriction.
-The stable gate lets the internal job graph evolve without updating release documentation.
+unless every internal requirement succeeds. Before AWS delivery is enabled, protect `main` by
+requiring a pull request and that stable check in both repositories. The stable gate lets the
+internal job graph evolve without updating release documentation.
 
-CI does not authenticate to AWS or publish registry artifacts. Follow the exact branch, commit,
-push, and pull-request lifecycle in [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
+Application validation jobs do not authenticate to AWS. Only the post-gate reusable publisher job
+receives the image-publisher OIDC permission, and only for a deployable `main` change. Follow the
+exact branch, commit, push, and pull-request lifecycle in [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
 
 ## Manual Assurance
 
@@ -22,15 +23,16 @@ It runs dependency audit, CodeQL, advisory Trivy scans, the authenticated k6 bas
 offline agent evaluation. These exercises are intentionally manual while their results and failure
 modes are being learned; they are not routine merge gates.
 
-## Manual Image Publication
+## Image Publication
 
-[`publish-images.yml`](../../.github/workflows/publish-images.yml) accepts only a selected `main`
-ref. It verifies that the exact commit passed the merge gate, requires the protected
+[`publish-images.yml`](../../.github/workflows/publish-images.yml) is reusable and manually
+dispatchable. App CI calls it only after a deployable `main` change passes the merge gate. It
+verifies the exact commit, uses the protected
 `aws-image-publish` environment, authenticates with GitHub OIDC, and publishes immutable
 `tree-<full-tree-SHA>` ECR images with their resolved digests. It uploads machine-readable release
 metadata containing the source commit, source tree, and three image digests. It does not deploy to EC2.
 Publication remains safely skipped unless `AWS_IMAGE_PUBLISH_ENABLED` is exactly `true` and all AWS
-variables are configured.
+variables are configured. Manual dispatch reuses the same checks for an initial release or retry.
 
 Promotion is an infra-repository PR that changes the environment image lock; no `latest` image is
 published.
@@ -40,13 +42,11 @@ published.
 When a change affects published images, the runtime service contract, or deployment topology:
 
 1. Merge the application PR into `main` and wait for the internal `CI / Merge gate` to succeed.
-2. Publish immutable `tree-<SHA>` images with `publish-images.yml`.
-3. Download the resulting `release-metadata-<commit-SHA>` artifact.
-4. In `api-observatory-infra`, create a separate task branch from `main`, run
-   `just promote-images <artifact-path>`, review the generated `images.lock.json`, and open an
-   infra PR.
-5. After infra CI passes, manually dispatch the approved Stage 0 deployment workflow in the infra
-   repo.
+2. App CI publishes immutable `tree-<SHA>` images, applies the infra-owned promotion script to
+   current infra `main`, and opens or updates one `aws-dev` lock PR. It never deploys.
+3. Review and merge the lock PR after infra CI passes. This merge is the deployment approval.
+4. Infra CI deploys the exact merged desired state. Manual dispatch only replays current infra
+   `main`; the downloaded release artifact and `just promote-images` remain an operator fallback.
 
 Do not describe a lock-file change, Terraform plan, or published image as a completed deployment.
 

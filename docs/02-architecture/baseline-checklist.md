@@ -35,7 +35,7 @@ owns Terraform, Kubernetes, and platform SRE controls.
 | Optional cache, broker, telemetry, and AI paths fail as documented | feature flags and dependency failure tests |
 | Service images run non-root as UID 10001 and satisfy health contracts | Dockerfiles and [deployment contract](../07-deployment/app-repo-contract.md) |
 | Dependencies and images receive maintained vulnerability checks | manually triggered assurance workflow |
-| Image provenance uses immutable `tree-<SHA>` candidates | CI-gated manual deployment workflow |
+| Image provenance uses immutable `tree-<SHA>` candidates and a reviewed environment lock | CI-gated publisher, promotion PR, and infra contract validation |
 | `libs/` never imports service internals | service-boundary check |
 
 ## Maintenance Rule

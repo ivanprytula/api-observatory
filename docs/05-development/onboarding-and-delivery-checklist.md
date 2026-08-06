@@ -67,21 +67,22 @@ Before requesting review:
 Use this checklist when a change affects published images, the service contract, or deployment topology:
 
 1. Merge the application PR first and confirm the app CI gate is green.
-2. Publish immutable application images; the workflow also downloads the release metadata artifact.
-3. Promote the published release into the infrastructure repository:
-   - Automated: when the `INFRA_PROMOTION_TOKEN` secret and the `AWS_IMAGE_PUBLISH_ENABLED`
-     variables are configured in the application repository, the publish workflow dispatches an
-     `app-release-published` event to the infrastructure repository. Its Stage 0 workflow then
-     validates the release and, when the infra-side CD variables are enabled, promotes the
-     `images.lock.json` commit itself.
-   - Manual fallback: create a separate task branch in the infrastructure repository and run
-     `just promote-images <artifact-path>`, then open an infra PR.
-4. Review the resulting `images.lock.json` change and open an infra PR.
-5. Only after the infra PR is reviewed and green should deployment be approved and executed manually.
+2. For a deployable application change, the green `main` CI run calls the reusable image-publish
+   workflow. It publishes immutable images only when `AWS_IMAGE_PUBLISH_ENABLED` is explicitly
+   enabled; manual dispatch remains the first-release and recovery fallback.
+3. The publisher checks out current infra `main`, runs its promotion script, and opens or updates the
+   single `automation/promote-aws-dev` pull request.
+4. Review that PR's source commit, tree, exact image digests, and infra CI result. Merge the PR to
+   approve the selected `images.lock.json` desired state.
+5. A green infra `main` CI run deploys that exact merged lock when `AWS_CD_ENABLED` is enabled.
+   Manual deployment only replays the state already committed on infra `main`.
+
+Optional-profile changes use a separate infrastructure PR. Automated image promotion preserves the
+profiles already reviewed and merged into infra `main`.
 
 ## 5. Current deployment model
 
-The current AWS Stage 0 deployment model is a single-host in-place recreate flow with manual approval
-and best-effort rollback. It is not rolling, blue/green, or canary. The deployment guide in
+The current AWS Stage 0 deployment model is a single-host in-place recreate flow with promotion-PR
+approval and best-effort rollback. It is not rolling, blue/green, or canary. The deployment guide in
 [api-observatory-infra](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md)
 documents the current model and the approval gate.

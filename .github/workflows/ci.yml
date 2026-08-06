@@ -24,6 +24,7 @@ jobs:
     outputs:
       app: ${{ steps.filter.outputs.app }}
       docs: ${{ steps.filter.outputs.docs }}
+      deployable_images: ${{ steps.filter.outputs.deployable_images }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -59,6 +60,14 @@ jobs:
             echo "docs=true" >> "$GITHUB_OUTPUT"
           else
             echo "docs=false" >> "$GITHUB_OUTPUT"
+          fi
+          deployable_paths_regex='^(\.dockerignore|Dockerfile|pyproject\.toml|uv\.lock|alembic\.ini|alembic/'
+          deployable_paths_regex+='|libs/|release/services\.json|services/)'
+          deployable_files=$(echo "$changed_files" | grep -Ev '^services/mcp/' || true)
+          if echo "$deployable_files" | grep -Eq "$deployable_paths_regex"; then
+            echo "deployable_images=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deployable_images=false" >> "$GITHUB_OUTPUT"
           fi
 
   quality:
@@ -293,3 +302,17 @@ jobs:
           for result in "$QUALITY_RESULT" "$UNIT_RESULT" "$INTEGRATION_RESULT" "$IMAGE_SMOKE_RESULT"; do
             [[ "$result" == "success" || "$result" == "skipped" ]] || exit 1
           done
+
+  publish-images:
+    name: "Publish immutable images"
+    needs: [changes, merge-gate]
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      needs.changes.outputs.deployable_images == 'true' &&
+      needs.merge-gate.result == 'success'
+    permissions:
+      checks: read
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/publish-images.yml
+    secrets: inherit

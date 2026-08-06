@@ -54,9 +54,10 @@ git push -u origin HEAD
 gh pr create --base main --fill
 ```
 
-The maintainer policy is to merge only after `CI / Merge gate` succeeds and review conversations are
-resolved. GitHub does not currently enforce required checks or approvals, so verify that evidence
-manually before merging. Manual assurance and image publication are not routine merge requirements.
+Merge only after `CI / Merge gate` succeeds and review conversations are resolved. Before AWS
+delivery is enabled, configure `main` to require both the pull request and that stable check. Manual
+assurance is not a routine merge requirement; post-gate image publication runs only for deployable
+changes and remains disabled unless its explicit AWS gate is true.
 
 ## Cross-Repository Delivery
 

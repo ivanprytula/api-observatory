@@ -37,13 +37,20 @@ Set these as repository or `aws-image-publish` environment variables, not secret
 | `AWS_REGION` | AWS region containing the Stage 0 resources |
 | `AWS_ECR_REGISTRY` | ECR registry hostname used in immutable image references |
 
-Create the `aws-image-publish` environment and configure a required reviewer before enabling publication.
-The workflow skips image publication unless `AWS_IMAGE_PUBLISH_ENABLED` is exactly `true`; an absent or
-`false` value is the safe default while AWS is being prepared. The workflow already requests
-`id-token: write` and uses `aws-actions/configure-aws-credentials` with `role-to-assume`.
+Create the `aws-image-publish` environment and restrict it to `main`. The promotion PR merge is the
+routine human approval, so do not add another required-reviewer prompt to this environment. Protect
+`main` separately with required pull requests and `CI / Merge gate` before enabling delivery.
 
-Trigger the workflow manually from a CI-green `main` ref. Task-branch publication is rejected.
-Routine CI never receives AWS credentials and never publishes images.
+Store `INFRA_PROMOTION_TOKEN` in this environment. It is a fine-grained PAT scoped only to the infra
+repository with Contents and Pull requests read/write access. The publisher uses it to check out the
+infra repository and maintain the fixed promotion PR. Set an expiry and rotate this stored value.
+Never put the token value in a workflow, repository variable, command argument, or documentation.
+
+The workflow skips publication unless `AWS_IMAGE_PUBLISH_ENABLED` is exactly `true`; an absent or
+`false` value is the safe default while AWS is being prepared. A deployable green `main` CI run calls
+the publisher automatically. Manual dispatch from a CI-green `main` ref remains the initial-release
+and recovery fallback; task-branch publication is rejected. Only the post-gate publisher job receives
+`id-token: write` and AWS credentials.
 
 ## Local CLI Credentials
 
