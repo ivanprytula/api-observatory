@@ -1,8 +1,4 @@
-"""Incident-triage agent router (Phase 3).
-
-JWT-authenticated (Phase 4, `docs/03-planning/audit-gaps.md` gap 🟠#6) — same
-jwt_role_guard pattern already used in contract_drift.py/source_registry.py.
-"""
+"""JWT-protected routes for incident-triage agent runs."""
 
 from __future__ import annotations
 

@@ -52,8 +52,8 @@ def _alembic_downgrade(sync_url: str) -> None:
     session-scoped test Postgres with the ingestor's own test suite when
     both run in the same pytest invocation. Nuking the whole schema here
     would silently wipe the ingestor's tables mid-session — exactly the
-    kind of cross-service blast radius `include_object` in alembic/env.py
-    already guards against for autogenerate; this is the same guard for
+    kind of cross-service blast radius the migration environment guards
+    against during autogenerate; this is the same guard for
     the test teardown path.
     """
     from alembic.config import Config

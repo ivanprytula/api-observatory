@@ -1,11 +1,9 @@
-"""Alembic environment config.
+"""Configure Alembic for the ingestor schema.
 
-Use a SQLAlchemy sync Engine (psycopg dialect) for online migrations.
-This provides a SQLAlchemy `Connection` object (with `.dialect`) which
-Alembic expects. Running migrations via the Alembic CLI is a top-level
-process so creating a sync engine here is safe.
-
-See docs/05-development/gotchas.md for Python 3.14 notes and alternatives.
+Alembic invokes this module as a top-level process. Migrations therefore use
+SQLAlchemy's synchronous PostgreSQL driver, while the application can keep its
+async driver for request handling. The metadata import registers every ORM
+model before autogenerate or migration execution begins.
 """
 
 from logging.config import fileConfig
@@ -29,15 +27,11 @@ target_metadata = Base.metadata
 def include_object(
     object: object, name: str | None, type_: str, reflected: bool, compare_to: object
 ) -> bool:
-    """Filter which database objects Alembic autogenerate considers.
+    """Keep autogenerate focused on tables owned by this schema.
 
-    Rules:
-    - Skip any reflected table that is NOT already declared in our metadata
-      (catches PostGIS extension tables, Tiger geocoder tables, partition
-      children, and any other objects installed by DB extensions).
-    - Skip the observations_archive_YYYYMM monthly partition children, which
-      are created by raw SQL in the partitioning migration and are not
-      SQLAlchemy ORM models.
+    Reflected tables without ORM counterparts are ignored so extension-owned
+    tables and the monthly archive partitions created by SQL migrations are
+    not treated as application-owned tables.
     """
     # Only filter tables; non-table objects are included.
     if type_ != "table" or not reflected:
@@ -70,7 +64,7 @@ else:
 
 
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode (emit SQL)."""
+    """Render migration SQL without opening a database connection."""
     context.configure(
         url=_sync_url,
         target_metadata=target_metadata,
@@ -85,10 +79,10 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode using a SQLAlchemy Engine.
+    """Apply migrations using a short-lived synchronous SQLAlchemy engine.
 
-    We create a sync Engine using the psycopg dialect and pass a SQLAlchemy
-    Connection to Alembic. This ensures `connection.dialect` exists.
+    Alembic receives a real connection so dialect-specific operations and
+    transactional migration steps work as expected.
     """
     connectable = create_engine(_sync_url, poolclass=pool.NullPool)
 

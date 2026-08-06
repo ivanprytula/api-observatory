@@ -107,8 +107,8 @@ class TestResumeAgentRun:
     ) -> None:
         """reviewer_user_id is resolved server-side from the JWT `sub` claim.
 
-        The shared `client` fixture mocks the JWT as {"sub": "testuser", ...}
-        (tests/fixtures_shared.py) — creating a matching User row here proves
+        The shared test client mocks the JWT as {"sub": "testuser", ...};
+        creating a matching User row here proves
         the sub -> User.id lookup actually runs end-to-end through the router.
         """
         agent_run = await _create_agent_run(db, status="awaiting_review")
@@ -199,9 +199,9 @@ class TestResumeAgentRun:
 
 
 class TestAgentRouterAuth:
-    """Phase 4: both routes require a JWT; resume additionally requires
+    """Both routes require a JWT; resume additionally requires
     writer/admin/tenant_admin. The shared `client` fixture pre-authenticates
-    every request as admin (see tests/fixtures_shared.py), so these tests
+    every request as admin, so these tests
     manipulate `app.dependency_overrides` directly to exercise the real
     unauthenticated/under-privileged paths."""
 

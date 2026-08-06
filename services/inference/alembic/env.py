@@ -1,8 +1,4 @@
-"""Alembic environment config for the inference service.
-
-Own migration history, own settings/Base — see alembic.ini for why this is
-separate from the root alembic/ (ingestor's).
-"""
+"""Configure Alembic for the inference service's independent schema."""
 
 from logging.config import fileConfig
 
@@ -25,14 +21,11 @@ target_metadata = Base.metadata
 def include_object(
     object: object, name: str | None, type_: str, reflected: bool, compare_to: object
 ) -> bool:
-    """Ignore tables this service doesn't own.
+    """Ignore reflected tables that are not part of this service's metadata.
 
-    `inference` runs on its own dedicated Postgres instance (`inference-db`,
-    see ADR 015) — this shouldn't ever see foreign tables in practice. Kept
-    as a defensive guard so a misconfigured `DATABASE_URL` (e.g. accidentally
-    pointed at the ingestor's `ingestor-db`) can't turn an autogenerate into a
-    cross-service DROP TABLE spree — see the Phase 1/2 incident where exactly
-    that happened before this guard existed.
+    The service normally uses a dedicated PostgreSQL database. This defensive
+    guard prevents a misconfigured connection from producing destructive
+    autogenerate operations against another service's tables.
     """
     if type_ != "table" or not reflected:
         return True

@@ -180,7 +180,7 @@ async def test_upsert_conflict_counter_increments_on_idempotent_duplicate(
 
     The production-default app deliberately does not mount v2 learning routes.
     Mount only the v2 router here so this proof remains independent of the
-    default-route inventory asserted by the Phase 4 tests.
+    default-route inventory asserted by the authentication contract tests.
     """
 
     def _get_conflict_count(body: str, mode: str) -> float:

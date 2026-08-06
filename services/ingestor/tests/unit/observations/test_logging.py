@@ -64,6 +64,24 @@ def test_logging_respects_global_log_level():
 
 
 @pytest.mark.unit
+def test_uvicorn_logs_use_application_format_without_duplicate_access_lines():
+    """Keep Uvicorn output consistent and avoid duplicate request access logs."""
+    settings.environment = "production"
+    settings.log_level = "INFO"
+
+    _ = setup_logging()
+
+    access_logger = logging.getLogger("uvicorn.access")
+    error_logger = logging.getLogger("uvicorn.error")
+
+    assert access_logger.disabled is True
+    assert access_logger.propagate is False
+    assert error_logger.propagate is False
+    assert error_logger.handlers
+    assert error_logger.handlers[0].formatter is not None
+
+
+@pytest.mark.unit
 def test_correlation_id_context_vars():
     """Test that CID get/set work correctly."""
     # Initially None

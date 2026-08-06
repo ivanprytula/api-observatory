@@ -221,6 +221,22 @@ def setup_logging() -> logging.Logger:
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
 
+    # Uvicorn configures its own handlers before importing the application
+    # when started through the CLI. Replace those handlers so startup/errors
+    # use the same formatter, and rely on the application middleware for the
+    # structured request lifecycle events instead of duplicate access lines.
+    for logger_name in ("uvicorn", "uvicorn.error"):
+        uvicorn_logger = logging.getLogger(logger_name)
+        uvicorn_logger.handlers.clear()
+        uvicorn_logger.addHandler(console_handler)
+        uvicorn_logger.setLevel(root_level)
+        uvicorn_logger.propagate = False
+
+    access_logger = logging.getLogger("uvicorn.access")
+    access_logger.handlers.clear()
+    access_logger.disabled = True
+    access_logger.propagate = False
+
     if not use_json:
         log_dir = Path(os.environ.get("LOG_DIR", "/tmp/logs"))  # nosec B108
         log_dir.mkdir(exist_ok=True)

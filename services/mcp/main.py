@@ -1,9 +1,7 @@
-"""Entrypoint: `uv run python -m services.mcp.main`.
+"""Run the MCP server with the selected transport.
 
-Transport defaults to stdio (how Claude Desktop and most local MCP clients
-connect — see services/mcp/README.md). Set MCP_TRANSPORT=streamable-http (and
-add a docker-compose service on port 8006) to run this as an always-on
-network service instead — no code change needed, just the transport switch.
+Transport defaults to stdio for local clients. Set ``MCP_TRANSPORT`` to a
+supported network transport when an always-on service is required.
 """
 
 from __future__ import annotations
