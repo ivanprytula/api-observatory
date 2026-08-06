@@ -23,8 +23,10 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       app: ${{ steps.filter.outputs.app }}
+      delivery: ${{ steps.filter.outputs.delivery }}
       docs: ${{ steps.filter.outputs.docs }}
       deployable_images: ${{ steps.filter.outputs.deployable_images }}
+      aws_mvp_lock: ${{ steps.filter.outputs.aws_mvp_lock }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -53,6 +55,15 @@ jobs:
           else
             echo "app=false" >> "$GITHUB_OUTPUT"
           fi
+          delivery_paths_regex='^(deployment/aws-mvp/|environments/aws-dev/images\.lock\.json|'
+          delivery_paths_regex+='scripts/(promote_mvp_images|validate_mvp_contract)\.py|'
+          delivery_paths_regex+='tests/unit/test_aws_mvp_delivery_contract\.py|'
+          delivery_paths_regex+='\.github/workflows/(ci|publish-images|deploy-aws-mvp)\.yml)'
+          if echo "$changed_files" | grep -Eq "$delivery_paths_regex"; then
+            echo "delivery=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "delivery=false" >> "$GITHUB_OUTPUT"
+          fi
           docs_paths_regex='^(docs/|README\.md|CONTRIBUTING\.md|\.github/workflows/ci\.yml|'
           docs_paths_regex+='\.github/workflows/publish-images\.yml|\.github/workflows/assurance\.yml|'
           docs_paths_regex+='pyproject\.toml|uv\.lock|\.python-version)'
@@ -69,11 +80,18 @@ jobs:
           else
             echo "deployable_images=false" >> "$GITHUB_OUTPUT"
           fi
+          if echo "$changed_files" | grep -Fxq 'environments/aws-dev/images.lock.json'; then
+            echo "aws_mvp_lock=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "aws_mvp_lock=false" >> "$GITHUB_OUTPUT"
+          fi
 
   quality:
     name: "Quality"
     needs: [changes]
-    if: needs.changes.outputs.app == 'true' || needs.changes.outputs.docs == 'true'
+    if: >-
+      needs.changes.outputs.app == 'true' || needs.changes.outputs.docs == 'true' ||
+      needs.changes.outputs.delivery == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -96,6 +114,7 @@ jobs:
           uv run python scripts/ci/check_workspace_manifests.py
           uv run python scripts/ci/check_service_boundaries.py
           uv run python scripts/validate_release_manifest.py
+          uv run python scripts/validate_mvp_contract.py --allow-placeholder-lock --app-root .
 
       - name: Validate workflow action references
         shell: bash
@@ -144,7 +163,7 @@ jobs:
   unit:
     name: "Unit and contract tests"
     needs: [changes]
-    if: needs.changes.outputs.app == 'true'
+    if: needs.changes.outputs.app == 'true' || needs.changes.outputs.delivery == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -276,19 +295,23 @@ jobs:
     name: "Deployable image smoke"
     runs-on: ubuntu-latest
     needs: [changes, quality, unit, integration]
-    if: needs.changes.outputs.app == 'true'
+    if: >-
+      needs.changes.outputs.app == 'true' &&
+      needs.changes.outputs.deployable_images == 'true'
     timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Build and health-check the Stage 0 images
+      - name: Build and health-check MVP workload images
         run: scripts/ci/smoke-deployable-images.sh
 
   merge-gate:
     name: "Merge gate"
     runs-on: ubuntu-latest
-    if: always() && (needs.changes.outputs.app == 'true' || needs.changes.outputs.docs == 'true')
+    if: >-
+      always() && (needs.changes.outputs.app == 'true' || needs.changes.outputs.docs == 'true' ||
+      needs.changes.outputs.delivery == 'true')
     needs: [changes, quality, unit, integration, image-smoke]
     steps:
       - name: Require every application CI job
@@ -316,3 +339,16 @@ jobs:
       id-token: write
     uses: ./.github/workflows/publish-images.yml
     secrets: inherit
+
+  deploy-aws-mvp:
+    name: Deploy AWS MVP desired state
+    needs: [changes, merge-gate]
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      needs.changes.outputs.aws_mvp_lock == 'true' &&
+      needs.merge-gate.result == 'success'
+    permissions:
+      checks: read
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/deploy-aws-mvp.yml

@@ -1,4 +1,4 @@
-# Disposable CI topology for the three Stage 0 images. It has no host ports,
+# Disposable CI topology for the three MVP workload images. It has no host ports,
 # volumes, secrets, or cloud dependencies; `docker compose ... down --volumes`
 # removes all state after the smoke check.
 services:

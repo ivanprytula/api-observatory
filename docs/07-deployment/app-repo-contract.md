@@ -1,29 +1,54 @@
-# Application Image Contract
+# Application AWS MVP Delivery Contract
 
-The application repository owns developer-local Compose, service behavior, Dockerfiles, image
-build contexts, ports, health/readiness endpoints, migrations, and image smoke tests. It does not
-own an AWS runtime topology, deployment host, runtime secrets, or rollout mechanism.
+The application repository owns service behavior, Dockerfiles, images, migrations, health/readiness
+endpoints, the AWS MVP Compose workload, Prometheus configuration, the reviewed `aws-dev` image
+lock, and application deployment/rollback. The infrastructure repository owns the platform that
+supplies those capabilities: Terraform state, networking, EC2/RDS/ECR/S3, IAM, Parameter Store,
+Docker/SSM bootstrap, host replacement, backup storage, and restore tooling.
 
-[`release/services.json`](../../release/services.json) is the portable release manifest. It defines
-the three deployable HTTP images and the immutable `tree-<full-tree-SHA>` tag convention. The
-reusable image-publication workflow runs after a deployable `main` change passes application CI and
-verifies the exact commit again before pushing those images to ECR. Its release metadata binds the
-Git commit to the tree identity and three resolved digests so infrastructure can validate the exact
-source contract; it does not deploy them. Manual dispatch remains an initial-release and retry
-fallback for a CI-green `main` commit.
-
-The infrastructure repository owns the selected environment image digests, Compose profile shape,
-runtime values, migration ordering, deployment/rollback, monitoring, backup, and cloud IAM. It
-uses a simple promotion model of `dev`, `stage`, and `prod-like` lanes, with `aws-dev` as the only
-active concrete target today. See its [deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md)
-and [promotion model](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/promotion-model.md).
-The publisher can update only a bot-owned infra lock PR through the infra-owned promotion script;
-merging that reviewed lock is the approval for infra CI to deploy it. Automated image promotion
-preserves optional profiles already selected on infra `main`.
-
-`SERVICE_VERSION=tree-<SHA>` is coordinated release provenance, not the semantic application
-version. `APP_VERSION` remains an independently managed API/OpenAPI version, while
+[`release/services.json`](../../release/services.json) remains the portable release manifest. It
+defines the three deployable HTTP images and the immutable `tree-<full-tree-SHA>` tag convention.
+`SERVICE_VERSION=tree-<SHA>` is release provenance, not the semantic application version.
+`APP_VERSION` remains an independently managed API/OpenAPI version, while
 `libs/contracts/VERSION` records shared-contract compatibility.
 
-Local Compose files remain application-owned so a developer can run and test the complete stack
-without cloning infrastructure code.
+## Reviewed Desired State
+
+`environments/aws-dev/images.lock.json` is application-owned desired state. The schema binds the
+source commit and tree to exact ECR digests and records enabled optional profiles. The publisher
+validates release metadata, resets its fixed `automation/promote-aws-dev` branch from current app
+`main`, preserves already reviewed profiles, and replaces only image identities. Duplicate releases
+produce no lock change; a newer source release updates the same pull request.
+
+The routine delivery path is:
+
+`app PR → CI → main → immutable images → aws-dev lock PR → review/merge → SSM → EC2 Compose`
+
+Merging the green lock PR is the human release decision. A source merge can publish images but
+cannot deploy them before that lock merge. Reverting a reviewed lock through a PR follows the same
+deployment path and is the normal application-image rollback. Database migrations are forward-only;
+rollback requires compatible migrations rather than an automated downgrade.
+
+Optional profiles change in a separate application PR. Automated image promotion never changes
+their selection, so a release can update only the services that received new immutable digests while
+unchanged services retain their previous image identities.
+
+## MVP Platform Contract 1
+
+Before `AWS_CD_ENABLED` can be enabled, the infrastructure repository must bootstrap contract
+version `1`. The host supplies Docker Compose, SSM command access,
+`/opt/api-observatory-mvp`, its protected `.runtime` directory, and
+`api-observatory-mvp-render-env <group>...`. The app computes the required groups from the reviewed
+profiles, renders runtime values through that command, transfers its Compose/Prometheus/rollout
+assets with SSM, then runs migrations, readiness checks, smoke checks, and best-effort previous-image
+rollback.
+
+`mvp` describes the current product/deployment scope. `aws-dev` is an environment name; future
+`aws-qa-stage` and `aws-prod` must promote the same tested digests without rebuilding them.
+
+## Evidence Boundary
+
+Local Compose remains application-owned and canonical for development. The AWS MVP path is
+configuration and contract evidence until a separately approved live run retains redacted image,
+migration, readiness, smoke, rollback, backup/restore, and teardown evidence. A lock diff,
+published image, static check, or Terraform plan alone is not a deployment claim.

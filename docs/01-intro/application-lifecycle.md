@@ -58,7 +58,7 @@ The repository boundary is also a contract:
 
 | App repository | Infrastructure repository |
 | --- | --- |
-| Behavior, schemas, migrations, images, ports, health, local runtime, tests | Cloud IaC/state, IAM, networking, runtime secrets, deployment, platform monitoring |
+| Behavior, schemas, migrations, images, ports, health, local/MVP runtime, reviewed locks, application rollout, tests | Cloud IaC/state, IAM, networking, runtime secrets, Docker/SSM bootstrap, backups/restores, platform monitoring |
 
 Changes to ports, images, health endpoints, configuration names, ingress, IAM, secrets, or
 telemetry must be checked against the app-owned
@@ -95,17 +95,17 @@ Passing configuration or a Terraform plan is not runtime proof. The statuses **C
 Application CI validates all three deployable images without publishing them. After a deployable
 `main` change passes exact-commit CI verification, a separately gated reusable publisher builds
 immutable `tree-<SHA>` images for ingestor, inference, and dashboard and emits release metadata
-containing the source commit, source tree, and image digests. The publisher applies the infra-owned
-promotion script to current infra `main` and opens or updates a reviewed lock PR. Infrastructure
-supplies ECR, EC2, local runtime storage, IAM, runtime values, and deployment mechanics. MCP is
-excluded because it is a locally spawned stdio process.
+containing the source commit, source tree, and image digests. The publisher maintains a same-repo
+reviewed `aws-dev` lock PR. Infrastructure supplies ECR, EC2, local runtime storage, IAM, and runtime
+values through a documented platform contract. MCP is excluded because it is a locally spawned stdio
+process.
 
-Every release publishes identities for the three HTTP images. The default AWS Stage 0 runtime starts
+Every release publishes identities for the three HTTP images. The default AWS MVP runtime starts
 `ingestor`, `dashboard`, and the ingestor PostgreSQL database; `inference` and its database start only
 when the reviewed `inference` profile is enabled. All selected workloads share one EC2 Docker Compose
-platform. Merging the green infrastructure lock PR approves an automatic deployment of that exact
-desired state. Delivery is an in-place recreate with a coordinated image set and best-effort rollback; it
-is not rolling, blue/green, canary, or zero-downtime delivery. The contract is documented and
+platform. Merging the green application lock PR approves an automatic deployment of that exact
+desired state. Delivery is an in-place recreate with independently preserved unchanged digests and
+best-effort rollback; it is not rolling, blue/green, canary, or zero-downtime delivery. The contract is documented and
 statically validated, but no live deployment is claimed. A real release requires
 approval, health checks, migration compatibility, rollback proof, redacted evidence, and
 cost-aware teardown. Continue with the app
@@ -145,7 +145,7 @@ query/index/retention work. Technology interest alone is not a trigger.
 2. Trace one incident from requirement to data, API, UI, and telemetry.
 3. Explain the app/infra boundary.
 4. Show one test, one recovery path, and one immutable delivery contract.
-5. Separate local runtime, labs, unexecuted AWS Stage 0, and deferred transformation.
+5. Separate local runtime, labs, unexecuted AWS MVP, and deferred transformation.
 6. End with the measurement that would justify the next architecture change.
 
 The [interview package](interview-package.md) turns this lifecycle into a shorter live tour.

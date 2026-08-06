@@ -33,7 +33,7 @@ Be ready to defend:
 - outbox/inbox limits versus end-to-end delivery proof;
 - application tenant filtering plus incremental RLS;
 - Streamlit now, with concrete triggers for Jinja2/HTMX or a full SPA later;
-- EC2/Compose as an unexecuted Stage 0 decision, not production ownership.
+- EC2/Compose as an unexecuted MVP decision, not production ownership.
 
 ## Evidence Stories
 

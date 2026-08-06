@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "source_commit_sha": "0000000000000000000000000000000000000000",
+  "source_tree_sha": "0000000000000000000000000000000000000000",
+  "enabled_profiles": [],
+  "images": {
+    "ingestor": {
+      "repository": "api-observatory/ingestor",
+      "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "inference": {
+      "repository": "api-observatory/inference",
+      "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "dashboard": {
+      "repository": "api-observatory/dashboard",
+      "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  }
+}

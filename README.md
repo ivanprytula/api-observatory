@@ -23,8 +23,8 @@ contract. No live production operation is claimed.
   runbooks, and bounded load/fault tests.
 - An optional LangGraph incident-triage flow with pgvector retrieval, human review, and deterministic
   offline evaluation.
-- Local Docker Compose/k3d infrastructure plus an unexecuted AWS Stage 0 deployment contract shared
-  with the sibling infrastructure repository.
+- Local Docker Compose/k3d infrastructure plus an unexecuted app-owned AWS MVP workload-delivery
+  contract backed by the sibling infrastructure repository.
 
 ## Practical Workflow
 
@@ -93,10 +93,10 @@ release handoff.
 
 | Repository | Owns |
 | --- | --- |
-| `api-observatory` | Application behavior, contracts, migrations, service images, local Compose/k3d, emulators, tests, and developer bootstrap |
-| [`api-observatory-infra`](https://github.com/ivanprytula/api-observatory-infra) | Real-cloud Terraform/state, IAM, DNS/TLS, runtime secret delivery, cloud deployment workflows, and production-oriented monitoring assets |
+| `api-observatory` | Application behavior, contracts, migrations, service images, local and MVP Compose, reviewed `aws-dev` desired state, deployment/rollback, tests, and developer bootstrap |
+| [`api-observatory-infra`](https://github.com/ivanprytula/api-observatory-infra) | Real-cloud Terraform/state, IAM, DNS/TLS, Parameter Store, Docker/SSM bootstrap, host/platform recovery, backup/restore tooling, and infrastructure monitoring |
 
-The machine-readable AWS Stage 0 service contract is
+The machine-readable AWS MVP service contract is
 [`release/services.json`](release/services.json). AWS is the
 primary portfolio direction; no completed live deployment is claimed.
 

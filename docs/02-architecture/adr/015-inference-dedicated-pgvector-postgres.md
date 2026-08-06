@@ -20,7 +20,7 @@ current MVP scope (its own "Part of" link points at a doc that only exists in
 `docs/_archive/`) — it was never archived or superseded when the project pivoted, so it's stale
 documentation debt, not a live constraint.
 
-The current deployment-relevant constraint is an inexpensive, temporary AWS Stage 0 exercise on
+The current deployment-relevant constraint is an inexpensive, temporary AWS MVP exercise on
 EC2. The exact instance size is an infra decision and no cloud deployment is claimed. Resource
 cost remains a design constraint, not a permanent ceiling.
 
@@ -59,7 +59,7 @@ volume, own credentials (`API_OBS_INFERENCE_DB_PASSWORD`), own port (`5433`). **
   changes, and vice versa. A clean "each microservice owns its own datastore" story.
 - No new tooling: same Postgres image, same migration tooling (Alembic), same backup/restore
   playbook as `ingestor-db` — zero new operational surface area.
-- Fits the current local and low-cost Stage 0 direction; doesn't foreclose Qdrant later if a concrete
+- Fits the current local and low-cost MVP direction; doesn't foreclose Qdrant later if a concrete
   need emerges.
 
 ### Negative

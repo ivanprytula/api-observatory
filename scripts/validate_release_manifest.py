@@ -46,7 +46,9 @@ def main() -> int:
             service.get("health_path"),
             service.get("readiness_path"),
         ) != (port, health_path, readiness_path):
-            errors.append(f"{name}: port or health contract does not match Stage 0")
+            errors.append(
+                f"{name}: port or health contract does not match the MVP workload"
+            )
         dockerfile = ROOT / str(service.get("dockerfile", ""))
         build_context = ROOT / str(service.get("build_context", ""))
         if not dockerfile.is_file():

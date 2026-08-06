@@ -63,7 +63,7 @@ Keep this section current as the project evolves. It is the source of truth for 
   unnecessary PII or secrets; retention work must be bounded, verifiable, and reversible.
 - **Integration policy:** Version shared contracts, bound every network call, retry only safe work,
   and keep external AI/cache/broker integrations optional or fail-open where documented.
-- **Deployment target:** Local Compose is canonical. AWS Stage 0 (ECR + EC2 + RDS) is the primary
+- **Deployment target:** Local Compose is canonical. AWS MVP (ECR + EC2 + RDS) is the primary
   portfolio direction but remains a decision/configuration claim until a separately approved live
   deployment is verified. Azure is secondary/reference.
 - **Quality bar:** Focused unit/integration tests, migration compatibility, authorization regression

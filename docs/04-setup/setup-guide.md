@@ -26,9 +26,10 @@ Follow the [Canonical Onboarding and Delivery Checklist](../05-development/onboa
 | Local Kubernetes | `just k8s-up` | Orchestration lab; Compose remains canonical |
 
 The [`Justfile`](../../Justfile) documents companion stop, status, test, and teardown recipes. Real
-AWS Stage 0 is **Decision** evidence and is handled by the sibling infra
-[deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md),
-not by a local environment profile.
+AWS MVP delivery is **Decision** evidence. Its application workload is versioned here and its
+platform bootstrap is handled by the sibling infra
+[deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md);
+it is not a local environment profile.
 
 ## HTTP and HTTPS Split
 
@@ -224,7 +225,7 @@ terraform validate
 terraform plan
 ```
 
-These directories are local learning environments. Real AWS Stage 0 provisioning, apply, rollback,
+These directories are local learning environments. Real AWS MVP provisioning, apply, rollback,
 and teardown remain infra-owned and require the separately approved delivery gate.
 
 ## Optional Local Capabilities

@@ -108,8 +108,8 @@ The service is enabled only through the opt-in local broker profile. It shares t
 and broker configuration but does not start the ingestor API, scheduler, producer lifespan, cache
 Pub/Sub bridge, or agent runtime. It starts only the consumer process.
 
-Local Compose remains canonical and opt-in. AWS Stage 0 can enable the same worker through the
-reviewed `broker` profile in the infrastructure image lock; direct delivery remains the default.
+Local Compose remains canonical and opt-in. AWS MVP can enable the same worker through the reviewed
+`broker` profile in the application image lock; direct delivery remains the default.
 
 ## Deferred Worker Health Interface
 

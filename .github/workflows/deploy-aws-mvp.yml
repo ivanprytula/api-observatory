@@ -1,0 +1,159 @@
+name: Deploy AWS MVP desired state
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aws-dev-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      checks: read
+      contents: read
+      id-token: write
+    if: >-
+      vars.AWS_CD_ENABLED == 'true' && vars.AWS_ECR_REGISTRY != '' &&
+      vars.AWS_APP_DEPLOY_ROLE_ARN != '' && vars.AWS_REGION != '' &&
+      vars.AWS_EC2_INSTANCE_ID_DEV != ''
+    environment: aws-dev
+    env:
+      MVP_PLATFORM_CONTRACT_VERSION: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Sync deployment tooling
+        run: uv sync --frozen --no-dev
+
+      - name: Require a CI-green current main commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == 'refs/heads/main' ]] || {
+            echo 'AWS MVP deployment accepts only main.' >&2
+            exit 1
+          }
+          git fetch --no-tags origin main
+          [[ "$(git rev-parse FETCH_HEAD)" == "$GITHUB_SHA" ]] || {
+            echo 'Only the current main desired state may be deployed.' >&2
+            exit 1
+          }
+          checks=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?per_page=100")
+          result=$(jq -r '[.check_runs[] | select(.name == "Merge gate")][0].conclusion // "missing"' <<< "$checks")
+          [[ "$result" == success ]] || {
+            echo "CI check 'Merge gate' is ${result}." >&2
+            exit 1
+          }
+
+      - id: app-ref
+        name: Resolve the committed application source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          lock='environments/aws-dev/images.lock.json'
+          source_commit_sha=$(jq -r .source_commit_sha "$lock")
+          source_tree_sha=$(jq -r .source_tree_sha "$lock")
+          [[ "$source_commit_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$source_tree_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$source_commit_sha" != '0000000000000000000000000000000000000000' ]]
+          [[ "$source_tree_sha" != '0000000000000000000000000000000000000000' ]]
+          echo "ref=${source_commit_sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the exact image source commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: .mvp-release
+          ref: ${{ steps.app-ref.outputs.ref }}
+
+      - name: Validate the application MVP workload contract
+        run: uv run python scripts/validate_mvp_contract.py --app-root .mvp-release
+
+      - uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
+        with:
+          role-to-assume: ${{ vars.AWS_APP_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: api-observatory-app-deploy
+
+      - name: Verify ECR digests and deploy committed desired state through SSM
+        env:
+          INSTANCE_ID: ${{ vars.AWS_EC2_INSTANCE_ID_DEV }}
+          REGISTRY: ${{ vars.AWS_ECR_REGISTRY }}
+        run: |
+          set -euo pipefail
+          lock='environments/aws-dev/images.lock.json'
+          tree_sha=$(jq -r .source_tree_sha "$lock")
+          enabled_profiles=$(jq -r '.enabled_profiles | join(",")' "$lock")
+          deployment_env=$({
+            jq -r --arg registry "$REGISTRY" --arg sha "$tree_sha" \
+              '.images | to_entries[] |
+               "\(.key|ascii_upcase)_IMAGE=\($registry)/\(.value.repository)@\(.value.digest)",
+               "SERVICE_VERSION=tree-\($sha)"' \
+              "$lock" | awk '!seen[$0]++'
+            printf 'ENABLED_PROFILES=%s\n' "$enabled_profiles"
+          } | base64 -w 0)
+          while IFS= read -r image; do
+            repository=$(jq -r '.value.repository' <<< "$image")
+            digest=$(jq -r '.value.digest' <<< "$image")
+            aws ecr describe-images \
+              --repository-name "$repository" \
+              --image-ids imageDigest="$digest" \
+              --query 'imageDetails[0].imageTags' \
+              --output text | grep -qx "tree-${tree_sha}"
+          done < <(jq -c '.images | to_entries[]' "$lock")
+          runtime_groups=$(jq -cn --argjson profiles "$(jq '.enabled_profiles' "$lock")" '
+            ["ingestor-db", "ingestor", "dashboard", "backup"] +
+            (if $profiles | index("inference") then ["inference-db", "inference"] else [] end) +
+            (if $profiles | index("cache") then ["cache"] else [] end)
+          ')
+          renderer_command=$(jq -rn \
+            --arg command '/usr/local/sbin/api-observatory-mvp-render-env' \
+            --argjson groups "$runtime_groups" \
+            '$command + " " + ($groups | join(" "))')
+          compose=$(base64 -w 0 deployment/aws-mvp/docker-compose.yml)
+          prometheus=$(base64 -w 0 deployment/aws-mvp/prometheus.yml)
+          rollout=$(base64 -w 0 deployment/aws-mvp/rollout.sh)
+          remote_commands=$(jq -cn \
+            --arg deployment_env "$deployment_env" \
+            --arg compose "$compose" \
+            --arg contract "$MVP_PLATFORM_CONTRACT_VERSION" \
+            --arg prometheus "$prometheus" \
+            --arg renderer "$renderer_command" \
+            --arg rollout "$rollout" \
+            '{commands: [
+              "test \"$(head -n 1 /opt/api-observatory-mvp/.platform-contract-version)\" = \"\($contract)\"",
+              "install -d -m 0700 /opt/api-observatory-mvp/.runtime",
+              "cd /opt/api-observatory-mvp",
+              "test ! -f .runtime/deployment.env || cp .runtime/deployment.env .runtime/deployment.env.previous",
+              "echo \($deployment_env) | base64 -d > .runtime/deployment.env",
+              "chmod 0600 .runtime/deployment.env",
+              "echo \($compose) | base64 -d > docker-compose.yml",
+              "echo \($prometheus) | base64 -d > prometheus.yml",
+              "echo \($rollout) | base64 -d > rollout.sh",
+              "chmod 0700 rollout.sh",
+              $renderer,
+              "./rollout.sh"
+            ]}')
+          command_id=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters "$remote_commands" \
+            --query 'Command.CommandId' \
+            --output text)
+          aws ssm wait command-executed --command-id "$command_id" --instance-id "$INSTANCE_ID"
+          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID"

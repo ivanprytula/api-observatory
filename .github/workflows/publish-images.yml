@@ -119,16 +119,16 @@ jobs:
       contents: read
     environment: aws-image-publish
     steps:
-      - name: Require the cross-repo promotion token
+      - name: Require the application promotion token
         env:
-          PROMOTION_TOKEN: ${{ secrets.INFRA_PROMOTION_TOKEN }}
+          PROMOTION_TOKEN: ${{ secrets.APP_PROMOTION_TOKEN }}
         run: |
           [[ -n "$PROMOTION_TOKEN" ]] || {
-            echo "INFRA_PROMOTION_TOKEN is required; use the release artifact for manual recovery." >&2
+            echo "APP_PROMOTION_TOKEN is required; use the release artifact for manual recovery." >&2
             exit 1
           }
 
-      - name: Check out application main for the promotion guard
+      - name: Check out current application desired state
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -142,22 +142,13 @@ jobs:
             exit 1
           }
 
-      - name: Check out current infra desired state
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ${{ github.repository_owner }}/api-observatory-infra
-          ref: main
-          path: .infra-promotion
-          fetch-depth: 0
-          token: ${{ secrets.INFRA_PROMOTION_TOKEN }}
-
-      - name: Set up uv for infra promotion
+      - name: Set up uv for application promotion
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           enable-cache: true
-          cache-dependency-glob: .infra-promotion/uv.lock
+          cache-dependency-glob: uv.lock
 
-      - name: Update the reviewed infra lock
+      - name: Update the reviewed application lock
         env:
           RELEASE_METADATA: ${{ needs.publish.outputs.release_metadata }}
         run: |
@@ -165,16 +156,14 @@ jobs:
           metadata_path="${RUNNER_TEMP}/release-metadata.json"
           printf '%s' "$RELEASE_METADATA" | base64 -d > "$metadata_path"
           [[ -s "$metadata_path" ]] || { echo "Release metadata was not produced." >&2; exit 1; }
-          uv run --project .infra-promotion --frozen --no-dev python \
-            .infra-promotion/scripts/promote_stage0_images.py \
+          uv run --frozen --no-dev python scripts/promote_mvp_images.py \
             "$metadata_path" \
-            --lock .infra-promotion/environments/aws-dev/images.lock.json
+            --lock environments/aws-dev/images.lock.json
 
-      - name: Open or update the reviewed infra promotion PR
+      - name: Open or update the reviewed application promotion PR
         uses: peter-evans/create-pull-request@98357b18bf14b5342f975ff684046ec3b2a07725 # v8.0.0
         with:
-          token: ${{ secrets.INFRA_PROMOTION_TOKEN }}
-          path: .infra-promotion
+          token: ${{ secrets.APP_PROMOTION_TOKEN }}
           add-paths: environments/aws-dev/images.lock.json
           base: main
           branch: automation/promote-aws-dev
@@ -182,11 +171,11 @@ jobs:
           commit-message: "chore: promote aws-dev tree-${{ needs.publish.outputs.tree_sha }}"
           title: "chore: promote aws-dev tree-${{ needs.publish.outputs.tree_sha }}"
           body: |
-            Automated promotion of the current CI-green application release.
+            Automated promotion of the current CI-green application release into app-owned desired state.
 
             - Source commit: `${{ github.sha }}`
             - Source tree: `${{ needs.publish.outputs.tree_sha }}`
             - Target: `aws-dev`
 
-            Review the exact lock diff and CI results. Merging this PR approves deployment.
-            Optional profiles are preserved from infra `main` and change in a separate infra PR.
+            Review the exact lock diff and CI results. Merging this PR approves AWS MVP deployment.
+            Optional profiles are preserved from application `main` and change in a separate app PR.

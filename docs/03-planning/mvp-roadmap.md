@@ -10,7 +10,7 @@ customer acquisition, and speculative scale work are out of scope.
   auth, migrations, retention, resilience controls, dashboard, and optional agent/inference paths.
 - **Lab:** gateway/load-balancing, Kafka partitioning, k3d, monitoring, cloud emulators, and bounded
   performance/failure exercises.
-- **Decision:** AWS Stage 0 uses three immutable images on EC2 Compose with RDS; configuration and
+- **Decision:** AWS MVP uses three immutable images on EC2 Compose with RDS; configuration and
   contract checks exist, but no completed live deployment is claimed.
 - **Deferred:** managed gateway/Kafka, ECS/EKS, database sharding, multi-region, and a replacement
   frontend require measured product or operational pressure.
@@ -34,7 +34,7 @@ tests, and explainable without relying on a technology list.
 Use captured query plans, performance baselines, fault/recovery timing, authorization regressions,
 and deterministic agent evaluation. Add a tool only when it closes a named evidence gap.
 
-### 3. Validate AWS Stage 0 only as a separately approved exercise
+### 3. Validate AWS MVP only as a separately approved exercise
 
 Before any live proof, validate the three image contracts locally, review Terraform cost and
 security, configure short-lived OIDC identities, define rollback/teardown, and obtain explicit

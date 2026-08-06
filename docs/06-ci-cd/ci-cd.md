@@ -1,54 +1,45 @@
 # Application CI/CD
 
-The delivery path is intentionally small enough for one maintainer to run and explain end to end.
-Workflow YAML under [`.github/workflows/`](../../.github/workflows/) is the executable source of
-truth.
+The application repository owns CI and AWS MVP workload delivery. Workflow YAML under
+[`.github/workflows/`](../../.github/workflows/) is the executable source of truth; the sibling
+infrastructure repository provides the secure platform contract rather than a second deployment
+control plane.
 
 ## Branch and Review Flow
 
-Short-lived task branches merge into `main` through a pull request. The executable workflow owns its
-internal quality, test, migration, contract, and image-smoke jobs. The stable `CI / Merge gate` fails
-unless every internal requirement succeeds. Before AWS delivery is enabled, protect `main` by
-requiring a pull request and that stable check in both repositories. The stable gate lets the
-internal job graph evolve without updating release documentation.
+Short-lived task branches merge into `main` through a pull request. The stable `CI / Merge gate`
+protects `main`; it covers the internal quality, test, migration, contract, and image-smoke graph.
+Protect the app `main` branch with required PRs and that check before enabling AWS gates.
 
-Application validation jobs do not authenticate to AWS. Only the post-gate reusable publisher job
-receives the image-publisher OIDC permission, and only for a deployable `main` change. Follow the
-exact branch, commit, push, and pull-request lifecycle in [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
+Application CI has no AWS credentials. Only the post-gate image publisher receives the separate
+`aws-image-publish` OIDC identity. The deployment workflow receives the different `aws-dev` OIDC
+identity only after reviewed desired state reaches `main`.
 
-## Manual Assurance
+## Image Publication and Promotion
 
-[`assurance.yml`](../../.github/workflows/assurance.yml) is explicit `workflow_dispatch` evidence.
-It runs dependency audit, CodeQL, advisory Trivy scans, the authenticated k6 baseline, and the
-offline agent evaluation. These exercises are intentionally manual while their results and failure
-modes are being learned; they are not routine merge gates.
+[`publish-images.yml`](../../.github/workflows/publish-images.yml) runs after a deployable `main`
+change passes CI. It verifies the exact current commit, builds immutable `tree-<full-tree-SHA>` ECR
+images, and emits the source commit, tree, and resolved digests. It remains skipped unless
+`AWS_IMAGE_PUBLISH_ENABLED` is exactly `true`.
 
-## Image Publication
+The publisher then validates that release metadata and maintains one same-repository
+`automation/promote-aws-dev` PR. It preserves `enabled_profiles` from app `main` and changes only
+`environments/aws-dev/images.lock.json`. The `APP_PROMOTION_TOKEN` is limited to this repository's
+Contents and Pull requests write access, allowing the bot PR to use normal branch protection without
+an additional GitHub Actions approval path.
 
-[`publish-images.yml`](../../.github/workflows/publish-images.yml) is reusable and manually
-dispatchable. App CI calls it only after a deployable `main` change passes the merge gate. It
-verifies the exact commit, uses the protected
-`aws-image-publish` environment, authenticates with GitHub OIDC, and publishes immutable
-`tree-<full-tree-SHA>` ECR images with their resolved digests. It uploads machine-readable release
-metadata containing the source commit, source tree, and three image digests. It does not deploy to EC2.
-Publication remains safely skipped unless `AWS_IMAGE_PUBLISH_ENABLED` is exactly `true` and all AWS
-variables are configured. Manual dispatch reuses the same checks for an initial release or retry.
+## Deployment
 
-Promotion is an infra-repository PR that changes the environment image lock; no `latest` image is
-published.
+[`deploy-aws-mvp.yml`](../../.github/workflows/deploy-aws-mvp.yml) has no image or target inputs.
+After a green lock merge, app CI invokes it exactly once for the committed `aws-dev` lock. It checks
+the lock source commit/tree, resolves that exact source checkout, verifies ECR digests, requires MVP
+platform contract `1`, and sends the application workload to the pre-bootstrapped host through SSM.
+It does not write Git and it never consumes event-supplied image digests. A manual dispatch replays
+only the desired state already committed on app `main`.
 
-## Cross-Repository Contract Change
-
-When a change affects published images, the runtime service contract, or deployment topology:
-
-1. Merge the application PR into `main` and wait for the internal `CI / Merge gate` to succeed.
-2. App CI publishes immutable `tree-<SHA>` images, applies the infra-owned promotion script to
-   current infra `main`, and opens or updates one `aws-dev` lock PR. It never deploys.
-3. Review and merge the lock PR after infra CI passes. This merge is the deployment approval.
-4. Infra CI deploys the exact merged desired state. Manual dispatch only replays current infra
-   `main`; the downloaded release artifact and `just promote-images` remain an operator fallback.
-
-Do not describe a lock-file change, Terraform plan, or published image as a completed deployment.
+Keep `AWS_IMAGE_PUBLISH_ENABLED` and `AWS_CD_ENABLED` separate and disabled until the one-time
+platform/bootstrap and GitHub environment setup is complete. Reverting the lock in a reviewed PR
+uses the same deployment path for an application-image rollback.
 
 ## Evidence Boundary and Evolution
 
@@ -57,6 +48,3 @@ a completed, approved run with image identity, migrations, readiness, smoke, rol
 evidence. Local Compose remains canonical. Fargate or Kubernetes becomes relevant only after the VM
 path is understood and a measured availability, scaling, or ownership trigger justifies the next
 operational layer.
-
-Use the [OIDC setup](github-secrets-setup.md) for identity and variable requirements and the
-[deployment contract](../07-deployment/app-repo-contract.md) for service interfaces.

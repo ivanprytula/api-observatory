@@ -1,66 +1,48 @@
 # GitHub Actions AWS OIDC Setup
 
-The application image-publication workflow uses short-lived AWS credentials through GitHub OIDC. It does
-not require an IAM user access key or secret key in GitHub. The executable contract is
-[`publish-images.yml`](../../.github/workflows/publish-images.yml); this page records the AWS and GitHub settings it
-expects.
+The application repository uses two separate short-lived GitHub OIDC identities. No IAM user access
+key or secret key belongs in GitHub. Terraform in the infrastructure repository creates the roles;
+this page records the app-side GitHub configuration they consume.
 
-## AWS Identity Configuration
+## AWS Identities
 
-Create or reuse the GitHub OIDC provider for
-`https://token.actions.githubusercontent.com` with audience `sts.amazonaws.com`. Create a
-dedicated image-publisher role, such as `github-actions-api-observatory-image-publish`, with a trust
-policy restricted to this repository and the `aws-image-publish` environment:
+The image-publisher role is restricted to
+`repo:ivanprytula/api-observatory:environment:aws-image-publish` and can push/inspect only the
+three ECR repositories. The application deployment role is restricted to
+`repo:ivanprytula/api-observatory:environment:aws-dev` and can inspect those ECR images and send or
+inspect SSM commands for the selected EC2 host. The EC2 instance role separately pulls images and
+reads Parameter Store runtime values. Do not attach broad account permissions to either GitHub role.
 
-- audience: `sts.amazonaws.com`;
-- subject: `repo:ivanprytula/api-observatory:environment:aws-image-publish`;
-- action: `sts:AssumeRoleWithWebIdentity`.
+## GitHub Environments and Variables
 
-Attach only the permissions required by the workflow: push and inspect the three application ECR
-repositories. The infrastructure repository owns the separate SSM deployment role, while the EC2
-instance role separately needs permission to pull images. Do not attach `PowerUserAccess` to the
-GitHub publisher role.
+Create `aws-image-publish` and `aws-dev`, each restricted to `main`. The reviewed `aws-dev` lock PR
+merge is the normal deployment approval, so routine environment-review prompts add a duplicate
+approval step. Keep branch protection on `main` with required PRs and `CI / Merge gate`.
 
-The application repository owns the role ARN and variable names; infrastructure owns the IAM
-provider, role policy, ECR, EC2, and runtime delivery. See the
-[infra deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md)
-for the platform boundary.
+Set variables, not secrets, as follows:
 
-## GitHub Actions Variables
+| Environment | Variable | Meaning |
+| --- | --- | --- |
+| `aws-image-publish` | `AWS_IMAGE_PUBLISH_ENABLED` | Explicit image-publication gate; leave false or unset initially |
+| `aws-image-publish` | `AWS_ECR_PUBLISH_ROLE_ARN` | Dedicated ECR publisher role ARN |
+| `aws-image-publish` | `AWS_REGION` | AWS region hosting the MVP platform |
+| `aws-image-publish` | `AWS_ECR_REGISTRY` | ECR registry hostname for immutable references |
+| `aws-dev` | `AWS_CD_ENABLED` | Explicit deployment gate; leave false or unset initially |
+| `aws-dev` | `AWS_APP_DEPLOY_ROLE_ARN` | Application workload-deployer role ARN |
+| `aws-dev` | `AWS_REGION` | AWS region hosting `aws-dev` |
+| `aws-dev` | `AWS_ECR_REGISTRY` | ECR registry hostname for digest verification |
+| `aws-dev` | `AWS_EC2_INSTANCE_ID_DEV` | EC2 host receiving SSM commands |
 
-Set these as repository or `aws-image-publish` environment variables, not secrets:
+Store `APP_PROMOTION_TOKEN` only in `aws-image-publish`. It is a fine-grained PAT restricted to this
+application repository with Contents and Pull requests write access. It maintains one fixed
+promotion PR; set an expiry, rotate it, and never place its value in a command, variable, or
+documentation.
 
-| Variable | Meaning |
-| --- | --- |
-| `AWS_IMAGE_PUBLISH_ENABLED` | Explicit image-publication gate; keep `false` or unset until AWS is ready |
-| `AWS_ECR_PUBLISH_ROLE_ARN` | ARN of the dedicated ECR-publisher OIDC role |
-| `AWS_REGION` | AWS region containing the Stage 0 resources |
-| `AWS_ECR_REGISTRY` | ECR registry hostname used in immutable image references |
-
-Create the `aws-image-publish` environment and restrict it to `main`. The promotion PR merge is the
-routine human approval, so do not add another required-reviewer prompt to this environment. Protect
-`main` separately with required pull requests and `CI / Merge gate` before enabling delivery.
-
-Store `INFRA_PROMOTION_TOKEN` in this environment. It is a fine-grained PAT scoped only to the infra
-repository with Contents and Pull requests read/write access. The publisher uses it to check out the
-infra repository and maintain the fixed promotion PR. Set an expiry and rotate this stored value.
-Never put the token value in a workflow, repository variable, command argument, or documentation.
-
-The workflow skips publication unless `AWS_IMAGE_PUBLISH_ENABLED` is exactly `true`; an absent or
-`false` value is the safe default while AWS is being prepared. A deployable green `main` CI run calls
-the publisher automatically. Manual dispatch from a CI-green `main` ref remains the initial-release
-and recovery fallback; task-branch publication is rejected. Only the post-gate publisher job receives
-`id-token: write` and AWS credentials.
-
-## Local CLI Credentials
-
-An IAM user profile such as `dev-cli` may be used for local AWS CLI administration or inspection.
-Keep its access key and secret key in the local credential store or environment, never in GitHub,
-workflow files, repository variables, or committed documentation. Prefer short-lived federation
-for human access when the account supports it.
+Manual workflow dispatch is a recovery/replay mechanism for a CI-green app `main` commit and its
+already committed lock; it is not a way to supply a new image or deployment target.
 
 ## Verification Boundary
 
-A successful role assumption and SSM command prove credential wiring and command delivery only.
-Deployment evidence additionally requires the selected immutable image tag, health/readiness
-results, migration result, smoke proof, rollback path, and retained redacted evidence.
+A successful role assumption or SSM command proves credential wiring and command delivery only.
+Deployment evidence additionally requires the selected immutable image identities, migrations,
+readiness, smoke proof, rollback path, and retained redacted evidence.

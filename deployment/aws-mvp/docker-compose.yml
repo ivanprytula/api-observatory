@@ -1,0 +1,120 @@
+services:
+  ingestor-db:
+    image: pgvector/pgvector:pg17-trixie@sha256:a74b9af952f5609c090120bf938b0c8bca56c33ed9fb05643fd9fceec52c4a08
+    env_file: .runtime/ingestor-db.env
+    environment: {POSTGRES_DB: api_obs_ingestor, POSTGRES_USER: postgres}
+    volumes: [ingestor_postgres_data:/var/lib/postgresql/data]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+  ingestor:
+    image: "${INGESTOR_IMAGE:?Set an immutable ingestor image}"
+    env_file: .runtime/ingestor.env
+    environment:
+      INFERENCE_URL: http://inference:8001
+      SERVICE_VERSION: "${SERVICE_VERSION:?Set tree identity}"
+    depends_on: {ingestor-db: {condition: service_healthy}}
+    ports: [127.0.0.1:8000:8000]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=3)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+  dashboard:
+    image: "${DASHBOARD_IMAGE:?Set an immutable dashboard image}"
+    env_file: .runtime/dashboard.env
+    environment:
+      INGESTOR_URL: http://ingestor:8000
+      INFERENCE_URL: http://inference:8001
+      SERVICE_VERSION: "${SERVICE_VERSION:?Set tree identity}"
+    depends_on: {ingestor: {condition: service_healthy}}
+    ports: [127.0.0.1:8501:8501]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=3)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+  inference-db:
+    profiles: [inference]
+    image: pgvector/pgvector:pg17-trixie@sha256:a74b9af952f5609c090120bf938b0c8bca56c33ed9fb05643fd9fceec52c4a08
+    env_file: .runtime/inference-db.env
+    environment: {POSTGRES_DB: api_obs_inference, POSTGRES_USER: postgres}
+    volumes: [inference_postgres_data:/var/lib/postgresql/data]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+  inference:
+    profiles: [inference]
+    image: "${INFERENCE_IMAGE:?Set an immutable inference image}"
+    env_file: .runtime/inference.env
+    environment: {SERVICE_VERSION: "${SERVICE_VERSION:?Set tree identity}"}
+    depends_on: {inference-db: {condition: service_healthy}}
+    ports: [127.0.0.1:8001:8001]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/readyz', timeout=3)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+  cache:
+    profiles: [cache]
+    image: redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
+    env_file: .runtime/cache.env
+    command: [sh, -c, "exec redis-server --requirepass \"$REDIS_PASSWORD\""]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD-SHELL, "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+  broker:
+    profiles: [broker]
+    image: redpandadata/redpanda:v24.1.1@sha256:3387a7ac6b2307129032562bf957653de13373a2748f82de7ab588a39d50b88d
+    command:
+      - redpanda
+      - start
+      - --smp
+      - "1"
+      - --overprovisioned
+      - --kafka-addr
+      - internal://0.0.0.0:29092
+      - --advertise-kafka-addr
+      - internal://broker:29092
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD-SHELL, "rpk cluster health -X brokers=127.0.0.1:29092 | grep -Eq 'Healthy:.+true'"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+  notification-consumer:
+    profiles: [broker]
+    image: "${INGESTOR_IMAGE:?Set an immutable ingestor image}"
+    env_file: .runtime/ingestor.env
+    command: [python, -m, services.ingestor.notification_delivery_worker]
+    depends_on:
+      broker: {condition: service_healthy}
+      ingestor-db: {condition: service_healthy}
+    restart: unless-stopped
+  prometheus:
+    profiles: [monitoring]
+    image: prom/prometheus:v2.54.1@sha256:f6639335d34a77d9d9db382b92eeb7fc00934be8eae81dbc03b31cfe90411a94
+    command: [--config.file=/etc/prometheus/prometheus.yml]
+    volumes: [./prometheus.yml:/etc/prometheus/prometheus.yml:ro]
+    ports: [127.0.0.1:9090:9090]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, wget, --spider, -q, http://127.0.0.1:9090/-/ready]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+volumes:
+  ingestor_postgres_data: {}
+  inference_postgres_data: {}

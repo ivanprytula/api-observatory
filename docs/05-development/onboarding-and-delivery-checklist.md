@@ -1,7 +1,7 @@
 # Canonical onboarding and delivery checklist
 
 This document is the single source of truth for first-time setup, day-to-day task flow, PR readiness,
-and the app-to-infra release handoff. When a contributor workflow changes, update this document first
+and the application release handoff. When a contributor workflow changes, update this document first
 and then link to it from the README, contributing guide, and deployment docs rather than copying the
 same instructions into multiple places.
 
@@ -70,19 +70,19 @@ Use this checklist when a change affects published images, the service contract,
 2. For a deployable application change, the green `main` CI run calls the reusable image-publish
    workflow. It publishes immutable images only when `AWS_IMAGE_PUBLISH_ENABLED` is explicitly
    enabled; manual dispatch remains the first-release and recovery fallback.
-3. The publisher checks out current infra `main`, runs its promotion script, and opens or updates the
-   single `automation/promote-aws-dev` pull request.
-4. Review that PR's source commit, tree, exact image digests, and infra CI result. Merge the PR to
+3. The publisher validates release metadata against current app `main` and opens or updates the
+   single `automation/promote-aws-dev` application pull request.
+4. Review that PR's source commit, tree, exact image digests, and app CI result. Merge the PR to
    approve the selected `images.lock.json` desired state.
-5. A green infra `main` CI run deploys that exact merged lock when `AWS_CD_ENABLED` is enabled.
-   Manual deployment only replays the state already committed on infra `main`.
+5. A green app `main` CI run deploys that exact merged lock when `AWS_CD_ENABLED` is enabled.
+   Manual deployment only replays the state already committed on app `main`.
 
-Optional-profile changes use a separate infrastructure PR. Automated image promotion preserves the
-profiles already reviewed and merged into infra `main`.
+Optional-profile changes use a separate application PR. Automated image promotion preserves the
+profiles already reviewed and merged into app `main`.
 
 ## 5. Current deployment model
 
-The current AWS Stage 0 deployment model is a single-host in-place recreate flow with promotion-PR
-approval and best-effort rollback. It is not rolling, blue/green, or canary. The deployment guide in
-[api-observatory-infra](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md)
-documents the current model and the approval gate.
+The current AWS MVP deployment model is a single-host in-place recreate flow with promotion-PR
+approval and best-effort application-image rollback. It is not rolling, blue/green, or canary. The
+[application deployment contract](../07-deployment/app-repo-contract.md) documents the workload
+flow; the sibling infra guide documents the platform bootstrap, backup, and host recovery boundary.

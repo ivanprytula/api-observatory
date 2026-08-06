@@ -8,14 +8,14 @@ Current implementation status belongs in the
 
 | Question | Current decision | Rationale and record |
 | --- | --- | --- |
-| Broker | Redpanda locally; managed Kafka deferred | Kafka protocol enables replay/partition exercises without claiming Stage 0 needs a managed broker. [ADR 001](adr/001-kafka-vs-rabbitmq.md) |
+| Broker | Redpanda locally; managed Kafka deferred | Kafka protocol enables replay/partition exercises without claiming the MVP needs a managed broker. [ADR 001](adr/001-kafka-vs-rabbitmq.md) |
 | Vector database | Dedicated pgvector PostgreSQL for inference | Preserves service data ownership without another database engine. [ADR 015](adr/015-inference-dedicated-pgvector-postgres.md); [superseded ADR 002](adr/002-qdrant-vs-pgvector.md) |
 | Frontend | Keep Streamlit until workflow complexity justifies replacement | Avoid a second build/runtime without a stable product trigger. [ADR 003](adr/003-htmx-vs-react.md) |
 | Image build/security | BuildKit, dependency audit, and container scanning | Reproducible, cached builds with standard supply-chain checks. [ADR 004](adr/004-docker-buildkit-and-security-scanning.md) |
 | Cloud authentication | GitHub OIDC; no long-lived AWS keys in GitHub | Short-lived, scoped credentials with auditable assumptions |
 | Terraform state | S3 backend with native lockfile locking | Remote versioned state for recovery; no DynamoDB lock dependency |
 | Migrations | Explicit Alembic migration step before application rollout | Startup migration ownership becomes unsafe with replicas. [ADR 007](adr/007-migration-runner-vs-sidecar.md) |
-| AWS Stage 0 | EC2 plus Docker Compose; ECS/EKS deferred | Preserve the exercised operating model until delivery/scaling evidence justifies another platform |
+| AWS MVP | EC2 plus Docker Compose; ECS/EKS deferred | Preserve the exercised operating model until delivery/scaling evidence justifies another platform |
 | Agent workflow | Optional LangGraph graph, PostgreSQL checkpointing, human review | Explicit pause/resume and fail-open behavior. [ADR 012](adr/012-langgraph-agent.md) |
 | Management vs operations | Keep product administration separate from platform access | Different identities, risks, and audit boundaries. [ADR 014](adr/014-management-vs-ops-plane.md) |
 | Contract drift baseline | Compare observations with a versioned accepted baseline; confirm candidates before alerting | Prevents single-poll noise and gradual baseline creep while keeping acceptance tenant-scoped and auditable. [ADR 017](adr/017-versioned-contract-baselines.md) |

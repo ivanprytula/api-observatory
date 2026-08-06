@@ -11,7 +11,7 @@ before a changed application image serves traffic, but they must not run from Fa
 from one sidecar per replica. Those alternatives create duplicate execution, ordering, and rollback
 ambiguity.
 
-Local Docker Compose is canonical. AWS Stage 0 uses the same application images on one EC2 Compose
+Local Docker Compose is canonical. AWS MVP uses the same application images on one EC2 Compose
 host, with a separate optional inference database.
 
 ## Decision
@@ -37,7 +37,7 @@ compatible during best-effort rollback.
 Benefits:
 
 - one explicit and observable migration execution per selected database;
-- the same image and Alembic configuration are used locally and during Stage 0 delivery;
+- the same image and Alembic configuration are used locally and during MVP delivery;
 - application startup remains focused on serving traffic;
 - no sidecar, leader election, or replica coordination is required.
 
@@ -52,12 +52,12 @@ Costs and limits:
 
 - Application CI validates ingestor and inference migrations against isolated PostgreSQL databases.
 - Local onboarding runs `just db-migrate` through the configured ingestor container.
-- The infra rollout runs selected migrations before application replacement and aborts on failure.
+- The app-owned rollout runs selected migrations before application replacement and aborts on failure.
 - Rollback documentation requires backward-compatible migrations across both image sets.
 
 ## References
 
 - [Application CI](../../../.github/workflows/ci.yml)
 - [Local database lifecycle](../../../just/database-lifecycle.just)
-- [AWS Stage 0 rollout](https://github.com/ivanprytula/api-observatory-infra/blob/main/deployment/aws-stage0/rollout.sh)
-- [AWS Stage 0 deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md)
+- [AWS MVP rollout](../../../deployment/aws-mvp/rollout.sh)
+- [AWS MVP deployment contract](../../07-deployment/app-repo-contract.md)

@@ -34,7 +34,7 @@ assert_non_root() {
 
 main() {
   docker info >/dev/null 2>&1 || error "Docker daemon is not running."
-  info "Building disposable Stage 0 images."
+  info "Building disposable MVP workload images."
   compose build
 
   assert_non_root "${INGESTOR_IMAGE}"
@@ -51,7 +51,7 @@ token = create_jwt_token("image-smoke", {"roles": ["admin"]})
 request = urllib.request.Request("http://127.0.0.1:8000/api/v1/scorecards", headers={"Authorization": f"Bearer {token}"})
 urllib.request.urlopen(request, timeout=5).close()
 '
-  success "Stage 0 images built, ran as non-root, and passed Compose health checks."
+  success "MVP workload images built, ran as non-root, and passed Compose health checks."
 }
 
 trap cleanup EXIT
