@@ -1,6 +1,6 @@
-"""Integration tests for auth-protected routes and endpoints.
+"""Integration tests for authenticated routes and public documentation.
 
-Tests session-based auth, bearer token auth, protected docs, and rate limit handler.
+Tests cache-backed sessions, bearer tokens, JWT-protected operations, and rate limits.
 
 `asyncio_mode='auto'` handles async test execution; the module marker classifies this suite.
 """
@@ -24,7 +24,7 @@ async def _viewer_claims() -> dict[str, str]:
 
 @pytest.mark.demo
 class TestSessionAuth:
-    """Tests for session-based auth routes."""
+    """Tests for cache-backed session-cookie routes."""
 
     async def test_login_session_creates_session(self, client: AsyncClient) -> None:
         """POST /api/v1/observations/auth/login creates a session cookie."""
@@ -204,22 +204,18 @@ class TestBearerTokenAuth:
 
 
 @pytest.mark.integration
-class TestProtectedDocs:
-    """Tests for documentation endpoints.
-
-    Note: In test environment, docs_username/password are not set
-    (or test config overrides them), so docs are public.
-    """
+class TestPublicDocs:
+    """Documentation endpoints are publicly readable."""
 
     async def test_docs_endpoint_accessible(self, client: AsyncClient) -> None:
-        """GET /docs returns Swagger UI (accessible in test environment)."""
+        """GET /docs returns Swagger UI without credentials."""
         response = await client.get("/docs")
         assert response.status_code == 200
         # Swagger UI contains specific HTML
         assert "swagger" in response.text.lower() or "openapi" in response.text.lower()
 
     async def test_openapi_schema_accessible(self, client: AsyncClient) -> None:
-        """GET /openapi.json returns valid OpenAPI schema (accessible in test environment)."""
+        """GET /openapi.json returns a valid schema without credentials."""
         response = await client.get("/openapi.json")
         assert response.status_code == 200
         schema = response.json()
@@ -228,7 +224,7 @@ class TestProtectedDocs:
         assert "info" in schema
 
     async def test_redoc_endpoint_accessible(self, client: AsyncClient) -> None:
-        """GET /redoc returns ReDoc UI (accessible in test environment)."""
+        """GET /redoc returns ReDoc UI without credentials."""
         response = await client.get("/redoc")
         assert response.status_code == 200
         # ReDoc contains specific HTML
@@ -253,10 +249,9 @@ class TestRateLimitHandler:
 
 @pytest.mark.integration
 class TestJwtAuthOnCoreRoutes:
-    """Phase 4: the core (non-teaching) CRUD/analyze routes now require a
+    """Core CRUD and analysis routes require a
     writer/admin JWT for writes and any authenticated JWT for reads. The
-    shared `client` fixture pre-authenticates every request as admin (see
-    tests/fixtures_shared.py), so these tests manipulate
+    shared test client pre-authenticates every request as admin, so these tests manipulate
     `app.dependency_overrides` directly to exercise the real
     unauthenticated/under-privileged paths."""
 

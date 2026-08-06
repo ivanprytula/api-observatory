@@ -29,8 +29,6 @@ compose_env:
   background_worker_queue_size: '200'
   background_workers_enabled: 'false'
   database_url: "postgresql+asyncpg://postgres:{{ vault_db_password }}@localhost:5432/api_obs_ingestor"
-  docs_password: "{{ vault_docs_password }}"
-  docs_username: 'admin'
   environment: 'production'
   jwt_algorithm: 'HS256'
   jwt_expiry_minutes: '60'

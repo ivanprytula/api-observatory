@@ -13,7 +13,6 @@ from copy import deepcopy
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
-from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi.errors import RateLimitExceeded
@@ -21,7 +20,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from starlette.responses import HTMLResponse, JSONResponse
+from starlette.responses import JSONResponse
 
 from libs.platform.auth import set_security_audit_emitter
 from libs.platform.http_timeout import RequestTimeoutMiddleware
@@ -31,7 +30,6 @@ from services.ingestor.auth import (
     connect_session_store,
     disconnect_session_store,
     jwt_role_guard,
-    verify_docs_credentials,
 )
 from services.ingestor.config import settings
 from services.ingestor.constants import APP_DESCRIPTION, HEALTH_RATE_LIMIT
@@ -174,13 +172,7 @@ def _validate_production_security_settings() -> None:
 
     weak_jwt_secret = len(settings.jwt_secret) < 32
     jwt_secret_from_env = bool(os.environ.get("JWT_SECRET"))
-    weak_docs_password = bool(settings.docs_password) and settings.docs_password in {
-        "changeme",
-        "admin",
-        "password",
-    }
-
-    if weak_jwt_secret or weak_docs_password or not jwt_secret_from_env:
+    if weak_jwt_secret or not jwt_secret_from_env:
         raise RuntimeError(
             "Weak default secrets detected in production environment. "
             "Set strong values via environment variables or a secrets manager."
@@ -458,7 +450,7 @@ _OPENAPI_TAGS: list[dict[str, str]] = [
         "name": "source-registry",
         "description": (
             "CRUD management for external API source profiles. "
-            "Centralises reliability metadata (SLA targets, quota, cost) "
+            "Centralizes reliability metadata (SLA targets, quota, cost) "
             "and auth policy per source. Includes live health probes."
         ),
     },
@@ -524,8 +516,6 @@ _OPENAPI_TAGS: list[dict[str, str]] = [
     },
 ]
 
-# If docs_username/docs_password are configured, disable default docs
-# (they'll be handled by protected endpoints below)
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
@@ -537,9 +527,6 @@ app = FastAPI(
     description=APP_DESCRIPTION,
     lifespan=lifespan,
     openapi_tags=_OPENAPI_TAGS,
-    docs_url=None if settings.docs_username else "/docs",
-    redoc_url=None if settings.docs_username else "/redoc",
-    openapi_url=None if settings.docs_username else "/openapi.json",
 )
 
 # Attach limiter to app (required by slowapi)
@@ -565,51 +552,6 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONRe
             response, request.state.view_rate_limit
         )
     return response
-
-
-# ---------------------------------------------------------------------------
-# Protected Documentation Endpoints (if auth is configured)
-# ---------------------------------------------------------------------------
-if settings.docs_username and settings.docs_password:
-    """If docs auth is configured, protect Swagger UI, ReDoc, and OpenAPI schema."""
-
-    @app.get(
-        "/docs",
-        include_in_schema=False,
-        dependencies=[Depends(verify_docs_credentials)],
-    )
-    async def get_swagger_ui() -> HTMLResponse:
-        """Protected Swagger UI endpoint."""
-        return get_swagger_ui_html(
-            openapi_url="/openapi.json",
-            title=f"{settings.app_name} - Swagger UI",
-        )
-
-    @app.get(
-        "/redoc",
-        include_in_schema=False,
-        dependencies=[Depends(verify_docs_credentials)],
-    )
-    async def get_redoc() -> HTMLResponse:
-        """Protected ReDoc endpoint."""
-        return get_redoc_html(
-            openapi_url="/openapi.json",
-            title=f"{settings.app_name} - ReDoc",
-        )
-
-    @app.get(
-        "/openapi.json",
-        include_in_schema=False,
-        dependencies=[Depends(verify_docs_credentials)],
-    )
-    async def get_openapi_schema() -> dict:
-        """Protected OpenAPI schema endpoint."""
-        return app.openapi()
-
-    logger.info(
-        "docs_auth_enabled",
-        extra={"docs_endpoints": ["/docs", "/redoc", "/openapi.json"]},
-    )
 
 
 # Add correlation ID middleware early (runs before route handlers)

@@ -63,8 +63,6 @@ os.environ["ENVIRONMENT"] = "testing"
 os.environ["CACHE_ENABLED"] = "false"
 os.environ.setdefault("SERVICE_VERSION", "test-service")
 os.environ.setdefault("CONTRACTS_VERSION", "test-contracts")
-os.environ["DOCS_USERNAME"] = ""
-os.environ["DOCS_PASSWORD"] = ""
 os.environ["API_V1_BEARER_TOKEN"] = ""
 
 from services.ingestor.auth import verify_jwt_token  # noqa: E402
@@ -88,7 +86,6 @@ __all__ = [
     "client",
     "client_isolated",
     "test_settings",
-    "settings_with_docs_auth",
     "settings_with_api_token",
     "created_observation",
     "created_observations",
@@ -97,7 +94,6 @@ __all__ = [
     "postgresql_async_session",
     "postgresql_async_session_isolated",
     "mock_db_failure",
-    "app_with_docs_auth",
     "app_with_api_token",
     "pytest_configure",
     "pytest_collection_modifyitems",
@@ -537,27 +533,13 @@ async def client_isolated(
 def test_settings() -> Settings:
     """Override app settings for testing.
 
-    Useful for tests that need to verify different configurations
-    (e.g., docs auth enabled/disabled, different log levels).
+    Useful for tests that need to verify different configurations.
     """
     return Settings(
         environment="testing",
         app_version="1.0.0-test",
-        docs_username=None,  # Docs public in tests by default
-        docs_password=None,
         api_v1_bearer_token=None,
         jwt_secret="test-secret-key-32-chars-minimum!!",
-        db_echo=False,
-    )
-
-
-@pytest.fixture()
-def settings_with_docs_auth() -> Settings:
-    """Settings with documentation authentication enabled."""
-    return Settings(
-        environment="testing",
-        docs_username="admin",
-        docs_password="secret123",
         db_echo=False,
     )
 
@@ -751,13 +733,6 @@ async def mock_db_failure() -> AsyncGenerator[AsyncMock]:
     mock_session = AsyncMock(spec=AsyncSession)
     mock_session.execute.side_effect = RuntimeError("Database connection lost")
     yield mock_session
-
-
-@pytest.fixture()
-def app_with_docs_auth(settings_with_docs_auth: Settings):
-    """FastAPI app with docs authentication enabled."""
-    with patch("app.main.settings", settings_with_docs_auth):
-        yield app
 
 
 @pytest.fixture()

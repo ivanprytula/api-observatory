@@ -22,16 +22,8 @@ class TestSettingsFixtures:
     def test_default_test_settings(self, test_settings: Settings) -> None:
         """test_settings fixture has expected testing defaults."""
         assert test_settings.environment == "testing"
-        assert test_settings.docs_username is None
-        assert test_settings.docs_password is None
         assert test_settings.api_v1_bearer_token is None
         assert test_settings.db_echo is False
-
-    def test_docs_auth_settings(self, settings_with_docs_auth: Settings) -> None:
-        """settings_with_docs_auth provides docs credentials."""
-        assert settings_with_docs_auth.docs_username == "admin"
-        assert settings_with_docs_auth.docs_password == "secret123"
-        assert settings_with_docs_auth.environment == "testing"
 
     def test_api_token_settings(self, settings_with_api_token: Settings) -> None:
         """settings_with_api_token provides bearer token."""
@@ -102,21 +94,6 @@ class TestSettingsValidation:
         settings = Settings()
         assert settings.jwt_algorithm == "HS256"
 
-    def test_docs_auth_requires_both_username_and_password(
-        self, settings_with_docs_auth: Settings
-    ) -> None:
-        """Docs auth requires both username and password set."""
-        assert settings_with_docs_auth.docs_username is not None
-        assert settings_with_docs_auth.docs_password is not None
-
-    def test_partial_docs_auth_disabled(self) -> None:
-        """Docs auth disabled if only one of username/password is set."""
-        # Settings with only username
-        settings = Settings(docs_username="admin", docs_password=None)
-        assert settings.docs_username == "admin"
-        assert settings.docs_password is None
-        # Application logic should treat this as "auth not configured"
-
 
 # ---------------------------------------------------------------------------
 # Environment Variable Overrides
@@ -124,6 +101,17 @@ class TestSettingsValidation:
 @pytest.mark.unit
 class TestEnvironmentVariableOverrides:
     """Settings respect environment variable overrides."""
+
+    def test_legacy_docs_credentials_are_ignored(self, monkeypatch) -> None:
+        """Retired docs credentials cannot re-enable a docs access gate."""
+        monkeypatch.setenv("DOCS_USERNAME", "legacy-user")
+        monkeypatch.setenv("DOCS_PASSWORD", "legacy-password")
+
+        settings = Settings()
+
+        assert settings.environment
+        assert "docs_username" not in Settings.model_fields
+        assert "docs_password" not in Settings.model_fields
 
     def test_settings_can_override_version(self) -> None:
         """App version can be overridden."""
@@ -155,12 +143,6 @@ class TestEnvironmentVariableOverrides:
 @pytest.mark.unit
 class TestSettingsFeatureFlags:
     """Settings control feature flags and behavior."""
-
-    def test_docs_auth_feature_flag(self, settings_with_docs_auth: Settings) -> None:
-        """Docs auth setting can be used as a feature flag."""
-        # Application can check: if settings.docs_username:
-        is_docs_protected = bool(settings_with_docs_auth.docs_username)
-        assert is_docs_protected is True
 
     def test_api_token_feature_flag(self, settings_with_api_token: Settings) -> None:
         """API token setting can be used as a feature flag."""

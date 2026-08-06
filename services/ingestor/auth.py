@@ -1,9 +1,8 @@
 """Authentication and authorization utilities.
 
 Three auth patterns for learning:
-1. Docs Auth (HTTP Basic Auth)
-2. v1 API (Bearer Token + Cookie Session)
-3. v2 API (JWT)
+1. v1 API (Bearer Token + Cookie Session)
+2. v2 API (JWT)
 """
 
 from __future__ import annotations
@@ -12,11 +11,10 @@ import logging
 import uuid
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any
+from typing import Any
 
 import jwt
 from fastapi import Cookie, Depends, Header, HTTPException, status
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from redis.asyncio import Redis
 
 from services.ingestor.config import settings
@@ -28,12 +26,6 @@ from services.ingestor.security.authorization import (
 
 
 logger = logging.getLogger(__name__)
-
-# HTTP Basic Auth scheme (for docs only)
-security = HTTPBasic()
-
-# Module-level type aliases (FastAPI-approved pattern)
-type DocsCredentialsDep = Annotated[HTTPBasicCredentials, Depends(security)]
 
 # Cache-backed session store (module-level singleton, initialized in lifespan).
 # Key pattern: session:{session_id} → Cache hash {user_id, role, created_at}
@@ -94,36 +86,7 @@ async def disconnect_session_store() -> None:
 
 
 # ============================================================================
-# Layer 1: Docs Auth (HTTP Basic Auth)
-# ============================================================================
-
-
-async def verify_docs_credentials(
-    credentials: DocsCredentialsDep,
-) -> HTTPBasicCredentials:
-    """Verify credentials for documentation access."""
-    if not settings.docs_username or not settings.docs_password:
-        return credentials
-
-    if credentials.username != settings.docs_username:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid credentials",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-
-    if credentials.password != settings.docs_password:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid credentials",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-
-    return credentials
-
-
-# ============================================================================
-# Layer 2: v1 API Auth (Bearer Token + Sessions)
+# Layer 1: v1 API Auth (Bearer Token + Sessions)
 # ============================================================================
 
 
@@ -344,7 +307,7 @@ async def delete_session(session_id: str) -> None:
 
 
 # ============================================================================
-# Layer 3: v2 API Auth (JWT)
+# Layer 2: v2 API Auth (JWT)
 # ============================================================================
 
 

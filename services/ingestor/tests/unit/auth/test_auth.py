@@ -1,9 +1,9 @@
-"""Unit tests for all authentication layers in services/ingestor/auth.py.
+"""Unit tests for the ingestor authentication helpers.
 
 Covers:
-- Layer 1: Docs auth (HTTP Basic)
-- Layer 2: Bearer token + session cookie
-- Layer 3: JWT create/verify
+- static bearer-token verification
+- cache-backed session verification
+- JWT creation, verification, and role guards
 
 Note: No @pytest.mark.asyncio — asyncio_mode='auto' is set in pyproject.toml.
 """
@@ -15,7 +15,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
-from fastapi.security import HTTPBasicCredentials
 
 from services.ingestor.auth import (
     _extract_roles,
@@ -27,7 +26,6 @@ from services.ingestor.auth import (
     revoke_refresh_token,
     session_role_guard,
     verify_bearer_token,
-    verify_docs_credentials,
     verify_jwt_token,
     verify_jwt_token_str,
     verify_refresh_token,
@@ -35,50 +33,8 @@ from services.ingestor.auth import (
 )
 
 
-class TestDocsAuth:
-    """HTTP Basic Auth for documentation endpoints."""
-
-    async def test_valid_credentials_returns_credentials(self) -> None:
-        """Correct username+password passes through unchanged."""
-        creds = HTTPBasicCredentials(username="admin", password="secret")
-        with patch("services.ingestor.auth.settings") as mock_settings:
-            mock_settings.docs_username = "admin"
-            mock_settings.docs_password = "secret"
-            result = await verify_docs_credentials(creds)
-        assert result is creds
-
-    async def test_wrong_username_raises_403(self) -> None:
-        """Wrong username raises 403 Forbidden."""
-        creds = HTTPBasicCredentials(username="hacker", password="secret")
-        with patch("services.ingestor.auth.settings") as mock_settings:
-            mock_settings.docs_username = "admin"
-            mock_settings.docs_password = "secret"
-            with pytest.raises(HTTPException) as exc:
-                await verify_docs_credentials(creds)
-        assert exc.value.status_code == 403
-
-    async def test_wrong_password_raises_403(self) -> None:
-        """Wrong password raises 403 Forbidden."""
-        creds = HTTPBasicCredentials(username="admin", password="wrongpass")
-        with patch("services.ingestor.auth.settings") as mock_settings:
-            mock_settings.docs_username = "admin"
-            mock_settings.docs_password = "secret"
-            with pytest.raises(HTTPException) as exc:
-                await verify_docs_credentials(creds)
-        assert exc.value.status_code == 403
-
-    async def test_auth_disabled_passes_through(self) -> None:
-        """When docs_username is not set, any credentials pass through."""
-        creds = HTTPBasicCredentials(username="anyone", password="anything")
-        with patch("services.ingestor.auth.settings") as mock_settings:
-            mock_settings.docs_username = None
-            mock_settings.docs_password = None
-            result = await verify_docs_credentials(creds)
-        assert result is creds
-
-
 # ---------------------------------------------------------------------------
-# Layer 2: Bearer Token
+# Static bearer token
 # ---------------------------------------------------------------------------
 class TestBearerToken:
     """Bearer token auth for v1 API endpoints."""
@@ -152,11 +108,11 @@ class TestRbacHelpers:
 
 
 # ---------------------------------------------------------------------------
-# Layer 2: Session Cookie
+# Cache-backed session cookie
 # ---------------------------------------------------------------------------
 @pytest.mark.unit
 class TestSessionCookie:
-    """Cookie-based session auth for v1 API endpoints."""
+    """Cache-backed session-cookie authentication helpers."""
 
     async def test_valid_session_returns_data(self) -> None:
         """Valid non-expired session ID returns session data dict."""
@@ -210,11 +166,11 @@ class TestSessionCookie:
 
 
 # ---------------------------------------------------------------------------
-# Layer 3: JWT
+# JWT authentication
 # ---------------------------------------------------------------------------
 @pytest.mark.unit
 class TestJWT:
-    """JWT create and verify for v2 API endpoints."""
+    """JWT creation, verification, and rotation behavior."""
 
     async def test_valid_token_returns_claims(self) -> None:
         """Valid JWT returns decoded payload with correct subject."""
