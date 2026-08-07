@@ -45,6 +45,6 @@ uses the same deployment path for an application-image rollback.
 
 Workflow configuration and local validation are **Decision** evidence. A deployment claim requires
 a completed, approved run with image identity, migrations, readiness, smoke, rollback, and teardown
-evidence. Local Compose remains canonical. Fargate or Kubernetes becomes relevant only after the VM
-path is understood and a measured availability, scaling, or ownership trigger justifies the next
-operational layer.
+evidence. Local Compose remains canonical. The AWS learning sequence is an exercised EC2 deployment,
+then ECS on Fargate, then EKS. Moving the product runtime beyond EC2 still requires a measured
+availability, scaling, ownership, or delivery-friction trigger.

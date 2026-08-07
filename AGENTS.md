@@ -63,9 +63,11 @@ Keep this section current as the project evolves. It is the source of truth for 
   unnecessary PII or secrets; retention work must be bounded, verifiable, and reversible.
 - **Integration policy:** Version shared contracts, bound every network call, retry only safe work,
   and keep external AI/cache/broker integrations optional or fail-open where documented.
-- **Deployment target:** Local Compose is canonical. AWS MVP (ECR + EC2 + RDS) is the primary
-  portfolio direction but remains a decision/configuration claim until a separately approved live
-  deployment is verified. Azure is secondary/reference.
+- **Deployment target:** Local Compose is canonical. The only active cloud direction is the AWS MVP:
+  ECR plus one private, SSM-operated EC2 Compose host, PostgreSQL on encrypted EBS, Parameter Store,
+  and retained S3 backups. It remains a decision/configuration claim until a separately approved live
+  deployment is verified. The learning sequence is EC2, then ECS on Fargate, then EKS; another IaaS
+  provider is out of scope until that sequence has exercised evidence.
 - **Quality bar:** Focused unit/integration tests, migration compatibility, authorization regression
   coverage, measured performance claims, failure/recovery evidence, observability, diff review, and a
   blocking secrets scan.

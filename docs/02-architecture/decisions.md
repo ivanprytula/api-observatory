@@ -15,11 +15,11 @@ Current implementation status belongs in the
 | Cloud authentication | GitHub OIDC; no long-lived AWS keys in GitHub | Short-lived, scoped credentials with auditable assumptions |
 | Terraform state | S3 backend with native lockfile locking | Remote versioned state for recovery; no DynamoDB lock dependency |
 | Migrations | Explicit Alembic migration step before application rollout | Startup migration ownership becomes unsafe with replicas. [ADR 007](adr/007-migration-runner-vs-sidecar.md) |
-| AWS MVP | EC2 plus Docker Compose; ECS/EKS deferred | Preserve the exercised operating model until delivery/scaling evidence justifies another platform |
+| AWS MVP | EC2 plus Docker Compose; ECS on Fargate and EKS deferred | Exercise one operational layer at a time; production migration still requires measured pressure |
 | Agent workflow | Optional LangGraph graph, PostgreSQL checkpointing, human review | Explicit pause/resume and fail-open behavior. [ADR 012](adr/012-langgraph-agent.md) |
 | Management vs operations | Keep product administration separate from platform access | Different identities, risks, and audit boundaries. [ADR 014](adr/014-management-vs-ops-plane.md) |
 | Contract drift baseline | Compare observations with a versioned accepted baseline; confirm candidates before alerting | Prevents single-poll noise and gradual baseline creep while keeping acceptance tenant-scoped and auditable. [ADR 017](adr/017-versioned-contract-baselines.md) |
-| Primary cloud direction | AWS primary; Azure secondary/reference | Current portfolio direction supersedes the older Azure-first choice. [Historical ADR 009](adr/009-azure-free-tier-over-aws.md) |
+| Cloud direction | AWS is the only active infrastructure target | Keep application contracts portable, but add another IaaS provider only after exercised EC2, ECS on Fargate, and EKS evidence |
 
 ## Decision Rules
 

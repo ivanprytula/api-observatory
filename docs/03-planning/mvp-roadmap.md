@@ -8,11 +8,12 @@ customer acquisition, and speculative scale work are out of scope.
 
 - **Core:** source registry, scheduled health/contract probes, scorecards, tenant-scoped incidents,
   auth, migrations, retention, resilience controls, dashboard, and optional agent/inference paths.
-- **Lab:** gateway/load-balancing, Kafka partitioning, k3d, monitoring, cloud emulators, and bounded
+- **Lab:** gateway/load-balancing, Kafka partitioning, k3d, monitoring, the AWS emulator, and bounded
   performance/failure exercises.
-- **Decision:** AWS MVP uses three immutable images on EC2 Compose with RDS; configuration and
-  contract checks exist, but no completed live deployment is claimed.
-- **Deferred:** managed gateway/Kafka, ECS/EKS, database sharding, multi-region, and a replacement
+- **Decision:** AWS MVP uses three immutable images and PostgreSQL containers on one private EC2
+  Compose host with encrypted EBS and retained S3 backups; configuration and contract checks exist,
+  but no completed live deployment is claimed.
+- **Deferred:** managed gateway/Kafka, ECS on Fargate, EKS, database sharding, multi-region, and a replacement
   frontend require measured product or operational pressure.
 - **Local event consumer:** notification delivery has a separately owned, opt-in Redpanda consumer
   process with at-least-once semantics. It is local implementation evidence, not a production
@@ -40,6 +41,12 @@ Before any live proof, validate the three image contracts locally, review Terraf
 security, configure short-lived OIDC identities, define rollback/teardown, and obtain explicit
 approval for cloud mutations. Until then the status remains **Decision**.
 
+### 4. Learn AWS deployment layers in order
+
+First capture exercised EC2 provisioning, deployment, recovery, rollback, and teardown evidence.
+Only then build an ECS-on-Fargate learning slice, followed by EKS. Product work may continue in
+parallel, but another IaaS provider is ineligible until all three AWS layers have exercised evidence.
+
 ## Change Decision
 
 Plan any change as one vertical slice:
@@ -56,7 +63,10 @@ Plan any change as one vertical slice:
 | --- | --- |
 | New service/runtime | Independent ownership, release cadence, scaling profile, or isolation SLO |
 | Multiple ingestor replicas | Saturation/availability target plus explicit scheduler ownership |
-| ECS or Kubernetes | Repeated Compose delivery friction or several independently operated workloads |
+| ECS on Fargate learning slice | Exercised EC2 deployment, recovery, rollback, and teardown evidence |
+| EKS learning slice | Exercised ECS-on-Fargate deployment and an explicit comparison objective |
+| Product migration beyond EC2 | Repeated Compose delivery friction or several independently operated workloads |
+| Another IaaS provider | Exercised EC2, ECS-on-Fargate, and EKS evidence |
 | Managed gateway | Multiple public services or consumer-specific edge policy |
 | Managed Kafka | Sustained asynchronous workload with ordering, replay, and availability objectives |
 | Additional Redpanda consumer service | A named asynchronous workflow with an ownership, isolation, replay, or throughput objective beyond notification delivery; record the boundary in [ADR 016](../02-architecture/adr/016-redpanda-consumer-service.md) |

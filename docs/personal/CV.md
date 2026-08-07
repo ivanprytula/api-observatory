@@ -64,10 +64,10 @@ Backend engineer with deep technical expertise across async systems, databases, 
 | **Event Streaming**        | Kafka/Redpanda, async consumers    | ✅ Phase 1 complete |
 | **Vector Search**          | AI/embeddings, semantic indexing   | ✅ Phase 3 complete |
 | **Resilience Patterns**    | Circuit breaker, DLQ, backpressure | ✅ Phase 4 complete |
-| **Infrastructure-as-Code** | Terraform, AWS multi-env           | ✅ Phase 7 complete |
-| **Observability Stack**    | Prometheus, Grafana, OTel, tracing | ✅ Complete         |
-| **Chaos / Load Testing**   | k6 scenarios, chaos.sh gauntlet    | ✅ Complete         |
-| **Ansible Automation**     | 7 roles, drift-check, EC2 prov.    | ✅ Complete         |
+| **Infrastructure-as-Code** | Terraform AWS EC2 MVP configuration | Decision; no live deployment claimed |
+| **Observability Stack**    | Prometheus, Grafana, OTel, tracing | Local/configuration evidence |
+| **Chaos / Load Testing**   | Bounded k6 and database recovery exercises | Local lab evidence |
+| **Ansible Automation**     | Common, Docker, and AWS MVP host bootstrap | Statically validated |
 
 ---
 
@@ -309,17 +309,17 @@ To consolidate 5 years of production experience into a **reference implementatio
 ### Infrastructure & DevOps
 
 - **Docker**: Containerization, multi-stage builds, image optimization, Compose stacks
-- **Kubernetes**: Deployments, services, HPA, network policies, Helm charts, Kustomize overlays
-- **AWS (production IaC)**: Terraform modules for VPC/ECS/RDS/ElastiCache/ECR; OIDC CI/CD; dev + sandbox multi-env
-- **Ansible**: Idempotent host provisioning (common, docker, app, monitoring, ecs_agent roles); dynamic AWS EC2 inventory; drift-check playbooks; vault-backed secrets assertions
+- **Kubernetes**: Disposable app-owned k3d lab with deployments, services, ingress, and Kustomize; no EKS operation claimed
+- **AWS (portfolio IaC)**: Statically validated VPC/ECR/EC2/EBS/S3/SSM Terraform and OIDC delivery contracts; live deployment not yet claimed
+- **Ansible**: Idempotent common, Docker, and AWS MVP host-bootstrap roles using SSM inventory inputs; statically validated only
 - **CI/CD**: GitHub Actions with multi-lane matrix (lint, unit, integration, docker-build, security scan), branch protection, digest-based promotion, GitHub Environments with OIDC
-- **Monitoring**: Prometheus + Grafana + Alertmanager (node_exporter, app metrics, SLO dashboards); OpenTelemetry tracing; structured JSON logging
-- **Chaos / Load testing**: k6 load scenarios (health/sources/observations/scorecards); chaos.sh (kill/db/kafka/memory/network gauntlet); pytest --run-chaos gating; recovery validation via /readyz polling
+- **Monitoring**: App-owned local Prometheus/Grafana/Alertmanager profiles, OpenTelemetry tracing, and structured JSON logging
+- **Chaos / Load testing**: Bounded k6 observations workload and opt-in local PostgreSQL stop/recovery proof
 
 ### Observability & Monitoring
 
 - Structured logging, JSON formatters, log aggregation (VictoriaLogs, OpenSearch, Loki/Promtail)
-- Prometheus metrics, Grafana dashboards (infrastructure + SLO + business)
+- Prometheus metrics and app-owned local Grafana dashboards
 - APM (Sentry error tracking, distributed tracing with OpenTelemetry)
 - Load/chaos engineering: k6 thresholds (p95<500ms, error rate<5%), container kill-recovery drills, readiness-based health assertions
 

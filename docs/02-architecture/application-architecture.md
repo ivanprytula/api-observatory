@@ -5,9 +5,6 @@
 [engineering evidence map](engineering-topics.md) owns topic status, and the
 [deployment contract](../07-deployment/app-repo-contract.md) owns the app/infra interface.
 
-> An earlier, larger 8-phase design (multi-service, AWS ECS, MongoDB, Qdrant) is archived at
-> `../_archive/02-architecture/architecture.md` — historical record, not current state.
-
 ## System Context
 
 ```mermaid

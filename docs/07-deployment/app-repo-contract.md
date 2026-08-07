@@ -3,8 +3,10 @@
 The application repository owns service behavior, Dockerfiles, images, migrations, health/readiness
 endpoints, the AWS MVP Compose workload, Prometheus configuration, the reviewed `aws-dev` image
 lock, and application deployment/rollback. The infrastructure repository owns the platform that
-supplies those capabilities: Terraform state, networking, EC2/RDS/ECR/S3, IAM, Parameter Store,
-Docker/SSM bootstrap, host replacement, backup storage, and restore tooling.
+supplies those capabilities: Terraform state, networking, ECR, one private EC2 host with encrypted
+EBS, IAM, Parameter Store, Docker/SSM bootstrap, retained S3 backups, host replacement, and restore
+tooling. PostgreSQL runs in application-owned Compose containers on the EC2 volume; no managed
+database is part of this MVP.
 
 [`release/services.json`](../../release/services.json) remains the portable release manifest. It
 defines the three deployable HTTP images and the immutable `tree-<full-tree-SHA>` tag convention.

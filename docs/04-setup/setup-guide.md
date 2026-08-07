@@ -36,8 +36,7 @@ stack implicitly.
 
 | Lab | Entry point | Boundary |
 | --- | --- | --- |
-| Cloud emulator | `just --justfile just/labs.just lab-cloud-up azure` | Starts and waits only for the selected local emulator; use the same provider with `lab-cloud-verify azure` and `lab-cloud-down azure` |
-| Azure emulator | `just --justfile just/labs.just lab-cloud-test-azure` | Focused Blob Storage test against an already-running Floci Azure emulator |
+| AWS emulator | `just --justfile just/labs.just lab-aws-up` | Starts only the disposable AWS API emulator; use `lab-aws-verify` and `lab-aws-down` for health and cleanup. This is not `aws-dev` parity or deployment evidence |
 | Kubernetes | `just --justfile just/labs.just lab-k8s-up` | Builds and publishes one ingestor, one dashboard, and disposable PostgreSQL to k3d; tear down with `lab-k8s-down` |
 | HTTPS ingress | `TLS_VERIFY=false just --justfile just/labs.just lab-ingress-smoke` | Checks an already-started local ingress |
 | Load | `BEARER_TOKEN="$(just smoke-token)" just --justfile just/labs.just lab-load` | Bounded authenticated observation workload against an already-ready core stack |
@@ -247,8 +246,8 @@ and teardown remain infra-owned and require the separately approved delivery gat
   [performance/failure worksheet](../05-development/performance-and-failure-lab.md), which links the
   maintained scripts.
 
-Qdrant, a production frontend replacement, ECS/EKS, and real multi-cloud environments are not
-active setup modes. Their adoption requires a trigger from the
+Qdrant, a production frontend replacement, ECS on Fargate, EKS, and additional IaaS providers are
+not active setup modes. The AWS learning order and production adoption triggers live in the
 [roadmap](../03-planning/mvp-roadmap.md).
 
 ## Verification and Troubleshooting

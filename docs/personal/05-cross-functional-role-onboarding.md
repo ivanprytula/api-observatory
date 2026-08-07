@@ -126,8 +126,8 @@ For product and delivery roles, use the Project Overview, Architecture Overview,
 
 ### First Focus
 
-- Review deployment and IaC flow in Cloud Deployment Model and Floci AWS Workflow.
-- Validate local-to-cloud parity assumptions.
+- Review the current app delivery contract and sibling AWS MVP deployment guide.
+- Validate the boundary between disposable AWS API rehearsal and real `aws-dev` evidence.
 - Check infra drift and promotion workflow quality.
 
 ### Contribution Pattern

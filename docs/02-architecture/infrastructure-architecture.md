@@ -5,7 +5,7 @@ It is a **Decision** contract until a separately approved live run supplies oper
 
 | Application repository | Infrastructure repository |
 | --- | --- |
-| CI, immutable images, reviewed `aws-dev` lock, Compose workload, migrations, readiness, smoke checks, application rollback, Prometheus workload configuration | Terraform, networking, EC2/RDS/ECR/S3, IAM, Parameter Store, Docker/SSM bootstrap, host recovery, backup/restore tooling, infrastructure monitoring |
+| CI, immutable images, reviewed `aws-dev` lock, Compose workload, migrations, readiness, smoke checks, application rollback, Prometheus workload configuration | Terraform, networking, ECR, one EC2 host with encrypted EBS, IAM, Parameter Store, Docker/SSM bootstrap, retained S3 backups, and host recovery tooling |
 
 The app's desired state is the reviewed lock at
 [`environments/aws-dev/images.lock.json`](../../environments/aws-dev/images.lock.json). A green
