@@ -33,7 +33,7 @@ run_integration() {
 }
 
 run_e2e() {
-    uv run pytest -m 'e2e and not live and not azure and not chaos' -q
+    uv run pytest -m 'e2e and not live and not chaos' -q
 }
 
 run_live() {

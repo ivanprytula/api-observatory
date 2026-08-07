@@ -629,7 +629,7 @@ async def postgresql_async_session(
         pytest.skip(
             "EXPLAIN ANALYZE tests are opt-in only. "
             "Set ALLOW_EXPLAIN_ANALYZE=true to run against a local PostgreSQL instance. "
-            "Never run against remote/staging/prod RDS."
+            "Never run against a remote, staging, or production database."
         )
     if not _is_postgres():
         pytest.skip(

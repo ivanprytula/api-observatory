@@ -4,10 +4,9 @@ Isolates the `fastembed` dependency behind a project-owned interface —
 callers never import `fastembed` directly, so swapping the embedding backend
 later (a different model, an API-based embedder) touches only this module.
 
-fastembed (ONNX Runtime) over sentence-transformers/torch deliberately: this
-service targets a free-tier Azure VM, and torch's Linux wheel pulls a full
-CUDA dependency chain (~2GB) unconditionally, regardless of index — wildly
-disproportionate for CPU-only embedding inference on a 1GB-RAM box.
+fastembed (ONNX Runtime) over sentence-transformers/torch deliberately: the
+optional inference service must fit on a small CPU-only host, while torch's
+Linux wheel pulls a large CUDA dependency chain regardless of index.
 """
 
 from functools import lru_cache
