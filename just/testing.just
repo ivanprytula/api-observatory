@@ -69,15 +69,41 @@ test-smoke-auth base-url="http://127.0.0.1:8000":
     : "${SMOKE_JWT:?Set SMOKE_JWT to a writer/admin JWT.}"
     bash "{{justfile_directory()}}/scripts/smoke-test.sh" {{base-url}}
 
+# No containers: isolated tests with optional runtime dependencies installed by uv.
 test-unit:
-    cd "{{justfile_directory()}}" && uv run pytest tests/unit services/ingestor/tests/unit -m unit -q
+    bash "{{justfile_directory()}}/scripts/test/run-lane.sh" unit
 
+# Requires Docker only; fixtures provision and remove their own temporary dependencies.
 test-integration:
-    cd "{{justfile_directory()}}" && uv run pytest -m integration -q
+    bash "{{justfile_directory()}}/scripts/test/run-lane.sh" integration
 
-# Run end-to-end coverage excluding cloud-emulator and chaos labs.
+# Baseline application and PostgreSQL behavior. Optional runtime capabilities remain off.
+test-core:
+    bash "{{justfile_directory()}}/scripts/test/run-profile.sh" core
+
+# Requires Docker only; verifies PostgreSQL tenant-isolation behavior in an isolated database.
+test-capability-rls:
+    bash "{{justfile_directory()}}/scripts/test/run-profile.sh" rls
+
+# Requires Docker only; broker boundaries use deterministic fixtures and test doubles.
+test-capability-broker:
+    bash "{{justfile_directory()}}/scripts/test/run-profile.sh" broker
+
+# Requires Docker only when selected integration fixtures need PostgreSQL; no AI provider is called.
+test-capability-ai:
+    bash "{{justfile_directory()}}/scripts/test/run-profile.sh" ai
+
+# Requires Docker only; starts and removes its own deterministic harness, never the local stack.
+test-full-optional:
+    bash "{{justfile_directory()}}/scripts/test/run-full-optional.sh"
+
+# Requires Docker only when selected fixtures need it; excludes public live probes and labs.
 test-e2e:
-    cd "{{justfile_directory()}}" && uv run pytest -m 'e2e and not azure and not chaos' -q
+    bash "{{justfile_directory()}}/scripts/test/run-lane.sh" e2e
+
+# Requires public network access; never a CI gate and no local stack is needed.
+test-live-external:
+    bash "{{justfile_directory()}}/scripts/test/run-lane.sh" live
 
 # Run manual API collections without resetting or seeding the local database.
 test-api:

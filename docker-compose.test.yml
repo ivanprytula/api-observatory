@@ -1,0 +1,14 @@
+services:
+  test-harness:
+    build:
+      context: .
+      dockerfile: services/ingestor/tests/harness/Dockerfile
+    profiles: [test-harness]
+    ports:
+      - "127.0.0.1:18080:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+    security_opt: [no-new-privileges:true]
