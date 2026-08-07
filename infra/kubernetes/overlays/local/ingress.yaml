@@ -1,9 +1,9 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: data-zoo-local
+  name: api-obs-local
   labels:
-    app.kubernetes.io/part-of: data-zoo
+    app.kubernetes.io/part-of: api-obs
 spec:
   ingressClassName: traefik
   rules:
@@ -26,4 +26,4 @@ spec:
               service:
                 name: dashboard
                 port:
-                  number: 8003
+                  number: 8501

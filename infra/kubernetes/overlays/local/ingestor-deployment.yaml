@@ -5,13 +5,9 @@ metadata:
   labels:
     app.kubernetes.io/name: ingestor
     app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: api-obs
 spec:
-  replicas: 2
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: ingestor
@@ -20,8 +16,9 @@ spec:
       labels:
         app.kubernetes.io/name: ingestor
         app.kubernetes.io/component: api
+        app.kubernetes.io/part-of: api-obs
     spec:
-      serviceAccountName: data-zoo-app
+      serviceAccountName: api-obs-app
       automountServiceAccountToken: false
       securityContext:
         fsGroup: 10001
@@ -29,8 +26,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: ingestor
-          image: data-zoo/ingestor:latest
-          imagePullPolicy: IfNotPresent
+          image: api-obs-registry:5000/api-obs/ingestor:local
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8000
@@ -39,15 +36,42 @@ spec:
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: data-zoo-app-secrets
+                  name: api-obs-app-secrets
                   key: database_url
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: api-obs-app-secrets
+                  key: jwt_secret
+            - name: INTERNAL_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: api-obs-app-secrets
+                  key: internal_jwt_secret
             - name: ENVIRONMENT
-              value: local
+              value: local-k3d
             - name: SERVICE_VERSION
               valueFrom:
                 configMapKeyRef:
-                  name: data-zoo-app-config
+                  name: api-obs-app-config
                   key: service_version
+            - name: TRUSTED_HOSTS
+              valueFrom:
+                configMapKeyRef:
+                  name: api-obs-app-config
+                  key: trusted_hosts
+            - name: CACHE_ENABLED
+              value: "false"
+            - name: BROKER_ENABLED
+              value: "false"
+            - name: OPENAI_ENABLED
+              value: "false"
+            - name: ANTHROPIC_ENABLED
+              value: "false"
+            - name: OTEL_ENABLED
+              value: "false"
+            - name: LOG_FORMAT
+              value: json
           startupProbe:
             httpGet:
               path: /health
@@ -55,10 +79,9 @@ spec:
               httpHeaders:
                 - name: Host
                   value: ingestor
-            initialDelaySeconds: 5
-            periodSeconds: 10
-            failureThreshold: 6
-            timeoutSeconds: 5
+            periodSeconds: 5
+            failureThreshold: 24
+            timeoutSeconds: 3
           livenessProbe:
             httpGet:
               path: /health
@@ -66,9 +89,8 @@ spec:
               httpHeaders:
                 - name: Host
                   value: ingestor
-            initialDelaySeconds: 0
             periodSeconds: 20
-            timeoutSeconds: 5
+            timeoutSeconds: 3
             failureThreshold: 3
           readinessProbe:
             httpGet:
@@ -77,17 +99,16 @@ spec:
               httpHeaders:
                 - name: Host
                   value: ingestor
-            initialDelaySeconds: 0
             periodSeconds: 10
-            timeoutSeconds: 5
+            timeoutSeconds: 3
             failureThreshold: 3
           resources:
             requests:
-              cpu: "100m"
-              memory: "256Mi"
+              cpu: 100m
+              memory: 256Mi
             limits:
-              cpu: "500m"
-              memory: "512Mi"
+              cpu: 500m
+              memory: 512Mi
           securityContext:
             runAsUser: 10001
             runAsGroup: 10001

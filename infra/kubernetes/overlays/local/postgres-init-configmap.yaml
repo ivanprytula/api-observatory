@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-obs-postgres-init
+  labels:
+    app.kubernetes.io/name: ingestor-db
+    app.kubernetes.io/part-of: api-obs
+data:
+  01-init.sql: |
+    CREATE EXTENSION IF NOT EXISTS vector;

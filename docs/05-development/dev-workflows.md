@@ -1,10 +1,11 @@
 # Development Workflows
 
-The [`Justfile`](../../Justfile) is the command catalogue. This guide owns intent, proof selection,
-and stable development rules so command syntax is not duplicated in Markdown. Branching, commits,
-pushes, and pull requests are owned by [`CONTRIBUTING.md`](../../CONTRIBUTING.md). For a compact
-checklist that joins onboarding, task execution, PR readiness, and the app-to-infra release handoff,
-see [onboarding and delivery checklist](onboarding-and-delivery-checklist.md).
+The [`Justfile`](../../Justfile) is the core command catalogue; [`just/labs.just`](../../just/labs.just)
+contains disposable Kubernetes, cloud, ingress, load, and chaos exercises. This guide owns intent,
+proof selection, and stable development rules so command syntax is not duplicated in Markdown.
+Branching, commits, pushes, and pull requests are owned by [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
+For a compact checklist that joins onboarding, task execution, PR readiness, and the app-to-infra
+release handoff, see [onboarding and delivery checklist](onboarding-and-delivery-checklist.md).
 
 ## Canonical local workflow
 
@@ -16,9 +17,9 @@ Follow the [Canonical Onboarding and Delivery Checklist](onboarding-and-delivery
    `just dev-up-inference` for inference/RAG work, or `just dev-up-extended` only when a task needs
    cache, broker, and inference together. Extended mode requires `API_OBS_CACHE_ENABLED=true` and
    `API_OBS_BROKER_ENABLED=true` in `.env`; inference itself is selected by its Compose profile.
-2. Run `just dev-wait-ready`, then `just db-migrate`; use `just db-auto-init` when a local admin/demo dataset is
-   needed.
-   For extended mode, also run `just db-inference-migrate` and then `just dev-inference-ready`.
+2. `just dev-up` and `just dev-up-inference` return only after Compose reports the selected services
+   healthy. Then run `just db-migrate`; use `just db-auto-init` when a local admin/demo dataset is
+   needed. For extended mode, also run `just db-inference-migrate`.
    Enable optional capabilities in `.env` before starting their explicit recipes; OpenTelemetry
    requires `API_OBS_OTEL_ENABLED=true`, `docker compose restart ingestor`, and then
    `just dev-up-monitoring`.
@@ -36,8 +37,10 @@ Follow the [Canonical Onboarding and Delivery Checklist](onboarding-and-delivery
    marker recipes remain useful for the default unit/integration split, but they do not replace
    the focused service suite.
 4. For a normal isolated bugfix, `just test-unit` is the default minimum proof. Run `just test-smoke`
-   when the change affects the running API, database, dashboard, or an integration boundary; run
-   `just test-e2e` for an explicitly end-to-end change.
+   for the running ingestor public boundary or `SMOKE_JWT="$(just smoke-token)" just test-smoke-auth`
+   for a protected observation workflow. Run `just test-e2e` for an explicitly end-to-end change.
+   Invoke ingress, load, chaos, Kubernetes, and cloud checks only through
+   `just --justfile just/labs.just <lab-recipe>`.
    `just test-api` runs the API collection against the prepared local stack. For a disposable demo,
    explicitly run `just db-reset --confirm DELETE` and `just db-auto-init` first; never reset
    observations or API sources you intend to keep.
@@ -118,9 +121,10 @@ under [`.github/workflows/`](../../.github/workflows/).
 | Inference service tests (`uv run pytest services/inference/tests -q`) | Inference-owned fixtures and testcontainers PostgreSQL | Embeddings, retrieval, and inference service behavior |
 | MCP service tests (`uv run pytest services/mcp/tests -q --no-cov`) | Mocked HTTP transport and in-process FastMCP registry | Authentication lifecycle, ingestor client behavior, and tool registration |
 | Contract | In-process OpenAPI/shared schemas | Backward compatibility and protected-route behavior |
-| End-to-end (`just test-e2e`) | Running local stack; tests own their fixtures | Critical user path without relying on `just db-auto-init` |
-| Smoke (`just test-smoke`) | Running local stack | Critical health and observation path |
-| Performance/fault | Explicit opt-in workload | Measurement, degradation, recovery, and remaining uncertainty |
+| End-to-end (`just test-e2e`) | Running local stack; tests own their fixtures | Critical user path without relying on `just db-auto-init`; excludes emulator labs |
+| Core smoke (`just test-smoke`) | Running local stack | Public readiness, health, metrics, and API documentation |
+| Authenticated smoke (`SMOKE_JWT="$(just smoke-token)" just test-smoke-auth`) | Running local stack plus a local writer/admin account | Protected read and observation write/read path |
+| Labs (`just --justfile just/labs.just <lab-recipe>`) | Explicit opt-in emulator, k3d, ingress, load, or chaos boundary | Disposable exercises separated from the local MVP workflow |
 
 Shared fixtures live in [`tests/fixtures_shared.py`](../../tests/fixtures_shared.py). Root and
 ingestor `conftest.py` files re-export them; fixture logic should not be copied between trees.
@@ -236,10 +240,8 @@ mode without turning the extended stack into the default development path.
 
    ```bash
    just dev-up-extended
-   just dev-wait-ready
    just db-migrate
    just db-inference-migrate
-   just dev-inference-ready
    docker compose ps
    ```
 
@@ -264,7 +266,7 @@ mode without turning the extended stack into the default development path.
 3. Exercise recovery only on a disposable local stack:
 
    ```bash
-   just test-chaos
+   just --justfile just/labs.just lab-chaos
    ```
 
    This stops the current PostgreSQL container, requires readiness to fail, restarts it, and waits

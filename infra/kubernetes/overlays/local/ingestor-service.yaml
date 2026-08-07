@@ -4,6 +4,8 @@ metadata:
   name: ingestor
   labels:
     app.kubernetes.io/name: ingestor
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: api-obs
 spec:
   type: ClusterIP
   selector:

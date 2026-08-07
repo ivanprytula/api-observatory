@@ -4,6 +4,7 @@
 #   just --justfile just/labs.just lab-k8s-up
 
 import 'cloud.just'
+import 'kubernetes.just'
 
 # Probe the optional local HTTPS ingress after it has been started separately.
 lab-ingress-smoke gateway-url="https://127.0.0.1":

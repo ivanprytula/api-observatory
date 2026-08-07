@@ -5,6 +5,7 @@ metadata:
   labels:
     app.kubernetes.io/name: dashboard
     app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: api-obs
 spec:
   replicas: 1
   selector:
@@ -15,8 +16,9 @@ spec:
       labels:
         app.kubernetes.io/name: dashboard
         app.kubernetes.io/component: frontend
+        app.kubernetes.io/part-of: api-obs
     spec:
-      serviceAccountName: data-zoo-app
+      serviceAccountName: api-obs-app
       automountServiceAccountToken: false
       securityContext:
         fsGroup: 10001
@@ -24,8 +26,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: dashboard
-          image: data-zoo/dashboard:latest
-          imagePullPolicy: IfNotPresent
+          image: api-obs-registry:5000/api-obs/dashboard:local
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8501
@@ -34,41 +36,38 @@ spec:
             - name: INGESTOR_URL
               valueFrom:
                 configMapKeyRef:
-                  name: data-zoo-app-config
+                  name: api-obs-app-config
                   key: ingestor_url
             - name: ENVIRONMENT
-              value: local
+              value: local-k3d
           startupProbe:
             httpGet:
               path: /_stcore/health
               port: http
-            initialDelaySeconds: 5
-            periodSeconds: 10
-            failureThreshold: 6
-            timeoutSeconds: 5
+            periodSeconds: 5
+            failureThreshold: 24
+            timeoutSeconds: 3
           livenessProbe:
             httpGet:
               path: /_stcore/health
               port: http
-            initialDelaySeconds: 0
             periodSeconds: 20
-            timeoutSeconds: 5
+            timeoutSeconds: 3
             failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /_stcore/health
               port: http
-            initialDelaySeconds: 0
             periodSeconds: 10
-            timeoutSeconds: 5
+            timeoutSeconds: 3
             failureThreshold: 3
           resources:
             requests:
-              cpu: "50m"
-              memory: "128Mi"
+              cpu: 50m
+              memory: 128Mi
             limits:
-              cpu: "200m"
-              memory: "256Mi"
+              cpu: 200m
+              memory: 256Mi
           securityContext:
             runAsUser: 10001
             runAsGroup: 10001

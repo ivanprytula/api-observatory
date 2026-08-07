@@ -1,62 +1,80 @@
-# Local Kubernetes lab recipes. Compose remains the canonical onboarding runtime.
+# Disposable local Kubernetes lab. Import this file from just/labs.just.
 
-k8s-cluster-create:
-    k3d cluster create --config infra/kubernetes/k3d.yaml --kubeconfig-update-default --kubeconfig-switch-context
-    echo "cluster data-zoo created — context: k3d-data-zoo"
-
-k8s-cluster-delete:
-    k3d cluster delete data-zoo
-
-k8s-build:
-    docker build -t data-zoo/ingestor:latest .
-    docker build -t data-zoo/dashboard:latest -f services/dashboard/Dockerfile .
-
-k8s-load-images:
-    k3d image import -c data-zoo data-zoo/ingestor:latest data-zoo/dashboard:latest
-
-k8s-deploy-infra:
+_lab-k8s-cluster-create:
     #!/usr/bin/env bash
     set -euo pipefail
-    helm repo add --force-update bitnami https://charts.bitnami.com/bitnami
-    helm repo add --force-update redpanda https://charts.redpanda.com
-    helm repo update
-    kubectl create namespace data-zoo --dry-run=client -o yaml | kubectl apply -f -
-    for chart in postgresql redis; do
-      helm upgrade --install "$chart" "bitnami/$chart" --namespace data-zoo --values "infra/kubernetes/helm-values/${chart}.yaml" --wait
-    done
-    helm upgrade --install redpanda redpanda/redpanda --namespace data-zoo --values infra/kubernetes/helm-values/redpanda.yaml --wait
+    project_root="{{justfile_directory()}}/.."
+    if ! k3d cluster list | awk 'NR > 1 {print $1}' | grep -qx "api-obs"; then
+        k3d cluster create --config "${project_root}/infra/kubernetes/k3d.yaml" --kubeconfig-update-default --kubeconfig-switch-context=false
+    fi
 
-k8s-secret:
-    kubectl apply -n data-zoo -f infra/kubernetes/overlays/local/secret.example.yaml
+_lab-k8s-build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{justfile_directory()}}/.."
+    registry="localhost:5000/api-obs"
+    docker build -t "${registry}/ingestor:local" .
+    docker build -t "${registry}/dashboard:local" -f services/dashboard/Dockerfile .
+    docker build -t "${registry}/ingestor-db:local" infra/database
 
-k8s-migrate:
-    kubectl delete job/ingestor-migrate -n data-zoo --ignore-not-found
-    kubectl apply -f infra/kubernetes/overlays/local/migrate-job.yaml
-    kubectl -n data-zoo wait --for=condition=complete job/ingestor-migrate --timeout=60s
+_lab-k8s-push-images:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    registry="localhost:5000/api-obs"
+    docker push "${registry}/ingestor:local"
+    docker push "${registry}/dashboard:local"
+    docker push "${registry}/ingestor-db:local"
 
-k8s-deploy:
-    kubectl apply -k infra/kubernetes/overlays/local
-    kubectl -n data-zoo rollout status deployment/ingestor --timeout=120s
-    kubectl -n data-zoo rollout status deployment/dashboard --timeout=120s
+_lab-k8s-bootstrap:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    overlay="{{justfile_directory()}}/../infra/kubernetes/overlays/local"
+    context="k3d-api-obs"
+    kubectl --context "${context}" apply -f "${overlay}/namespace.yaml"
+    kubectl --context "${context}" -n api-obs apply -f "${overlay}/service-account.yaml"
+    kubectl --context "${context}" -n api-obs apply -f "${overlay}/config.yaml"
+    kubectl --context "${context}" -n api-obs apply -f "${overlay}/secret.yaml"
+    kubectl --context "${context}" -n api-obs apply -f "${overlay}/postgres-init-configmap.yaml"
+    kubectl --context "${context}" -n api-obs apply -f "${overlay}/ingestor-db-deployment.yaml"
+    kubectl --context "${context}" -n api-obs apply -f "${overlay}/ingestor-db-service.yaml"
+    kubectl --context "${context}" -n api-obs rollout status deployment/ingestor-db --timeout=120s
 
-k8s-status:
-    @kubectl -n data-zoo get pods,deployments,services,ingress -o wide
+_lab-k8s-migrate:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    overlay="{{justfile_directory()}}/../infra/kubernetes/overlays/local"
+    context="k3d-api-obs"
+    kubectl --context "${context}" -n api-obs delete job/ingestor-migrate --ignore-not-found
+    kubectl --context "${context}" apply -f "${overlay}/migrate-job.yaml"
+    kubectl --context "${context}" -n api-obs wait --for=condition=complete job/ingestor-migrate --timeout=120s
 
-k8s-logs service="":
-    @kubectl -n data-zoo logs "deployment/{{service}}" --tail=50 -f
+_lab-k8s-deploy:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    context="k3d-api-obs"
+    restart_apps=false
+    if kubectl --context "${context}" -n api-obs get deployment/ingestor >/dev/null 2>&1; then
+        restart_apps=true
+    fi
+    kubectl --context "${context}" apply -k "{{justfile_directory()}}/../infra/kubernetes/overlays/local"
+    if [[ "${restart_apps}" == true ]]; then
+        kubectl --context "${context}" -n api-obs rollout restart deployment/ingestor deployment/dashboard
+    fi
+    kubectl --context "${context}" -n api-obs rollout status deployment/ingestor --timeout=120s
+    kubectl --context "${context}" -n api-obs rollout status deployment/dashboard --timeout=120s
 
-k8s-port-forward service="" local-port="" remote-port="":
-    kubectl -n data-zoo port-forward "deployment/{{service}}" {{local-port}}:{{remote-port}}
+# Build, publish, migrate, and deploy the disposable local stack.
+lab-k8s-up: _lab-k8s-cluster-create _lab-k8s-build _lab-k8s-push-images _lab-k8s-bootstrap _lab-k8s-migrate _lab-k8s-deploy
+    @kubectl --context k3d-api-obs -n api-obs get pods,deployments,services,ingress -o wide
 
-k8s-up:
-    @just k8s-cluster-create
-    @just k8s-build
-    @just k8s-load-images
-    @just k8s-deploy-infra
-    @just k8s-secret
-    @just k8s-migrate
-    @just k8s-deploy
-    @just k8s-status
+lab-k8s-down:
+    k3d cluster delete api-obs
 
-k8s-down:
-    k3d cluster delete data-zoo
+lab-k8s-status:
+    @kubectl --context k3d-api-obs -n api-obs get pods,deployments,services,ingress -o wide
+
+lab-k8s-logs service="ingestor":
+    kubectl --context k3d-api-obs -n api-obs logs "deployment/{{service}}" --tail=50 -f
+
+lab-k8s-port-forward service="ingestor" local_port="8000" remote_port="8000":
+    kubectl --context k3d-api-obs -n api-obs port-forward "deployment/{{service}}" {{local_port}}:{{remote_port}}

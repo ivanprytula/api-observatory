@@ -1,8 +1,8 @@
 # Setup Guide
 
-Local Docker Compose is the canonical runtime. The [`Justfile`](../../Justfile) owns supported named
-recipe syntax; this guide explains which mode to choose, what it proves, and where native commands
-are clearer.
+Local Docker Compose is the canonical runtime. The [`Justfile`](../../Justfile) owns core named
+recipes, while [`just/labs.just`](../../just/labs.just) owns explicitly invoked disposable labs.
+This guide explains which mode to choose, what it proves, and where native commands are clearer.
 The Docker-first `just dev-up` flow is the official onboarding path. Files under `.github/prompts/` are
 historical agent prompts and are not setup instructions for new developers.
 
@@ -22,14 +22,26 @@ Follow the [Canonical Onboarding and Delivery Checklist](../05-development/onboa
 | Hot reload (optional) | `just dev` | Direct HTTP on host Uvicorn/Streamlit after Docker-first setup |
 | Containerized watch (advanced) | Manual Compose Watch command below | Core containers with source sync and reload for Compose debugging |
 | Monitoring | `just dev-up-monitoring` | Opt-in Prometheus, Grafana, Loki/Promtail, Tempo, Alertmanager, Mailpit |
-| Cloud emulator | `CLOUD=<aws|azure|gcp> just cloud-sandbox-up` | Zero-cost provider-shaped API/IaC exercises, not real cloud behavior |
-| Local Kubernetes | `just k8s-up` | Orchestration lab; Compose remains canonical |
 
-The [`Justfile`](../../Justfile) documents companion stop, status, test, and teardown recipes. Real
-AWS MVP delivery is **Decision** evidence. Its application workload is versioned here and its
-platform bootstrap is handled by the sibling infra
+Use `just --list` for the current core workflow commands. Real AWS MVP delivery is **Decision**
+evidence. Its application workload is versioned here and its platform bootstrap is handled by the sibling infra
 [deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md);
 it is not a local environment profile.
+
+## Optional Labs
+
+Labs are deliberately outside the root command surface. Invoke them through `just/labs.just`; they
+are disposable exercises, not alternate MVP runtimes, and they never start the Compose application
+stack implicitly.
+
+| Lab | Entry point | Boundary |
+| --- | --- | --- |
+| Cloud emulator | `just --justfile just/labs.just lab-cloud-up azure` | Starts and waits only for the selected local emulator; use the same provider with `lab-cloud-verify azure` and `lab-cloud-down azure` |
+| Azure emulator | `just --justfile just/labs.just lab-cloud-test-azure` | Focused Blob Storage test against an already-running Floci Azure emulator |
+| Kubernetes | `just --justfile just/labs.just lab-k8s-up` | Builds and publishes one ingestor, one dashboard, and disposable PostgreSQL to k3d; tear down with `lab-k8s-down` |
+| HTTPS ingress | `TLS_VERIFY=false just --justfile just/labs.just lab-ingress-smoke` | Checks an already-started local ingress |
+| Load | `BEARER_TOKEN="$(just smoke-token)" just --justfile just/labs.just lab-load` | Bounded authenticated observation workload against an already-ready core stack |
+| Chaos | `just --justfile just/labs.just lab-chaos` | Stops/restarts the local PostgreSQL container; use a disposable core stack |
 
 ## HTTP and HTTPS Split
 
@@ -39,8 +51,8 @@ Use Docker-first HTTP for onboarding, day-to-day editing, local API debugging, a
 mode with the same `.env` feature flags. It starts PostgreSQL only by default; run the explicit
 `dev-up-cache` or `dev-up-broker` recipe before using those integrations. It is not a separate
 onboarding requirement. Because `just dev` runs the host servers in the foreground, use two
-terminals: keep `just dev` running in terminal 1, and run `dev-wait-ready`, migrations, and tests from
-terminal 2.
+terminals: keep `just dev` running in terminal 1, then run migrations and tests from terminal 2 once
+`/readyz` returns `200`.
 
 ### Manual Compose Watch
 
@@ -52,8 +64,8 @@ must not run at the same time as another local stack because it uses the same po
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --watch --build ingestor-db ingestor dashboard
 ```
 
-Keep that command in terminal 1. In terminal 2, run `just dev-wait-ready`, focused migrations, and
-tests. This watcher intentionally starts only the core services; use the explicit `dev-up-cache`,
+Keep that command in terminal 1. In terminal 2, run focused migrations and tests once `/readyz`
+returns `200`. This watcher intentionally starts only the core services; use the explicit `dev-up-cache`,
 `dev-up-broker`, `dev-up-inference`, or `dev-up-extended` paths when a task needs optional dependencies. Its ingestor
 override applies pending ingestor migrations on startup, so use the native migration workflow when
 authoring or reviewing schema changes.
@@ -77,6 +89,7 @@ Use this explicit HTTPS sequence:
 bash scripts/setup/02-setup-local-https.sh
 docker compose --profile ingress up -d --build
 curl --fail https://127.0.0.1/api/health --insecure
+TLS_VERIFY=false just --justfile just/labs.just lab-ingress-smoke
 ```
 
 Return to the normal HTTP stack with `docker compose --profile ingress down` followed by `just dev-up`.
@@ -163,24 +176,19 @@ with `docker compose stop`, or remove containers and the network with `docker co
 PostgreSQL container and its local named volume, then starts only the core stack; Redis, Redpanda,
 and the separate inference database remain opt-in and untouched. Stop using it once you have
 registered real observations, real API URLs, or any other data you want to keep. For that data,
-stop/start containers without resetting volumes. After a reset, explicitly run `just dev-wait-ready`,
-then `just db-migrate` and `just db-auto-init` when you need demo data.
+stop/start containers without resetting volumes. `db-reset` waits for the recreated core services;
+then run `just db-migrate` and `just db-auto-init` when you need demo data.
 Before any destructive database operation, create and verify a manual backup with
 `bash infra/scripts/backup.sh`; do not proceed until the dump is known to be usable.
 
-Startup does not hide readiness, migrations, or demo seeding. For inference work use:
+Compose startup waits for declared service healthchecks; migrations and demo seeding remain explicit.
+For inference work use:
 
 ```bash
 just dev-up-inference
-just dev-wait-ready
 just db-migrate
 just db-inference-migrate
-just dev-inference-ready
 ```
-
-Both readiness recipes wait for `/readyz` for at most 60 seconds by default. Override the bound with
-`READY_TIMEOUT_SECONDS` when a slow machine needs more time. On failure they print Compose state and
-the owning service logs.
 
 | Capability | `.env` setting | Start command |
 | --- | --- | --- |
@@ -209,9 +217,9 @@ just dev-up-monitoring
 Starting the monitoring UI alone
 does not enable tracing in the application.
 
-Cloud-emulator workflows are an intentional exception to the explicit local sequence:
-`cloud-sandbox-up` starts the selected emulator, applies migrations, and seeds disposable demo data
-in one command. Do not use it for retained observations or real API sources.
+Cloud-emulator and Kubernetes exercises stay separate from the local application workflow. Use the
+[optional labs](#optional-labs) commands only when their provider or orchestration boundary is the
+subject of the exercise.
 
 ### Terraform Sandbox Commands
 
@@ -232,8 +240,7 @@ and teardown remain infra-owned and require the separately approved delivery gat
 
 - HTTPS/edge parity is owned by the Compose `ingress` profile and the local certificate setup
   script named in the [HTTP and HTTPS split](#http-and-https-split).
-- Image/dependency scanning is owned by the security recipes in the
-  [`Justfile`](../../Justfile) and [CI workflows](../../.github/workflows/).
+- Image/dependency scanning is owned by pre-commit and [CI workflows](../../.github/workflows/).
 - pgvector is provisioned by the inference database image and migration under
   [`services/inference/`](../../services/inference/).
 - Performance and fault work starts from the
@@ -257,8 +264,8 @@ docker compose logs --tail=100 <service>
 Then check migrations and the owning settings module rather than copying command sequences into this
 guide.
 
-If `dev-wait-ready` does not complete promptly, stop it with Ctrl+C and inspect the running services
-before retrying:
+If `just dev-up` exits before Compose reports the stack healthy, inspect the running services before
+retrying:
 
 ```bash
 docker compose ps

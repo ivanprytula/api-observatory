@@ -1,16 +1,23 @@
-# Run once via `just k3s-migrate` (not part of `kubectl apply -k` — Jobs are
-# run-to-completion, not continuously reconciled resources).
+# Applied by the local lab after ingestor-db is ready and before application
+# deployments.
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: ingestor-migrate
-  namespace: data-zoo
+  namespace: api-obs
+  labels:
+    app.kubernetes.io/name: ingestor-migrate
+    app.kubernetes.io/part-of: api-obs
 spec:
   backoffLimit: 2
   ttlSecondsAfterFinished: 300
   template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ingestor-migrate
+        app.kubernetes.io/part-of: api-obs
     spec:
-      serviceAccountName: data-zoo-app
+      serviceAccountName: api-obs-app
       automountServiceAccountToken: false
       restartPolicy: Never
       securityContext:
@@ -19,14 +26,14 @@ spec:
           type: RuntimeDefault
       containers:
         - name: migrate
-          image: data-zoo/ingestor:latest
-          imagePullPolicy: IfNotPresent
+          image: api-obs-registry:5000/api-obs/ingestor:local
+          imagePullPolicy: Always
           command: ["alembic", "upgrade", "head"]
           env:
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: data-zoo-app-secrets
+                  name: api-obs-app-secrets
                   key: database_url
           securityContext:
             runAsUser: 10001
