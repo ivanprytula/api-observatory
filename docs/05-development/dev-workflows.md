@@ -26,7 +26,7 @@ Follow the [Canonical Onboarding and Delivery Checklist](onboarding-and-delivery
 3. Run the smallest focused test while iterating: `just test-unit` for isolated code or
    `just test-integration` for PostgreSQL/service behavior. When Docker is available, PostgreSQL
    integration tests provision a temporary database through testcontainers; they do not require the
-   local core or extended stack. Smoke, API, and E2E checks do require their corresponding running stack.
+   local core or extended stack. Smoke and API checks do require the corresponding running stack.
    Every non-E2E test under `services/ingestor/tests/integration/` carries the `integration` marker,
    so `just test-integration` is the authoritative ingestor integration gate.
    Cache- or broker-specific tests use the test double or testcontainer named by that test;
@@ -41,7 +41,9 @@ Follow the [Canonical Onboarding and Delivery Checklist](onboarding-and-delivery
    for a protected observation workflow. Run `just test-e2e` for an explicitly end-to-end change.
    Invoke ingress, load, chaos, Kubernetes, and cloud checks only through
    `just --justfile just/labs.just <lab-recipe>`.
-   `just test-api` runs the API collection against the prepared local stack. For a disposable demo,
+   `just test-e2e` excludes public-network probes; run `just test-live-external` only when you
+   explicitly want to verify JSONPlaceholder availability. `just test-api` runs the API collection
+   against the prepared local stack. For a disposable demo,
    explicitly run `just db-reset --confirm DELETE` and `just db-auto-init` first; never reset
    observations or API sources you intend to keep.
 5. Run the affected boundary, contract, security, and documentation checks.
@@ -113,15 +115,24 @@ under [`.github/workflows/`](../../.github/workflows/).
 
 ## Test Architecture
 
+There is no required ordering between test recipes. Run only the recipe that proves the change;
+each recipe owns its temporary state and is safe to run repeatedly. The only prerequisite is the
+one named below—do not start the local Compose stack for testcontainers-based recipes.
+
 | Suite | Dependency boundary | Purpose |
 | --- | --- | --- |
 | Unit (`just test-unit`) | In-memory/mocked boundary | Deterministic behavior and failure rules |
 | Integration (`just test-integration`) | Testcontainers PostgreSQL when Docker is available; Redis/Redpanda only for dependency-specific tests | Main application persistence, migrations, auth, concurrency, and service contracts |
+| Core profile (`just test-core`) | Docker daemon for any selected testcontainers fixture; optional runtime capabilities disabled | Baseline unit and PostgreSQL behavior without cache, broker, AI, tracing, workers, retention, or demo routes |
+| RLS and broker profiles (`just test-capability-rls`, `just test-capability-broker`) | Docker daemon; temporary databases and deterministic messaging boundaries | Isolated tenant-RLS and durable notification-delivery proofs |
+| AI profile (`just test-capability-ai`) | No provider credentials or public network; Docker only if a selected integration fixture needs it | Deterministic AI contract and agent-handoff behavior |
+| Full optional profile (`just test-full-optional`) | Docker daemon; starts and removes only its own local harness plus fixture-owned dependencies | Deterministic composed RLS, drift, agent-handoff, retry, and durable-delivery journey |
 | Ingestor service tests (`uv run pytest services/ingestor/tests -q`) | Ingestor-owned fixtures; SQLite by default, testcontainers for PostgreSQL/Redis boundaries | API, persistence, probes, scheduling, and ingestor integrations |
 | Inference service tests (`uv run pytest services/inference/tests -q`) | Inference-owned fixtures and testcontainers PostgreSQL | Embeddings, retrieval, and inference service behavior |
 | MCP service tests (`uv run pytest services/mcp/tests -q --no-cov`) | Mocked HTTP transport and in-process FastMCP registry | Authentication lifecycle, ingestor client behavior, and tool registration |
 | Contract | In-process OpenAPI/shared schemas | Backward compatibility and protected-route behavior |
-| End-to-end (`just test-e2e`) | Running local stack; tests own their fixtures | Critical user path without relying on `just db-auto-init`; excludes emulator labs |
+| End-to-end (`just test-e2e`) | In-process and fixture-owned boundaries; Docker only when a selected fixture needs it | Deterministic critical paths without public live probes or emulator labs |
+| Live external (`just test-live-external`) | Public network only | Manual non-blocking check of the external demonstration endpoint |
 | Core smoke (`just test-smoke`) | Running local stack | Public readiness, health, metrics, and API documentation |
 | Authenticated smoke (`SMOKE_JWT="$(just smoke-token)" just test-smoke-auth`) | Running local stack plus a local writer/admin account | Protected read and observation write/read path |
 | Labs (`just --justfile just/labs.just <lab-recipe>`) | Explicit opt-in emulator, k3d, ingress, load, or chaos boundary | Disposable exercises separated from the local MVP workflow |
