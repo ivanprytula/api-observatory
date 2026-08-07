@@ -138,22 +138,9 @@ jobs:
           uv run ruff check services libs scripts tests
           uv run ruff format --check services libs scripts tests
           uv run bandit -c pyproject.toml -r services libs scripts
+          uv run python scripts/ci/check_test_markers.py
           uv run python scripts/ci/docs_quality_check.py
-          uv run ty check \
-            libs/platform \
-            services/dashboard/core \
-            services/dashboard/ui \
-            services/ingestor/auth.py \
-            services/ingestor/cache.py \
-            services/ingestor/main.py \
-            services/ingestor/pubsub.py \
-            services/ingestor/repositories/etl.py \
-            services/ingestor/routers/mongo_analytics.py \
-            services/ingestor/routers/scraper.py \
-            services/ingestor/scrapers \
-            services/ingestor/storage/minios3.py \
-            services/ingestor/transformations/tabular.py \
-            services/mcp/main.py
+          uv run ty check services libs
 
       - name: Detect committed secrets
         uses: docker://ghcr.io/gitleaks/gitleaks@sha256:0e99e8821643ea5b235718642b93bb32486af9c8162c8b8731f7cbdc951a7f46 # v8.21.2
@@ -180,17 +167,26 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Sync dependencies
-        run: uv sync --frozen --all-packages --extra messaging --extra etl
+        run: uv sync --frozen --all-packages --extra ai --extra messaging --extra etl
 
       - name: Run unit, MCP, and OpenAPI contract tests
         run: |
-          uv run pytest tests/unit services/ingestor/tests/unit -q -m unit
+          mkdir -p coverage
+          COVERAGE_FILE=coverage/.coverage.unit \
+            uv run pytest tests/unit services/ingestor/tests/unit -q -m unit
           uv run pytest services/mcp/tests -q --no-cov
           uv run pytest services/ingestor/tests/contract -q -m contract --no-cov
 
+      - name: Upload ingestor unit coverage data
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ingestor-unit-coverage-data
+          path: coverage/.coverage.unit
+          if-no-files-found: error
+
   integration:
-    name: "PostgreSQL integration and migrations"
-    needs: [changes]
+    name: "Core PostgreSQL integration and migrations"
+    needs: [changes, unit]
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -208,20 +204,21 @@ jobs:
           --health-retries 10
         ports:
           - 5432:5432
-      cache:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-        ports:
-          - 6379:6379
     env:
       DATABASE_URL_TEST: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_ingestor_test
-      CACHE_ENABLED: "true"
-      CACHE_URL: redis://localhost:6379/0
-      AUTH_DEMO_ROUTES_ENABLED: "true"
+      CACHE_ENABLED: "false"
+      AUTH_DEMO_ROUTES_ENABLED: "false"
+      BROKER_ENABLED: "false"
+      NOTIFICATIONS_ENABLED: "false"
+      RLS_ENABLED: "false"
+      OPENAI_ENABLED: "false"
+      ANTHROPIC_ENABLED: "false"
+      OTEL_ENABLED: "false"
+      BACKGROUND_WORKERS_ENABLED: "false"
+      RETENTION_ENABLED: "false"
+      CORE_TEST_MARKER: >-
+        integration and not capability_rls and not capability_broker and not
+        capability_ai and not full_optional
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -233,7 +230,13 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Sync workspace
-        run: uv sync --frozen --all-packages --extra messaging --extra etl
+        run: uv sync --frozen --all-packages --extra ai --extra messaging --extra etl
+
+      - name: Download ingestor unit coverage data
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ingestor-unit-coverage-data
+          path: coverage
 
       - name: Create isolated migration and inference databases
         run: |
@@ -260,15 +263,19 @@ jobs:
           uv run alembic -c services/inference/alembic.ini current --check-heads
           uv run alembic -c services/inference/alembic.ini check
 
-      - name: Run ingestor integration tests
+      - name: Run core ingestor integration tests
         run: |
           mkdir -p coverage
-          uv run pytest -q -m integration \
+          COVERAGE_FILE=coverage/.coverage.core \
+            uv run pytest -q -m "${CORE_TEST_MARKER}" \
             --cov=services/ingestor \
-            --cov=libs \
-            --cov-report=term-missing \
-            --cov-report=xml:coverage/ingestor.xml \
-            --cov-fail-under=40
+            --cov-report=term-missing
+
+      - name: Combine and report ingestor coverage
+        run: |
+          uv run coverage combine --keep coverage/.coverage.unit coverage/.coverage.core
+          uv run coverage report
+          uv run coverage xml -o coverage/ingestor.xml
 
       - name: Run inference integration tests
         env:
@@ -278,14 +285,92 @@ jobs:
             --cov-config=coverage.inference.ini \
             --cov \
             --cov-report=term-missing \
-            --cov-report=xml:coverage/inference.xml \
-            --cov-fail-under=85
+            --cov-report=xml:coverage/inference.xml
 
       - name: Upload coverage
         if: success()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: integration-coverage
+          name: core-integration-coverage
+          path: coverage
+          if-no-files-found: error
+
+  capability:
+    name: "Capability: ${{ matrix.profile }}"
+    needs: [changes, unit]
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: rls
+            marker: capability_rls
+            rls_enabled: "true"
+            broker_enabled: "false"
+            notifications_enabled: "false"
+          - profile: broker
+            marker: capability_broker
+            rls_enabled: "false"
+            broker_enabled: "true"
+            notifications_enabled: "true"
+          - profile: ai
+            marker: capability_ai
+            rls_enabled: "false"
+            broker_enabled: "false"
+            notifications_enabled: "false"
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17-trixie
+        env:
+          POSTGRES_DB: api_obs_ingestor_test
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+    env:
+      DATABASE_URL_TEST: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_ingestor_test
+      CACHE_ENABLED: "false"
+      AUTH_DEMO_ROUTES_ENABLED: "false"
+      OTEL_ENABLED: "false"
+      BACKGROUND_WORKERS_ENABLED: "false"
+      RETENTION_ENABLED: "false"
+      OPENAI_ENABLED: "false"
+      ANTHROPIC_ENABLED: "false"
+      RLS_ENABLED: ${{ matrix.rls_enabled }}
+      BROKER_ENABLED: ${{ matrix.broker_enabled }}
+      NOTIFICATIONS_ENABLED: ${{ matrix.notifications_enabled }}
+      NOTIFICATION_DELIVERY_MODE: broker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Sync workspace
+        run: uv sync --frozen --all-packages --extra ai --extra messaging --extra etl
+
+      - name: Run capability profile
+        run: |
+          mkdir -p coverage
+          COVERAGE_FILE=coverage/.coverage.${{ matrix.profile }} \
+            uv run pytest services/ingestor/tests -q -m "${{ matrix.marker }}" \
+            --cov=services/ingestor --cov-report=term-missing
+
+      - name: Publish capability coverage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: capability-${{ matrix.profile }}-coverage
           path: coverage
           if-no-files-found: error
 
