@@ -70,12 +70,6 @@ from services.ingestor.notifications import notify_background_task_failed
 from services.ingestor.rate_limiting import limiter
 from services.ingestor.rate_limiting_token_bucket import enforce_v1_token_bucket
 from services.ingestor.routers import ws as ws_router
-
-
-try:
-    from services.ingestor.routers import mongo_analytics
-except ModuleNotFoundError:
-    mongo_analytics = None  # ty:ignore[invalid-assignment]
 from services.ingestor.security.audit import emit_security_audit_event
 from services.ingestor.services_lifecycle import (
     cleanup_external_services,
@@ -443,10 +437,6 @@ _OPENAPI_TAGS: list[dict[str, str]] = [
         "description": "Notification dispatch endpoints for email, webhook, and Slack channels.",
     },
     {
-        "name": "mongo-analytics",
-        "description": "Analytics endpoints backed by MongoDB aggregation pipelines.",
-    },
-    {
         "name": "source-registry",
         "description": (
             "CRUD management for external API source profiles. "
@@ -583,7 +573,6 @@ _ROUTER_MODULES = [
     "auth",
     "agent",
     "observations",
-    "scraper",
     "analytics",
     "background_processing",
     "notifications",
@@ -610,9 +599,6 @@ _ADMIN_PROTECTED_ROUTERS = {
 _WRITER_PROTECTED_ROUTERS = {"etl"}
 
 for _name in _ROUTER_MODULES:
-    if _name == "scraper" and (not settings.mongo_enabled or mongo_analytics is None):
-        logger.info("router_disabled", extra={"router": _name, "reason": "mongo"})
-        continue
     try:
         dependencies = [] if _name == "auth" else [Depends(enforce_v1_token_bucket)]
         if _name in _ADMIN_PROTECTED_ROUTERS:
@@ -630,12 +616,6 @@ for _name in _ROUTER_MODULES:
             "router_unavailable",
             extra={"router": _name, "missing_module": str(exc)},
         )
-
-if settings.mongo_enabled and mongo_analytics is not None:
-    app.include_router(
-        mongo_analytics.router,
-        dependencies=[Depends(enforce_v1_token_bucket)],
-    )
 
 if settings.auth_demo_routes_enabled:
     from services.ingestor.routers import observations, observations_v2

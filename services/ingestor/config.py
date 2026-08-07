@@ -14,7 +14,6 @@ from services.ingestor.constants import (
     RETENTION_BATCH_SIZE_DEFAULT,
     RETENTION_BATCH_SIZE_MAX,
     RETENTION_DAYS_DEFAULT,
-    SCRAPER_HTTP_TIMEOUT_SECONDS_DEFAULT,
     VECTOR_SEARCH_DEFAULT_COLLECTION,
     VECTOR_SEARCH_HTTP_TIMEOUT_SECONDS_DEFAULT,
 )
@@ -219,22 +218,6 @@ class Settings(BaseSettings):
         ),
     )
 
-    # ============ MongoDB ============
-    mongo_url: str = Field(
-        default="mongodb://localhost:27017",
-        description="MongoDB connection URL",
-    )
-
-    mongo_db_name: str = Field(
-        default="api_obs_ingestor",
-        description="MongoDB database name",
-    )
-
-    mongo_enabled: bool = Field(
-        default=False,
-        description="Enable MongoDB storage. Disabled by default (safe for tests w/o MongoDB).",
-    )
-
     # ============ OpenTelemetry ============
     otel_enabled: bool = Field(
         default=False,
@@ -393,12 +376,6 @@ class Settings(BaseSettings):
         ge=1,
         le=60,
         description="HTTP timeout (seconds) for AI gateway index and search requests.",
-    )
-    scraper_timeout: int = Field(
-        default=SCRAPER_HTTP_TIMEOUT_SECONDS_DEFAULT,
-        ge=1,
-        le=300,
-        description="Timeout (seconds) for HTTP scrapers.",
     )
 
     # ============ OpenAPI / Swagger ============

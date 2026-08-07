@@ -3,7 +3,6 @@
 Encapsulates startup/shutdown logic for:
 - Cache (optional)
 - Kafka producer (optional)
-- MongoDB (optional)
 
 Design principle: Each service is independently initializable and gracefully
 degrades if unavailable (fail-open for optional services).
@@ -27,10 +26,6 @@ def _get_module(name: str):
         return None
 
 
-def _get_mongo_module():
-    return _get_module("services.ingestor.storage.mongo")
-
-
 def _cache():
     return _get_module("services.ingestor.cache")
 
@@ -49,7 +44,6 @@ async def initialize_external_services() -> None:
     Services are initialized in order of dependency:
     1. Cache (for caching)
     2. Broker (for events)
-    3. MongoDB (for storage)
 
     Each service failure is logged but non-fatal (fail-open).
     """
@@ -105,27 +99,6 @@ async def initialize_external_services() -> None:
                 extra={"service": "broker", "error": str(e)},
             )
             # Non-fatal: events are fail-open, app continues without broker
-
-    # Initialize MongoDB (optional)
-    mongo = _get_mongo_module()
-    if settings.mongo_enabled and mongo is not None:
-        try:
-            await mongo.connect_mongo(settings.mongo_url, settings.mongo_db_name)
-            logger.info(
-                "mongo_connected",
-                extra={"service": "mongodb", "db": settings.mongo_db_name},
-            )
-        except Exception as e:
-            logger.warning(
-                "mongo_connection_failed",
-                extra={"service": "mongodb", "error": str(e)},
-            )
-            # Non-fatal: scraper routes degrade gracefully without MongoDB
-    elif settings.mongo_enabled and mongo is None:
-        logger.warning(
-            "mongo_module_missing",
-            extra={"service": "mongodb", "error": "storage.mongo unavailable"},
-        )
 
 
 async def _warm_list_cache() -> None:
@@ -197,7 +170,7 @@ async def cleanup_external_services() -> None:
     Cleanup order (LIFO from initialization):
     1. Kafka producer
     2. Cache cache
-    3. MongoDB
+    3. Cache pub/sub
 
     Each cleanup is attempted even if a prior step fails.
     """
@@ -237,15 +210,3 @@ async def cleanup_external_services() -> None:
             "pubsub_cleanup_error",
             extra={"error": str(e)},
         )
-
-    # Cleanup MongoDB (safe even if not connected)
-    mongo = _get_mongo_module()
-    if mongo is not None:
-        try:
-            await mongo.disconnect_mongo()
-            logger.info("mongo_disconnected")
-        except Exception as e:
-            logger.warning(
-                "mongo_cleanup_error",
-                extra={"error": str(e)},
-            )
