@@ -7,7 +7,7 @@ Fixture strategy:
 
 - Layer 1 (shared): `fixtures_shared.py` — database mode selection (`aiosqlite` in-memory vs. PostgreSQL)
 - Layer 2 (platform): `tests/unit/` — shared-library, script, and lab checks
-- Layer 3 (external stack): `tests/e2e/` — Compose chaos and floci-az checks
+- Layer 3 (external lab): `tests/e2e/` — opt-in Compose chaos and Floci Azure checks
 - Ingestor tests: `services/ingestor/tests/` — API, schema, auth, and scraper behavior
 
 Test hierarchy (quick):

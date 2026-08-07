@@ -1,23 +1,20 @@
-"""Chaos test wrapper — drives infra/scripts/chaos.sh and validates recovery.
+"""Chaos test wrapper for the disposable PostgreSQL blackout lab.
 
 Skip by default; enable with --run-chaos.
 
 Requires:
-  - docker compose up -d ingestor-db ingestor
-  - Run with: pytest tests/e2e/test_chaos.py --run-chaos
+  - a ready local core stack
+  - Run with: just --justfile just/labs.just lab-chaos
 """
 
 from __future__ import annotations
 
 import subprocess
-import time
 
 import pytest
 
 
-BASE_URL = "http://localhost:8000"
-
-pytestmark = pytest.mark.e2e
+pytestmark = [pytest.mark.e2e, pytest.mark.chaos]
 
 
 @pytest.fixture(autouse=True)
@@ -26,28 +23,10 @@ def _require_chaos_flag(request: pytest.FixtureRequest) -> None:
         pytest.skip("Chaos tests disabled (pass --run-chaos to enable)")
 
 
-def _wait_for_readyz(timeout: int = 120) -> bool:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        try:
-            result = subprocess.run(
-                ["curl", "-sf", f"{BASE_URL}/readyz"],
-                capture_output=True,
-                timeout=5,
-            )
-            if result.returncode == 0:
-                return True
-        except Exception:
-            pass
-        time.sleep(3)
-    return False
-
-
 def test_postgresql_blackout() -> None:
     """Inject a chaos fault and verify the service recovers.
 
-    Runs the current PostgreSQL blackout exercise with CHAOS_DURATION=15,
-    asserts readiness degraded during the outage, then waits for recovery.
+    The shell exercise asserts readiness degradation and recovery itself.
     """
     env = {**subprocess.os.environ, "CHAOS_DURATION": "15"}
     proc = subprocess.run(
@@ -58,7 +37,3 @@ def test_postgresql_blackout() -> None:
     )
     assert proc.returncode == 0, f"chaos.sh failed: {proc.stderr}"
     assert "Readiness degraded while PostgreSQL was unavailable" in proc.stdout
-
-    assert _wait_for_readyz(timeout=90), (
-        "Service did not recover after PostgreSQL blackout"
-    )

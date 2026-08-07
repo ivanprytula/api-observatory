@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-set -o errexit -o pipefail -o nounset
+
+# Script: chaos.sh
+# Description: Inject a disposable local PostgreSQL blackout and restore the database on exit.
+# Usage: infra/scripts/chaos.sh db
+
+set -o errexit -o pipefail -o nounset -o errtrace
 
 # Local-only PostgreSQL blackout exercise for the current Compose stack.
 # It intentionally stops api-obs-ingestor-db and verifies the ingestor readiness
@@ -9,13 +14,23 @@ DB_CONTAINER="${DB_CONTAINER:-api-obs-ingestor-db}"
 API_BASE_URL="${API_BASE_URL:-http://127.0.0.1:8000}"
 CHAOS_DURATION="${CHAOS_DURATION:-30}"
 MAX_RECOVERY_SECONDS="${MAX_RECOVERY_SECONDS:-60}"
+database_stopped=false
 
 log() { echo "[$(date '+%H:%M:%S')] [CHAOS] $*"; }
 die() { echo "[$(date '+%H:%M:%S')] [CHAOS] $*" >&2; exit 1; }
 
-require_command() {
-    command -v "$1" >/dev/null 2>&1 || die "'$1' is required but not found"
+cleanup() {
+    if [[ "${database_stopped}" == true ]]; then
+        log "Recovery cleanup: restarting '${DB_CONTAINER}'"
+        if docker start "${DB_CONTAINER}" >/dev/null 2>&1; then
+            database_stopped=false
+        else
+            log "Recovery cleanup could not restart '${DB_CONTAINER}'"
+        fi
+    fi
 }
+
+trap cleanup EXIT
 
 wait_for_postgres() {
     local elapsed=0
@@ -45,6 +60,7 @@ run_db_blackout() {
 
     log "Stopping '${DB_CONTAINER}' for ${CHAOS_DURATION}s"
     docker stop "${DB_CONTAINER}" >/dev/null
+    database_stopped=true
 
     local readiness_status
     readiness_status="$(curl --max-time 5 --silent --output /dev/null --write-out '%{http_code}' "${API_BASE_URL}/readyz" || true)"
@@ -57,6 +73,7 @@ run_db_blackout() {
 
     log "Restarting '${DB_CONTAINER}'"
     docker start "${DB_CONTAINER}" >/dev/null
+    database_stopped=false
     wait_for_postgres
     wait_for_readiness
     log "PostgreSQL and ingestor readiness recovered"
@@ -75,9 +92,6 @@ Environment variables:
   MAX_RECOVERY_SECONDS=60
 EOF
 }
-
-require_command docker
-require_command curl
 
 case "${1:-}" in
     db) run_db_blackout ;;

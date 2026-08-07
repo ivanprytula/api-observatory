@@ -1,5 +1,5 @@
 import http from 'k6/http';
-import { check, group, sleep } from 'k6';
+import { check, fail, group, sleep } from 'k6';
 
 const faultMode = __ENV.RESILIENCE_FAULT_MODE === 'inference-slow';
 
@@ -41,40 +41,29 @@ export const options = faultMode ? {
 };
 
 const BASE = __ENV.BASE_URL || 'http://127.0.0.1:8000';
-const TOKEN = __ENV.BEARER_TOKEN || '';
+const TOKEN = __ENV.BEARER_TOKEN;
+
+if (!TOKEN) {
+  fail('BEARER_TOKEN is required; create a local writer/admin token with `just smoke-token`.');
+}
 
 const headers = {
   'Content-Type': 'application/json',
-  ...(TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {}),
+  Authorization: `Bearer ${TOKEN}`,
 };
 
 export function setup() {
-  if (faultMode) {
-    return { sessionJwt: '' };
-  }
-
-  const res = http.post(
-    `${BASE}/api/v1/auth/token`,
-    'username=admin&pass' + 'word=admin123',
-    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
-  );
-  check(res, { 'login ok': (r) => r.status === 200 || r.status === 401 });
-  const sessionJwt = res.status === 200 ? res.json().access_token : '';
-  return { sessionJwt };
+  return {};
 }
 
-export default function (data) {
+export default function () {
   if (faultMode) {
-    const response = http.get(`${BASE}/api/v1/vector-search/health`);
+    const response = http.get(`${BASE}/api/v1/vector-search/health`, { headers });
     check(response, {
       'inference fault returns 503': (r) => r.status === 503,
     });
     return;
   }
-
-  const authHeaders = data.sessionJwt
-    ? { ...headers, Authorization: `Bearer ${data.sessionJwt}` }
-    : headers;
 
   group('health', () => {
     const health = http.get(`${BASE}/health`);
@@ -86,7 +75,7 @@ export default function (data) {
 
   group('sources-read', () => {
     const sources = http.get(`${BASE}/api/v1/sources?limit=20`, {
-      headers: authHeaders,
+      headers,
     });
     check(sources, {
       'sources 200': (r) => r.status === 200,
@@ -97,13 +86,13 @@ export default function (data) {
   group('observations-write', () => {
     const obs = {
       source: 'k6-load',
-      raw_data: { ts: Date.now(), vus: __VU, iter: __ITER },
+      data: { ts: Date.now(), vus: __VU, iter: __ITER },
       tags: ['load', 'k6'],
     };
     const created = http.post(
       `${BASE}/api/v1/observations`,
       JSON.stringify(obs),
-      { headers: authHeaders },
+      { headers },
     );
     check(created, {
       'obs 201': (r) => r.status === 201,
@@ -114,7 +103,7 @@ export default function (data) {
 
   group('observations-read', () => {
     const list = http.get(`${BASE}/api/v1/observations?limit=10`, {
-      headers: authHeaders,
+      headers,
     });
     check(list, {
       'list 200': (r) => r.status === 200,
@@ -125,7 +114,7 @@ export default function (data) {
 
   group('scorecards', () => {
     const scorecards = http.get(`${BASE}/api/v1/scorecards?limit=10`, {
-      headers: authHeaders,
+      headers,
     });
     check(scorecards, {
       'scorecards 200': (r) => r.status === 200,

@@ -110,8 +110,7 @@ dev = [
   #   - or: https://k6.io/docs/getting-started/installation/
   "ty>=0.0.56",
   "pip-audit>=2.10.1",
-  "azure-storage-blob>=12.20.0",              # E2E tests against floci-az Blob/Queue
-  "azure-storage-queue>=12.10.0",
+  "azure-storage-blob>=12.20.0",              # E2E tests against floci-az Blob Storage
   "schemathesis>=4.0,<5",
 ]
 
@@ -131,6 +130,7 @@ markers = [
   "contract: In-process OpenAPI contract tests (no external services)",
   "e2e: End-to-end or long-running tests (skipped by default)",
   "azure: floci-az Azure emulator dependent tests",
+  "chaos: destructive local fault-injection tests run only through the lab workflow",
   "browser: Browser-based tests using Playwright (may require system dependencies)",
   "mongo: MongoDB-dependent tests (skipped if MongoDB unavailable)",
 ]

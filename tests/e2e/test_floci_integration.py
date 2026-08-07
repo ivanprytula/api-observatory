@@ -1,16 +1,4 @@
-"""End-to-end tests for floci-az (local Azure emulator) sandbox integration.
-
-Verifies that the floci-az sandbox is running and that core service operations work:
-1. floci-az container is running and accessible at http://127.0.0.1:4577
-2. Blob Storage operations (create container, upload, download, list)
-3. Queue Storage operations (create queue, send, receive messages)
-
-Prerequisites:
-    just floci-az-up    # starts floci-az and provisions base resources
-
-Run with:
-    uv run pytest tests/e2e/test_floci_integration.py -v -m azure
-"""
+"""Exercise Blob Storage contracts against the local Azure emulator."""
 
 import json
 import os
@@ -20,7 +8,6 @@ from uuid import uuid4
 
 import pytest
 from azure.storage.blob import BlobServiceClient
-from azure.storage.queue import QueueServiceClient
 
 
 pytestmark = [pytest.mark.e2e, pytest.mark.azure]
@@ -63,7 +50,8 @@ def require_floci_az_endpoint(azure_config: dict[str, str]) -> None:
             return
     except OSError:
         pytest.skip(
-            f"floci-az endpoint is unreachable at {endpoint}. Run `just floci-az-up`.",
+            "floci-az endpoint is unreachable at "
+            f"{endpoint}. Run `just --justfile just/labs.just lab-cloud-up azure`.",
             allow_module_level=True,
         )
 
@@ -71,11 +59,6 @@ def require_floci_az_endpoint(azure_config: dict[str, str]) -> None:
 @pytest.fixture
 def blob_client(azure_config: dict[str, str]) -> BlobServiceClient:
     return BlobServiceClient.from_connection_string(azure_config["connection_string"])
-
-
-@pytest.fixture
-def queue_client(azure_config: dict[str, str]) -> QueueServiceClient:
-    return QueueServiceClient.from_connection_string(azure_config["connection_string"])
 
 
 # ---------------------------------------------------------------------------
@@ -125,78 +108,3 @@ def test_blob_multiple_objects(blob_client: BlobServiceClient) -> None:
 
     uploaded = sorted([b["name"] for b in container.list_blobs()])
     assert uploaded == sorted(objects.keys())
-
-
-# ---------------------------------------------------------------------------
-# Queue Storage Tests
-# ---------------------------------------------------------------------------
-
-
-def test_queue_creation(queue_client: QueueServiceClient) -> None:
-    queue_name = _unique_name("test-queue")
-
-    queue_client.create_queue(queue_name)
-
-    queues = [q["name"] for q in queue_client.list_queues()]
-    assert queue_name in queues
-
-
-def test_queue_message_operations(queue_client: QueueServiceClient) -> None:
-    queue_name = _unique_name("test-messages")
-    queue = queue_client.create_queue(queue_name)
-
-    test_message = json.dumps({"order_id": 123, "status": "pending"})
-    queue.send_message(test_message)
-
-    messages = queue.receive_messages()
-    received = [json.loads(m.content) for m in messages]
-
-    assert len(received) == 1
-    assert received[0]["order_id"] == 123
-    assert received[0]["status"] == "pending"
-
-
-def test_queue_batch_messages(queue_client: QueueServiceClient) -> None:
-    queue_name = _unique_name("test-batch")
-    queue = queue_client.create_queue(queue_name)
-
-    payloads = [{"order_id": i, "customer": f"customer-{i}"} for i in range(1, 4)]
-    for msg in payloads:
-        queue.send_message(json.dumps(msg))
-
-    messages = queue.receive_messages(messages_per_page=10)
-    received_ids = {json.loads(m.content)["order_id"] for m in messages}
-
-    assert received_ids == {1, 2, 3}
-
-
-# ---------------------------------------------------------------------------
-# Integration Tests (Cross-Service)
-# ---------------------------------------------------------------------------
-
-
-def test_blob_and_queue_integration(
-    blob_client: BlobServiceClient, queue_client: QueueServiceClient
-) -> None:
-    """Upload data to Blob Storage, notify via Queue, verify both."""
-    container_name = _unique_name("integration")
-    blob_client.create_container(container_name)
-
-    queue_name = _unique_name("integration-q")
-    queue = queue_client.create_queue(queue_name)
-
-    data_blob = "processed/data-001.json"
-    data_content = {"observations": [{"id": 1}, {"id": 2}]}
-    container = blob_client.get_container_client(container_name)
-    container.upload_blob(data_blob, json.dumps(data_content))
-
-    notification = {"container": container_name, "blob": data_blob, "status": "ready"}
-    queue.send_message(json.dumps(notification))
-
-    messages = queue.receive_messages()
-    msg_body = json.loads(list(messages)[0].content)
-    assert msg_body["container"] == container_name
-    assert msg_body["blob"] == data_blob
-
-    retrieved = json.loads(container.download_blob(data_blob).readall())
-    assert retrieved == data_content

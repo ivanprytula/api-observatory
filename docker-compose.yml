@@ -484,12 +484,9 @@ services:
     networks:
       - api-obs
 
-  # ── Cloud Emulators (optional; started via: just sandbox-up CLOUD=azure|aws|gcp)
+  # ── Cloud emulators (separate labs; see just/labs.just)
 
-  # Floci-gcp — GCP emulator (wire-compatible with Google Cloud SDKs and gcloud CLI).
-  # Emulates: Cloud Storage, Pub/Sub, Firestore, Datastore, Secret Manager, IAM,
-  # Managed Kafka, Cloud Tasks, Cloud Run, Cloud SQL, Cloud Functions, Cloud KMS,
-  # Cloud Logging, Cloud Monitoring, Cloud Scheduler, GKE, and Operations.
+  # GCP emulator. The lab currently verifies only its local health endpoint.
   floci-gcp:
     image: floci/floci-gcp:latest
     container_name: api-obs-floci-gcp
@@ -498,8 +495,6 @@ services:
       - '127.0.0.1:4588:4588'
     environment:
       CLOUDSDK_CORE_PROJECT: ${GCP_PROJECT_ID:-floci-local}
-    volumes:
-      - ./.local-dev/tmp/floci-gcp-data:/tmp/floci-gcp
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:4588/health']
       start_period: 15s
@@ -519,19 +514,15 @@ services:
     networks:
       - api-obs
 
-  # Floci-aws — AWS emulator (wire-compatible with AWS SDKs and CLI).
-  # Emulates: S3, EC2, IAM, STS, SQS, SNS, DynamoDB, Lambda, RDS, ECS,
-  # CloudWatch, Secrets Manager, SSM, CloudFormation, Route 53, and more.
+  # AWS emulator. The lab currently verifies only its local health endpoint.
   floci-aws:
-    image: floci/floci-aws:latest
+    image: floci/floci:latest
     container_name: api-obs-floci-aws
     profiles: [aws]
     ports:
       - '127.0.0.1:4566:4566'
     environment:
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-eu-central-1}
-    volumes:
-      - ./.local-dev/tmp/floci-aws-data:/tmp/floci-aws
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:4566/health']
       start_period: 15s
@@ -551,10 +542,7 @@ services:
     networks:
       - api-obs
 
-  # Floci-az — Azure emulator (wire-compatible with Azure SDKs and Azurite).
-  # Emulates: Blob Storage, Queue Storage, Table Storage, Key Vault, Event Hubs,
-  # Service Bus, Cosmos DB, AKS, Azure SQL, Container Registry, Cache for Redis,
-  # App Configuration, Azure Monitor, Entra ID, Container Apps, and more.
+  # Azure emulator. The focused lab exercises its supported Blob Storage API.
   floci-az:
     image: floci/floci-az:latest
     container_name: api-obs-floci-az
@@ -565,8 +553,6 @@ services:
       - '127.0.0.1:5673:5673'
     environment:
       AZURE_REGION: ${AZURE_REGION:-polandcentral}
-    volumes:
-      - ./.local-dev/tmp/floci-az-data:/tmp/floci-az
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:4577/health']
       start_period: 10s

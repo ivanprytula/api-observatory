@@ -27,8 +27,8 @@ container resource limits.
 Use the existing
 [`k6-ci-smoke.js`](../../scripts/load/k6-ci-smoke.js) and
 [`k6-observations-load.js`](../../scripts/load/k6-observations-load.js) workloads. Their CI owner is
-[`assurance.yml`](../../.github/workflows/assurance.yml), and the
-[Justfile](../../Justfile) owns supported local recipes.
+[`assurance.yml`](../../.github/workflows/assurance.yml). The latter is an explicit local lab:
+`BEARER_TOKEN="$(just smoke-token)" just --justfile just/labs.just lab-load`.
 
 Record commit, hardware/container limits, concurrency, duration, dataset size, p50/p95/p99, error
 rate, CPU/memory, connection-pool use, and queue depth. Do not convert a laptop result into a
@@ -52,11 +52,11 @@ failure-injection details in the script rather than duplicating them here.
 Measure **time to detection**, **time to containment**, **time to recovery**, and whether queued or
 retried work drains safely. Merely observing an exception is not recovery evidence.
 
-For the PostgreSQL exercise, start the core stack, then run
-`CHAOS_DURATION=15 bash infra/scripts/chaos.sh db`. The script requires `/readyz` to become non-200
-while PostgreSQL is stopped, then waits for both `pg_isready` and `/readyz` after restart. Follow it
-with the focused incident API integration test. This is opt-in local fault evidence, not a production
-recovery claim.
+For the PostgreSQL exercise, start a disposable core stack, then run
+`just --justfile just/labs.just lab-chaos`. The lab requires `/readyz` to become non-200 while
+PostgreSQL is stopped, then waits for both `pg_isready` and `/readyz` after restart. Its exit cleanup
+restarts the database if the exercise fails. Follow it with the focused incident API integration test.
+This is opt-in local fault evidence, not a production recovery claim.
 
 ## 10x and 100x Review
 

@@ -48,7 +48,8 @@ Usage: scripts/verify-resilience-fault.sh --confirm-fault-injection
 
 This pauses the local api-obs-inference container temporarily, sends 21
 concurrent vector-search requests, and verifies Prometheus breaker/bulkhead
-metrics. The container is always unpaused on exit.
+metrics. Set BEARER_TOKEN to a writer/admin JWT first; the container is always
+unpaused on exit.
 EOF
 }
 
@@ -114,6 +115,9 @@ main() {
     usage
     exit 2
   }
+  [[ -n "${BEARER_TOKEN:-}" ]] || {
+    error 'Set BEARER_TOKEN to a writer/admin JWT (for example, from just smoke-token)'
+  }
 
   require_command docker
   require_command curl
@@ -138,7 +142,7 @@ main() {
   INFERENCE_PAUSED=true
 
   info "Running 21 concurrent vector-search health requests through k6"
-  RESILIENCE_FAULT_MODE=inference-slow BASE_URL="${API_BASE_URL}" \
+  RESILIENCE_FAULT_MODE=inference-slow BASE_URL="${API_BASE_URL}" BEARER_TOKEN="${BEARER_TOKEN}" \
     k6 run "${PROJECT_ROOT}/scripts/load/k6-observations-load.js"
 
   wait_for_prometheus_positive \
