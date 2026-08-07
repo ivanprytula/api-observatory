@@ -14,7 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.capability_rls]
 
 
 async def test_tenant_isolation_rls(db: AsyncSession, client: AsyncClient) -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -11,14 +12,17 @@ import services.ingestor.vector_search as vector_search
 from services.ingestor.models import Observation
 
 
+pytestmark = pytest.mark.unit
+
+
 class _FakeResponse:
-    def __init__(self, payload: dict[str, Any]) -> None:
+    def __init__(self, payload: Any) -> None:
         self._payload = payload
 
     def raise_for_status(self) -> None:
         return None
 
-    def json(self) -> dict[str, Any]:
+    def json(self) -> Any:
         return self._payload
 
 
@@ -96,3 +100,63 @@ async def test_get_vector_search_health_calls_gateway(
 
     assert result["status"] == "ok"
     assert client.calls[0]["method"] == "GET"
+
+
+async def test_search_uses_explicit_collection_and_filters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeHttpClient()
+
+    async def _fake_get_http_client() -> _FakeHttpClient:
+        return client
+
+    monkeypatch.setattr(vector_search, "get_http_client", _fake_get_http_client)
+
+    result = await vector_search.search_observation_documents(
+        "slow dependency",
+        top_k=3,
+        collection="tenant-42",
+        filters={"source": "payments"},
+    )
+
+    assert result["count"] == 0
+    assert client.calls[0]["json"] == {
+        "query": "slow dependency",
+        "top_k": 3,
+        "collection": "tenant-42",
+        "filters": {"source": "payments"},
+    }
+
+
+@pytest.mark.parametrize(
+    ("operation", "args"),
+    [
+        ("index", ([_build_observation()],)),
+        ("search", ("dependency", 1)),
+        ("health", ()),
+    ],
+)
+async def test_gateway_non_object_responses_are_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+    args: tuple[Any, ...],
+) -> None:
+    client = _FakeHttpClient()
+
+    async def _fake_get_http_client() -> _FakeHttpClient:
+        return client
+
+    monkeypatch.setattr(vector_search, "get_http_client", _fake_get_http_client)
+    monkeypatch.setattr(
+        vector_search.inference_resilience,
+        "call",
+        AsyncMock(return_value=_FakeResponse([])),
+    )
+
+    functions = {
+        "index": vector_search.index_observation_documents,
+        "search": vector_search.search_observation_documents,
+        "health": vector_search.get_vector_search_health,
+    }
+    with pytest.raises(ValueError, match="non-object"):
+        await functions[operation](*args)

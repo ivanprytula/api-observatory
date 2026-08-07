@@ -126,19 +126,30 @@ filterwarnings = [
 markers = [
   "unit: Fast, isolated unit tests (no I/O, no DB)",
   "integration: Tests that touch DB/ASGI client",
+  "core: Baseline application behavior with optional capabilities disabled",
+  "capability_rls: PostgreSQL tenant row-level-security capability",
+  "capability_broker: Broker-mode notification outbox, inbox, and delivery capability",
+  "capability_ai: Deterministic incident-triage AI capability",
+  "full_optional: Composed deterministic RLS, broker-delivery, and AI handoff flow",
   "demo: Demo/learning feature tests (v2 routes, session auth examples)",
   "contract: In-process OpenAPI contract tests (no external services)",
   "e2e: End-to-end or long-running tests (skipped by default)",
   "azure: floci-az Azure emulator dependent tests",
   "chaos: destructive local fault-injection tests run only through the lab workflow",
   "browser: Browser-based tests using Playwright (may require system dependencies)",
+  "live: Manual checks that call a public third-party service; never run in CI",
   "mongo: MongoDB-dependent tests (skipped if MongoDB unavailable)",
 ]
 
 
 [tool.coverage.run]
 source = ["services.ingestor"]
-omit = ["services/ingestor/__main__.py", "*/migrations/*", "*/alembic/*"]
+omit = [
+  "services/ingestor/__main__.py",
+  "*/services/ingestor/tests/*",
+  "*/migrations/*",
+  "*/alembic/*",
+]
 branch = true
 
 [tool.coverage.report]

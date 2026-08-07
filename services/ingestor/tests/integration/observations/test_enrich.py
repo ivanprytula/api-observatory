@@ -19,6 +19,9 @@ from services.ingestor.constants import ENRICH_MAX_IDS, ENRICH_SEMAPHORE_LIMIT
 from tests.shared.payloads import OBSERVATION_API
 
 
+pytestmark = pytest.mark.demo
+
+
 _URL = "/api/v2/observations/enrich"
 _OBSERVATION = OBSERVATION_API
 

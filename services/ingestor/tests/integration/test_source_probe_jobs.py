@@ -18,7 +18,7 @@ from services.ingestor.jobs import run_source_contract_snapshot, run_source_prob
 from services.ingestor.models import ContractSnapshot, DriftEvent, SourceProfile
 
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.core]
 
 
 def _make_profile(

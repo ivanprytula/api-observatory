@@ -19,6 +19,9 @@ from services.ingestor.api_schemas.observations import ObservationRequest
 from tests.shared.payloads import OBSERVATION_API
 
 
+pytestmark = pytest.mark.demo
+
+
 _BASE_PAYLOAD = {
     **OBSERVATION_API,
     "source": "concurrency-test",

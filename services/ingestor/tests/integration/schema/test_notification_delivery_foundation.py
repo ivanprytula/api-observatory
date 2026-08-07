@@ -40,7 +40,11 @@ from services.ingestor.repositories.notification_delivery import (
 )
 
 
-pytestmark = [pytest.mark.integration, pytest.mark.postgresonly]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.postgresonly,
+    pytest.mark.capability_broker,
+]
 
 
 _NOW = datetime(2026, 7, 29, 12, 0, 0)

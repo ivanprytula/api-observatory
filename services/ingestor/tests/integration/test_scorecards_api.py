@@ -18,7 +18,7 @@ import pytest
 from httpx import AsyncClient
 
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.core]
 
 
 _SOURCE: dict[str, Any] = {

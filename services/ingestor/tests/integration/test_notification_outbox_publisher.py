@@ -22,7 +22,11 @@ from services.ingestor.notification_outbox_publisher import (
 from services.ingestor.repositories.messaging import add_outbox_event
 
 
-pytestmark = [pytest.mark.integration, pytest.mark.postgresonly]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.postgresonly,
+    pytest.mark.capability_broker,
+]
 
 _NOW = datetime(2026, 7, 29, 16, 0, 0)
 

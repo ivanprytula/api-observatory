@@ -11,6 +11,9 @@ from services.ingestor.api_schemas.observations import ObservationRequest
 from services.ingestor.core.background_workers import BackgroundWorkerPool
 
 
+pytestmark = pytest.mark.unit
+
+
 def _observation(source: str) -> ObservationRequest:
     return ObservationRequest(
         source=source,

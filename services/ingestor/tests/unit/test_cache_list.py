@@ -9,6 +9,9 @@ import services.ingestor.cache as cache_module
 from services.ingestor.constants import CACHE_LIST_MAX_LIMIT, CACHE_LIST_MAX_SKIP
 
 
+pytestmark = pytest.mark.unit
+
+
 @pytest.fixture(autouse=True)
 async def fake_cache():
     """Inject a FakeRedis instance as the cache client for every test."""

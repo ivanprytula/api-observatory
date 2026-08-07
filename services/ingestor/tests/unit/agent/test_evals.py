@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from services.ingestor.agent.evals.evaluator import (
     evaluate_case,
     evaluate_cases,
@@ -16,6 +18,9 @@ from services.ingestor.agent.evals.schemas import (
     AgentEvalExpected,
 )
 from services.ingestor.agent.schemas import DraftAnalysis, SeverityClassification
+
+
+pytestmark = pytest.mark.unit
 
 
 def _passing_case() -> AgentEvalCase:

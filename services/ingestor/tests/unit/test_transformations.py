@@ -8,6 +8,8 @@ Tests verify:
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from services.ingestor.transformations.decorators import (
@@ -23,6 +25,9 @@ from services.ingestor.transformations.strategies import (
     JSONObservationValidator,
 )
 from services.ingestor.transformations.types import SyncConfig
+
+
+pytestmark = pytest.mark.unit
 
 
 class TestStrategyPattern:
@@ -69,6 +74,45 @@ class TestStrategyPattern:
         assert error is not None
         assert "numeric" in error.lower()
 
+    @pytest.mark.parametrize(
+        ("field", "value", "message"),
+        [
+            ("id", "", "Invalid 'id'"),
+            ("price", -1, "Price must be >= 0"),
+            ("timestamp", "not-a-date", "Invalid timestamp format"),
+        ],
+    )
+    async def test_csv_validator_rejects_invalid_required_values(
+        self,
+        field: str,
+        value: object,
+        message: str,
+    ) -> None:
+        observation = {
+            "id": "123",
+            "price": 99.99,
+            "timestamp": "2024-01-15T10:00:00Z",
+        }
+        observation[field] = value
+
+        is_valid, error = await CSVObservationValidator().validate(observation)
+
+        assert is_valid is False
+        assert error is not None
+        assert message in error
+
+    async def test_csv_validator_rejects_future_timestamp(self) -> None:
+        observation = {
+            "id": "123",
+            "price": 99.99,
+            "timestamp": datetime.now(UTC) + timedelta(days=1),
+        }
+
+        is_valid, error = await CSVObservationValidator().validate(observation)
+
+        assert is_valid is False
+        assert error == "Timestamp cannot be in future"
+
     @pytest.mark.asyncio
     async def test_json_validator_valid_observation(self) -> None:
         """JSON validator accepts dict with id."""
@@ -88,6 +132,18 @@ class TestStrategyPattern:
         assert error is not None
         assert "Missing required field" in error
 
+    @pytest.mark.parametrize(
+        "observation",
+        [[], {}, {"id": None}],
+    )
+    async def test_json_validator_rejects_invalid_shapes(
+        self, observation: object
+    ) -> None:
+        is_valid, error = await JSONObservationValidator().validate(observation)  # type: ignore[arg-type]
+
+        assert is_valid is False
+        assert error is not None
+
     @pytest.mark.asyncio
     async def test_api_validator_accepts_any_dict(self) -> None:
         """API validator is permissive (only checks dict not empty)."""
@@ -96,6 +152,15 @@ class TestStrategyPattern:
         is_valid, error = await validator.validate(observation)
         assert is_valid
         assert error is None
+
+    @pytest.mark.parametrize("observation", [[], {}])
+    async def test_api_validator_rejects_non_object_or_empty(
+        self, observation: object
+    ) -> None:
+        is_valid, error = await APIObservationValidator().validate(observation)  # type: ignore[arg-type]
+
+        assert is_valid is False
+        assert error is not None
 
 
 class TestDecoratorPattern:

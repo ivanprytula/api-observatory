@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from services.ingestor.models import Observation
 
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.capability_rls]
 
 
 async def test_rls_hides_other_tenant_rows_from_unfiltered_query(

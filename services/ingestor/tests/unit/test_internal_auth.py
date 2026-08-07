@@ -27,6 +27,9 @@ from libs.platform.auth import (
 _TEST_SECRET = "test-internal-secret-for-unit-tests-only"
 
 
+pytestmark = pytest.mark.unit
+
+
 @pytest.fixture(autouse=True)
 def set_secret(monkeypatch: pytest.MonkeyPatch) -> None:
     """Set INTERNAL_JWT_SECRET for all tests in this module."""

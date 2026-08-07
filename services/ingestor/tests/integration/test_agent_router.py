@@ -23,7 +23,7 @@ from services.ingestor.main import app
 from services.ingestor.models import AgentRun, Observation, User
 
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.capability_ai]
 
 
 async def _viewer_claims() -> dict[str, str]:

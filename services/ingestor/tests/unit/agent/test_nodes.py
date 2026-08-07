@@ -17,7 +17,7 @@ from services.ingestor.agent import nodes
 from services.ingestor.agent.schemas import DraftAnalysis, SeverityClassification
 
 
-pytestmark = pytest.mark.unit
+pytestmark = [pytest.mark.unit, pytest.mark.capability_ai]
 
 
 def _base_state(**overrides) -> dict:

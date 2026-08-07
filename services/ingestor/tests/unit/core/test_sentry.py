@@ -10,6 +10,9 @@ from services.ingestor.config import settings
 from services.ingestor.core import sentry as sentry_module
 
 
+pytestmark = pytest.mark.unit
+
+
 def test_setup_sentry_returns_false_when_disabled() -> None:
     old_enabled = settings.sentry_enabled
     settings.sentry_enabled = False

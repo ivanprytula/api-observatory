@@ -8,6 +8,11 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
+
+pytestmark = pytest.mark.unit
+
 
 def _get_minio_client_class() -> type:
     """Load MinIOClient with a local minio stub when dependency is absent."""

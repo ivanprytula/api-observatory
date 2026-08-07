@@ -13,6 +13,9 @@ from services.ingestor.models import Observation
 from services.ingestor.services_lifecycle import _warm_list_cache
 
 
+pytestmark = pytest.mark.unit
+
+
 class WarmCall(TypedDict):
     """Captured args passed to set_observations_list during warmup."""
 

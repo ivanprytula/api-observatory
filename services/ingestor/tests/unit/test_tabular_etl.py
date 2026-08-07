@@ -10,6 +10,9 @@ from services.ingestor.transformations.tabular import (
 )
 
 
+pytestmark = pytest.mark.unit
+
+
 _OBSERVATIONS = [
     {"provider": "alpha", "latency_ms": 110, "status": "ok"},
     {"provider": "beta", "latency_ms": 190, "status": "warn"},
@@ -54,3 +57,32 @@ class TestTabularETLEngine:
     def test_dask_preview_is_blocked(self) -> None:
         with pytest.raises(UnsupportedETLBackendError):
             TabularETLEngine.preview(backend="dask", observations=_OBSERVATIONS)
+
+    def test_unknown_backend_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="Unsupported ETL backend"):
+            TabularETLEngine.preview(backend="spark", observations=_OBSERVATIONS)  # type: ignore[arg-type]
+
+    @pytest.mark.parametrize("backend", ["polars", "pandas"])
+    def test_preview_ignores_unknown_columns_and_summarizes_nulls(
+        self, backend: str
+    ) -> None:
+        pytest.importorskip(backend)
+
+        result = TabularETLEngine.preview(
+            backend=backend,  # type: ignore[arg-type]
+            observations=[
+                {"provider": "alpha", "latency_ms": "10"},
+                {"provider": "beta", "latency_ms": "not-a-number"},
+            ],
+            select_columns=["provider", "unknown"],
+            rename_columns={"unknown": "ignored"},
+            filter_equals={"unknown": "ignored"},
+            sort_by="unknown",
+            numeric_fields=["latency_ms", "unknown"],
+            preview_limit=1,
+        )
+
+        assert result.columns == ["provider"]
+        assert result.row_count == 2
+        assert result.truncated is True
+        assert result.numeric_summaries == []

@@ -10,6 +10,9 @@ from services.ingestor.cache import redis_lock
 from services.ingestor.constants import CACHE_LOCK_PREFIX
 
 
+pytestmark = pytest.mark.unit
+
+
 @pytest.fixture(autouse=True)
 async def fake_redis():
     """Inject FakeRedis as the cache client for every test."""

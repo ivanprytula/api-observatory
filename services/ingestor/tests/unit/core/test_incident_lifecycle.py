@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +17,9 @@ from services.ingestor.models import (
     ProviderHealthSample,
     SourceProfile,
 )
+
+
+pytestmark = pytest.mark.integration
 
 
 def _sample(

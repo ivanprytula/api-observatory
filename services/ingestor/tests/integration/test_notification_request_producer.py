@@ -26,7 +26,11 @@ from services.ingestor.models import (
 from services.ingestor.repositories.incidents import IncidentTransition
 
 
-pytestmark = [pytest.mark.integration, pytest.mark.postgresonly]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.postgresonly,
+    pytest.mark.capability_broker,
+]
 
 
 def _failed_sample(source_id: int) -> HealthSampleCreate:

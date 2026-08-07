@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from services.ingestor.models import DependencyIncident, SourceProfile
 
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.capability_rls]
 
 
 async def _seed_incidents(db: AsyncSession) -> None:

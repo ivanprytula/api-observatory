@@ -12,6 +12,9 @@ from services.ingestor.security.authorization import (
 )
 
 
+pytestmark = pytest.mark.unit
+
+
 class TestAuthorizationPolicy:
     """Focused coverage for OPA-style authorization decisions."""
 
@@ -40,6 +43,27 @@ class TestAuthorizationPolicy:
 
         assert decision.allow is False
         assert decision.policy_name == "scope_membership"
+
+    def test_required_role_allows_matching_role(self) -> None:
+        decision = evaluate_authorization(
+            AuthorizationInput(
+                action="role_guard",
+                principal_type="user",
+                roles={"writer"},
+                required_roles={"writer", "admin"},
+            )
+        )
+
+        assert decision.allow is True
+        assert decision.policy_name == "role_membership"
+
+    def test_default_deny_requires_an_explicit_policy(self) -> None:
+        decision = evaluate_authorization(
+            AuthorizationInput(action="unknown", principal_type="user")
+        )
+
+        assert decision.allow is False
+        assert decision.policy_name == "default_deny"
 
     def test_tenant_mismatch_denies_before_role_check(self) -> None:
         decision = evaluate_authorization(

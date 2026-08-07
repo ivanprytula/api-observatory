@@ -12,6 +12,9 @@ import pytest
 from libs.platform.tracing import get_trace_id
 
 
+pytestmark = pytest.mark.unit
+
+
 def test_get_trace_id_is_none_without_active_span() -> None:
     """Outside any span (or without OTel installed) the helper degrades to None."""
     assert get_trace_id() is None

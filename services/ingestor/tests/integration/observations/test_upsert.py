@@ -18,6 +18,9 @@ from httpx import AsyncClient
 from tests.shared.payloads import OBSERVATION_API
 
 
+pytestmark = pytest.mark.demo
+
+
 _URL = "/api/v2/observations/upsert"
 
 _BASE_PAYLOAD = {

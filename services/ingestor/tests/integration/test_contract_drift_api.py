@@ -21,7 +21,7 @@ from services.ingestor.models import (
 )
 
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.core]
 
 
 _SCHEMA_V1: dict[str, Any] = {

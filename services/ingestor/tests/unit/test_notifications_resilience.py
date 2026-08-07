@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
+import pytest
+
 from services.ingestor import notifications
+
+
+pytestmark = pytest.mark.unit
 
 
 async def test_notification_failure_is_returned_per_channel(
