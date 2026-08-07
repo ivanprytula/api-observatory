@@ -171,18 +171,9 @@ jobs:
 
       - name: Run unit, MCP, and OpenAPI contract tests
         run: |
-          mkdir -p coverage
-          COVERAGE_FILE=coverage/.coverage.unit \
-            uv run pytest tests/unit services/ingestor/tests/unit -q -m unit
+          uv run pytest tests/unit services/ingestor/tests/unit -q -m unit
           uv run pytest services/mcp/tests -q --no-cov
           uv run pytest services/ingestor/tests/contract -q -m contract --no-cov
-
-      - name: Upload ingestor unit coverage data
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: ingestor-unit-coverage-data
-          path: coverage/.coverage.unit
-          if-no-files-found: error
 
   integration:
     name: "Core PostgreSQL integration and migrations"
@@ -232,12 +223,6 @@ jobs:
       - name: Sync workspace
         run: uv sync --frozen --all-packages --extra ai --extra messaging --extra etl
 
-      - name: Download ingestor unit coverage data
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: ingestor-unit-coverage-data
-          path: coverage
-
       - name: Create isolated migration and inference databases
         run: |
           docker exec "${{ job.services.postgres.id }}" createdb -U postgres api_obs_ingestor_migrations
@@ -266,16 +251,8 @@ jobs:
       - name: Run core ingestor integration tests
         run: |
           mkdir -p coverage
-          COVERAGE_FILE=coverage/.coverage.core \
-            uv run pytest -q -m "${CORE_TEST_MARKER}" \
-            --cov=services/ingestor \
-            --cov-report=term-missing
-
-      - name: Combine and report ingestor coverage
-        run: |
-          uv run coverage combine --keep coverage/.coverage.unit coverage/.coverage.core
-          uv run coverage report
-          uv run coverage xml -o coverage/ingestor.xml
+          uv run pytest -q -m "${CORE_TEST_MARKER}" \
+            --cov-report=xml:coverage/ingestor.xml
 
       - name: Run inference integration tests
         env:
@@ -286,14 +263,6 @@ jobs:
             --cov \
             --cov-report=term-missing \
             --cov-report=xml:coverage/inference.xml
-
-      - name: Upload coverage
-        if: success()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: core-integration-coverage
-          path: coverage
-          if-no-files-found: error
 
   capability:
     name: "Capability: ${{ matrix.profile }}"
@@ -362,17 +331,7 @@ jobs:
 
       - name: Run capability profile
         run: |
-          mkdir -p coverage
-          COVERAGE_FILE=coverage/.coverage.${{ matrix.profile }} \
-            uv run pytest services/ingestor/tests -q -m "${{ matrix.marker }}" \
-            --cov=services/ingestor --cov-report=term-missing
-
-      - name: Publish capability coverage
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: capability-${{ matrix.profile }}-coverage
-          path: coverage
-          if-no-files-found: error
+          uv run pytest services/ingestor/tests -q -m "${{ matrix.marker }}"
 
   image-smoke:
     name: "Deployable image smoke"
