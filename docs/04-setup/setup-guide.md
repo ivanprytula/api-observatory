@@ -6,8 +6,6 @@ This guide explains which mode to choose, what it proves, and where native comma
 The Docker-first `just dev-up` flow is the official onboarding path. Files under `.github/prompts/` are
 historical agent prompts and are not setup instructions for new developers.
 
-Prerequisites are covered in the [Canonical Onboarding and Delivery Checklist](../05-development/onboarding-and-delivery-checklist.md).
-
 ## Quick Start
 
 Follow the [Canonical Onboarding and Delivery Checklist](../05-development/onboarding-and-delivery-checklist.md) for the complete first-time setup sequence. This guide explains which mode to choose, what it proves, and where configuration lives.
@@ -48,10 +46,9 @@ Use Docker-first HTTP for onboarding, day-to-day editing, local API debugging, a
 `just dev-up` serves the ingestor at `http://127.0.0.1:8000` and the dashboard at
 `http://127.0.0.1:8501`. After that path works, `just dev` is an optional host-process hot-reload
 mode with the same `.env` feature flags. It starts PostgreSQL only by default; run the explicit
-`dev-up-cache` or `dev-up-broker` recipe before using those integrations. It is not a separate
-onboarding requirement. Because `just dev` runs the host servers in the foreground, use two
-terminals: keep `just dev` running in terminal 1, then run migrations and tests from terminal 2 once
-`/readyz` returns `200`.
+`dev-up-cache` or `dev-up-broker` recipe before using those integrations. Because `just dev` runs the
+host servers in the foreground, use two terminals: keep `just dev` running in terminal 1, then run
+migrations and tests from terminal 2 once `/readyz` returns `200`.
 
 ### Manual Compose Watch
 
@@ -193,11 +190,8 @@ just db-inference-migrate
 | --- | --- | --- |
 | Redis integration | `API_OBS_CACHE_ENABLED=true` | Set the flag first, then `just dev-up-cache` |
 | Broker integration | `API_OBS_BROKER_ENABLED=true` | Set the flag first, then `just dev-up-broker` |
-| Inference and vector search | None | `just dev-up-inference` |
 | OpenTelemetry | `API_OBS_OTEL_ENABLED=true` | Restart `ingestor`, then run `just dev-up-monitoring` |
-| Full optional integration | `API_OBS_CACHE_ENABLED=true` and `API_OBS_BROKER_ENABLED=true` | `just dev-up-extended` |
 | HTTPS ingress | `API_OBS_LOCAL_HTTPS=true` | `bash scripts/setup/02-setup-local-https.sh` then `docker compose --profile ingress up -d --build` |
-| Full monitoring | `API_OBS_OTEL_ENABLED=true`, then restart application services | `just dev-up-monitoring` |
 
 After changing a cache, broker, or telemetry flag, restart the ingestor so it receives the new
 configuration. The broker carries general application events and the opt-in notification delivery

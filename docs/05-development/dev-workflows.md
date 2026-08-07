@@ -1,11 +1,10 @@
 # Development Workflows
 
-The [`Justfile`](../../Justfile) is the core command catalogue; [`just/labs.just`](../../just/labs.just)
-contains disposable Kubernetes, cloud, ingress, load, and chaos exercises. This guide owns intent,
-proof selection, and stable development rules so command syntax is not duplicated in Markdown.
-Branching, commits, pushes, and pull requests are owned by [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
-For a compact checklist that joins onboarding, task execution, PR readiness, and the app-to-infra
-release handoff, see [onboarding and delivery checklist](onboarding-and-delivery-checklist.md).
+This guide owns intent, proof selection, and stable development rules so command syntax is not
+duplicated in Markdown. The [`Justfile`](../../Justfile) is the command catalogue (see the
+[setup guide](../04-setup/setup-guide.md)); [`just/labs.just`](../../just/labs.just) contains
+disposable Kubernetes, cloud, ingress, load, and chaos exercises. Branching, commits, pushes, and
+pull requests are owned by [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
 
 ## Canonical local workflow
 
@@ -15,14 +14,11 @@ Follow the [Canonical Onboarding and Delivery Checklist](onboarding-and-delivery
 
 1. Run `just doctor`, then choose the smallest runtime shape: `just dev-up` for core work,
    `just dev-up-inference` for inference/RAG work, or `just dev-up-extended` only when a task needs
-   cache, broker, and inference together. Extended mode requires `API_OBS_CACHE_ENABLED=true` and
-   `API_OBS_BROKER_ENABLED=true` in `.env`; inference itself is selected by its Compose profile.
+   cache, broker, and inference together. Capability flags and their start sequencing are owned by
+   the [setup guide](../04-setup/setup-guide.md).
 2. `just dev-up` and `just dev-up-inference` return only after Compose reports the selected services
    healthy. Then run `just db-migrate`; use `just db-auto-init` when a local admin/demo dataset is
    needed. For extended mode, also run `just db-inference-migrate`.
-   Enable optional capabilities in `.env` before starting their explicit recipes; OpenTelemetry
-   requires `API_OBS_OTEL_ENABLED=true`, `docker compose restart ingestor`, and then
-   `just dev-up-monitoring`.
 3. Run the smallest focused test while iterating: `just test-unit` for isolated code or
    `just test-integration` for PostgreSQL/service behavior. When Docker is available, PostgreSQL
    integration tests provision a temporary database through testcontainers; they do not require the

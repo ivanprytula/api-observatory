@@ -70,13 +70,12 @@ for exact boundaries and status.
 
 ## Quick Start
 
-Run `just doctor` to check your workstation, then follow the [Canonical Onboarding and Delivery Checklist](docs/05-development/onboarding-and-delivery-checklist.md) for the full setup sequence. The [`Justfile`](Justfile) owns supported named workflows; use the documented native Compose, Alembic, Terraform, and `psql` commands for boundary-specific work.
+Run `just doctor` to check your workstation, then follow the [Canonical Onboarding and Delivery Checklist](docs/05-development/onboarding-and-delivery-checklist.md) for the full setup sequence.
 
 The README stays intentionally high-level. Use [Contributing](CONTRIBUTING.md) for branch and PR
-conventions, [Development Workflows](docs/05-development/dev-workflows.md) for proof selection,
-and the [Canonical Onboarding and Delivery Checklist](docs/05-development/onboarding-and-delivery-checklist.md)
-as the single source of truth for onboarding, task flow, PR readiness, and the app-to-infra
-release handoff.
+conventions, [Development Workflows](docs/05-development/dev-workflows.md) for proof selection, and
+the checklist above as the single source of truth for onboarding, task flow, PR readiness, and the
+app-to-infra release handoff.
 
 ## Recruiter and Interview Tour
 
@@ -115,7 +114,6 @@ cloud deployment, or archived services.
 
 ## Primary Commands
 
-The [`Justfile`](Justfile) is the command catalogue for environment checks, focused tests, smoke
-proof, monitoring, and evaluation; linked scripts own specialized flags. Run `just --list` for the
-current targets. Real cloud operations and destructive
-teardown commands require an explicit, separately reviewed decision.
+The [`Justfile`](Justfile) is the command catalogue; run `just --list` for current targets. See
+[Setup](docs/04-setup/setup-guide.md) for runtime modes and native command guidance. Real cloud
+operations and destructive teardown commands require an explicit, separately reviewed decision.
