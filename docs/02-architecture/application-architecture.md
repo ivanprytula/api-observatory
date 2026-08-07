@@ -5,62 +5,53 @@
 [engineering evidence map](engineering-topics.md) owns topic status, and the
 [deployment contract](../07-deployment/app-repo-contract.md) owns the app/infra interface.
 
-## System Context
-
-```mermaid
-flowchart LR
-    Client["API Client\n(HTTP, Bruno, browser)"]
-    Dashboard["Streamlit Dashboard\n:8501"]
-    Ingestor["Ingestor API\nFastAPI, :8000"]
-    SourceAPIs["External source APIs\n(probed by scheduler)"]
-
-    Client -->|REST, WebSocket| Ingestor
-    Dashboard -->|httpx / websockets| Ingestor
-    Ingestor -->|HTTP GET probe_url| SourceAPIs
-```
-
 ## Containers
 
 ```mermaid
 flowchart TB
     Client["Client\nHTTP + WS"]
     Dashboard["Dashboard\nStreamlit — services/dashboard/"]
-
-    subgraph App["Ingestor — services/ingestor/"]
-      API["FastAPI routers"]
-      Scheduler["APScheduler\nprobe jobs"]
-      Incidents["Dependency incidents\navailability + latency + drift"]
-      Agent["LangGraph agent\nservices/ingestor/agent/\nclassify -> RAG -> draft -> human_review -> notify"]
-    end
-
-    Inference["Inference — services/inference/\nFastAPI, :8001\nfastembed (ONNX, CPU-only) + pgvector"]
-    Anthropic[["Anthropic API\nclaude-haiku-4-5, claude-sonnet-4-5"]]
-    MCP["MCP server — services/mcp/\nFastMCP (stdio) — 11 tools\nsource/scorecard/drift/agent-run"]
-    LLMClient["MCP client\n(Claude Desktop, etc.)"]
-
-    Postgres[("PostgreSQL 17 — ingestor-db\napi_obs_ingestor\nsource profiles, observations,\ndrift events, agent runs, scorecards,\nagent checkpoints (langgraph-checkpoint-postgres)")]
-    InferenceDB[("PostgreSQL 17 — inference-db\napi_obs_inference\nindexed_documents (pgvector)\ndedicated instance, ADR-015")]
-    Cache[("Redis\ncache, pub/sub, rate-limit\noptional — API_OBS_CACHE_ENABLED")]
-    Broker[("Redpanda\nKafka-compatible\noptional — API_OBS_BROKER_ENABLED")]
+    Postgres[("PostgreSQL 17 — ingestor-db\nsource profiles, observations,\ndrift events, agent runs, scorecards,\nagent checkpoints")]
+    InferenceDB[("PostgreSQL 17 — inference-db\nindexed_documents (pgvector)")]
 
     Client --> API
     Dashboard --> API
+
+    subgraph Ingestor["Ingestor — services/ingestor/"]
+        API["FastAPI routers"]
+        Scheduler["APScheduler\nprobe jobs"]
+        Incidents["Dependency incidents"]
+        Agent["LangGraph agent\nservices/ingestor/agent/"]
+        Anthropic[["Anthropic API\nclaude-haiku-4-5, claude-sonnet-4-5"]]
+    end
+
+    subgraph Optional["Feature-gated"]
+        Cache[("Redis\ncache, pub/sub, rate-limit")]
+        Broker[("Redpanda\nKafka-compatible")]
+        Inference["Inference — services/inference/\nFastAPI, :8001"]
+    end
+
+    MCP["MCP server — services/mcp/\nFastMCP (stdio)"]
+    LLMClient["MCP client\n(Claude Desktop, etc.)"]
+
     API --> Postgres
-    API -.-> Cache
     Scheduler --> Postgres
     Scheduler --> Incidents
     API --> Incidents
     Incidents --> Postgres
-    Scheduler -.-> Broker
-    API -.->|drift events| Broker
-    API -->|POST /index, /search\nRAG for /analyze| Inference
-    Inference --> InferenceDB
-    Scheduler -.->|critical/breaking drift\nfire-and-forget| Agent
     Agent --> Postgres
-    Agent -->|RAG| Inference
+    Agent --> Inference
+    Scheduler -.->|critical drift| Agent
     Agent -->|classify, draft| Anthropic
-    LLMClient -.->|stdio, spawned per-session| MCP
-    MCP -.->|JWT — writer role\nreal /auth/token login| API
+
+    API -.-> Cache
+    API -.->|drift events| Broker
+    Scheduler -.-> Broker
+    API -->|POST /index, /search| Inference
+    Inference --> InferenceDB
+
+    LLMClient -.-> MCP
+    MCP -.-> API
 ```
 
 Core, always-on: Ingestor + PostgreSQL. Cache and Broker are optional and feature-flagged
@@ -69,32 +60,24 @@ components; see the Containers diagram for their boundaries and ownership.
 
 ## Router / Feature Map
 
-Router files under `services/ingestor/routers/`, grouped by MVP status. "Active" = mounted by
-default and JWT-authenticated. The opt-in learning lab is mounted only when
-`AUTH_DEMO_ROUTES_ENABLED=true`; unavailable dependencies remain unmounted.
+Routers live under `services/ingestor/routers/` — the source layout is canonical, not this map.
+The table groups them by domain; per-router status and priority live in the
+[evergreen engineering evidence map](engineering-topics.md), and the opt-in learning lab is
+mounted only when `AUTH_DEMO_ROUTES_ENABLED=true`. Auth is JWT/API-key gated by default with role
+guards applied where noted.
 
-| Router | Domain | Status |
-|---|---|---|
-| `agent.py` | Incident-triage agent run status + HITL resume (`GET /runs/{id}`, `POST /runs/{id}/resume`) | Active — real as of Phase 3, JWT-auth-gated as of Phase 4 |
-| `source_registry.py` | Register/manage probed API sources | Active |
-| `observations.py` / `observations_v2.py` | Probe results, ingestion | Active — core v1 CRUD/analyze routes use JWT plus a tenant/subject token bucket. The v2 and legacy v1 auth examples are opt-in learning routes. |
-| `scorecards.py` | Reliability scorecards (p95 latency, uptime) | Active |
-| `contract_drift.py` | Schema drift detection | Active |
-| `incidents.py` | Tenant-scoped dependency incident lifecycle | Active — availability, latency, and breaking-drift triggers; operator acknowledge/resolve |
-| `health_ingestion_jobs.py` | Scheduler/job health endpoints | Active |
-| `auth.py` / `api_keys.py` | JWT auth, API key management | Active |
-| `abuse_detection.py` | Rate-limit/abuse heuristics | Active |
-| `ws.py` | WebSocket push (drift events) | Active |
-| `analytics.py`, `reporting.py`, `insights.py` | Analytics/reporting layer | Active — JWT-authenticated; state-changing operations have role guards |
-| `subscriptions.py`, `notifications.py` | Alerting channels | Active — JWT-authenticated; administrative operations have role guards |
-| `vector_search.py` | RAG bridge to the `inference` service (`/index`, `/search`) | Active — `inference` is real as of Phase 2 (pgvector, no Qdrant) |
-| `mongo_analytics.py` | Document store | Unmounted unless Mongo is explicitly enabled and available |
-| `scraper.py` | HTTP/HTML/browser scraping | Unmounted unless Mongo is explicitly enabled and available |
-| `etl.py` | Tabular ETL preview (pandas/polars) | Active with writer-or-higher JWT role; requires `uv sync --extra etl` |
-| `background_processing.py` | Async task queue prototype | Active with administrative JWT role |
+| Domain | Routers |
+|---|---|
+| Core data & contracts | `observations`/`observations_v2`, `scorecards`, `source_registry`, `contract_drift`, `incidents` |
+| Authentication & identity | `auth`, `api_keys`, `abuse_detection` |
+| Analytics, reporting, insights | `analytics`, `reporting`, `insights` |
+| Alerting & delivery | `subscriptions`, `notifications` |
+| Inference & agent | `vector_search` (RAG bridge to `inference`), `agent` (incident-triage HITL) |
+| Realtime & ops | `ws` (WebSocket push), `health_ingestion_jobs` (probe/scheduler status), `background_processing` (task queue) |
+| Tabular ETL | `etl` (optional `uv sync --extra etl`) |
 
-`services/mcp/` (Phase 5) has no FastAPI routers of its own — it's a separate process
-(`services/mcp/server.py`) exposing 11 MCP tools that each call the routers above over real HTTP,
+`services/mcp/` has no FastAPI routers of its own — it's a separate process
+(`services/mcp/server.py`) exposing MCP tools that call the routers above over real HTTP,
 authenticated as a dedicated `mcp-service` account. See the Containers diagram above.
 
 ## Source and Data Ownership
@@ -123,10 +106,11 @@ contract rather than duplicating topology documentation.
 
 - **New service:** add the container and contract boundary, then update the deployment contract and
   applicable baseline controls in the same change.
-- **New router**: add one row to the table above. No diagram edit needed unless it introduces
-  a new external dependency (new datastore, new outbound integration).
-- **Feature moves from deferred → active** (roadmap phase advances): flip its Status cell and
-  drop the "why deferred" note.
+- **New router or new domain:** add one group to the table above (or extend an existing group). No
+  diagram edit needed unless it introduces a new external dependency (new datastore, new outbound
+  integration).
+- **Feature moves from deferred → active** (roadmap phase advances): update its status in the
+  [evergreen engineering evidence map](engineering-topics.md).
 
 ## Data Flow Diagrams
 
@@ -158,18 +142,10 @@ sequenceDiagram
 
 ### Incident Lifecycle
 
-```mermaid
-stateDiagram-v2
-    [*] --> Open: Health sample breaches SLO
-    Open --> Acknowledged: Admin /api/v1/incidents/{id}/acknowledge
-    Acknowledged --> Resolved: Auto/heal /api/v1/incidents/{id}/resolve
-    Resolved --> Closed: Retention window expires
-    Open --> Resolved: Quick heal
-    Acknowledged --> Open: Re-open if still breaching
-
-    note right of Open: Deduplication key = source_id + incident_type + fingerprint
-    note right of Resolved: RLS scopes to tenant; admin can read global
-```
+The incident state machine (`open → acknowledged → resolved/closed`, re-open and quick-heal)
+is canonical in the [dependency incident lifecycle](../08-operations/dependency-incidents.md#state-machine).
+Deduplication keys on `source_id + incident_type + fingerprint`; RLS scopes to tenant, while
+admins can read the global view.
 
 ### Auth Flow (JWT)
 

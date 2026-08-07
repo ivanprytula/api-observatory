@@ -22,9 +22,12 @@ stateDiagram-v2
     open --> open: duplicate occurrence
     open --> acknowledged: operator accepts ownership
     open --> resolved: automatic recovery or operator
+    open --> closed: operator closes
     acknowledged --> acknowledged: duplicate occurrence
     acknowledged --> resolved: automatic recovery or operator
+    acknowledged --> open: re-open if still breaching
     resolved --> open: later independent recurrence
+    resolved --> closed: retention window expires
 ```
 
 Only active incidents retain an `active_key`. Its unique index prevents two active rows for the

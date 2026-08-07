@@ -34,9 +34,7 @@ contract. No live production operation is claimed.
 4. Detect breaking response-contract changes.
 5. Stream or dispatch operational signals and optionally enrich serious drift with reviewed AI analysis.
 
-The standing product example is a solo SaaS developer monitoring payment, authentication, email,
-AI, or data dependencies. This context explains engineering choices; customer acquisition, billing,
-and permanent hosting are out of scope.
+Customer acquisition, billing, and permanent hosting are out of scope.
 
 ## Architecture
 
@@ -44,23 +42,26 @@ and permanent hosting are out of scope.
 flowchart LR
     User["Developer / dashboard / MCP client"]
     API["Ingestor API\nFastAPI :8000"]
-    Scheduler["APScheduler\nhealth + contract probes"]
-    External["External APIs"]
     DB[("PostgreSQL 17\nsource of truth")]
-    Cache[("Redis\ncache + pub/sub + limits")]
-    Broker[("Redpanda\nKafka protocol")]
-    Inference["Inference API\npgvector :8001"]
-    Agent["Optional LangGraph\nHITL triage"]
 
     User --> API
     API --> DB
+
+    subgraph Optional["Feature-gated"]
+        Scheduler["APScheduler\nhealth + contract probes"]
+        Cache[("Redis\ncache + pub/sub + limits")]
+        Broker[("Redpanda\nKafka protocol")]
+        Inference["Inference API\npgvector :8001"]
+        Agent["LangGraph\nHITL triage"]
+    end
+
     API -.-> Cache
-    Scheduler --> External
-    Scheduler --> DB
-    Scheduler -.-> Broker
     API -.-> Broker
+    Scheduler -.-> Broker
+    Scheduler -.-> External["External APIs"]
+    API -.-> Inference
     Agent --> DB
-    Agent --> Inference
+    Agent -.-> Inference
 ```
 
 Core local runtime is the ingestor plus PostgreSQL. Redis, Redpanda, inference, monitoring, and the
