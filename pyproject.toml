@@ -5,7 +5,7 @@ requires-python = ">=3.14"
 authors = [{ name = "Ivan Prytula", email = "ivanprytula.dev@gmail.com" }]
 maintainers = [{ name = "Ivan Prytula", email = "ivanprytula.dev@gmail.com" }]
 dependencies = [
-  "fastapi>=0.139.0",
+  "fastapi>=0.141.1",
   "uvicorn[standard]>=0.51.0",
   "slowapi>=0.1.10",
   "sqlalchemy[asyncio]>=2.0.51",
@@ -19,8 +19,8 @@ dependencies = [
   "argon2-cffi>=23.1.0",
   "alembic>=1.18.5",
   "httpx>=0.28.1",
-  "prometheus-fastapi-instrumentator>=8.0.2",
-  "redis>=8.0.1",
+  "prometheus-fastapi-instrumentator>=8.1.0",
+  "redis>=8.1.0",
   "apscheduler>=3.11.3,<4.0",
   "websockets>=14.0",
   "python-multipart>=0.0.27",
@@ -34,40 +34,40 @@ keywords = ["api", "observatory", "async", "ivan-prytula"]
 
 [project.optional-dependencies]
 tracing = [
-  "opentelemetry-sdk>=1.43.0",
+  "opentelemetry-sdk>=1.44.0",
   "opentelemetry-instrumentation-fastapi>=0.64b0",
   "opentelemetry-instrumentation-sqlalchemy>=0.64b0",
   "opentelemetry-exporter-otlp>=1.43.0",
 ]
 messaging = ["aiokafka>=0.11"]
 ai = [
-  "openai>=2.44.0",
-  "anthropic>=0.75.0",
-  "langgraph>=1.0.4",
-  "langgraph-checkpoint-postgres>=3.0.0",
-  "langchain-anthropic>=0.3.24",
+  "openai>=2.53.0",
+  "anthropic>=0.120.2",
+  "langgraph>=1.2.10",
+  "langgraph-checkpoint-postgres>=3.1.1",
+  "langchain-anthropic>=1.5.3",
 ]
 etl = [
-  "pandas>=2.2.3",
+  "pandas>=3.0.5",
   "polars[rtcompat]>=1.30.0",
 ]
 monitoring = ["sentry-sdk[fastapi]>=2.19.2"]
-http = ["aiohttp>=3.14.0"]
+http = ["aiohttp>=3.14.3"]
 full = [
-  "opentelemetry-sdk>=1.43.0",
+  "opentelemetry-sdk>=1.44.0",
   "opentelemetry-instrumentation-fastapi>=0.64b0",
   "opentelemetry-instrumentation-sqlalchemy>=0.64b0",
   "opentelemetry-exporter-otlp>=1.43.0",
   "aiokafka>=0.11",
-  "openai>=2.44.0",
-  "anthropic>=0.75.0",
-  "langgraph>=1.0.4",
-  "langgraph-checkpoint-postgres>=3.0.0",
-  "langchain-anthropic>=0.3.24",
-  "pandas>=2.2.3",
+  "openai>=2.53.0",
+  "anthropic>=0.120.2",
+  "langgraph>=1.2.10",
+  "langgraph-checkpoint-postgres>=3.1.1",
+  "langchain-anthropic>=1.5.3",
+  "pandas>=3.0.5",
   "polars[rtcompat]>=1.30.0",
   "sentry-sdk[fastapi]>=2.19.2",
-  "aiohttp>=3.14.0",
+  "aiohttp>=3.14.3",
 ]
 
 [project.urls]
@@ -96,20 +96,20 @@ dev = [
   "pygments>=2.20.0",
   "httpx>=0.28.1",
   "aiosqlite>=0.20.0",                      # async SQLite for tests (no real PG needed)
-  "fakeredis>=2.36.2",                      # in-memory redis for tests
+  "fakeredis>=2.37.0",                      # in-memory redis for tests
   # Pre-commit hooks & linting
-  "pre-commit>=4.5.1",
+  "pre-commit>=4.6.1",
   "bandit[toml]>=1.9.4",
-  "ruff>=0.15.20",
+  "ruff>=0.16.1",
   # Load testing
-  "locust>=2.44.4",
+  "locust>=2.46.3",
   # k6 is a standalone CLI, install via:
   #   - Linux: sudo apt install k6
   #   - macOS: brew install grafana/k6/k6
   #   - or: https://k6.io/docs/getting-started/installation/
-  "ty>=0.0.56",
+  "ty>=0.0.66",
   "pip-audit>=2.10.1",
-  "schemathesis>=4.0,<5",
+  "schemathesis>=4.24.3,<5",
 ]
 
 [tool.pytest.ini_options]
