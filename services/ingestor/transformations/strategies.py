@@ -69,8 +69,10 @@ class CSVObservationValidator(ObservationValidationStrategy):
 
     async def _validate_price(self, value: object) -> tuple[bool, str | None]:
         """Check price is numeric and >= 0."""
+        if not isinstance(value, str | int | float):
+            return False, "Price must be numeric (int/float/string)"
         try:
-            price = float(value) if not isinstance(value, float) else value
+            price = float(value)
             if price < 0:
                 return False, "Price must be >= 0"
             return True, None

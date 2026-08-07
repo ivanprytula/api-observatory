@@ -10,7 +10,7 @@ from __future__ import annotations
 import random
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from pydantic import ValidationError
@@ -143,11 +143,12 @@ async def deliver_due_notifications(
         except Exception as exc:
             category, code, retryable = _classify_provider_error(exc)
             if retryable and delivery.attempt_count < MAX_DELIVERY_ATTEMPTS:
+                last_attempt_at = delivery.last_attempt_at or now or datetime.now(UTC)
                 updated = await schedule_delivery_retry(
                     db,
                     delivery_id=delivery.id,
                     claim_token=delivery.claim_token,
-                    next_attempt_at=delivery.last_attempt_at
+                    next_attempt_at=last_attempt_at
                     + retry_delay(delivery.attempt_count),
                     error_category=category,
                     error_code=code,

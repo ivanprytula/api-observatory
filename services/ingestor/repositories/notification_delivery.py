@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import cast
 from uuid import uuid4
 
 from sqlalchemy import and_, or_, select
@@ -11,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from libs.contracts.events import (
     EVENT_NOTIFICATION_DELIVERY_DEAD_LETTERED_V1,
+    NotificationChannel,
     NotificationDeliveryDeadLetteredPayloadV1,
     NotificationDeliveryDeadLetteredV1,
     NotificationDeliveryRequestedV1,
@@ -260,8 +262,10 @@ async def dead_letter_delivery(
     delivery.status = "dead_letter"
     delivery.dead_lettered_at = current_time
     delivery.next_attempt_at = None
-    delivery.first_attempt_at = delivery.first_attempt_at or current_time
-    delivery.last_attempt_at = delivery.last_attempt_at or current_time
+    first_attempt_at = delivery.first_attempt_at or current_time
+    last_attempt_at = delivery.last_attempt_at or current_time
+    delivery.first_attempt_at = first_attempt_at
+    delivery.last_attempt_at = last_attempt_at
     _clear_delivery_claim(delivery)
     _set_delivery_error(delivery, error_category, error_code, error_detail)
 
@@ -275,12 +279,12 @@ async def dead_letter_delivery(
             incident_id=delivery.incident_id,
             source_id=delivery.source_id,
             tenant_id=delivery.tenant_id,
-            channel=delivery.channel,
+            channel=cast("NotificationChannel", delivery.channel),
             attempt_count=delivery.attempt_count,
             error_category=error_category,
             error_code=error_code[:64] if error_code is not None else None,
-            first_attempt_at=_aware_utc(delivery.first_attempt_at),
-            last_attempt_at=_aware_utc(delivery.last_attempt_at),
+            first_attempt_at=_aware_utc(first_attempt_at),
+            last_attempt_at=_aware_utc(last_attempt_at),
         ),
     )
     outbox = await add_outbox_event(

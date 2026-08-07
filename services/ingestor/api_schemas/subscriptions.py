@@ -7,6 +7,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from libs.contracts.events import NotificationChannel
+
 
 class SuppressionWindow(BaseModel):
     """Defines a mute window for noisy alerts."""
@@ -199,4 +201,4 @@ class TestDeliveryRequest(BaseModel):
     message: str = Field(default="Test notification from subscription delivery API.")
     severity: str = Field(default="warning")
     source_id: int | None = Field(default=None, ge=1)
-    channels: list[str] | None = Field(default=None)
+    channels: list[NotificationChannel] | None = Field(default=None)

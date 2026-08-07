@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +12,7 @@ from libs.contracts.events import (
     EVENT_NOTIFICATION_DELIVERY_REQUESTED_V1,
     NotificationDeliveryRequestedPayloadV1,
     NotificationDeliveryRequestedV1,
+    NotificationTriggerType,
 )
 from services.ingestor.api_schemas.scorecards import (
     HealthSampleCreate,
@@ -73,7 +75,7 @@ async def enqueue_incident_notification_requests(
                 tenant_id=incident.tenant_id,
                 severity=incident.severity,
                 summary=incident.summary,
-                trigger_type=incident.trigger_type,
+                trigger_type=cast("NotificationTriggerType", incident.trigger_type),
                 occurrence_count=incident.occurrence_count,
                 guidance=incident.guidance,
                 channels=channels,
