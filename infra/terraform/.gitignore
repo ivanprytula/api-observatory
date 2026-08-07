@@ -15,11 +15,9 @@ override.tf.json
 *.tfvars
 !*.tfvars.example
 
-# Backend config (contains endpoint/bucket/storage account choices)
+# Backend config (contains endpoint and bucket choices)
 backend.local.hcl
 !backend.local.hcl.example
-backend.azure.hcl
-!backend.azure.hcl.example
 backend.hcl
 !backend.hcl.example
 

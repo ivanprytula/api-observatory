@@ -12,8 +12,8 @@ services:
       # Named volume so `docker compose down` (without `-v`) preserves Postgres
       # data across restarts — lets local data accumulate for indexing/
       # perf-tuning practice instead of resetting to empty on every `up`.
-      # Dev-only: the base docker-compose.yml stays cloud-deploy-ready, where
-      # a managed Postgres (Azure Flexible Server / RDS) owns persistence.
+      # Dev-only: the base Compose file leaves persistence policy to the
+      # deployment-specific environment.
       - ingestor_postgres_data:/var/lib/postgresql/data
     deploy:
       resources:

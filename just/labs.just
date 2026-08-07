@@ -1,6 +1,6 @@
 # Disposable exercises kept outside the root developer command surface.
 # Run one explicitly, for example:
-#   just --justfile just/labs.just lab-cloud-up azure
+#   just --justfile just/labs.just lab-aws-up
 #   just --justfile just/labs.just lab-k8s-up
 
 import 'cloud.just'

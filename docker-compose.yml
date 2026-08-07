@@ -1,5 +1,5 @@
 # Minimal MVP stack: ingestor-db, cache, broker, ingestor, dashboard
-# Network model: All services (including cloud emulator) share `api-obs` network
+# Network model: All services (including the AWS emulator lab) share `api-obs` network
 # for inter-service communication (e.g., ingestor → ingestor-db, ingestor → cache).
 # Host access: All services expose ports to 127.0.0.1 or 0.0.0.0 for local development.
 
@@ -484,37 +484,9 @@ services:
     networks:
       - api-obs
 
-  # ── Cloud emulators (separate labs; see just/labs.just)
+  # ── AWS emulator (separate lab; see just/labs.just)
 
-  # GCP emulator. The lab currently verifies only its local health endpoint.
-  floci-gcp:
-    image: floci/floci-gcp:latest
-    container_name: api-obs-floci-gcp
-    profiles: [gcp]
-    ports:
-      - '127.0.0.1:4588:4588'
-    environment:
-      CLOUDSDK_CORE_PROJECT: ${GCP_PROJECT_ID:-floci-local}
-    healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:4588/health']
-      start_period: 15s
-    security_opt: [no-new-privileges:true]
-    deploy:
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-      resources:
-        reservations:
-          cpus: '0.1'
-          memory: '128M'
-        limits:
-          cpus: '0.5'
-          memory: '512M'
-    networks:
-      - api-obs
-
-  # AWS emulator. The lab currently verifies only its local health endpoint.
+  # Disposable API rehearsal only; it is not parity or deployment evidence.
   floci-aws:
     image: floci/floci:latest
     container_name: api-obs-floci-aws
@@ -542,38 +514,8 @@ services:
     networks:
       - api-obs
 
-  # Azure emulator. The focused lab exercises its supported Blob Storage API.
-  floci-az:
-    image: floci/floci-az:latest
-    container_name: api-obs-floci-az
-    profiles: [azure]
-    ports:
-      - '127.0.0.1:4577:4577'
-      - '127.0.0.1:5672:5672'
-      - '127.0.0.1:5673:5673'
-    environment:
-      AZURE_REGION: ${AZURE_REGION:-polandcentral}
-    healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:4577/health']
-      start_period: 10s
-    security_opt: [no-new-privileges:true]
-    deploy:
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-      resources:
-        reservations:
-          cpus: '0.1'
-          memory: '128M'
-        limits:
-          cpus: '0.5'
-          memory: '512M'
-    networks:
-      - api-obs
-
 # ─── NETWORK ────────────────────────────────────────────────────────────────
-# All services (microservices + infrastructure emulators) share this network
+# All services and the disposable AWS emulator share this network
 # for inter-container communication.
 #
 # Services on `api-obs`:
@@ -583,9 +525,7 @@ services:
 #   - ingestor (FastAPI microservice)
 #   - edge (HTTPS ingress proxy, started explicitly with the `ingress` profile)
 #   - prometheus, grafana, loki, promtail, tempo, alertmanager, mailpit (monitoring, optional via `just dev-up-monitoring`)
-#   - floci-az (Azure emulator, optional via --profile azure)
 #   - floci-aws (AWS emulator, optional via --profile aws)
-#   - floci-gcp (GCP emulator, optional via --profile gcp)
 #
 # Host access:
 #   - edge:80, 443 → localhost:80, 443 — optional HTTPS ingress (via nginx)
@@ -594,7 +534,7 @@ services:
 #   - ingestor-db:5432 → localhost:5432
 #   - cache:6379 → localhost:6379 (loopback only; ingestor connects via Docker network at redis://cache:6379)
 #   - broker:9092 (Kafka), 8082 (HTTP) → localhost:9092, 8082
-#   - floci-az:4577 → 127.0.0.1:4577 (local only)
+#   - floci-aws:4566 → 127.0.0.1:4566 (local only)
 networks:
   api-obs:
     driver: bridge
