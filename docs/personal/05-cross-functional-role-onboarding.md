@@ -11,7 +11,6 @@ For technical roles, this baseline gives a reproducible local environment and a 
 ```bash
 just doctor
 just dev-up
-just dev-wait-ready
 just db-migrate
 just test-unit
 just test-integration

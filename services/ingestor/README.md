@@ -11,7 +11,6 @@ stack with:
 
 ```bash
 just dev-up
-just dev-wait-ready
 just db-migrate
 ```
 

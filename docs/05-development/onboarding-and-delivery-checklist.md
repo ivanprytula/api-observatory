@@ -9,8 +9,8 @@ same instructions into multiple places.
 
 The supported developer workstation is Linux (Ubuntu) or macOS with Docker Engine/Desktop and
 Compose v2, a running Docker daemon, the Python version selected by [`.python-version`](../../.python-version),
-`uv`, `just`, Git, and `curl`. Run `just doctor` before creating `.env`; it checks core tools and
-reports optional tooling as warnings.
+`uv`, `just`, Git, and `curl`. Run `just doctor` before creating `.env`; it checks only these core
+tools and the Docker daemon/Compose path.
 
 Terraform, Ansible, cloud CLIs, Kubernetes tools, and database client utilities are not application
 onboarding requirements. Install them only for a task that owns that boundary, following the sibling
@@ -40,7 +40,7 @@ Use this path for first-time setup or when returning to the repository after a l
 2. Run `just doctor`.
 3. Copy `.env.example` to `.env` and generate local secrets with `just generate-secrets`.
 4. Start the default stack with `just dev-up`.
-5. Wait for readiness with `just dev-wait-ready` and run `just db-migrate`.
+5. `dev-up` returns only after Compose reports the core services healthy; run `just db-migrate`.
 6. Run the smallest proof that matches the task: `just test-unit` for isolated work or `just test-smoke` when the running stack is involved.
 
 ## 2. Canonical task workflow

@@ -1,58 +1,20 @@
 # Core command order follows the README/setup flow:
 #   just doctor → cp .env.example .env → just generate-secrets → just dev-up
-#   → just dev-wait-ready → just db-migrate → just test-smoke
-# Optional paths: just db-auto-init, just dev-up-cache, just dev-up-broker, just dev-up-inference,
-# just dev-up-extended, just dev-up-monitoring, HTTPS ingress, cloud/Terraform, security, and Kubernetes.
-# Concern-specific commands live in the imported files below.
-import? 'just/cloud.just'
-import? 'just/security.just'
+#   → just db-migrate → just test-smoke
+# Optional local paths: just db-auto-init, just dev-up-cache, just dev-up-broker,
+# just dev-up-inference, just dev-up-extended, and just dev-up-monitoring.
+# Core test and database-lifecycle commands live in the imported files below.
+
 import? 'just/testing.just'
 import? 'just/database-lifecycle.just'
-import? 'just/kubernetes.just'
 
 # Focused command map for a first task; run `just --list` only when exploring a specialist area.
 help-core:
-    @echo "Core: just doctor → cp .env.example .env → just generate-secrets → just dev-up → just dev-wait-ready → just db-migrate"
-    @echo "Proof: just test-unit (isolated) | just test-smoke (running core stack)"
+    @echo "Core: just doctor → cp .env.example .env → just generate-secrets → just dev-up → just db-migrate"
+    @echo "Proof: just test-unit (isolated) | just test-smoke (running core stack) | just test-smoke-auth (authenticated API path)"
     @echo "Optional: just dev-up-inference (vector search) | just dev-up-cache | just dev-up-broker | just dev-up-extended (all three)"
 
 # ─── 1. ENVIRONMENT CHECKS ───────────────────────────────────────────────────
-
-# Explicitly wait for the ingestor readiness endpoint after starting services.
-dev-wait-ready:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    timeout_seconds="${READY_TIMEOUT_SECONDS:-60}"
-    if curl --fail --silent --show-error \
-        --connect-timeout 2 --max-time 5 \
-        --retry "${timeout_seconds}" --retry-delay 1 \
-        --retry-max-time "${timeout_seconds}" --retry-all-errors \
-        http://127.0.0.1:8000/readyz >/dev/null; then
-        echo "Ingestor ready: http://127.0.0.1:8000"
-    else
-        echo "Ingestor was not ready after ${timeout_seconds}s." >&2
-        docker compose ps >&2
-        docker compose logs --tail=100 ingestor-db ingestor >&2
-        exit 1
-    fi
-
-# Wait for the optional inference service with the same bounded behavior.
-dev-inference-ready:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    timeout_seconds="${READY_TIMEOUT_SECONDS:-60}"
-    if curl --fail --silent --show-error \
-        --connect-timeout 2 --max-time 5 \
-        --retry "${timeout_seconds}" --retry-delay 1 \
-        --retry-max-time "${timeout_seconds}" --retry-all-errors \
-        http://127.0.0.1:8001/readyz >/dev/null; then
-        echo "Inference ready: http://127.0.0.1:8001"
-    else
-        echo "Inference was not ready after ${timeout_seconds}s." >&2
-        docker compose ps >&2
-        docker compose logs --tail=100 inference-db inference >&2
-        exit 1
-    fi
 
 db-inference-migrate:
     #!/usr/bin/env bash
@@ -64,26 +26,21 @@ db-inference-migrate:
     docker compose run --rm --no-deps inference alembic upgrade head
 
 doctor:
-    bash scripts/setup/00-doctor.sh
+    bash scripts/setup/03-verify-system-requirements.sh
 
 # Generate or rotate local prod-like credentials in the existing private .env.
 generate-secrets:
     uv run python scripts/tools/generate-secrets.py
-
-
 
 # ─── 2. LOCAL DEVELOPMENT ────────────────────────────────────────────────────
 #
 # Primary local loops:
 #   just dev-up → Docker PostgreSQL + application
 #   just dev    → optional host-process hot reload
-
 # Optional host-process hot reload (Docker-first `just dev-up` remains canonical).
 # ─────────────────────────────────────────────
 
-# Start both ingestor (uvicorn --reload) and dashboard (Streamlit hot-reload) locally.
-# PostgreSQL runs in Compose by default; enable Redis/Redpanda with the same explicit
-# dev-up-cache/dev-up-broker recipes used by the containerized workflow.
+# Run ingestor and dashboard locally with hot reload; Docker PostgreSQL remains required.
 dev:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -117,11 +74,10 @@ dev:
 # Official Docker-first HTTP workflow.
 # ─────────────────────────────────────────────────────────
 
-# Start the default containerized HTTP development stack.
-# Enable the optional `ingress` profile separately when testing HTTPS.
+# Start the default containerized HTTP stack; enable the optional `ingress` profile separately for HTTPS.
 dev-up:
-    docker compose up -d --build ingestor-db ingestor dashboard
-    echo "stack started — run 'just dev-wait-ready' before using http://127.0.0.1:8000 or http://127.0.0.1:8501"
+    docker compose up -d --build --wait ingestor-db ingestor dashboard
+    echo "stack ready — run 'just db-migrate' before using http://127.0.0.1:8000 or http://127.0.0.1:8501"
 
 # Enable Redis explicitly after setting API_OBS_CACHE_ENABLED=true in .env.
 dev-up-cache:
@@ -147,8 +103,8 @@ dev-up-broker:
 
 # Start the core stack plus inference and its dedicated database for vector-search work.
 dev-up-inference:
-    docker compose --profile inference up -d --build ingestor-db ingestor dashboard inference-db inference
-    echo "inference stack started — run 'just dev-wait-ready', 'just db-migrate', 'just db-inference-migrate', and 'just dev-inference-ready' before testing"
+    docker compose --profile inference up -d --build --wait ingestor-db ingestor dashboard inference-db inference
+    echo "inference stack ready — run 'just db-migrate' and 'just db-inference-migrate' before testing"
 
 # Start cache, broker, and inference together only for a full optional-integration task.
 dev-up-extended:
@@ -163,9 +119,8 @@ dev-up-extended:
         echo "Set API_OBS_BROKER_ENABLED=true in .env before starting the extended stack." >&2
         exit 1
     fi
-    docker compose --profile cache --profile broker --profile inference up -d --build ingestor-db cache broker ingestor dashboard inference-db inference
-    echo "extended stack started — run 'just dev-wait-ready' before testing"
-
+    docker compose --profile cache --profile broker --profile inference up -d --build --wait ingestor-db cache broker ingestor dashboard inference-db inference
+    echo "extended stack ready — run 'just db-migrate' and 'just db-inference-migrate' before testing"
 
 # Start monitoring stack (Prometheus, Grafana, Loki, Promtail, Tempo, Alertmanager, Mailpit).
 dev-up-monitoring:
