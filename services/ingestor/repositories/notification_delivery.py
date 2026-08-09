@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import cast
 from uuid import uuid4
 
@@ -18,6 +18,7 @@ from libs.contracts.events import (
     NotificationDeliveryRequestedV1,
     NotificationErrorCategory,
 )
+from services.ingestor.core.utils import _aware_utc
 from services.ingestor.models import (
     InboxConsumption,
     NotificationDelivery,
@@ -35,12 +36,6 @@ _INBOX_TERMINAL_STATUSES = {
     "dead_letter",
 }
 _DELIVERY_TERMINAL_STATUSES = {"delivered", "dead_letter"}
-
-
-def _aware_utc(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=UTC)
-    return value.astimezone(UTC)
 
 
 async def claim_notification_request(

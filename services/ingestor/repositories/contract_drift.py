@@ -24,10 +24,6 @@ from services.ingestor.constants import (
     CONTRACT_PENALTY_REMOVED_FIELD,
     CONTRACT_PENALTY_TYPE_CHANGE,
 )
-from services.ingestor.incident_lifecycle import (
-    dispatch_incident_transitions,
-    enqueue_incident_notification_requests,
-)
 from services.ingestor.models import (
     AgentRun,
     ContractBaseline,
@@ -41,6 +37,12 @@ from services.ingestor.repositories.incidents import (
     IncidentTransition,
     open_or_update_incident,
 )
+
+
+# Lazy-loaded to avoid circular import during module initialization.
+# Tests and callers can patch these names before create_contract_snapshot runs.
+dispatch_incident_transitions = None
+enqueue_incident_notification_requests = None
 
 
 logger = logging.getLogger(__name__)
@@ -316,6 +318,17 @@ async def create_contract_snapshot(
     )
     if source is None:
         return None, None
+
+    global dispatch_incident_transitions, enqueue_incident_notification_requests
+    if dispatch_incident_transitions is None:
+        from services.ingestor.core.incident_notifications import (
+            dispatch_incident_transitions as _dispatch_fn,
+        )
+        from services.ingestor.core.incident_notifications import (
+            enqueue_incident_notification_requests as _enqueue_fn,
+        )
+        dispatch_incident_transitions = _dispatch_fn
+        enqueue_incident_notification_requests = _enqueue_fn
 
     new_fingerprint = _fingerprint(payload.payload_schema)
     snapshot = ContractSnapshot(

@@ -1,6 +1,6 @@
 """ORM models (async stack — identical structure to sync, different Base)."""
 
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import (
     JSON,
@@ -16,11 +16,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
+from services.ingestor.core.utils import _utcnow
 from services.ingestor.database import Base
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class TimestampMixin:
@@ -281,6 +278,24 @@ class ObservationArchive(Base):
     archived_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utcnow, nullable=False
     )
+
+
+class Tenant(Base, TimestampMixin):
+    """Minimal tenant for multi-tenancy.
+
+    MVP scope: one personal tenant per user, auto-provisioned on registration.
+    """
+
+    __tablename__ = "tenants"
+    __table_args__ = (
+        Index("ix_tenants_name", "name", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+
+    def __repr__(self) -> str:
+        return f"<Tenant id={self.id} name={self.name!r}>"
 
 
 class User(Base, TimestampMixin):

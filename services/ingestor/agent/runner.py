@@ -10,10 +10,10 @@ request-scoped session), and syncs graph output back onto the `AgentRun` row.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from services.ingestor.config import settings
+from services.ingestor.core.utils import _utcnow
 from services.ingestor.database import AsyncSessionLocal
 from services.ingestor.models import AgentRun
 
@@ -30,10 +30,6 @@ logger = logging.getLogger(__name__)
 _pool: AsyncConnectionPool[AsyncConnection[dict[str, Any]]] | None = None
 _checkpointer: AsyncPostgresSaver | None = None
 _graph: CompiledStateGraph | None = None
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _sync_db_url() -> str:
