@@ -32,7 +32,7 @@ repos:
     rev: v0.16.0
     hooks:
       - id: ruff-check
-        args: [--fix, --config=pyproject.toml]
+        args: ["--fix", "--config=pyproject.toml", "services", "libs", "scripts", "tests"]
       - id: ruff-format
 
   - repo: https://github.com/rhysd/actionlint
@@ -73,11 +73,16 @@ repos:
     hooks:
       - id: ty
         name: ty type checker
-        entry: uv run ty check
+        entry: uv run ty check services libs
         language: system
         types: [python]
-        pass_filenames: true
-        stages: [manual]
+        pass_filenames: false
+      - id: check-test-markers
+        name: check test markers
+        entry: uv run python scripts/ci/check_test_markers.py
+        language: system
+        types: [python]
+        pass_filenames: false
       - id: private-docs-safeguard
         name: private-docs-safeguard
         entry: ./scripts/ci/02-pre-commit-private-docs.sh

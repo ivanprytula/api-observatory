@@ -101,12 +101,12 @@ class HttpScraper:
                 # Wrap the fetching logic with a global timeout
                 posts = await asyncio.wait_for(
                     self._fetch_with_backoff(url, limit),
-                    timeout=settings.scraper_timeout,
+                    timeout=settings.request_timeout_seconds,
                 )
         except TimeoutError as e:
             logger.error(
                 "http_scraper_timeout",
-                extra={"url": url, "timeout": settings.scraper_timeout},
+                extra={"url": url, "timeout": settings.request_timeout_seconds},
             )
             raise ScraperTimeoutError(f"Timeout fetching {url}") from e
 

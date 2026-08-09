@@ -466,7 +466,9 @@ async def create_contract_snapshot(
                 agent_run = AgentRun(observation_id=incident.id, status="pending")
                 db.add(agent_run)
 
-    await enqueue_incident_notification_requests(db, incident_transitions)
+    _enqueue = enqueue_incident_notification_requests
+    assert _enqueue is not None
+    await _enqueue(db, incident_transitions)
     await db.commit()
     await db.refresh(snapshot)
     if drift_event is not None:
