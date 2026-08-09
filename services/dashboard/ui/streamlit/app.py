@@ -59,21 +59,46 @@ def main() -> None:
         and manager.state.refresh_token
         and not manager.state.is_valid
     ):
-        manager.do_refresh()
+        refreshed = manager.do_refresh()
+        if not refreshed:
+            st.warning("Session expired — please log in again.")
 
     render_onboarding_guide(ui, manager)
 
+    features = ui.fetch_stack_features()
+    if not features.get("cache", False):
+        st.warning(
+            "Live Stream is disabled — Redis cache is not enabled. "
+            "Set `API_OBS_CACHE_ENABLED=true` to unlock real-time events."
+        )
+    if not features.get("has_sources", False):
+        st.info(
+            "No sources yet. Add a source in Step 1 to unlock probes, "
+            "observations, and health data."
+        )
+
+    ui.subheader("Step 1: Add your sources")
     render_source_manager(ui, manager)
-    render_source_health_table(ui, manager)
-    render_ingestion_throughput(ui)
+
+    ui.subheader("Step 2: Run probes")
     render_probe_scheduler(ui, manager)
-    render_freshness_heatmap(ui, manager)
+    render_queue_retry_health(ui, manager)
+
+    ui.subheader("Step 3: Explore data")
+    render_observations_panel(ui, manager)
     render_drift_events(ui, manager)
     render_incidents(ui, manager)
-    render_observations_panel(ui, manager)
-    render_live_stream(ui, manager)
+    if features.get("cache", False):
+        render_live_stream(ui, manager)
+    else:
+        with st.expander("📡 Live Stream (disabled — cache required)", expanded=False):
+            st.caption("Enable Redis cache to see real-time events.")
+
+    ui.subheader("Step 4: Monitor health")
+    render_source_health_table(ui, manager)
+    render_ingestion_throughput(ui)
+    render_freshness_heatmap(ui, manager)
     render_service_health(ui, manager)
-    render_queue_retry_health(ui, manager)
 
     st.divider()
     col_r, col_auto = st.columns([3, 1])

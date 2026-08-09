@@ -103,21 +103,20 @@ def render_observations_panel(ui: UIAdapter, auth: AuthManager) -> None:
         ui.show_info("No observations found matching your filters.")
         return
 
-    rows = []
     for obs in observations:
         tags_str = ", ".join(obs.tags) if obs.tags else "—"
-        processed_badge = "✓ Yes" if obs.processed else "✗ No"
-        rows.append(
-            {
-                "ID": obs.id,
-                "Source": obs.source,
-                "Timestamp": obs.timestamp.isoformat() if obs.timestamp else "—",
-                "Tags": tags_str,
-                "Processed": processed_badge,
-            }
-        )
-
-    ui.render_dataframe(rows, width="stretch")
+        processed_badge = "Yes" if obs.processed else "No"
+        with ui.container():
+            c1, c2, c3, c4, c5, c6 = ui.columns([1, 2, 2, 1, 1, 1])
+            c1.write(f"**{obs.id}**")
+            c2.caption(f"`{obs.source}`")
+            c3.caption(obs.timestamp.isoformat()[:19] if obs.timestamp else "—")
+            c4.caption(tags_str)
+            c5.caption(processed_badge)
+            if c6.button("View", key=f"obs_view_{obs.id}"):
+                ui.set("obs_detail_id", obs.id)
+                ui.rerun()
+        ui.divider()
 
     ui.caption(
         f"Total: {pagination.total} | "

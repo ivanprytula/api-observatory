@@ -23,6 +23,27 @@ from services.dashboard.core.metrics_parser import (
 from services.dashboard.ui.protocols import UIAdapter
 
 
+_PROBE_ERROR_MAP = {
+    "Connection refused": "Target actively refused the connection.",
+    "Timeout": "Probe timed out — target may be overloaded or unreachable.",
+    "DNS resolution failed": "Could not resolve the hostname.",
+    "Name or service not known": "Could not resolve the hostname.",
+    "No route to host": "Network is unreachable.",
+}
+
+
+def _friendly_probe_error(exc: Exception) -> str:
+    msg = str(exc)
+    for needle, friendly in _PROBE_ERROR_MAP.items():
+        if needle.lower() in msg.lower():
+            return friendly
+    if isinstance(exc, httpx.TimeoutException):
+        return "Probe timed out — target may be overloaded or unreachable."
+    if isinstance(exc, httpx.ConnectError):
+        return "Could not connect to the target."
+    return msg
+
+
 # ---------------------------------------------------------------------------
 # Hooks
 # ---------------------------------------------------------------------------
@@ -70,14 +91,18 @@ def render_probe_scheduler(ui: UIAdapter, auth: AuthManager) -> None:
     probe_results = ui.probe_results
 
     col_all, col_clear = ui.columns([1, 5])
-    if col_all.button("▶ Probe all", key="probe_all"):
-        for src in sources:
+    if col_all.button("Probe all", key="probe_all"):
+        total = len(sources)
+        status_holder = ui.empty()
+        for idx, src in enumerate(sources, start=1):
+            status_holder.info(f"Probing {src.name} ({idx}/{total})...")
             try:
                 result = api.sources.probe(src.id, token=auth.access_token)
                 probe_results[src.id] = result.model_dump()
             except Exception as exc:
-                probe_results[src.id] = {"error": str(exc)}
+                probe_results[src.id] = {"error": _friendly_probe_error(exc)}
         ui.probe_results = probe_results
+        status_holder.empty()
         ui.rerun()
 
     if col_clear.button("🗑 Clear results", key="probe_clear"):
@@ -89,12 +114,12 @@ def render_probe_scheduler(ui: UIAdapter, auth: AuthManager) -> None:
         col_name, col_btn, col_result = ui.columns([2, 1, 4])
         col_name.markdown(f"**{src.name}** `#{sid}`")
 
-        if col_btn.button("▶ Probe", key=f"probe_{sid}"):
+        if col_btn.button("Probe", key=f"probe_{sid}"):
             try:
                 result = api.sources.probe(sid, token=auth.access_token)
                 probe_results[sid] = result.model_dump()
             except Exception as exc:
-                probe_results[sid] = {"error": str(exc)}
+                probe_results[sid] = {"error": _friendly_probe_error(exc)}
             ui.probe_results = probe_results
             ui.rerun()
 
