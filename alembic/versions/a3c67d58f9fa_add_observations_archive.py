@@ -1,6 +1,6 @@
 """add_observations_archive
 
-Revision ID: retention_archive_01
+Revision ID: a3c67d58f9fa
 Revises: 1088e092eac2
 Create Date: 2026-07-23 17:00:00.000000
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 
-revision: str = "retention_archive_01"
+revision: str = "a3c67d58f9fa"
 down_revision: str | None = "1088e092eac2"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None

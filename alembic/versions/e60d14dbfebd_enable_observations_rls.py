@@ -1,7 +1,7 @@
 """Add opt-in tenant RLS policy for observations.
 
-Revision ID: observations_rls_01
-Revises: retention_archive_01
+Revision ID: e60d14dbfebd
+Revises: a3c67d58f9fa
 Create Date: 2026-07-23 19:00:00.000000
 
 """
@@ -11,8 +11,8 @@ from collections.abc import Sequence
 from alembic import op
 
 
-revision: str = "observations_rls_01"
-down_revision: str | None = "retention_archive_01"
+revision: str = "e60d14dbfebd"
+down_revision: str | None = "a3c67d58f9fa"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

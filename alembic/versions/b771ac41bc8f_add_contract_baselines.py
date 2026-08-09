@@ -1,7 +1,7 @@
 """add versioned accepted contract baselines
 
-Revision ID: contract_baselines_01
-Revises: dependency_incidents_01
+Revision ID: b771ac41bc8f
+Revises: c61518e0a57e
 Create Date: 2026-07-29 12:00:00.000000
 """
 
@@ -12,14 +12,14 @@ import sqlalchemy as sa
 from alembic import op
 
 
-revision: str = "contract_baselines_01"
-down_revision: str | None = "dependency_incidents_01"
+revision: str = "b771ac41bc8f"
+down_revision: str | None = "c61518e0a57e"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Create baseline history/current-candidate storage and backfill existing sources."""
+    """Create baseline history/current-candidate storage."""
     op.create_table(
         "contract_baselines",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -84,43 +84,6 @@ def upgrade() -> None:
         unique=False,
     )
 
-    op.execute(
-        sa.text(
-            """
-            INSERT INTO contract_baselines (
-                source_id,
-                tenant_id,
-                baseline_snapshot_id,
-                version,
-                status,
-                active_key,
-                accepted_by,
-                accepted_at,
-                candidate_observation_count,
-                created_at,
-                updated_at
-            )
-            SELECT
-                first_snapshot.source_id,
-                source_profiles.tenant_id,
-                first_snapshot.snapshot_id,
-                1,
-                'active',
-                'source:' || CAST(first_snapshot.source_id AS VARCHAR),
-                'system:migration',
-                CURRENT_TIMESTAMP,
-                0,
-                CURRENT_TIMESTAMP,
-                CURRENT_TIMESTAMP
-            FROM (
-                SELECT source_id, MIN(id) AS snapshot_id
-                FROM contract_snapshots
-                GROUP BY source_id
-            ) AS first_snapshot
-            JOIN source_profiles ON source_profiles.id = first_snapshot.source_id
-            """
-        )
-    )
 
 
 def downgrade() -> None:

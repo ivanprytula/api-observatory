@@ -1,7 +1,7 @@
 """add durable notification delivery foundation
 
-Revision ID: notification_delivery_01
-Revises: contract_baselines_01
+Revision ID: cced5946142f
+Revises: b771ac41bc8f
 Create Date: 2026-07-29 14:00:00.000000
 """
 
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from alembic import op
 
 
-revision: str = "notification_delivery_01"
-down_revision: str | None = "contract_baselines_01"
+revision: str = "cced5946142f"
+down_revision: str | None = "b771ac41bc8f"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -178,10 +178,7 @@ def downgrade() -> None:
         type_="check",
     )
     op.execute(
-        sa.text(
-            "UPDATE inbox_consumptions "
-            "SET processed_at = COALESCE(processed_at, created_at, CURRENT_TIMESTAMP)"
-        )
+        "UPDATE inbox_consumptions SET processed_at = now() WHERE processed_at IS NULL"
     )
     op.alter_column(
         "inbox_consumptions",

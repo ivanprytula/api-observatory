@@ -531,7 +531,7 @@ def test_notification_delivery_migration_round_trip(
         engine.dispose()
 
     try:
-        command.downgrade(config, "contract_baselines_01")
+        command.downgrade(config, "b771ac41bc8f")
         downgraded_engine = sa.create_engine(sync_url)
         try:
             inspector = sa.inspect(downgraded_engine)

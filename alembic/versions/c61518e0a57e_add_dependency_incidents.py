@@ -1,7 +1,7 @@
 """add dependency incident lifecycle
 
-Revision ID: dependency_incidents_01
-Revises: observations_rls_01
+Revision ID: c61518e0a57e
+Revises: e60d14dbfebd
 Create Date: 2026-07-24 12:00:00.000000
 """
 
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from alembic import op
 
 
-revision: str = "dependency_incidents_01"
-down_revision: str | None = "observations_rls_01"
+revision: str = "c61518e0a57e"
+down_revision: str | None = "e60d14dbfebd"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
