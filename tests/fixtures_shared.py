@@ -389,7 +389,6 @@ def apply_migrations(_auto_provision_postgres: None) -> Generator[None]:
 
     engine = sa.create_engine(sync_url)
     with engine.begin() as conn:
-        # Create test role if it doesn't exist
         conn.execute(
             sa.text(
                 "DO $$ BEGIN "
@@ -414,6 +413,17 @@ def apply_migrations(_auto_provision_postgres: None) -> Generator[None]:
             sa.text(
                 "ALTER DEFAULT PRIVILEGES IN SCHEMA public "
                 "GRANT ALL ON TABLES TO test_app_api_user;"
+            )
+        )
+        conn.execute(
+            sa.text(
+                "ALTER DEFAULT PRIVILEGES IN SCHEMA public "
+                "GRANT ALL ON SEQUENCES TO test_app_api_user;"
+            )
+        )
+        conn.execute(
+            sa.text(
+                "GRANT INSERT, SELECT, UPDATE, DELETE ON tenants TO test_app_api_user"
             )
         )
 

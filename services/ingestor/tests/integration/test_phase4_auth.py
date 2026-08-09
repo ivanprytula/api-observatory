@@ -107,24 +107,22 @@ async def test_jwt_tenant_claim_beats_conflicting_header(
     assert observation.tenant_id == 7
 
 
-async def test_public_registration_cannot_assign_role_or_tenant(
+async def test_public_registration_creates_viewer_with_personal_tenant(
     client: AsyncClient,
 ) -> None:
-    """Public signup always creates an unassigned viewer account."""
+    """Public signup always creates an unassigned viewer account with auto-provisioned tenant."""
     response = await client.post(
         "/api/v1/auth/register",
         json={
             "username": "phase4-viewer",
             "email": "phase4-viewer@example.com",
             "password": "safe-password-123",
-            "role": "admin",
-            "tenant_id": 999,
         },
     )
 
     assert response.status_code == 201
     assert response.json()["role"] == "viewer"
-    assert response.json()["tenant_id"] is None
+    assert response.json()["tenant_id"] is not None
 
 
 def test_default_route_inventory_excludes_opt_in_features() -> None:
