@@ -8,7 +8,9 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Literal
 
 import streamlit as st
+from services.dashboard.core.api_client import DashboardApiError
 from services.dashboard.core.auth import AuthManager
+from services.dashboard.core.config import config
 
 
 _SESSION_DEFAULTS: dict[str, Any] = {
@@ -29,6 +31,53 @@ def _ensure_ws_runtime() -> dict:
             "thread": None,
         }
     return st.session_state._ws_runtime
+
+
+def _fetch_json(base_url: str, path: str, token: str | None) -> Any:
+    import httpx
+
+    url = f"{base_url}{path}"
+    headers: dict[str, str] = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        resp = httpx.get(url, headers=headers or None, timeout=5)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as exc:
+        raise DashboardApiError(str(exc)) from exc
+
+
+@st.cache_data(ttl=30)
+def _fetch_stack_features(base_url: str, token: str | None) -> dict[str, bool]:
+    features: dict[str, bool] = {
+        "cache": False,
+        "broker": False,
+        "has_sources": False,
+    }
+    try:
+        readyz = _fetch_json(base_url, "/readyz", token)
+        if isinstance(readyz, dict):
+            features["cache"] = readyz.get("cache") == "ok"
+    except (DashboardApiError, Exception):
+        pass
+
+    try:
+        sources = _fetch_json(base_url, "/api/v1/sources", token)
+        if isinstance(sources, dict):
+            items = sources.get("items", [])
+            features["has_sources"] = len(items) > 0
+    except (DashboardApiError, Exception):
+        pass
+
+    try:
+        queues = _fetch_json(base_url, "/api/v1/queues/health", token)
+        if isinstance(queues, dict):
+            features["broker"] = len(queues) > 0
+    except (DashboardApiError, Exception):
+        pass
+
+    return features
 
 
 class StreamlitUIAdapter:
@@ -149,6 +198,11 @@ class StreamlitUIAdapter:
 
     def empty(self) -> Any:
         return st.empty()
+
+    def fetch_stack_features(self) -> dict[str, bool]:
+        auth = self._session.get("_auth_manager")
+        token = auth.access_token if auth and auth.access_token else None
+        return _fetch_stack_features(config.ingestor_url, token)
 
     def columns(self, spec: int | Sequence[int | float]) -> Any:
         return st.columns(spec)
