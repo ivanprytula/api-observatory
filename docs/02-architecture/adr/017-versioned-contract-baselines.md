@@ -81,7 +81,7 @@ Observed arrays follow bounded union-of-elements analysis:
 - Persistence and comparison behavior:
   [`contract_drift.py`](../../../services/ingestor/repositories/contract_drift.py).
 - Migration:
-  [`20260729_120000_add_contract_baselines.py`](../../../alembic/versions/20260729_120000_add_contract_baselines.py).
+  [`b771ac41bc8f_add_contract_baselines.py`](../../../alembic/versions/b771ac41bc8f_add_contract_baselines.py).
 - Focused behavior tests:
   [`test_contract_drift_api.py`](../../../services/ingestor/tests/integration/test_contract_drift_api.py).
 

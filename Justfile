@@ -61,6 +61,7 @@ dev:
     docker compose stop ingestor dashboard >/dev/null 2>&1 || true
     docker compose rm -f ingestor dashboard >/dev/null 2>&1 || true
     until docker compose exec -T ingestor-db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
+    just db-migrate
     # Streamlit hot-reloads .py files on save automatically
     uv run streamlit run services/dashboard/ui/streamlit/app.py \
         --server.port=8501 --server.address=0.0.0.0 --server.headless=true \

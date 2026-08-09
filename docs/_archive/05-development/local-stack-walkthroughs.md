@@ -59,7 +59,7 @@ prove that tenant boundaries and schema evolution are tested.
      state transitions.
    - [`routers/incidents.py`](../../services/ingestor/routers/incidents.py) scopes list, read,
      acknowledge, and resolve actions to the caller's tenant before the database query.
-   - [`20260729_160000_enable_dependency_incidents_rls.py`](../../alembic/versions/20260729_160000_enable_dependency_incidents_rls.py)
+   - [`bab88abe6c35_enable_dependency_incidents_rls.py`](../../alembic/versions/bab88abe6c35_enable_dependency_incidents_rls.py)
      adds the opt-in PostgreSQL policy as a second boundary.
 
 3. Run the focused proof rather than trusting the dashboard view:
