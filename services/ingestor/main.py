@@ -27,8 +27,6 @@ from libs.platform.http_timeout import RequestTimeoutMiddleware
 from libs.platform.tracing import setup_tracing
 from libs.version import get_contracts_version, get_version_payload
 from services.ingestor.auth import (
-    connect_session_store,
-    disconnect_session_store,
     jwt_role_guard,
 )
 from services.ingestor.config import settings
@@ -210,12 +208,6 @@ async def lifespan(app: FastAPI):
     logger.info("startup", extra={"event": "application_started"})
     _validate_production_security_settings()
 
-    # Initialize session store (always-on, not gated by cache_enabled)
-    try:
-        await connect_session_store(settings.cache_url)
-    except Exception as e:
-        logger.warning("session_store_startup_failed", extra={"error": str(e)})
-
     # Wire optional platform-level security audit sink from the service layer.
     set_security_audit_emitter(emit_security_audit_event)
 
@@ -358,9 +350,6 @@ async def lifespan(app: FastAPI):
         await stop_agent_checkpointer()
     except Exception as e:
         logger.warning("agent_checkpointer_shutdown_error", extra={"error": str(e)})
-
-    # Cleanup session store
-    await disconnect_session_store()
 
     # Clear platform-level hook during shutdown/reload.
     set_security_audit_emitter(None)
@@ -721,8 +710,6 @@ async def readyz(db: DbDep) -> dict[str, object]:
     unresolved version info can still safely serve traffic (see /version
     for the strict, deliberate version-consensus check).
     """
-    from services.ingestor.auth import _session_client as _cache
-
     checks: dict[str, str] = {}
     failed: list[str] = []
 
@@ -732,16 +719,6 @@ async def readyz(db: DbDep) -> dict[str, object]:
     except Exception as e:
         checks["db"] = "unreachable"
         failed.append(f"db: {e}")
-
-    try:
-        if _cache is not None:
-            await _cache.ping()
-            checks["cache"] = "ok"
-        else:
-            checks["cache"] = "not_configured"
-    except Exception as e:
-        checks["cache"] = "unreachable"
-        failed.append(f"cache: {e}")
 
     svc_version = os.getenv("SERVICE_VERSION") or settings.app_version
     try:

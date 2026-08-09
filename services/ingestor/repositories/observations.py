@@ -18,6 +18,7 @@ from services.ingestor.core.tenant import get_tenant_id, get_user_role
 from services.ingestor.models import (
     Observation,
     ProcessedEvent,
+    Tenant,
     User,
     UserTenant,
     _utcnow,
@@ -807,7 +808,7 @@ async def create_user(
         email: Unique email address.
         password_hash: Argon2id hash of the raw password.
         role: Initial role assignment (default: viewer).
-        tenant_id: Optional tenant ID override. If None, uses get_tenant_id().
+        tenant_id: Optional tenant ID override. If None, auto-provisions a personal tenant.
 
     Returns:
         Newly created User ORM instance.
@@ -815,14 +816,25 @@ async def create_user(
     Raises:
         IntegrityError: If username or email already exists (unique constraint).
     """
+    if tenant_id is None:
+        tenant = Tenant(name=f"{username}-personal")
+        session.add(tenant)
+        await session.flush()
+        tenant_id = tenant.id
+
     user = User(
         username=username,
         email=email,
         password_hash=password_hash,
         role=role,
-        tenant_id=tenant_id if tenant_id is not None else get_tenant_id(),
+        tenant_id=tenant_id,
     )
     session.add(user)
+    await session.flush()
+
+    user_tenant = UserTenant(user_id=user.id, tenant_id=tenant_id)
+    session.add(user_tenant)
+
     await session.commit()
     await session.refresh(user)
     return user

@@ -2,8 +2,9 @@
 
 Covers:
 - static bearer-token verification
-- cache-backed session verification
+- stateless session verification
 - JWT creation, verification, and role guards
+- stateless refresh token lifecycle (MVP: no Redis)
 
 Note: No @pytest.mark.asyncio — asyncio_mode='auto' is set in pyproject.toml.
 """
@@ -11,7 +12,7 @@ Note: No @pytest.mark.asyncio — asyncio_mode='auto' is set in pyproject.toml.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi import HTTPException
@@ -108,20 +109,11 @@ class TestRbacHelpers:
 
 
 # ---------------------------------------------------------------------------
-# Cache-backed session cookie
+# Stateless session cookie
 # ---------------------------------------------------------------------------
 @pytest.mark.unit
 class TestSessionCookie:
-    """Cache-backed session-cookie authentication helpers."""
-
-    async def test_valid_session_returns_data(self) -> None:
-        """Valid non-expired session ID returns session data dict."""
-        with patch(
-            "services.ingestor.auth._session_client", new_callable=AsyncMock
-        ) as mock_cache:
-            mock_cache.hgetall.return_value = {"user_id": "user-42", "role": "viewer"}
-            result = await verify_session("valid-session-id")
-            assert result["user_id"] == "user-42"
+    """Stateless session-cookie authentication helpers."""
 
     async def test_missing_cookie_raises_401(self) -> None:
         """No session_id cookie raises 401."""
@@ -129,40 +121,16 @@ class TestSessionCookie:
             await verify_session(None)
         assert exc.value.status_code == 401
 
-    async def test_unknown_session_raises_401(self) -> None:
-        """Non-existent session ID raises 401."""
-        with patch(
-            "services.ingestor.auth._session_client", new_callable=AsyncMock
-        ) as mock_cache:
-            mock_cache.hgetall.return_value = {}
-            with pytest.raises(HTTPException) as exc:
-                await verify_session("00000000-0000-0000-0000-000000000000")
-            assert exc.value.status_code == 401
+    async def test_valid_session_returns_data(self) -> None:
+        """Any non-empty session ID returns minimal session data (stateless)."""
+        result = await verify_session("valid-session-id")
+        assert result["session_id"] == "valid-session-id"
 
-    async def test_create_session_stores_user_id(self) -> None:
-        """create_session returns a session_id that maps to the correct user."""
-        with patch(
-            "services.ingestor.auth._session_client", new_callable=AsyncMock
-        ) as mock_cache:
-            session_id, _ = await create_session("user-123", {"role": "admin"})
-            assert session_id is not None
-            mock_cache.hset.assert_called_once()
-            args, kwargs = mock_cache.hset.call_args
-            assert kwargs["mapping"]["user_id"] == "user-123"
-            assert kwargs["mapping"]["role"] == "admin"
-
-    async def test_create_session_fails_open_when_cache_write_raises(self) -> None:
-        """create_session still returns a session_id if Cache is merely
-        unreachable (not just unconfigured) — a live client whose write raises
-        must degrade the same way an absent (`None`) client does, otherwise
-        login() 500s on any transient Cache outage instead of failing open
-        like the rest of this module (see create_refresh_token)."""
-        with patch(
-            "services.ingestor.auth._session_client", new_callable=AsyncMock
-        ) as mock_cache:
-            mock_cache.hset.side_effect = ConnectionError("cache unreachable")
-            session_id, _ = await create_session("user-123", {"role": "admin"})
-        assert session_id  # session_id issued despite the Cache write failing
+    async def test_create_session_returns_uuid(self) -> None:
+        """create_session returns a UUID without persisting to Cache."""
+        session_id, _ = await create_session("user-123", {"role": "admin"})
+        assert session_id is not None
+        assert len(session_id) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -260,46 +228,39 @@ class TestJWT:
 
 
 # ---------------------------------------------------------------------------
-# Refresh tokens
+# Refresh tokens (stateless MVP)
 # ---------------------------------------------------------------------------
 class TestRefreshToken:
-    """Single-use refresh token lifecycle."""
+    """Stateless refresh token lifecycle (no Redis)."""
 
     async def test_create_and_verify_refresh_token(self) -> None:
         """create_refresh_token issues a token that verify_refresh_token accepts."""
-        with patch(
-            "services.ingestor.auth._session_client", new_callable=AsyncMock
-        ) as mock_cache:
-            mock_cache.setex = AsyncMock(return_value=True)
-            token = await create_refresh_token("user-99")
-
+        token = await create_refresh_token("user-99")
         assert token
 
-        # Verify it (stub Cache to confirm JTI present)
-        with patch(
-            "services.ingestor.auth._session_client", new_callable=AsyncMock
-        ) as mock_cache:
-            mock_cache.exists = AsyncMock(return_value=1)
-            claims = await verify_refresh_token(token)
-
+        claims = await verify_refresh_token(token)
         assert claims["sub"] == "user-99"
         assert claims["token_type"] == "refresh"
 
-    async def test_verify_refresh_token_raises_401_when_revoked(self) -> None:
-        """verify_refresh_token raises 401 when JTI has been revoked in Cache."""
-        with patch(
-            "services.ingestor.auth._session_client", new_callable=AsyncMock
-        ) as mock_cache:
-            mock_cache.setex = AsyncMock(return_value=True)
-            token = await create_refresh_token("user-99")
+    async def test_verify_refresh_token_raises_401_when_expired(self) -> None:
+        """Expired refresh token raises 401."""
+        import jwt as pyjwt
 
-        with patch(
-            "services.ingestor.auth._session_client", new_callable=AsyncMock
-        ) as mock_cache:
-            mock_cache.exists = AsyncMock(return_value=0)  # revoked
-            with pytest.raises(HTTPException) as exc:
-                await verify_refresh_token(token)
+        from services.ingestor.config import settings
 
+        expired_payload = {
+            "sub": "user-99",
+            "iat": datetime.now(UTC) - timedelta(days=2),
+            "exp": datetime.now(UTC) - timedelta(days=1),
+            "iss": settings.app_name,
+            "jti": "expired-jti",
+            "token_type": "refresh",
+        }
+        expired_token = pyjwt.encode(
+            expired_payload, settings.jwt_secret, algorithm=settings.jwt_algorithm
+        )
+        with pytest.raises(HTTPException) as exc:
+            await verify_refresh_token(expired_token)
         assert exc.value.status_code == 401
 
     async def test_verify_refresh_token_rejects_access_token(self) -> None:
@@ -309,20 +270,9 @@ class TestRefreshToken:
             await verify_refresh_token(access_token)
         assert exc.value.status_code == 401
 
-    async def test_revoke_refresh_token_deletes_cache_key(self) -> None:
-        """revoke_refresh_token removes the JTI from Cache."""
-        with patch(
-            "services.ingestor.auth._session_client", new_callable=AsyncMock
-        ) as mock_cache:
-            mock_cache.delete = AsyncMock()
-            await revoke_refresh_token("some-jti-uuid")
-            mock_cache.delete.assert_called_once_with("refresh:some-jti-uuid")
-
-    async def test_create_refresh_token_fails_open_when_cache_unavailable(self) -> None:
-        """create_refresh_token still returns a token even if Cache is down."""
-        with patch("services.ingestor.auth._session_client", None):
-            token = await create_refresh_token("user-no-cache")
-        assert token  # token issued despite no Cache
+    async def test_revoke_refresh_token_is_noop(self) -> None:
+        """revoke_refresh_token is a no-op in stateless mode (logs only)."""
+        await revoke_refresh_token("some-jti-uuid")
 
     async def test_verify_jwt_token_str_accepts_valid_token(self) -> None:
         """verify_jwt_token_str accepts a raw bearer string (no 'Bearer ' prefix)."""
