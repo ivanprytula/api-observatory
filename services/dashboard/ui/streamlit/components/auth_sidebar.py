@@ -26,7 +26,9 @@ def _render_register_tab(ui: UIAdapter, manager: AuthManager) -> None:
         uname = st.text_input("Username", key="reg_uname")
         email = st.text_input("Email", key="reg_email")
         pwd = st.text_input("Password", type="password", key="reg_pwd")
-        pwd_confirm = st.text_input("Confirm password", type="password", key="reg_pwd_confirm")
+        pwd_confirm = st.text_input(
+            "Confirm password", type="password", key="reg_pwd_confirm"
+        )
         if st.form_submit_button("Create Account"):
             if not uname or not email or not pwd:
                 ui.show_error("All fields are required.")

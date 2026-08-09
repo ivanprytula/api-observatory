@@ -45,7 +45,8 @@ async def test_health_incidents_deduplicate_and_recover(
     monkeypatch.setattr(settings, "notification_delivery_mode", "direct")
     dispatch = AsyncMock(return_value={"sent": 0, "failed": 0})
     monkeypatch.setattr(
-        "services.ingestor.core.incident_notifications.dispatch_notification_event", dispatch
+        "services.ingestor.core.incident_notifications.dispatch_notification_event",
+        dispatch,
     )
     source = SourceProfile(
         name="tenant-provider",

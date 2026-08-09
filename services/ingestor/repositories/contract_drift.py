@@ -327,6 +327,7 @@ async def create_contract_snapshot(
         from services.ingestor.core.incident_notifications import (
             enqueue_incident_notification_requests as _enqueue_fn,
         )
+
         dispatch_incident_transitions = _dispatch_fn
         enqueue_incident_notification_requests = _enqueue_fn
 

@@ -104,8 +104,12 @@ class TestEnqueueNotificationRequests:
     async def test_returns_early_when_not_broker_mode(self) -> None:
         mock_db = MagicMock()
         with (
-            patch("services.ingestor.core.incident_notifications.settings") as mock_settings,
-            patch("services.ingestor.core.incident_notifications.add_outbox_event") as mock_add,
+            patch(
+                "services.ingestor.core.incident_notifications.settings"
+            ) as mock_settings,
+            patch(
+                "services.ingestor.core.incident_notifications.add_outbox_event"
+            ) as mock_add,
         ):
             mock_settings.notification_delivery_mode = "direct"
             mock_settings.notifications_enabled = True
@@ -117,8 +121,12 @@ class TestEnqueueNotificationRequests:
     async def test_returns_early_when_notifications_disabled(self) -> None:
         mock_db = MagicMock()
         with (
-            patch("services.ingestor.core.incident_notifications.settings") as mock_settings,
-            patch("services.ingestor.core.incident_notifications.add_outbox_event") as mock_add,
+            patch(
+                "services.ingestor.core.incident_notifications.settings"
+            ) as mock_settings,
+            patch(
+                "services.ingestor.core.incident_notifications.add_outbox_event"
+            ) as mock_add,
         ):
             mock_settings.notification_delivery_mode = "broker"
             mock_settings.notifications_enabled = False
@@ -130,7 +138,9 @@ class TestEnqueueNotificationRequests:
     async def test_raises_when_no_channels(self) -> None:
         mock_db = MagicMock()
         with (
-            patch("services.ingestor.core.incident_notifications.settings") as mock_settings,
+            patch(
+                "services.ingestor.core.incident_notifications.settings"
+            ) as mock_settings,
             patch(
                 "services.ingestor.core.incident_notifications.configured_notification_channels",
                 return_value=[],
@@ -147,7 +157,9 @@ class TestEnqueueNotificationRequests:
         no_notify = _transition(should_notify=False)
 
         with (
-            patch("services.ingestor.core.incident_notifications.settings") as mock_settings,
+            patch(
+                "services.ingestor.core.incident_notifications.settings"
+            ) as mock_settings,
             patch(
                 "services.ingestor.core.incident_notifications.configured_notification_channels",
                 return_value=["slack"],
@@ -170,7 +182,9 @@ class TestEnqueueNotificationRequests:
         transition = _transition(incident=inc, should_notify=True)
 
         with (
-            patch("services.ingestor.core.incident_notifications.settings") as mock_settings,
+            patch(
+                "services.ingestor.core.incident_notifications.settings"
+            ) as mock_settings,
             patch(
                 "services.ingestor.core.incident_notifications.configured_notification_channels",
                 return_value=["slack", "email"],
@@ -251,7 +265,9 @@ class TestDispatchTransitions:
     async def test_skips_dispatch_in_broker_mode(self) -> None:
         t = _transition(should_notify=True)
         with (
-            patch("services.ingestor.core.incident_notifications.settings") as mock_settings,
+            patch(
+                "services.ingestor.core.incident_notifications.settings"
+            ) as mock_settings,
             patch(
                 "services.ingestor.core.incident_notifications.dispatch_notification_event",
                 new=AsyncMock(),
@@ -275,7 +291,9 @@ class TestDispatchTransitions:
         t = _transition(should_notify=True)
         mock_db = MagicMock()
         with (
-            patch("services.ingestor.core.incident_notifications.settings") as mock_settings,
+            patch(
+                "services.ingestor.core.incident_notifications.settings"
+            ) as mock_settings,
             patch(
                 "services.ingestor.core.incident_notifications.dispatch_notification_event",
                 new=AsyncMock(),

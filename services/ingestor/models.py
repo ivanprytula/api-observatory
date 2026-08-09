@@ -287,9 +287,7 @@ class Tenant(Base, TimestampMixin):
     """
 
     __tablename__ = "tenants"
-    __table_args__ = (
-        Index("ix_tenants_name", "name", unique=True),
-    )
+    __table_args__ = (Index("ix_tenants_name", "name", unique=True),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(128), nullable=False)

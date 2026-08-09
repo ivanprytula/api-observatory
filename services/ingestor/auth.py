@@ -83,7 +83,9 @@ async def verify_jwt_token(
     saw_invalid_signature = False
     for secret in _jwt_verification_secrets():
         try:
-            payload = jwt.decode(credentials, secret, algorithms=[settings.jwt_algorithm])
+            payload = jwt.decode(
+                credentials, secret, algorithms=[settings.jwt_algorithm]
+            )
 
             tenant_id = payload.get("tenant_id")
             if tenant_id:
