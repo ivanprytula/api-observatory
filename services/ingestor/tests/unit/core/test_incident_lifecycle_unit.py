@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from services.ingestor.incident_lifecycle import (
+from services.ingestor.core.incident_notifications import (
     _aware_utc,
     _dispatch_transitions,
     _notification_message_id,
@@ -104,8 +104,8 @@ class TestEnqueueNotificationRequests:
     async def test_returns_early_when_not_broker_mode(self) -> None:
         mock_db = MagicMock()
         with (
-            patch("services.ingestor.incident_lifecycle.settings") as mock_settings,
-            patch("services.ingestor.incident_lifecycle.add_outbox_event") as mock_add,
+            patch("services.ingestor.core.incident_notifications.settings") as mock_settings,
+            patch("services.ingestor.core.incident_notifications.add_outbox_event") as mock_add,
         ):
             mock_settings.notification_delivery_mode = "direct"
             mock_settings.notifications_enabled = True
@@ -117,8 +117,8 @@ class TestEnqueueNotificationRequests:
     async def test_returns_early_when_notifications_disabled(self) -> None:
         mock_db = MagicMock()
         with (
-            patch("services.ingestor.incident_lifecycle.settings") as mock_settings,
-            patch("services.ingestor.incident_lifecycle.add_outbox_event") as mock_add,
+            patch("services.ingestor.core.incident_notifications.settings") as mock_settings,
+            patch("services.ingestor.core.incident_notifications.add_outbox_event") as mock_add,
         ):
             mock_settings.notification_delivery_mode = "broker"
             mock_settings.notifications_enabled = False
@@ -130,9 +130,9 @@ class TestEnqueueNotificationRequests:
     async def test_raises_when_no_channels(self) -> None:
         mock_db = MagicMock()
         with (
-            patch("services.ingestor.incident_lifecycle.settings") as mock_settings,
+            patch("services.ingestor.core.incident_notifications.settings") as mock_settings,
             patch(
-                "services.ingestor.incident_lifecycle.configured_notification_channels",
+                "services.ingestor.core.incident_notifications.configured_notification_channels",
                 return_value=[],
             ),
         ):
@@ -147,13 +147,13 @@ class TestEnqueueNotificationRequests:
         no_notify = _transition(should_notify=False)
 
         with (
-            patch("services.ingestor.incident_lifecycle.settings") as mock_settings,
+            patch("services.ingestor.core.incident_notifications.settings") as mock_settings,
             patch(
-                "services.ingestor.incident_lifecycle.configured_notification_channels",
+                "services.ingestor.core.incident_notifications.configured_notification_channels",
                 return_value=["slack"],
             ),
             patch(
-                "services.ingestor.incident_lifecycle.add_outbox_event",
+                "services.ingestor.core.incident_notifications.add_outbox_event",
                 new=AsyncMock(),
             ) as mock_add,
         ):
@@ -170,13 +170,13 @@ class TestEnqueueNotificationRequests:
         transition = _transition(incident=inc, should_notify=True)
 
         with (
-            patch("services.ingestor.incident_lifecycle.settings") as mock_settings,
+            patch("services.ingestor.core.incident_notifications.settings") as mock_settings,
             patch(
-                "services.ingestor.incident_lifecycle.configured_notification_channels",
+                "services.ingestor.core.incident_notifications.configured_notification_channels",
                 return_value=["slack", "email"],
             ),
             patch(
-                "services.ingestor.incident_lifecycle.add_outbox_event",
+                "services.ingestor.core.incident_notifications.add_outbox_event",
                 new=AsyncMock(),
             ) as mock_add,
         ):
@@ -208,17 +208,17 @@ class TestDispatchTransitions:
         t2 = _transition(should_notify=True)
 
         with (
-            patch("services.ingestor.incident_lifecycle.settings"),
+            patch("services.ingestor.core.incident_notifications.settings"),
             patch(
-                "services.ingestor.incident_lifecycle.dispatch_notification_event",
+                "services.ingestor.core.incident_notifications.dispatch_notification_event",
                 new=AsyncMock(),
             ),
             patch(
-                "services.ingestor.incident_lifecycle.mark_notification_attempted",
+                "services.ingestor.core.incident_notifications.mark_notification_attempted",
                 new=AsyncMock(),
             ) as mock_mark,
             patch(
-                "services.ingestor.incident_lifecycle.dependency_incident_transitions_total"
+                "services.ingestor.core.incident_notifications.dependency_incident_transitions_total"
             ) as mock_metrics,
         ):
             mock_metrics.labels.return_value.inc = MagicMock()
@@ -230,17 +230,17 @@ class TestDispatchTransitions:
     async def test_skips_dispatch_when_not_should_notify(self) -> None:
         t = _transition(should_notify=False)
         with (
-            patch("services.ingestor.incident_lifecycle.settings"),
+            patch("services.ingestor.core.incident_notifications.settings"),
             patch(
-                "services.ingestor.incident_lifecycle.dispatch_notification_event",
+                "services.ingestor.core.incident_notifications.dispatch_notification_event",
                 new=AsyncMock(),
             ) as mock_dispatch,
             patch(
-                "services.ingestor.incident_lifecycle.mark_notification_attempted",
+                "services.ingestor.core.incident_notifications.mark_notification_attempted",
                 new=AsyncMock(),
             ),
             patch(
-                "services.ingestor.incident_lifecycle.dependency_incident_transitions_total"
+                "services.ingestor.core.incident_notifications.dependency_incident_transitions_total"
             ) as mock_metrics,
         ):
             mock_metrics.labels.return_value.inc = MagicMock()
@@ -251,17 +251,17 @@ class TestDispatchTransitions:
     async def test_skips_dispatch_in_broker_mode(self) -> None:
         t = _transition(should_notify=True)
         with (
-            patch("services.ingestor.incident_lifecycle.settings") as mock_settings,
+            patch("services.ingestor.core.incident_notifications.settings") as mock_settings,
             patch(
-                "services.ingestor.incident_lifecycle.dispatch_notification_event",
+                "services.ingestor.core.incident_notifications.dispatch_notification_event",
                 new=AsyncMock(),
             ) as mock_dispatch,
             patch(
-                "services.ingestor.incident_lifecycle.mark_notification_attempted",
+                "services.ingestor.core.incident_notifications.mark_notification_attempted",
                 new=AsyncMock(),
             ) as mock_mark,
             patch(
-                "services.ingestor.incident_lifecycle.dependency_incident_transitions_total"
+                "services.ingestor.core.incident_notifications.dependency_incident_transitions_total"
             ) as mock_metrics,
         ):
             mock_settings.notification_delivery_mode = "broker"
@@ -275,17 +275,17 @@ class TestDispatchTransitions:
         t = _transition(should_notify=True)
         mock_db = MagicMock()
         with (
-            patch("services.ingestor.incident_lifecycle.settings") as mock_settings,
+            patch("services.ingestor.core.incident_notifications.settings") as mock_settings,
             patch(
-                "services.ingestor.incident_lifecycle.dispatch_notification_event",
+                "services.ingestor.core.incident_notifications.dispatch_notification_event",
                 new=AsyncMock(),
             ) as mock_dispatch,
             patch(
-                "services.ingestor.incident_lifecycle.mark_notification_attempted",
+                "services.ingestor.core.incident_notifications.mark_notification_attempted",
                 new=AsyncMock(),
             ) as mock_mark,
             patch(
-                "services.ingestor.incident_lifecycle.dependency_incident_transitions_total"
+                "services.ingestor.core.incident_notifications.dependency_incident_transitions_total"
             ) as mock_metrics,
         ):
             mock_settings.notification_delivery_mode = "direct"
@@ -308,7 +308,7 @@ class TestDispatchIncidentTransitions:
         mock_db = MagicMock()
         with (
             patch(
-                "services.ingestor.incident_lifecycle._dispatch_transitions",
+                "services.ingestor.core.incident_notifications._dispatch_transitions",
                 new=AsyncMock(),
             ) as mock_inner,
         ):

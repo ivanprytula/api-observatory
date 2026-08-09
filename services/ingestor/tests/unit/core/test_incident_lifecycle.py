@@ -45,7 +45,7 @@ async def test_health_incidents_deduplicate_and_recover(
     monkeypatch.setattr(settings, "notification_delivery_mode", "direct")
     dispatch = AsyncMock(return_value={"sent": 0, "failed": 0})
     monkeypatch.setattr(
-        "services.ingestor.incident_lifecycle.dispatch_notification_event", dispatch
+        "services.ingestor.core.incident_notifications.dispatch_notification_event", dispatch
     )
     source = SourceProfile(
         name="tenant-provider",
@@ -97,7 +97,7 @@ async def test_consecutive_latency_breach_opens_and_recovers(
 ) -> None:
     monkeypatch.setattr(settings, "notification_delivery_mode", "direct")
     monkeypatch.setattr(
-        "services.ingestor.incident_lifecycle.dispatch_notification_event",
+        "services.ingestor.core.incident_notifications.dispatch_notification_event",
         AsyncMock(return_value={"sent": 0, "failed": 0}),
     )
     source = SourceProfile(

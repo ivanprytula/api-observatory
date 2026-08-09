@@ -15,7 +15,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from services.ingestor.api_schemas.observations import ObservationRequest
-from services.ingestor.models import User, UserTenant
+from services.ingestor.models import Tenant, User, UserTenant
 from services.ingestor.repositories.observations import (
     _apply_tenant_filter,
     _decode_cursor,
@@ -221,24 +221,32 @@ class TestUpdateUserRole:
 
 @pytest.mark.unit
 class TestCreateUser:
-    async def test_uses_get_tenant_id_when_none(self) -> None:
+    async def test_auto_provisions_tenant_when_none(self) -> None:
         mock_session = MagicMock()
         mock_session.add = MagicMock()
         mock_session.commit = AsyncMock()
+        mock_session.flush = AsyncMock()
         mock_session.refresh = AsyncMock()
 
-        with patch(
-            "services.ingestor.repositories.observations.get_tenant_id",
-            return_value=42,
-        ):
-            user = await create_user(
-                mock_session,
-                username="alice",
-                email="alice@x.com",
-                password_hash="hash123",
-            )
+        tenant_id = 1
+        user_id = 2
 
-        assert user.tenant_id == 42
+        def _track_add(obj):
+            if isinstance(obj, Tenant):
+                obj.id = tenant_id
+            elif isinstance(obj, User):
+                obj.id = user_id
+
+        mock_session.add.side_effect = _track_add
+
+        user = await create_user(
+            mock_session,
+            username="alice",
+            email="alice@x.com",
+            password_hash="hash123",
+        )
+
+        assert user.tenant_id == tenant_id
         assert user.role == "viewer"
         mock_session.commit.assert_awaited_once()
 
@@ -246,6 +254,7 @@ class TestCreateUser:
         mock_session = MagicMock()
         mock_session.add = MagicMock()
         mock_session.commit = AsyncMock()
+        mock_session.flush = AsyncMock()
         mock_session.refresh = AsyncMock()
 
         user = await create_user(
@@ -259,6 +268,7 @@ class TestCreateUser:
 
         assert user.tenant_id == 99
         assert user.role == "admin"
+        mock_session.commit.assert_awaited_once()
 
 
 @pytest.mark.unit
