@@ -7,7 +7,7 @@ authors = [{ name = "Ivan Prytula", email = "ivanprytula.dev@gmail.com" }]
 maintainers = [{ name = "Ivan Prytula", email = "ivanprytula.dev@gmail.com" }]
 license = "Apache-2.0"
 dependencies = [
-  "streamlit>=1.45.0",
+  "streamlit>=1.61.1",
   "httpx>=0.28.1",
   "pydantic>=2.13.3",
 ]
