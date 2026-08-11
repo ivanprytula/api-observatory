@@ -145,16 +145,14 @@ jobs:
         uses: ./.github/actions/setup-python-project
         with:
           install-args: >-
-            with:
-            fetch-depth: 1
-            install-args: >-
             --frozen --all-packages
             --extra ai --extra messaging --extra etl
-            - name: Run unit, MCP, and OpenAPI contract tests
-            run: |
-            uv run pytest tests/unit services/ingestor/tests/unit -q -m unit
-            uv run pytest services/mcp/tests -q --no-cov
-            uv run pytest services/ingestor/tests/contract -q -m contract --no-cov
+
+      - name: Run unit, MCP, and OpenAPI contract tests
+        run: |
+          uv run pytest tests/unit services/ingestor/tests/unit -q -m unit
+          uv run pytest services/mcp/tests -q --no-cov
+          uv run pytest services/ingestor/tests/contract -q -m contract --no-cov
 
   integration:
     name: "Core PostgreSQL integration and migrations"
@@ -205,34 +203,36 @@ jobs:
         uses: ./.github/actions/setup-python-project
         with:
           install-args: >-
-            with:
-            fetch-depth: 1
-            install-args: >-
             --frozen --all-packages
             --extra ai --extra messaging --extra etl
-            - name: Create isolated migration and inference databases
-            run: |
-            docker exec "${{ job.services.postgres.id }}" createdb -U postgres api_obs_ingestor_migrations
-            docker exec "${{ job.services.postgres.id }}" createdb -U postgres api_obs_inference_migrations
-            docker exec "${{ job.services.postgres.id }}" createdb -U postgres api_obs_inference_test
-            - name: Validate ingestor migrations
-            env:
-            DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_ingestor_migrations
-            run: uv run python scripts/ci/validate_migrations.py "$DATABASE_URL"
-            - name: Validate inference migrations
-            env:
-            DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_inference_migrations
-            run: uv run python scripts/ci/validate_migrations.py "$DATABASE_URL" --alembic-config services/inference/alembic.ini
-            - name: Run core ingestor integration tests
-            run: |
-            mkdir -p coverage
-            uv run pytest -q -m "${CORE_TEST_MARKER}" \
+
+      - name: Create isolated migration and inference databases
+        run: |
+          docker exec "${{ job.services.postgres.id }}" createdb -U postgres api_obs_ingestor_migrations
+          docker exec "${{ job.services.postgres.id }}" createdb -U postgres api_obs_inference_migrations
+          docker exec "${{ job.services.postgres.id }}" createdb -U postgres api_obs_inference_test
+
+      - name: Validate ingestor migrations
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_ingestor_migrations
+        run: uv run python scripts/ci/validate_migrations.py "$DATABASE_URL"
+
+      - name: Validate inference migrations
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_inference_migrations
+        run: uv run python scripts/ci/validate_migrations.py "$DATABASE_URL" --alembic-config services/inference/alembic.ini
+
+      - name: Run core ingestor integration tests
+        run: |
+          mkdir -p coverage
+          uv run pytest -q -m "${CORE_TEST_MARKER}" \
             --cov-report=xml:coverage/ingestor.xml
-            - name: Run inference integration tests
-            env:
-            DATABASE_URL_TEST: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_inference_test
-            run: |
-            uv run pytest services/inference/tests -q -o addopts='' \
+
+      - name: Run inference integration tests
+        env:
+          DATABASE_URL_TEST: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_inference_test
+        run: |
+          uv run pytest services/inference/tests -q -o addopts='' \
             --cov-config=coverage.inference.ini \
             --cov \
             --cov-report=term-missing \
@@ -310,14 +310,12 @@ jobs:
         uses: ./.github/actions/setup-python-project
         with:
           install-args: >-
-            with:
-            fetch-depth: 1
-            install-args: >-
             --frozen --all-packages
             --extra ai --extra messaging --extra etl
-            - name: Run capability profile
-            run: |
-            uv run pytest services/ingestor/tests -q -m "${{ matrix.marker }}"
+
+      - name: Run capability profile
+        run: |
+          uv run pytest services/ingestor/tests -q -m "${{ matrix.marker }}"
 
   image-smoke:
     name: "Deployable image smoke"

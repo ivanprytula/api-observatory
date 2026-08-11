@@ -102,10 +102,65 @@ For Bash scripts:
 For Markdown documentation:
   read `.github/instructions/markdown.instructions.md`
 
+For Python code:
+  read `.github/instructions/python.instructions.md`
+  read `.github/instructions/pydantic.instructions.md`
+
+For FastAPI:
+  read `.github/instructions/fastapi.instructions.md`
+  read `.github/instructions/fastapi-testing.instructions.md`
+
+For database/SQL:
+  read `.github/instructions/sql.instructions.md`
+
+For testing:
+  read `.github/instructions/tests.instructions.md`
+
+For Docker/containers:
+  read `.github/instructions/containerization-docker-best-practices.instructions.md`
+  read `.github/instructions/docker-ci-guide.md`
+
+For infrastructure-as-code:
+  read `.github/instructions/terraform.instructions.md`
+  read `.github/instructions/ansible.instructions.md`
+
+For Kubernetes:
+  read `.github/instructions/kubernetes-deployment-best-practices.instructions.md`
+
 For design/architecture decisions:
   read `.github/instructions/design-patterns.instructions.md`
   read `.github/instructions/solid-principles.instructions.md`
 
+For GitHub Actions workflow changes:
+  read `.github/instructions/yaml.instructions.md`
+  read `.github/instructions/github-actions-ci-cd-best-practices.instructions.md`
+
+For API/docs:
+  read `.github/instructions/api-docs.instructions.md`
+
+For async/concurrency:
+  read `.github/instructions/async-patterns.instructions.md`
+
+For performance:
+  read `.github/instructions/performance-optimization.instructions.md`
+
+For models/CRUD:
+  read `.github/instructions/models.instructions.md`
+  read `.github/instructions/crud.instructions.md`
+
+For TOML:
+  read `.github/instructions/toml.instructions.md`
+
+For HTML/CSS:
+  read `.github/instructions/html-css.instructions.md`
+
+For LangChain:
+  read `.github/instructions/langchain-python.instructions.md`
+
 For project architecture, product decisions, or engineering topic lookups:
   read `docs/PROJECT_CONTEXT.md`
   read `docs/02-architecture/engineering-topics.md`
+
+## Instruction sync rule
+
+Whenever you add or update an instruction file listed in **Progressive-loading routes**, check whether the sibling infra repository has the same instruction file. If it does, update both repos to keep them in sync. If the sibling repo does not have it, update only the repo you were asked to modify, or the repo relevant to the specific action/question.
