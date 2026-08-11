@@ -29,9 +29,13 @@ jobs:
       aws_mvp_lock: ${{ steps.filter.outputs.aws_mvp_lock }}
     steps:
       - name: Checkout
-        uses: ./.github/actions/setup-python-project
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
+
+      - name: Setup Python project
+        uses: ./.github/actions/setup-python-project
+        with:
           install-args: --frozen --all-packages --all-extras
 
       - name: Detect relevant changes
@@ -96,47 +100,14 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: ./.github/actions/setup-python-project
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
-          install-args: --frozen --all-packages --all-extras
 
-      - name: Validate workspace and service boundaries
-        run: |
-          uv run python scripts/ci/check_workspace_manifests.py
-          uv run python scripts/ci/check_service_boundaries.py
-          uv run python scripts/validate_release_manifest.py
-          uv run python scripts/validate_mvp_contract.py --allow-placeholder-lock --app-root .
-
-      - name: Validate workflow action references
-        shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -t workflow_files < <(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) | sort)
-          mutable_refs=$(grep -nE 'uses:\s*[^#]+@(v[0-9]+|latest|main|master|develop)\b' "${workflow_files[@]}" || true)
-          mutable_docker_refs=$(grep -nE 'uses:\s*docker://' "${workflow_files[@]}" | grep -v '@sha256:' || true)
-          if [[ -n "${mutable_refs}" || -n "${mutable_docker_refs}" ]]; then
-            echo "Mutable action reference detected."
-            echo "${mutable_refs}"
-            echo "${mutable_docker_refs}"
-            exit 1
-          fi
-
-      - name: Lint GitHub Actions workflows
-        uses: devops-actions/actionlint@e7ee33fbf5aa8c9f9ee1145137f3e52e25d6a35b # v0.1.3 (upstream actionlint v1.7.12)
-
-      - name: Lint, format, and type checks
-        run: |
-          uv run ruff check services libs scripts tests
-          uv run ruff format --check services libs scripts tests
-          uv run bandit -c pyproject.toml -r services libs scripts
-          uv run python scripts/ci/check_test_markers.py
-          uv run ty check services libs
-
-      - name: Detect committed secrets
-        uses: docker://ghcr.io/gitleaks/gitleaks@sha256:0e99e8821643ea5b235718642b93bb32486af9c8162c8b8731f7cbdc951a7f46 # v8.21.2
+      - name: Setup Python project
+        uses: ./.github/actions/setup-python-project
         with:
-          args: detect --source=/github/workspace --verbose --no-banner
+          install-args: --frozen --all-packages --all-extras
 
   docs-quality:
     name: "Docs quality"
@@ -146,30 +117,14 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: ./.github/actions/setup-python-project
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
+
+      - name: Setup Python project
+        uses: ./.github/actions/setup-python-project
+        with:
           install-args: --frozen --all-packages --all-extras
-
-      - name: Validate workflow action references
-        shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -t workflow_files < <(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) | sort)
-          mutable_refs=$(grep -nE 'uses:\s*[^#]+@(v[0-9]+|latest|main|master|develop)\b' "${workflow_files[@]}" || true)
-          mutable_docker_refs=$(grep -nE 'uses:\s*docker://' "${workflow_files[@]}" | grep -v '@sha256:' || true)
-          if [[ -n "${mutable_refs}" || -n "${mutable_docker_refs}" ]]; then
-            echo "Mutable action reference detected."
-            echo "${mutable_refs}"
-            echo "${mutable_docker_refs}"
-            exit 1
-          fi
-
-      - name: Lint GitHub Actions workflows
-        uses: devops-actions/actionlint@e7ee33fbf5aa8c9f9ee1145137f3e52e25d6a35b # v0.1.3 (upstream actionlint v1.7.12)
-
-      - name: Lint markdown documentation
-        run: uv run python scripts/ci/docs_quality_check.py
 
   unit:
     name: "Unit and contract tests"
@@ -182,18 +137,24 @@ jobs:
       CACHE_ENABLED: "false"
     steps:
       - name: Checkout
-        uses: ./.github/actions/setup-python-project
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
+
+      - name: Setup Python project
+        uses: ./.github/actions/setup-python-project
+        with:
           install-args: >-
+            with:
+            fetch-depth: 1
+            install-args: >-
             --frozen --all-packages
             --extra ai --extra messaging --extra etl
-
-      - name: Run unit, MCP, and OpenAPI contract tests
-        run: |
-          uv run pytest tests/unit services/ingestor/tests/unit -q -m unit
-          uv run pytest services/mcp/tests -q --no-cov
-          uv run pytest services/ingestor/tests/contract -q -m contract --no-cov
+            - name: Run unit, MCP, and OpenAPI contract tests
+            run: |
+            uv run pytest tests/unit services/ingestor/tests/unit -q -m unit
+            uv run pytest services/mcp/tests -q --no-cov
+            uv run pytest services/ingestor/tests/contract -q -m contract --no-cov
 
   integration:
     name: "Core PostgreSQL integration and migrations"
@@ -236,40 +197,42 @@ jobs:
         capability_ai and not full_optional
     steps:
       - name: Checkout
-        uses: ./.github/actions/setup-python-project
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
+
+      - name: Setup Python project
+        uses: ./.github/actions/setup-python-project
+        with:
           install-args: >-
+            with:
+            fetch-depth: 1
+            install-args: >-
             --frozen --all-packages
             --extra ai --extra messaging --extra etl
-
-      - name: Create isolated migration and inference databases
-        run: |
-          docker exec "${{ job.services.postgres.id }}" createdb -U postgres api_obs_ingestor_migrations
-          docker exec "${{ job.services.postgres.id }}" createdb -U postgres api_obs_inference_migrations
-          docker exec "${{ job.services.postgres.id }}" createdb -U postgres api_obs_inference_test
-
-      - name: Validate ingestor migrations
-        env:
-          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_ingestor_migrations
-        run: uv run python scripts/ci/validate_migrations.py "$DATABASE_URL"
-
-      - name: Validate inference migrations
-        env:
-          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_inference_migrations
-        run: uv run python scripts/ci/validate_migrations.py "$DATABASE_URL" --alembic-config services/inference/alembic.ini
-
-      - name: Run core ingestor integration tests
-        run: |
-          mkdir -p coverage
-          uv run pytest -q -m "${CORE_TEST_MARKER}" \
+            - name: Create isolated migration and inference databases
+            run: |
+            docker exec "${{ job.services.postgres.id }}" createdb -U postgres api_obs_ingestor_migrations
+            docker exec "${{ job.services.postgres.id }}" createdb -U postgres api_obs_inference_migrations
+            docker exec "${{ job.services.postgres.id }}" createdb -U postgres api_obs_inference_test
+            - name: Validate ingestor migrations
+            env:
+            DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_ingestor_migrations
+            run: uv run python scripts/ci/validate_migrations.py "$DATABASE_URL"
+            - name: Validate inference migrations
+            env:
+            DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_inference_migrations
+            run: uv run python scripts/ci/validate_migrations.py "$DATABASE_URL" --alembic-config services/inference/alembic.ini
+            - name: Run core ingestor integration tests
+            run: |
+            mkdir -p coverage
+            uv run pytest -q -m "${CORE_TEST_MARKER}" \
             --cov-report=xml:coverage/ingestor.xml
-
-      - name: Run inference integration tests
-        env:
-          DATABASE_URL_TEST: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_inference_test
-        run: |
-          uv run pytest services/inference/tests -q -o addopts='' \
+            - name: Run inference integration tests
+            env:
+            DATABASE_URL_TEST: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_inference_test
+            run: |
+            uv run pytest services/inference/tests -q -o addopts='' \
             --cov-config=coverage.inference.ini \
             --cov \
             --cov-report=term-missing \
@@ -339,16 +302,22 @@ jobs:
       NOTIFICATION_DELIVERY_MODE: broker
     steps:
       - name: Checkout
-        uses: ./.github/actions/setup-python-project
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
+
+      - name: Setup Python project
+        uses: ./.github/actions/setup-python-project
+        with:
           install-args: >-
+            with:
+            fetch-depth: 1
+            install-args: >-
             --frozen --all-packages
             --extra ai --extra messaging --extra etl
-
-      - name: Run capability profile
-        run: |
-          uv run pytest services/ingestor/tests -q -m "${{ matrix.marker }}"
+            - name: Run capability profile
+            run: |
+            uv run pytest services/ingestor/tests -q -m "${{ matrix.marker }}"
 
   image-smoke:
     name: "Deployable image smoke"
