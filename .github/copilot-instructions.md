@@ -2,40 +2,7 @@
 
 Async FastAPI + SQLAlchemy 2.0 services for ingesting, processing, and querying pipeline data.
 
-> **Global rules** (privacy, read scope, OWASP, SSRF, secrets scanning, anti-overengineering, chat session reminders) live in `~/.agents/AGENTS.md`. This file holds only the project-specific overrides and conventions.
-
-## Priority
-
-Optimize for low token usage.
-
-- Be brief in chat.
-- Prefer file edits and focused commands over long prose.
-- Do not narrate internal reasoning, tool choice, or step-by-step plans unless the user asks.
-- Do not paste large code blocks when the file can be edited directly.
-- Do not restate the same fact twice.
-- Do not dump large command output; summarize only the important lines.
-
-## Read Scope
-
-- Read this file first.
-- Read only instruction files that match the files you touch.
-- Do not read `.env`, secrets, or unrelated config unless explicitly asked.
-- Do not scan `.venv`.
-
-## Execution Rules
-
-- Use tools immediately when the user asks to change files.
-- Use `apply_patch` for manual file edits.
-- Use `uv run` for Python commands, tests, scripts, Alembic, Ruff, and Uvicorn.
-- Do not commit, amend, or create branches unless explicitly asked.
-- Do not revert user changes unless explicitly asked.
-
-## Response Style
-
-- Default answer shape: result, key validation, next step if needed.
-- Keep explanations short and technical.
-- Prefer prose over lists unless the content is inherently list-shaped.
-- For simple tasks, 1 short paragraph is enough.
+> For universal agent behavior (priority, read scope, execution rules, response style, privacy, and technical conventions), read `AGENTS.md` in the repository root. This file holds only project-specific overrides and conventions.
 
 ## Project Layout
 
@@ -171,29 +138,3 @@ Any URL supplied by a user that will be used in a server-side HTTP request must 
 - Resolved IP must not fall in private ranges: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `::1`
 - Use `ipaddress` stdlib module to check the resolved IP after DNS resolution
 - This applies to: `SourceProfile.base_url`, webhook URLs, scraper targets, any other user-controlled URL
-
-## Chat Session Reminders
-
-- Remind the user to create a new chat every 20 messages and whenever starting a new topic to avoid mixing unrelated content in one session.
-- When a session reaches the 20th message, the assistant should prepare a concise "Session Summary" ready to copy/paste into a new chat.
-- Remind the user that pasting the summary as the first message in the new chat preserves context and continuity.
-
-### Session Summary Template (copy/paste into new chat)
-
-- **Session title:**
-- **Date:**
-- **Message count:**
-- **Topics covered:**
-   -
-- **Key decisions:**
-   -
-- **Files changed / paths:**
-   -
-- **Commands / snippets to run:**
-   -
-- **Outstanding questions / next steps:**
-   -
-- **Brief context / notes:**
-   -
-
-(End of summary)

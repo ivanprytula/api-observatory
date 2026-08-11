@@ -29,7 +29,7 @@ repos:
       - id: requirements-txt-fixer
         files: ^requirements-audit\.txt$
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.0
+    rev: v0.16.2
     hooks:
       - id: ruff-check
         args: ["--fix", "--config=pyproject.toml", "services", "libs", "scripts", "tests"]
@@ -57,7 +57,7 @@ repos:
           pass_filenames: false
 
   - repo: https://github.com/hadolint/hadolint
-    rev: v2.14.0
+    rev: v2.15.1
     hooks:
       - id: hadolint
         name: hadolint dockerfile lint
@@ -88,6 +88,11 @@ repos:
         entry: ./scripts/ci/02-pre-commit-private-docs.sh
         language: script
         types: [file]
+        pass_filenames: false
+      - id: check-workspace-and-boundaries
+        name: check workspace and service boundaries
+        entry: uv run python scripts/ci/preflight_checks.py
+        language: system
         pass_filenames: false
       - id: docs-quality-markdown
         name: docs-quality-markdown

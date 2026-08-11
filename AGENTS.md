@@ -1,26 +1,10 @@
 # AGENTS.md — Rules for AI Coding Agents
 
-Global rules for how AI coding agents (Cline, Kilo, Copilot, etc.) should behave when working on this user's projects.
-
-> **Project-specific overrides** for the current repo live in `.github/copilot-instructions.md` in that repo. Read that file too. The global rules here apply everywhere; project rules win on conflict.
-
----
-
-## Brief overview
-
-This file is deliberately lean. Three groups of rules live here:
-
-1. **How to communicate** — priority, style, response shape, session mechanics.
-2. **How to behave around files** — read scope, secrets, credential stores, `.gitignore`.
-3. **Cross-project technical conventions** — short checklists and links; deep content lives in the project.
-
-The repository's own `.github/instructions/` files carry the long-form examples. AGENTS.md carries the principles so an agent can act in any project, then points to the project files for depth.
-
----
+Global rules for AI coding agents (Cline, Kilo, Copilot, etc.) working in this repository. Project-specific overrides live in `.github/copilot-instructions.md`.
 
 ## Priority
 
-Optimize for low token usage. Be brief in chat. Prefer file edits and focused commands over long prose. Do not narrate internal reasoning, tool choice, or step-by-step plans unless asked. Do not paste large code blocks when the file can be edited directly. Do not restate the same fact twice. Do not dump large command output; summarize only the important lines.
+Optimize for low token usage. Be brief in chat. Prefer file edits and focused commands over long prose. Do not narrate internal reasoning, tool choice, or step-by-step plans unless asked. Do not paste large code blocks when the file can be edited directly. Do not restate the same fact twice. Summarize important lines only.
 
 ## Read scope
 
@@ -28,7 +12,7 @@ Read this file first. Read only instruction files that match the files you touch
 
 ## Execution rules
 
-Use tools immediately when the user asks to change files. Use `apply_patch` for manual edits. Use `uv run` for Python commands, tests, scripts, Alembic, Ruff, and Uvicorn. After image or container testing/verification, remove unneeded test images, containers, and volumes to prevent host-disk growth; inspect targets first and never remove user or persistent data without explicit approval. Do not commit, amend, or create branches unless explicitly asked. Do not revert user changes unless explicitly asked.
+Use tools immediately when the user asks to change files. Use `apply_patch` for manual edits. Use `uv run` for Python commands, tests, scripts, Alembic, Ruff, and Uvicorn. After testing, remove unneeded test artifacts; inspect targets first and never remove user or persistent data without explicit approval. Do not commit, amend, or create branches unless explicitly asked. Do not revert user changes unless explicitly asked.
 
 ## Response style
 
@@ -37,171 +21,83 @@ Default shape: result, key validation, next step if needed. Keep explanations sh
 ## Working preferences
 
 - Prefer small, reviewable patches over broad refactors.
-- Offer one recommended approach; mention alternatives only when their tradeoffs are material.
+- Offer one recommended approach; mention alternatives only when tradeoffs are material.
 - Preserve backward compatibility unless the user explicitly authorizes a breaking change.
 - Keep runtime dependencies minimal and explain why each new dependency is needed.
-- When a product decision is ambiguous, present concrete options and wait for direction rather than making an irreversible assumption.
+- When a product decision is ambiguous, present concrete options and wait for direction.
 - Favor operationally simple solutions with explicit failure modes and useful observability.
-
-## Project direction
-
-Keep this section current as the project evolves. It is the source of truth for product and architectural tradeoffs; do not infer missing decisions from it.
-
-- **Primary users:** The repository is primarily a job-preparation playground for a Python backend
-  engineer progressing from Strong Middle toward Senior/Lead depth. A solo SaaS developer monitoring
-  third-party dependencies is the standing product example, not a commitment to run a startup.
-- **Near-term goals:** Keep an evidence-backed engineering topic index; own the critical request,
-  data, messaging, failure, and deployment flows; add one tenant-safe dependency-incident vertical
-  slice; retain an interview-ready demo and architecture defence.
-- **Non-goals:** Maximizing technology count, implementing scale-only patterns without measured
-  triggers, customer acquisition, billing, permanent hosting, or claiming production ownership from
-  repository/configuration evidence.
-- **Architecture trajectory:** Preserve the simplest operational shape that demonstrates the current
-  behavior. Extract services, add managed platforms, or shard data only after an explicit capacity,
-  availability, ownership, or deployment trigger is measured.
-- **Data posture:** Tenant isolation is deny-by-default and extended table by table. Avoid collecting
-  unnecessary PII or secrets; retention work must be bounded, verifiable, and reversible.
-- **Integration policy:** Version shared contracts, bound every network call, retry only safe work,
-  and keep external AI/cache/broker integrations optional or fail-open where documented.
-- **Deployment target:** Local Compose is canonical. The only active cloud direction is the AWS MVP:
-  ECR plus one private, SSM-operated EC2 Compose host, PostgreSQL on encrypted EBS, Parameter Store,
-  and retained S3 backups. It remains a decision/configuration claim until a separately approved live
-  deployment is verified. The learning sequence is EC2, then ECS on Fargate, then EKS; another IaaS
-  provider is out of scope until that sequence has exercised evidence.
-- **Quality bar:** Focused unit/integration tests, migration compatibility, authorization regression
-  coverage, measured performance claims, failure/recovery evidence, observability, diff review, and a
-  blocking secrets scan.
-
-## Evergreen topic lookup
-
-Use `docs/02-architecture/engineering-topics.md` as the canonical index for questions such as
-"Where is sharding?" or "How does load balancing work here?" Verify the current checkout before
-answering; the index routes discovery but is not a substitute for source evidence.
-
-Answer topic lookups in this order:
-
-1. **Status:** `Core`, `Lab`, `Decision`, `Deferred`, or `Historical`.
-2. **Where:** exact current implementation, tests, configuration, and ADR/runbook paths.
-3. **How it works here:** project-specific behavior and data flow.
-4. **What is missing:** distinguish tested runtime behavior from configuration or an idea.
-5. **Why this design:** current constraint, tradeoff, and rejected complexity.
-6. **Scale trigger:** measurable evidence required before changing the design.
-7. **Learning exercise:** one bounded test, fault, or local experiment.
-8. **Interview check:** questions the user should answer without AI.
-
-Archived files can explain history but cannot prove current functionality. Never describe a lab,
-manifest, Terraform plan, or unexecuted deployment workflow as production experience. When a topic
-mixes implemented and deferred concepts (for example table partitioning versus database sharding),
-state each boundary explicitly.
-
----
 
 ## Privacy and file access
 
 ### Respect `.gitignore`
 
-Treat any path covered by `.gitignore`, `.dockerignore`, `.pre-commit-config.yaml` `exclude:` lists, or any other project ignore file as out of scope. Do not read, grep, or display the contents of ignored files unless the user explicitly names that specific file in that specific message. Typical ignored paths: `.venv/`, `.env`, `.env.*`, `node_modules/`, `_archive/`, `*.log`, build artifacts, `.copilot/`, `.kilo/`, `.cursor/`, `.aws/`, `.gcp/`, `.azure/`, `.ssh/`.
+Treat `.gitignore`, `.dockerignore`, `.pre-commit-config.yaml` `exclude:` lists, or any project ignore file as out of scope. Do not read ignored files unless the user explicitly names that specific file. Typical ignored paths: `.venv/`, `.env`, `.env.*`, `node_modules/`, `_archive/`, `*.log`, build artifacts, `.copilot/`, `.kilo/`, `.cursor/`, `.aws/`, `.gcp/`, `.azure/`, `.ssh/`.
 
-### Never read `.env`, `.env.*`, or any local secrets file
+### Never read secrets or credential stores
 
-Never read `.env`, `.env.*`, `secrets/`, `credentials`, or any other file that contains secrets, API keys, passwords, or tokens — even if committed (test fixtures in `.env.example` are fine). If you need info from these files, ask the user to check and share only the relevant line/value, masked if needed. This overrides the general "read scope" allowance — `.env` is never in scope regardless of `.gitignore` status.
+Never read `.env`, `.env.*`, `secrets/`, `credentials`, or any file with secrets, API keys, passwords, or tokens — even if committed (`.env.example` fixtures are fine). Ask the user to share only the relevant masked value. This overrides read-scope allowance.
 
-### Never read `~/.aws/*` (or any cloud credential store)
-
-Never read `~/.aws/credentials`, `~/.aws/config`, `~/.aws/sso/`, `~/.aws/amazonq/`, or any file under `~/.aws/`. The same rule applies to other providers: `~/.gcp/`, `~/.azure/`, `~/.kube/config`, `~/.docker/config.json`, `~/.netrc`, `~/.boto`, `~/.config/gcloud/`, `~/.config/gh/hosts.yml`, `~/.ssh/id_*`, `~/.gnupg/`. When a hook, linter, or CI rule appears to come from a credential file, fix the *configuration* (`pre-commit-config.yaml`, exclude lists, env-var setup) — never the credential file itself. Treat placeholder values (`test`, `example`, `AKIAIOSFODNN7EXAMPLE`) the same as real values.
+Never read `~/.aws/`, `~/.gcp/`, `~/.azure/`, `~/.kube/config`, `~/.docker/config.json`, `~/.netrc`, `~/.boto`, `~/.config/gcloud/`, `~/.config/gh/hosts.yml`, `~/.ssh/id_*`, `~/.gnupg/`. When a hook appears to come from a credential file, fix the *configuration*, never the credential file itself. Treat placeholder values (`test`, `example`, `AKIAIOSFODNN7EXAMPLE`) as real values.
 
 ### Diagnostics without exposing secrets
 
-For credential-related bugs, use only non-sensitive metadata: file existence (`ls -la`), file size, line count, env-var *names* (not values), or redacted output (`sed 's/=.*$/=***/'`). Never echo, log, or paste the value of an access key, secret key, session token, password, or API token. Refer to credential values only by their masked prefix (e.g. `test****`) as the hook itself does.
+For credential bugs, use only non-sensitive metadata: file existence, size, line count, env-var *names* (not values), or redacted output. Never echo, log, or paste actual credential values. Refer to values by masked prefix only.
 
 ### When the user mentions a credentials issue
 
-Do not try to reproduce by reading the credential file. Pivot to: (a) reading the hook's source/regex, (b) reading the *committed* file the hook flagged, (c) suggesting a non-invasive fix in the repo config. Config/credential files that are *committed* to the repo (e.g. `infra/terraform/**/*.tf`, sample `.env.example`) are fine to read; the rule applies to the user's private local credential store.
-
----
+Do not reproduce by reading the credential file. Pivot to: (a) the hook's source/regex, (b) the committed file the hook flagged, (c) a non-invasive fix in repo config. Committed config/credential files (e.g. `infra/terraform/**/*.tf`, `.env.example`) are fine to read.
 
 ## Cross-project technical conventions
 
-For each topic below, the principles are listed inline; the long-form guidance, examples, and code templates live in the project file linked at the end of the section. Read the project file before producing significant code in that area.
+For each topic below, the principles are listed inline; long-form guidance lives in the linked project file. Read it before producing significant code in that area.
 
-### Security (OWASP Top 10) → see `.github/instructions/security-and-owasp.instructions.md`
+### Security (OWASP Top 10) → `.github/instructions/security-and-owasp.instructions.md`
 
-- **A01 / A10 — Access control & SSRF.** Deny by default. Validate every user-supplied URL with host/port/path allow-lists. Sanitize file paths against directory traversal.
-- **A02 — Crypto.** Use Argon2 or bcrypt for passwords. Avoid MD5/SHA-1 for secrets. Default to HTTPS. Encrypt PII and tokens at rest. Never hardcode secrets.
-- **A03 — Injection.** Parameterized SQL only. `shlex`-style escaping for OS args. `.textContent` over `.innerHTML` (or DOMPurify).
-- **A05 / A06 — Misconfig & vulnerable deps.** Disable verbose errors in prod. Set CSP, HSTS, `X-Content-Type-Options`. Run `pip-audit` / `npm audit` after adding deps.
-- **A07 — Auth.** Rotate session IDs on login. `HttpOnly; Secure; SameSite=Strict` cookies. Rate-limit login and password-reset.
-- **A08 — Integrity.** Validate deserialized data. Prefer JSON over Pickle for untrusted sources.
+Deny by default. Validate user-supplied input. Use parameterized queries. Encrypt PII at rest. Never hardcode secrets. Validate deserialized data. Default to HTTPS. Set security headers. Rate-limit auth endpoints.
 
-### Markdown → see `.github/instructions/markdown.instructions.md`
+### Markdown → `.github/instructions/markdown.instructions.md`
 
-Use H1 once for the document title. H2 for major sections, H3 for subsections; never skip a level. Use `` `code` `` inline, language-tagged triple backticks for blocks, `-` for unordered lists, `1.` for ordered. Link liberally to source files with line refs. Keep docs concrete.
+Use H1 once, H2 for major sections, H3 for subsections. Never use emphasis-only headings (MD036).
 
-**MD036 guardrail (always inline — every agent hits this).** Pre-commit `docs-quality-markdown` and markdownlint MD036 fail on emphasis-only headings. Never put a standalone `**...**` line that acts as a heading (e.g. `**Settings:**`, `**Notes:**`, `**Manual method:**`). Replace with real `###` / `####` headings or convert into paragraph text. Pre-flight: scan for `**...**` lines, convert each.
+### Bash → `.github/instructions/bash.instructions.md`
 
-### Bash → see `.github/instructions/bash.instructions.md`
+Use strict mode, quote variables, lint with shellcheck.
 
-Shebang + metadata block. `set -o errexit -o pipefail -o nounset -o errtrace`. Trap ERR with a line-number reporter. Define `info`/`success`/`warn`/`error`/`require_command`/`command_exists` helpers at the top. Quote every variable (`"${var}"`). Use `${SCRIPT_DIR}` and `${PROJECT_ROOT}`; never hardcode paths. `trap cleanup EXIT` for teardown. Lint with `shellcheck`.
+### Design principles → `CLAUDE.md` (ACROSS) + `.github/instructions/solid-principles.instructions.md`
 
-### Design principles → see `CLAUDE.md` (ACROSS) and `.github/instructions/solid-principles.instructions.md`
+Use ACROSS as the primary design lens. SOLID as secondary. Prefer composition and pragmatic interfaces over rigid purity.
 
-Use ACROSS as the primary design lens — it prioritizes change management over structural purity. Use SOLID as a secondary reference when ACROSS doesn't give a clear answer. When they conflict, ACROSS wins:
+### Design patterns → `.github/instructions/design-patterns.instructions.md`
 
-- **ACROSS "Simple As Possible"** overrides strict OCP — don't add abstraction layers to avoid modifying code unless the change pattern is proven.
-- **ACROSS "Abstractions & Decomposition"** replaces rigid SRP — a module has *defined* responsibilities, not necessarily *single* responsibility.
-- **ACROSS "Composition by Default"** aligns with LSP/DIP but is more pragmatic — use interfaces when you have two implementations, not when you might someday.
+Diagnose friction before picking a pattern. Prefer plain functions, dataclasses, or models over patterns when they solve the problem with less code.
 
-### Design patterns → see `.github/instructions/design-patterns.instructions.md`
+### SSRF prevention → `.github/instructions/security-and-owasp.instructions.md`
 
-Diagnose the friction *before* picking a pattern. Pain-first decision tree: object-creation pain → creational; boundary pain → structural; changing-behavior pain → behavioral. Always ask: would a plain function, `dataclass`, or Pydantic model solve this with less code? If yes, do that.
+Validate scheme, resolve host, check resolved IP against private ranges for all user-supplied URLs.
 
-### SSRF prevention (user-supplied URLs)
+### Secrets scanning → `.pre-commit-config.yaml`
 
-- **Scheme**: `https` only, or `http` only if an explicit config flag allows it.
-- **Resolve the host** with DNS, then check the resolved IP against stdlib `ipaddress`.
-- **Block private ranges**: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `::1`, link-local.
-- Applies to webhook URLs, scraper targets, source-profile base URLs, and any other user-controlled URL.
-
-### Secrets scanning → see `.pre-commit-config.yaml`
-
-Use the pinned Gitleaks pre-commit hook for staged-content secret scanning. Keep false-positive
-exceptions narrow and reviewable through the repository's Gitleaks configuration; do not add a
-blanket allowlist for source directories.
+Use the pinned Gitleaks hook. Keep false-positive exceptions narrow.
 
 ### Anti-overengineering
 
-Before suggesting any custom implementation, check whether stdlib or a well-known PyPI package solves the same problem. If one exists, recommend it (`hashlib`, `pydantic-settings`, `structlog`, `slowapi`, `prometheus-fastapi-instrumentator`, etc.). Flag abstractions with fewer than 3 callers. If a class has more than one reason to change, say so. If a file exceeds ~300 lines, flag it for splitting. Simplest solution wins — complexity must be justified by a concrete, current requirement, not a future hypothetical.
+Prefer stdlib or well-known packages. Flag abstractions with fewer than 3 callers. Flag files exceeding ~300 lines. Simplest solution wins.
 
----
+## Progressive-loading routes
 
-## Chat session reminders
+For security-sensitive changes:
+  read `.github/instructions/security-and-owasp.instructions.md`
 
-- Start a new chat every 20 messages and whenever the topic changes, to keep context clean.
-- At the 20th message, prepare a concise "Session Summary" (template below) and offer to paste it into a new chat.
-- The first message of the new chat should be the summary, so context and continuity are preserved.
+For Bash scripts:
+  read `.github/instructions/bash.instructions.md`
 
-### Session Summary Template (copy/paste into new chat)
+For Markdown documentation:
+  read `.github/instructions/markdown.instructions.md`
 
-- **Session title:**
-- **Date:**
-- **Message count:**
+For design/architecture decisions:
+  read `.github/instructions/design-patterns.instructions.md`
+  read `.github/instructions/solid-principles.instructions.md`
 
-- **Topics covered:**
-   -
-
-- **Key decisions:**
-   -
-
-- **Files changed / paths:**
-   -
-
-- **Commands / snippets to run:**
-   -
-
-- **Outstanding questions / next steps:**
-   -
-
-- **Brief context / notes:**
-   -
-
-(End of summary)
+For project architecture, product decisions, or engineering topic lookups:
+  read `docs/PROJECT_CONTEXT.md`
+  read `docs/02-architecture/engineering-topics.md`
