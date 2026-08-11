@@ -130,7 +130,7 @@ class TestApiIngestion:
         """Test single observation ingestion with idempotency key."""
         mock_db = AsyncMock(spec=AsyncSession)
 
-        with patch("services.ingestor.jobs._dedup_tracker") as mock_tracker:
+        with patch("services.ingestor.jobs.ingestion._dedup_tracker") as mock_tracker:
             # Simulate duplicate
             mock_tracker.is_duplicate.return_value = True
 
@@ -217,7 +217,7 @@ class TestApiIngestion:
         """Test batch ingestion skips duplicate batches."""
         mock_db = AsyncMock(spec=AsyncSession)
 
-        with patch("services.ingestor.jobs._dedup_tracker") as mock_tracker:
+        with patch("services.ingestor.jobs.ingestion._dedup_tracker") as mock_tracker:
             # Simulate batch duplicate
             mock_tracker.is_duplicate.return_value = True
 
@@ -252,7 +252,7 @@ class TestScheduledBatchIngestion:
         mock_db = AsyncMock(spec=AsyncSession)
 
         with patch(
-            "services.ingestor.jobs.ingest_api_batch", new_callable=AsyncMock
+            "services.ingestor.jobs.ingestion.ingest_api_batch", new_callable=AsyncMock
         ) as mock_ingest:
             mock_ingest.return_value = {
                 "inserted": 1,

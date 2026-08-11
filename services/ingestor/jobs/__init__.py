@@ -1,5 +1,7 @@
+from services.ingestor.fetch import get_http_client
 from services.ingestor.jobs.health import get_ingestion_health
 from services.ingestor.jobs.ingestion import (
+    _dedup_tracker,
     ingest_api_batch,
     ingest_api_single,
     ingest_scheduled_batch_example,
@@ -24,11 +26,13 @@ from services.ingestor.jobs.queue import (
     set_job_queue,
 )
 from services.ingestor.jobs.retention import archive_old_observations
+from services.ingestor.repositories import observations as crud
 
 
 __all__ = [
     "_source_probe_breakers",
     "_get_source_probe_breaker",
+    "_dedup_tracker",
     "run_source_probe",
     "run_source_contract_snapshot",
     "ingest_api_single",
@@ -36,6 +40,8 @@ __all__ = [
     "ingest_scheduled_batch_example",
     "archive_old_observations",
     "get_ingestion_health",
+    "get_http_client",
+    "crud",
     "IngestionCommand",
     "SingleObservationIngestCommand",
     "BatchIngestCommand",

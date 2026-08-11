@@ -135,7 +135,7 @@ async def test_retention_skips_when_the_distributed_lock_is_held(
     async def held_lock(*_args: object, **_kwargs: object):
         yield False
 
-    monkeypatch.setattr("services.ingestor.cache.redis_lock", held_lock)
+    monkeypatch.setattr("services.ingestor.jobs.retention.redis_lock", held_lock)
 
     result = await archive_old_observations(db, apply=True)
 

@@ -72,7 +72,7 @@ class TestSourceProbeIncidentLifecycle:
         await db.refresh(source)
 
         with patch(
-            "services.ingestor.jobs.get_http_client",
+            "services.ingestor.jobs.probes.get_http_client",
             return_value=_failing_http_client(),
         ):
             result = await run_source_probe(db, source.id)
@@ -108,7 +108,7 @@ class TestSourceProbeIncidentLifecycle:
         await db.refresh(source)
 
         with patch(
-            "services.ingestor.jobs.get_http_client",
+            "services.ingestor.jobs.probes.get_http_client",
             return_value=_failing_http_client(),
         ):
             result = await run_source_probe(db, source.id)
@@ -147,7 +147,7 @@ class TestSourceProbeIncidentLifecycle:
 
         # First: fail to open an incident
         with patch(
-            "services.ingestor.jobs.get_http_client",
+            "services.ingestor.jobs.probes.get_http_client",
             return_value=_failing_http_client(),
         ):
             await run_source_probe(db, source.id)
@@ -167,9 +167,14 @@ class TestSourceProbeIncidentLifecycle:
         assert len(incidents) == 1
 
         # Second: succeed → incident should be resolved
-        with patch(
-            "services.ingestor.jobs.get_http_client",
-            return_value=_error_response_client(200),
+        with (
+            patch(
+                "services.ingestor.jobs.probes.validate_source_base_url",
+            ),
+            patch(
+                "services.ingestor.jobs.probes.get_http_client",
+                return_value=_error_response_client(200),
+            ),
         ):
             result = await run_source_probe(db, source.id)
 

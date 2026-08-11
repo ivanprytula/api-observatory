@@ -8,6 +8,28 @@
 import? 'just/testing.just'
 import? 'just/database-lifecycle.just'
 
+# Local CI with act (https://nektosact.com/)
+# Note: act does not support service containers, so integration tests must run
+# on real GitHub Actions or via local docker-compose.
+
+# Prime act image cache (run once, or after dependency changes)
+ci-prime:
+    act -j unit --pull -e event.json -W .github/workflows
+
+# Fast lane: unit + contract + MCP tests (no Postgres service)
+ci-unit:
+    act -j unit --pull=false -e event.json -W .github/workflows
+
+ci: ci-unit
+
+pre-commit:
+    just ci-unit
+
+pre-push:
+    just test-unit
+    just ci-unit
+
+
 # Focused command map for a first task; run `just --list` only when exploring a specialist area.
 help-core:
     @echo "Core: just doctor → cp .env.example .env → just generate-secrets → just dev-up → just db-migrate"

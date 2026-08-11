@@ -50,3 +50,33 @@ a completed, approved run with image identity, migrations, readiness, smoke, rol
 evidence. Local Compose remains canonical. The AWS learning sequence is an exercised EC2 deployment,
 then ECS on Fargate, then EKS. Moving the product runtime beyond EC2 still requires a measured
 availability, scaling, ownership, or delivery-friction trigger.
+
+## Local CI with `act`
+
+[`act`](https://nektosact.com/) runs GitHub Actions workflows locally in Docker containers,
+catching workflow syntax, composite-action, and migration-validation errors before pushing.
+
+### Installation
+
+```bash
+# macOS/Linux
+brew install act
+```
+
+### Just Recipes
+
+```bash
+# Prime the act image cache (run once or after dependency changes)
+just ci-prime
+
+# Fast lane: unit, MCP, and contract tests (no Postgres service)
+just ci-unit
+
+# Run unit tests only
+just ci
+
+# Before push: unit tests + pre-commit hooks
+just pre-push
+```
+
+> **Note:** `act` does not support GitHub Actions service containers, so the `integration` and `capability` jobs (which rely on Postgres service containers) must run on real GitHub Actions or via local `docker compose`. The `ci-unit` recipe catches workflow syntax, composite-action, and migration-path errors locally.
