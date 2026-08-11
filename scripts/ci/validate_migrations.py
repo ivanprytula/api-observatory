@@ -25,6 +25,7 @@ def _run_alembic(
 ) -> None:
     env = {
         "DATABASE_URL": database_url,
+        "PYTHONPATH": str(Path.cwd()),
     }
     cmd = [sys.executable, "-m", "alembic", *args]
     result = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True)
