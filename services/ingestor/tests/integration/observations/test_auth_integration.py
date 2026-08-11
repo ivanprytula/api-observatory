@@ -177,32 +177,6 @@ class TestSessionAuth:
         assert admin_response.status_code == 204
 
 
-@pytest.mark.demo
-class TestBearerTokenAuth:
-    """Tests for bearer token auth routes.
-
-    Note: API_V1_BEARER_TOKEN is not set in .env, so these tests verify
-    that auth is disabled and endpoints are accessible without tokens.
-    """
-
-    async def test_create_observations_batch_protected_works_when_disabled(
-        self, client: AsyncClient
-    ) -> None:
-        """POST observations/batch/protected works when token auth is disabled(.env not set)."""
-        response = await client.post(
-            "/api/v1/observations/batch/protected",
-            json={
-                "observations": [
-                    {"source": "test", "timestamp": "2024-01-01T00:00:00", "data": {}},
-                ]
-            },
-        )
-        # Since API_V1_BEARER_TOKEN is not set in .env, auth is disabled
-        # and endpoint returns 201 (no auth required)
-        assert response.status_code == 201
-        assert response.json()["created"] == 1
-
-
 @pytest.mark.integration
 class TestPublicDocs:
     """Documentation endpoints are publicly readable."""

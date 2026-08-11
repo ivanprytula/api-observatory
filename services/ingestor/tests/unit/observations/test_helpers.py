@@ -89,11 +89,11 @@ class TestApplyTenantFilter:
         query = MagicMock()
         with (
             patch(
-                "services.ingestor.repositories.observations.get_user_role",
+                "services.ingestor.repositories.observations_crud.get_user_role",
                 return_value="admin",
             ),
             patch(
-                "services.ingestor.repositories.observations.get_tenant_id",
+                "services.ingestor.repositories.observations_crud.get_tenant_id",
                 return_value=42,
             ),
         ):
@@ -106,11 +106,11 @@ class TestApplyTenantFilter:
         query.where = MagicMock(return_value=query)
         with (
             patch(
-                "services.ingestor.repositories.observations.get_user_role",
+                "services.ingestor.repositories.observations_crud.get_user_role",
                 return_value="viewer",
             ),
             patch(
-                "services.ingestor.repositories.observations.get_tenant_id",
+                "services.ingestor.repositories.observations_crud.get_tenant_id",
                 return_value=42,
             ),
         ):
@@ -125,11 +125,11 @@ class TestApplyTenantFilter:
         query.where = MagicMock(return_value=query)
         with (
             patch(
-                "services.ingestor.repositories.observations.get_user_role",
+                "services.ingestor.repositories.observations_crud.get_user_role",
                 return_value="viewer",
             ),
             patch(
-                "services.ingestor.repositories.observations.get_tenant_id",
+                "services.ingestor.repositories.observations_crud.get_tenant_id",
                 return_value=None,
             ),
         ):
@@ -199,7 +199,7 @@ class TestUpdateUserRole:
         mock_session.refresh = AsyncMock()
 
         with patch(
-            "services.ingestor.repositories.observations.get_user_by_username",
+            "services.ingestor.repositories.observations_crud.get_user_by_username",
             new=AsyncMock(return_value=user),
         ):
             result = await update_user_role(mock_session, "alice", "admin")
@@ -212,7 +212,7 @@ class TestUpdateUserRole:
     async def test_returns_none_when_user_not_found(self) -> None:
         mock_session = MagicMock()
         with patch(
-            "services.ingestor.repositories.observations.get_user_by_username",
+            "services.ingestor.repositories.observations_crud.get_user_by_username",
             new=AsyncMock(return_value=None),
         ):
             result = await update_user_role(mock_session, "ghost", "admin")
@@ -356,7 +356,7 @@ class TestCreateObservationsBatchNaive:
         mock_session.tenant_id = None
 
         with patch(
-            "services.ingestor.repositories.observations.get_tenant_id",
+            "services.ingestor.repositories.observations_crud.get_tenant_id",
             return_value=42,
         ):
             reqs = [
@@ -397,7 +397,7 @@ class TestGetObservations:
         mock_session.execute = AsyncMock(side_effect=execute_side_effect)
 
         with patch(
-            "services.ingestor.repositories.observations.get_user_role",
+            "services.ingestor.repositories.observations_crud.get_user_role",
             return_value="admin",
         ):
             observations, total = await get_observations(
@@ -416,7 +416,7 @@ class TestGetObservations:
         mock_session.execute = AsyncMock(side_effect=[count_result, data_result])
 
         with patch(
-            "services.ingestor.repositories.observations.get_user_role",
+            "services.ingestor.repositories.observations_crud.get_user_role",
             return_value="admin",
         ):
             observations, total = await get_observations(mock_session)
@@ -439,7 +439,7 @@ class TestGetObservationsCursorPaginated:
         mock_session.execute = AsyncMock(return_value=result)
 
         with patch(
-            "services.ingestor.repositories.observations.get_user_role",
+            "services.ingestor.repositories.observations_crud.get_user_role",
             return_value="admin",
         ):
             (
@@ -459,7 +459,7 @@ class TestGetObservationsCursorPaginated:
         mock_session.execute = AsyncMock(return_value=result)
 
         with patch(
-            "services.ingestor.repositories.observations.get_user_role",
+            "services.ingestor.repositories.observations_crud.get_user_role",
             return_value="admin",
         ):
             (
@@ -480,7 +480,7 @@ class TestGetObservationsCursorPaginated:
         cursor = _encode_cursor(42, datetime(2025, 1, 1, 12, 0, 0))
 
         with patch(
-            "services.ingestor.repositories.observations.get_user_role",
+            "services.ingestor.repositories.observations_crud.get_user_role",
             return_value="admin",
         ):
             (
@@ -512,7 +512,7 @@ class TestGetObservationsByDateRange:
         end = datetime(2025, 1, 2)
 
         with patch(
-            "services.ingestor.repositories.observations.get_user_role",
+            "services.ingestor.repositories.observations_crud.get_user_role",
             return_value="admin",
         ):
             observations = await get_observations_by_date_range(
@@ -528,7 +528,7 @@ class TestGetObservationsByDateRange:
         mock_session.execute = AsyncMock(return_value=result)
 
         with patch(
-            "services.ingestor.repositories.observations.get_user_role",
+            "services.ingestor.repositories.observations_crud.get_user_role",
             return_value="admin",
         ):
             observations = await get_observations_by_date_range(

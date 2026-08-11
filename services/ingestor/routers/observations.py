@@ -29,7 +29,6 @@ from services.ingestor.auth import (
     create_session,
     jwt_role_guard,
     session_role_guard,
-    verify_bearer_token,
     verify_jwt_token,
     verify_session,
 )
@@ -119,7 +118,6 @@ _R429 = {
 
 type DbDep = Annotated[AsyncSession, Depends(get_db)]
 type SessionDep = Annotated[dict[str, Any], Depends(verify_session)]
-type BearerTokenDep = Annotated[str, Depends(verify_bearer_token)]
 type WriterSessionDep = Annotated[
     dict[str, Any], Depends(session_role_guard("writer", "admin", "tenant_admin"))
 ]
@@ -494,39 +492,6 @@ async def delete_observation_secured(
             status_code=status.HTTP_404_NOT_FOUND, detail="Observation not found"
         )
     await cache.invalidate_observation(observation_id)
-
-
-@demo_router.post(
-    "/batch/protected",
-    summary="Batch-create observations with bearer token auth",
-    response_model=BatchCreateResponse,
-    status_code=status.HTTP_201_CREATED,
-    responses={**_R401, **_R422},
-)
-async def create_observations_batch_protected(
-    body: BatchObservationsRequest,
-    db: DbDep,
-    token: BearerTokenDep,
-) -> BatchCreateResponse:
-    """Batch create with bearer token auth (learning example).
-
-    Requires: Authorization: Bearer <token>
-    Set API_V1_BEARER_TOKEN in .env, then:
-
-    curl -X POST http://localhost:8000/api/v1/observations/batch/protected \\
-      -H "Authorization: Bearer dev-secret-bearer-token" \\
-      -H "Content-Type: application/json" \\
-      -d '{"observations": [...]}'
-
-    Production: Use API key rotation, rate limiting per key, audit logs.
-    """
-    logger.info(
-        "batch_protected_create",
-        extra={"count": len(body.observations), "token_prefix": token[:10]},
-    )
-    observations = await create_observations_batch(db, body.observations)
-    logger.info("batch_protected_created", extra={"count": len(observations)})
-    return BatchCreateResponse(created=len(observations), impl="optimized")
 
 
 # ============================================================================

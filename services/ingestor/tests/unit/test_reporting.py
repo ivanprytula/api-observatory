@@ -442,15 +442,15 @@ class TestExecutiveSummary:
 
         with (
             patch(
-                "services.ingestor.repositories.reporting.list_cohort_reports",
+                "services.ingestor.repositories.reporting_executive.list_cohort_reports",
                 new=AsyncMock(return_value=[cohort]),
             ),
             patch(
-                "services.ingestor.repositories.reporting.get_freshness_sla",
+                "services.ingestor.repositories.reporting_executive.get_freshness_sla",
                 new=AsyncMock(return_value=freshness),
             ),
             patch(
-                "services.ingestor.repositories.reporting.get_cost_value_chart",
+                "services.ingestor.repositories.reporting_executive.get_cost_value_chart",
                 new=AsyncMock(return_value=cost),
             ),
         ):

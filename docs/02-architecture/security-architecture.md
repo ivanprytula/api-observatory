@@ -17,7 +17,7 @@ mechanisms remain available only in the opt-in learning lab, gated by
 | -------------- | ---------------------------------- | --------------------------------- |
 | HTTP Basic     | `/docs`, `/redoc`, `/openapi.json` | Username + password, env-sourced  |
 | JWT HS256      | `/api/v1/*` production routes      | Signed token with role and tenant claims |
-| Learning lab   | `/api/v1/observations/auth/login`, `/api/v1/observations/{id}/secure`, `/api/v1/observations/batch/protected`, `/api/v2/observations/*` | Session cookie, bearer token, fixed-window/token-bucket/sliding-window rate limiting; disabled by default |
+| Learning lab   | `/api/v1/observations/auth/login`, `/api/v1/observations/{id}/secure`, `/api/v2/observations/*` | Session cookie, fixed-window/token-bucket/sliding-window rate limiting; disabled by default |
 | Session cookie | Dashboard / admin UI               | Stateful session, `HttpOnly`      |
 
 Authentication settings and their environment mappings are owned by
@@ -42,14 +42,13 @@ Roles (from lowest to highest privilege): `viewer` → `writer` → `admin`
 | ------------------------------------------------ | ----------------- | ----------------- |
 | Production v1 reads and normal writes | authenticated / `writer` | JWT claim (`role`) |
 | Administrative v1 operations | `admin` | JWT role claim |
-| `POST /api/v1/observations/batch/protected` (learning lab) | none (bearer token) | Static bearer token (`API_V1_BEARER_TOKEN`) |
 | Session-protected routes (learning lab) | `writer` / `admin` | Session cookie + role guard |
 
 The signed JWT carries both role and tenant claims. Tenant middleware accepts the verified
 claim in preference to `X-Tenant-ID`, so a request header cannot override tenant context.
 Tokens are verified on every request — no server-side state is required for access checks.
 
-The Bearer token and session endpoints live on `observations.demo_router` and are
+The session endpoints live on `observations.demo_router` and are
 only mounted when `auth_demo_routes_enabled` is `True`. They are not part of the
 production surface.
 

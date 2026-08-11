@@ -56,7 +56,7 @@ class TestCreateObservation:
         mock_session.refresh = AsyncMock()
 
         with patch(
-            "services.ingestor.repositories.observations.get_tenant_id",
+            "services.ingestor.repositories.observations_crud.get_tenant_id",
             return_value="tenant-1",
         ):
             await create_observation(
@@ -79,7 +79,7 @@ class TestCreateObservation:
         mock_session.refresh = AsyncMock()
 
         with patch(
-            "services.ingestor.repositories.observations.get_tenant_id",
+            "services.ingestor.repositories.observations_crud.get_tenant_id",
             return_value="custom-tenant",
         ):
             result = await create_observation(
@@ -126,7 +126,7 @@ class TestCreateObservationsBatch:
         ]
 
         with patch(
-            "services.ingestor.repositories.observations.get_tenant_id",
+            "services.ingestor.repositories.observations_crud.get_tenant_id",
             return_value="tenant-1",
         ):
             await create_observations_batch(mock_session, requests)
@@ -430,7 +430,7 @@ class TestUpsertObservation:
         mock_session.refresh = AsyncMock()
 
         with patch(
-            "services.ingestor.repositories.observations.get_tenant_id",
+            "services.ingestor.repositories.observations_crud.get_tenant_id",
             return_value="tenant-1",
         ):
             result, created = await upsert_observation(
@@ -457,7 +457,7 @@ class TestUpsertObservation:
         mock_session.refresh = AsyncMock()
 
         with patch(
-            "services.ingestor.repositories.observations.get_tenant_id",
+            "services.ingestor.repositories.observations_crud.get_tenant_id",
             return_value="tenant-1",
         ):
             result, created = await upsert_observation(

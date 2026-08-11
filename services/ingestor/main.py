@@ -598,11 +598,6 @@ for _name in _ROUTER_MODULES:
             extra={"router": _name, "missing_module": str(exc)},
         )
 
-if settings.auth_demo_routes_enabled:
-    from services.ingestor.routers import observations, observations_v2
-
-    app.include_router(observations.demo_router)
-    app.include_router(observations_v2.router)
 
 app.include_router(ws_router.router)
 
