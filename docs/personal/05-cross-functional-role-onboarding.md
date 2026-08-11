@@ -2,28 +2,22 @@
 
 Track: A — Product and Onboarding
 
+This file is personal organization evidence, not canonical onboarding. For the canonical first-run sequence, see the [Canonical Onboarding and Delivery Checklist](../05-development/onboarding-and-delivery-checklist.md).
+
 This page explains how each Agile team role can approach this polyglot multi-stack project during onboarding.
 
 ## Shared First-Day Baseline
 
-For technical roles, this baseline gives a reproducible local environment and a quick quality check.
+For technical roles, this baseline gives a reproducible local environment and a quick quality check. Follow the [Canonical Onboarding and Delivery Checklist](../05-development/onboarding-and-delivery-checklist.md) for the complete first-run sequence.
 
-```bash
-just doctor
-just dev-up
-just db-migrate
-just test-unit
-just test-integration
-```
-
-For product and delivery roles, use the Project Overview, Architecture Overview, and Roadmap first.
+For product and delivery roles, start with the [README](../../README.md), [Application Architecture](../02-architecture/application-architecture.md), and [MVP Roadmap](../03-planning/mvp-roadmap.md).
 
 ## QA Engineer
 
 ### First Focus
 
-- Validate core user and API flows in the Daily Development guide.
-- Expand regression scenarios from the Commands Reference.
+- Validate core user and API flows in the [Development Workflows](../05-development/dev-workflows.md).
+- Expand regression scenarios from the [Justfile](../../Justfile).
 - Keep defect notes with clear reproduction and API payloads in `.local-dev/dumps`.
 
 ### Contribution Pattern
@@ -48,8 +42,7 @@ For product and delivery roles, use the Project Overview, Architecture Overview,
 
 ### First Focus
 
-- Map ingestion and transformation boundaries via the Architecture Overview.
-- Inspect schema and migration path from the Pillar 2 Database guide.
+- Map ingestion and transformation boundaries via the [Application Architecture](../02-architecture/application-architecture.md).
 - Validate batch and event paths through CQRS and storage targets.
 
 ### Contribution Pattern
@@ -61,7 +54,7 @@ For product and delivery roles, use the Project Overview, Architecture Overview,
 
 ### First Focus
 
-- Review model and vector-related integration points in the Pillar 6 AI/LLM guide.
+- Review model and vector-related integration points in the [`services/inference/`](../../services/inference/) service.
 - Validate inference service contracts and payload shapes.
 - Align offline experiments with production observability and rollback strategy.
 
@@ -75,7 +68,7 @@ For product and delivery roles, use the Project Overview, Architecture Overview,
 ### First Focus
 
 - Audit migration safety, query patterns, and retention policy.
-- Use the Advanced SQL and CQRS guide and the Pillar 2 Database guide.
+- Use the [Application Architecture](../02-architecture/application-architecture.md) for database and migration context.
 - Validate backup/restore procedures from operational scripts.
 
 ### Contribution Pattern
@@ -87,7 +80,7 @@ For product and delivery roles, use the Project Overview, Architecture Overview,
 
 ### First Focus
 
-- Build a feature map from Track A and Track C docs.
+- Build a feature map from the [MVP Roadmap](../03-planning/mvp-roadmap.md) and [Application Lifecycle](../01-intro/application-lifecycle.md).
 - Use the Roadmap for dependency-aware sequencing.
 - Define clear outcome metrics per milestone.
 
@@ -101,7 +94,7 @@ For product and delivery roles, use the Project Overview, Architecture Overview,
 ### First Focus
 
 - Translate backlog items into acceptance criteria linked to docs and APIs.
-- Use the Evolution Playbook for value framing.
+- Use the [Application Lifecycle](../01-intro/application-lifecycle.md) for value framing.
 - Keep stakeholder language synchronized with technical constraints.
 
 ### Contribution Pattern
@@ -114,7 +107,7 @@ For product and delivery roles, use the Project Overview, Architecture Overview,
 ### First Focus
 
 - Review auth, session, RBAC, and header hardening paths.
-- Validate dependency and image scanning process in the Docker Security Scanning Setup guide.
+- Validate dependency and image scanning process in the [Docker BuildKit and Security Scanning ADR](../02-architecture/adr/004-docker-buildkit-and-security-scanning.md).
 - Verify secret handling and environment separation.
 
 ### Contribution Pattern
@@ -126,7 +119,7 @@ For product and delivery roles, use the Project Overview, Architecture Overview,
 
 ### First Focus
 
-- Review the current app delivery contract and sibling AWS MVP deployment guide.
+- Review the current app delivery contract and [infrastructure deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md).
 - Validate the boundary between disposable AWS API rehearsal and real `aws-dev` evidence.
 - Check infra drift and promotion workflow quality.
 
@@ -153,7 +146,7 @@ For product and delivery roles, use the Project Overview, Architecture Overview,
 ### First Focus
 
 - Re-evaluate service boundaries, coupling, and integration seams.
-- Use adr/README.md and design/decisions.md for decision context.
+- Use [ADRs](../02-architecture/adr/) and [decisions](../02-architecture/decisions.md) for decision context.
 - Align platform direction with product value and team capacity.
 
 ### Contribution Pattern
@@ -172,15 +165,15 @@ Day 1 / Week 1 / Month 1 milestones per role. Check off each milestone as it is 
 | **Data Engineer**                | Inspect ingestion schemas and pipeline flow                          | Validate end-to-end record lifecycle with real payloads       | Data quality checks or pipeline extension merged             |
 | **AI/ML Engineer**               | Understand data model and async job patterns                         | Prototype feature extraction or model hook against API        | Experiment notebook or ML pipeline integrated with ingestor  |
 | **DBA**                          | Review ORM models and current Alembic migrations                     | Audit index coverage and query plans for key read paths       | Index and constraint recommendations merged; runbook updated |
-| **Product Manager**              | Read `00-project-overview.md`, roadmap, and phase status             | Map user outcomes to current API surface                      | Backlog prioritized with measurable acceptance criteria      |
-| **Product Owner**                | Read `00-project-overview.md` and `02-architecture/application-architecture.md`  | Define sprint goal with 3 measurable acceptance criteria      | First sprint delivered; retrospective findings logged        |
+| **Product Manager**              | Read the [README](../../README.md) and [MVP Roadmap](../03-planning/mvp-roadmap.md) | Map user outcomes to current API surface | Backlog prioritized with measurable acceptance criteria |
+| **Product Owner**                | Read the [README](../../README.md) and [Application Architecture](../02-architecture/application-architecture.md) | Define sprint goal with 3 measurable acceptance criteria | First sprint delivered; retrospective findings logged |
 | **Security Specialist**          | Review auth flow, secrets management, and OWASP checklist            | Run dependency audit (`pip-audit`) and triage findings        | Security findings resolved or risk-accepted with ADR         |
 | **Cloud-Native Engineer**        | Read the infra repository deployment guide; validate Docker Compose stack | Review Kubernetes manifests and CI pipeline                   | Infrastructure-as-code change or hardening PR merged         |
 | **SRE**                          | Locate metrics, alerting config, and healthcheck endpoints           | Validate SLO targets, error budget, and incident runbook      | Post-incident review cycle established; runbook updated      |
-| **System/Application Architect** | Read all ADRs and `02-architecture/{application,infrastructure}-architecture.md`  | Map service boundaries and identify coupling hotspots         | Architecture decision logged in `adr/`; backlog aligned      |
+| **System/Application Architect** | Read all ADRs and `02-architecture/application-architecture.md` and `02-architecture/decisions.md`  | Map service boundaries and identify coupling hotspots         | Architecture decision logged in `adr/`; backlog aligned      |
 
 ## Team-Level Working Agreement
 
-- Use Track A for onboarding, Track B for execution, Track C for decisions, Track D for business narrative, and Track E for historical context.
 - Keep one canonical source per topic and link from other docs instead of duplicating command blocks.
 - Store noisy local investigation artifacts in `.local-dev/` and never in tracked docs.
+- This file is personal organization evidence. Track labels (A–E) are private shorthand; the canonical docs use the structure under `docs/`.

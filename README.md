@@ -13,8 +13,6 @@ contract. No live production operation is claimed.
 
 - Async FastAPI/Pydantic APIs with JWT, API keys, role guards, tenant context, and opt-in
   PostgreSQL row-level security.
-- PostgreSQL/SQLAlchemy/Alembic data design, scorecard aggregation, schema drift, retention, and
-  measured query-analysis paths.
 - Tenant-scoped dependency incidents with deduplication, notification cooldown, recovery, and
   operator acknowledgement/resolution.
 - Scheduled external API probes, Redis caching/pub-sub/rate limiting, and Kafka-compatible event
@@ -34,7 +32,11 @@ contract. No live production operation is claimed.
 4. Detect breaking response-contract changes.
 5. Stream or dispatch operational signals and optionally enrich serious drift with reviewed AI analysis.
 
-Customer acquisition, billing, and permanent hosting are out of scope.
+Customer acquisition, billing, and permanent hosting are out of scope. To contribute, you only need Docker Compose, PostgreSQL, and the core FastAPI/dashboard services; inference, Redis, Redpanda, monitoring, and the agent are optional feature flags.
+
+## Glossary
+
+Full definitions live in [docs/glossary.md](docs/glossary.md).
 
 ## Architecture
 
@@ -68,6 +70,21 @@ Core local runtime is the ingestor plus PostgreSQL. Redis, Redpanda, inference, 
 agent are optional/feature-gated. See [Application Architecture](docs/02-architecture/application-architecture.md)
 for exact boundaries and status.
 
+## Developer Journey
+
+```mermaid
+flowchart LR
+    Clone["git clone"] --> Doctor["just doctor"]
+    Doctor --> DevUp["just dev-up"]
+    DevUp --> Code["code + test"]
+    Code --> CI["CI / PR"]
+    CI --> Merge["merge to main"]
+    Merge --> Deploy{"deploy?"}
+    Deploy -->|yes| Lock["lock PR + SSM"]
+    Deploy -->|no| Done["done"]
+    Lock --> Done
+```
+
 ## Quick Start
 
 Run `just doctor` to check your workstation, then follow the [Canonical Onboarding and Delivery Checklist](docs/05-development/onboarding-and-delivery-checklist.md) for the full setup sequence.
@@ -90,27 +107,15 @@ app-to-infra release handoff.
 
 ## Repository Ownership
 
-| Repository | Owns |
-| --- | --- |
-| `api-observatory` | Application behavior, contracts, migrations, service images, local and MVP Compose, reviewed `aws-dev` desired state, deployment/rollback, tests, and developer bootstrap |
-| [`api-observatory-infra`](https://github.com/ivanprytula/api-observatory-infra) | Real-cloud Terraform/state, IAM, DNS/TLS, Parameter Store, Docker/SSM bootstrap, host/platform recovery, backup/restore tooling, and infrastructure monitoring |
+The `api-observatory` repository owns application behavior, contracts, migrations, service images, local and MVP Compose, reviewed `aws-dev` desired state, deployment/rollback, tests, and developer bootstrap. The sibling [`api-observatory-infra`](https://github.com/ivanprytula/api-observatory-infra) repository owns real-cloud Terraform/state, IAM, networking, runtime secrets, Docker/SSM bootstrap, backups/restores, and platform monitoring.
 
-The machine-readable AWS MVP service contract is
-[`release/services.json`](release/services.json). AWS is the
-primary portfolio direction; no completed live deployment is claimed.
+The machine-readable AWS MVP service contract is [`release/services.json`](release/services.json). AWS is the primary portfolio direction; no completed live deployment is claimed. See the [application deployment contract](docs/07-deployment/app-repo-contract.md) for the full delivery narrative.
 
 ## Evidence Status
 
-Documentation uses five statuses:
-
-- **Core:** implemented and tested in the application path.
-- **Lab:** executable/configurable in an isolated local environment.
-- **Decision:** analyzed but not exercised as production behavior.
-- **Deferred:** waits for a measurable scale or ownership trigger.
-- **Historical:** retained only to explain an older design.
-
-This distinction is mandatory when discussing Kubernetes, gateways, autoscaling, sharding, real
-cloud deployment, or archived services.
+Documentation uses five statuses defined in [docs/glossary.md](docs/glossary.md). This distinction
+is mandatory when discussing Kubernetes, gateways, autoscaling, sharding, real cloud deployment, or
+archived services.
 
 ## Primary Commands
 

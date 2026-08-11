@@ -17,7 +17,8 @@ reads Parameter Store runtime values. Do not attach broad account permissions to
 
 Create `aws-image-publish` and `aws-dev`, each restricted to `main`. The reviewed `aws-dev` lock PR
 merge is the normal deployment approval, so routine environment-review prompts add a duplicate
-approval step. Keep branch protection on `main` with required PRs and `CI / Merge gate`.
+approval step. Keep branch protection on `main` with required PRs and the core CI checks
+(`CI / Quality`, `CI / Unit and contract tests`).
 
 Set variables, not secrets, as follows:
 

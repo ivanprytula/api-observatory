@@ -1,14 +1,8 @@
 # Application Lifecycle and SDLC Drive-Through
 
 API Observatory is easier to remember as a system that changes over time than as a list of
-technologies. This guide follows the durable artifacts created from product idea through delivery,
-operation, and evidence-driven transformation. In this solo project one maintainer owns all of the
-concerns that a larger organization might distribute across roles.
-
-The product example is a small SaaS application that depends on payment, authentication, email,
-AI, or data APIs. The outcome is earlier evidence that a dependency is unavailable, slow, or
-contract-incompatible. This is locally runnable portfolio evidence, not a claim of permanent
-production operation.
+technologies. This guide follows the durable artifacts from product idea through delivery, operation,
+and evidence-driven transformation; see the [README](../../README.md) for project purpose and audience.
 
 ## Lifecycle
 
@@ -54,11 +48,7 @@ HTTP service with its own PostgreSQL database; the dashboard is a client; MCP is
 client. Significant choices are recorded in the [decision summary](../02-architecture/decisions.md)
 and linked ADRs.
 
-The repository boundary is also a contract:
-
-| App repository | Infrastructure repository |
-| --- | --- |
-| Behavior, schemas, migrations, images, ports, health, local/MVP runtime, reviewed locks, application rollout, tests | Cloud IaC/state, IAM, networking, runtime secrets, Docker/SSM bootstrap, backups/restores, platform monitoring |
+The repository boundary is also a contract; see the [ownership table](../../README.md#repository-ownership) in the README and the [application deployment contract](../07-deployment/app-repo-contract.md) for the exact boundary.
 
 Changes to ports, images, health endpoints, configuration names, ingress, IAM, secrets, or
 telemetry must be checked against the app-owned
@@ -84,33 +74,14 @@ maps these responsibilities to the current source tree.
 - Smoke, performance, and fault checks provide bounded runtime evidence.
 - Security, dependency, image, and secret scans protect delivery inputs.
 
-Passing configuration or a Terraform plan is not runtime proof. The statuses **Core**, **Lab**,
-**Decision**, **Deferred**, and **Historical** keep claims honest. Use the
+Passing configuration or a Terraform plan is not runtime proof. Use the
 [development workflows](../05-development/dev-workflows.md),
 [CI/CD reference](../06-ci-cd/ci-cd.md), and
 [performance/failure worksheet](../05-development/performance-and-failure-lab.md) for proof.
 
 ## 6. Release and Delivery
 
-Application CI validates all three deployable images without publishing them. After a deployable
-`main` change passes exact-commit CI verification, a separately gated reusable publisher builds
-immutable `tree-<SHA>` images for ingestor, inference, and dashboard and emits release metadata
-containing the source commit, source tree, and image digests. The publisher maintains a same-repo
-reviewed `aws-dev` lock PR. Infrastructure supplies ECR, EC2, local runtime storage, IAM, and runtime
-values through a documented platform contract. MCP is excluded because it is a locally spawned stdio
-process.
-
-Every release publishes identities for the three HTTP images. The default AWS MVP runtime starts
-`ingestor`, `dashboard`, and the ingestor PostgreSQL database; `inference` and its database start only
-when the reviewed `inference` profile is enabled. All selected workloads share one EC2 Docker Compose
-platform. Merging the green application lock PR approves an automatic deployment of that exact
-desired state. Delivery is an in-place recreate with independently preserved unchanged digests and
-best-effort rollback; it is not rolling, blue/green, canary, or zero-downtime delivery. The contract is documented and
-statically validated, but no live deployment is claimed. A real release requires
-approval, health checks, migration compatibility, rollback proof, redacted evidence, and
-cost-aware teardown. Continue with the app
-[deployment contract](../07-deployment/app-repo-contract.md) and infra
-[deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md).
+Application CI validates deployable images without publishing them. After a deployable `main` change passes CI, a separately gated publisher builds immutable `tree-<SHA>` images and maintains a same-repo reviewed `aws-dev` lock PR. Merging that PR is the human release decision; a green app `main` CI run then deploys the exact merged lock to the pre-bootstrapped EC2 Compose host. Delivery is an in-place recreate with best-effort rollback; it is not rolling, blue/green, canary, or zero-downtime. See the [application deployment contract](../07-deployment/app-repo-contract.md) and the [infrastructure deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md) for the full boundary.
 
 ## 7. Operate
 

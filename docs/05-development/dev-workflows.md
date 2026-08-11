@@ -6,48 +6,6 @@ duplicated in Markdown. The [`Justfile`](../../Justfile) is the command catalogu
 disposable Kubernetes, cloud, ingress, load, and chaos exercises. Branching, commits, pushes, and
 pull requests are owned by [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
 
-## Canonical local workflow
-
-Follow the [Canonical Onboarding and Delivery Checklist](onboarding-and-delivery-checklist.md) for the complete setup and first-run sequence. This guide explains proof selection, test architecture, and the development loop.
-
-## Development Loop
-
-1. Run `just doctor`, then choose the smallest runtime shape: `just dev-up` for core work,
-   `just dev-up-inference` for inference/RAG work, or `just dev-up-extended` only when a task needs
-   cache, broker, and inference together. Capability flags and their start sequencing are owned by
-   the [setup guide](../04-setup/setup-guide.md).
-2. `just dev-up` and `just dev-up-inference` return only after Compose reports the selected services
-   healthy. Then run `just db-migrate`; use `just db-auto-init` when a local admin/demo dataset is
-   needed. For extended mode, also run `just db-inference-migrate`.
-3. Run the smallest focused test while iterating: `just test-unit` for isolated code or
-   `just test-integration` for PostgreSQL/service behavior. When Docker is available, PostgreSQL
-   integration tests provision a temporary database through testcontainers; they do not require the
-   local core or extended stack. Smoke and API checks do require the corresponding running stack.
-   Every non-E2E test under `services/ingestor/tests/integration/` carries the `integration` marker,
-   so `just test-integration` is the authoritative ingestor integration gate.
-   Cache- or broker-specific tests use the test double or testcontainer named by that test;
-   start the matching local service only when the task exercises the running integration.
-   For a service-owned change, run that service's suite directly: use
-   `uv run pytest services/ingestor/tests -q` for ingestor changes and
-   `uv run pytest services/inference/tests -q` for inference changes. The repository-wide
-   marker recipes remain useful for the default unit/integration split, but they do not replace
-   the focused service suite.
-4. For a normal isolated bugfix, `just test-unit` is the default minimum proof. Run `just test-smoke`
-   for the running ingestor public boundary or `SMOKE_JWT="$(just smoke-token)" just test-smoke-auth`
-   for a protected observation workflow. Run `just test-e2e` for an explicitly end-to-end change.
-   Invoke ingress, load, chaos, Kubernetes, and cloud checks only through
-   `just --justfile just/labs.just <lab-recipe>`.
-   `just test-e2e` excludes public-network probes; run `just test-live-external` only when you
-   explicitly want to verify JSONPlaceholder availability. `just test-api` runs the API collection
-   against the prepared local stack. For a disposable demo,
-   explicitly run `just db-reset --confirm DELETE` and `just db-auto-init` first; never reset
-   observations or API sources you intend to keep.
-5. Run the affected boundary, contract, security, and documentation checks.
-6. Review the diff and run applicable pre-commit and CI-equivalent gates.
-
-Use [setup](../04-setup/setup-guide.md) for runtime modes. The
-[CI/CD reference](../06-ci-cd/ci-cd.md) explains automated gates.
-
 ## Proof Selection
 
 | Change | Minimum focused proof |
@@ -170,22 +128,13 @@ Do not paste values from `.env` into terminals, notes, or committed files. Do no
 Goal: prove that the smallest local system is running, then follow one write/read path into
 PostgreSQL.
 
-1. On the core stack, observe the process, dependency, and data boundaries.
+1. Verify the core stack is healthy (`/health`, `/readyz`, `docker compose ps`), then open
+   <http://127.0.0.1:8000/docs> and <http://127.0.0.1:8501>. `/health` proves the web process is
+   alive; `/readyz` also verifies its required database path.
 
-   ```bash
-   curl --fail http://127.0.0.1:8000/health
-   curl --fail http://127.0.0.1:8000/readyz
-   docker compose ps
-   docker compose exec ingestor-db psql -U postgres -d api_obs_ingestor
-   ```
-
-   In `psql`, check `SELECT version_num FROM alembic_version;` and inspect the observation rows
-   created by the smoke exercise. Exit with `\q`.
-
-2. Open <http://127.0.0.1:8000/docs> and <http://127.0.0.1:8501>. `/health` proves the web
-   process is alive; `/readyz` also verifies its required database path. The smoke test is the
-   evidence that an observation can be written and read through the running API, so it deliberately
-   leaves a small local row behind.
+2. Inspect the smoke test evidence left behind, then in `psql` check
+   `SELECT version_num FROM alembic_version;` and inspect the observation rows created by the
+   smoke exercise.
 
 Teach-back: draw `client -> FastAPI ingestor -> PostgreSQL -> API response`, then explain why a
 passing `/health` cannot prove the database is usable.
@@ -195,15 +144,9 @@ passing `/health` cannot prove the database is usable.
 Goal: trace the current product vertical from a health sample to an incident state transition, then
 prove that tenant boundaries and schema evolution are tested.
 
-1. On the core stack, create the disposable demo data only if you want an authenticated dashboard
-   walkthrough:
-
-   ```bash
-   just db-auto-init
-   ```
-
-   Sign in to the dashboard with the documented local demo fixture, then inspect sources and
-   incidents. The fixture is local-only; it is not an application credential pattern.
+1. If you want an authenticated dashboard walkthrough, create disposable demo data with
+   `just db-auto-init`, sign in with the local demo fixture, then inspect sources and incidents.
+   The fixture is local-only; it is not an application credential pattern.
 
 2. Follow the implementation in this order:
 
@@ -227,11 +170,11 @@ prove that tenant boundaries and schema evolution are tested.
    uv run alembic current --check-heads
    ```
 
-The API tests prove cross-tenant requests are denied and admins can use their documented scope.
-The PostgreSQL test uses a non-superuser role and proves tenant rows, global rows, no active tenant,
-and write-policy behavior. RLS remains table-by-table opt-in, not a claim that every tenant-bearing
-table is protected. The query-plan test uses 40 matching rows among 1,040 to show the existing
-tenant/status index is eligible; it is not a latency SLO.
+   The API tests prove cross-tenant requests are denied and admins can use their documented scope.
+   The PostgreSQL test uses a non-superuser role and proves tenant rows, global rows, no active tenant,
+   and write-policy behavior. RLS remains table-by-table opt-in, not a claim that every tenant-bearing
+   table is protected. The query-plan test uses 40 matching rows among 1,040 to show the existing
+   tenant/status index is eligible; it is not a latency SLO.
 
 Teach-back: explain why both API authorization and RLS are useful, why global rows remain visible,
 and how `upgrade -> downgrade -> upgrade` lowers migration rollout risk without making rollback
@@ -242,7 +185,7 @@ automatic in a deployed environment.
 Goal: operate the optional dependencies deliberately and explain which component owns each failure
 mode without turning the extended stack into the default development path.
 
-1. In `.env`, enable `API_OBS_CACHE_ENABLED=true` and `API_OBS_BROKER_ENABLED=true`, then start and
+1. Enable `API_OBS_CACHE_ENABLED=true` and `API_OBS_BROKER_ENABLED=true` in `.env`, then start and
    verify the extended stack:
 
    ```bash
@@ -288,7 +231,7 @@ another operational layer.
 ### End Each Exercise Deliberately
 
 Keep useful local data by stopping services with `docker compose stop`. Use the explicit destructive
-reset only for disposable demo data. Before a PR, use the proof selection table below instead of
+reset only for disposable demo data. Before a PR, use the proof selection table above instead of
 running every optional stack.
 
 ## Specialized Evidence

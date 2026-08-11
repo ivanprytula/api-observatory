@@ -82,7 +82,4 @@ profiles already reviewed and merged into app `main`.
 
 ## 5. Current deployment model
 
-The current AWS MVP deployment model is a single-host in-place recreate flow with promotion-PR
-approval and best-effort application-image rollback. It is not rolling, blue/green, or canary. The
-[application deployment contract](../07-deployment/app-repo-contract.md) documents the workload
-flow; the sibling infra guide documents the platform bootstrap, backup, and host recovery boundary.
+The application release handoff is a single-host in-place recreate flow with promotion-PR approval and best-effort application-image rollback; it is not rolling, blue/green, or canary. See the [application deployment contract](../07-deployment/app-repo-contract.md) for the workload flow and the sibling infra guide for platform bootstrap, backup, and host recovery.

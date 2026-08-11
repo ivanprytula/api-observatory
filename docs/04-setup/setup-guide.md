@@ -18,13 +18,20 @@ Follow the [Canonical Onboarding and Delivery Checklist](../05-development/onboa
 | Inference | `just dev-up-inference` | Core stack plus inference and its dedicated PostgreSQL database |
 | Full optional integration | `just dev-up-extended` | Inference stack plus Redis and Redpanda for a cross-integration task |
 | Hot reload (optional) | `just dev` | Direct HTTP on host Uvicorn/Streamlit after Docker-first setup |
-| Containerized watch (advanced) | Manual Compose Watch command below | Core containers with source sync and reload for Compose debugging |
+| Containerized watch (advanced) | Manual Compose Watch | Core containers with source sync and reload for Compose debugging |
 | Monitoring | `just dev-up-monitoring` | Opt-in Prometheus, Grafana, Loki/Promtail, Tempo, Alertmanager, Mailpit |
 
 Use `just --list` for the current core workflow commands. Real AWS MVP delivery is **Decision**
 evidence. Its application workload is versioned here and its platform bootstrap is handled by the sibling infra
 [deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md);
 it is not a local environment profile.
+
+## What You Don't Need
+
+To contribute to the application, you do not need Terraform, Ansible, cloud CLIs, Kubernetes tools,
+production TLS certificates, or real notification providers (Slack, email, webhooks). Install them
+only for a task that owns that boundary, following the sibling infrastructure repository's
+[README](https://github.com/ivanprytula/api-observatory-infra/blob/main/README.md).
 
 ## Optional Labs
 
@@ -52,40 +59,20 @@ migrations and tests from terminal 2 once `/readyz` returns `200`.
 
 ### Manual Compose Watch
 
-Use this advanced, containerized watcher only when debugging Compose-specific behavior such as
-container reload, image rebuild, or service networking. It is not a replacement for `just dev` and
-must not run at the same time as another local stack because it uses the same ports.
+For Compose-specific debugging (container reload, image rebuild, service networking), see the
+[Compose Watch documentation](https://docs.docker.com/compose/how-tos/watch/). The project's
+`just --justfile just/labs.just` recipes cover the same boundary without maintaining a local copy
+of generic Compose syntax. Do not run the watcher alongside another local stack.
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --watch --build ingestor-db ingestor dashboard
-```
-
-Keep that command in terminal 1. In terminal 2, run focused migrations and tests once `/readyz`
-returns `200`. This watcher intentionally starts only the core services; use the explicit `dev-up-cache`,
-`dev-up-broker`, `dev-up-inference`, or `dev-up-extended` paths when a task needs optional dependencies. Its ingestor
-override applies pending ingestor migrations on startup, so use the native migration workflow when
-authoring or reviewing schema changes.
-
-Stop the watcher with Ctrl+C, then remove its containers/network without deleting named database
-volumes:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml down
-```
-
-Use HTTPS when proving the public boundary: install developer-trusted certificates with
-[`scripts/setup/02-setup-local-https.sh`](../../scripts/setup/02-setup-local-https.sh), then run
-`docker compose --profile ingress up -d --build`. The Nginx edge redirects port 80 to HTTPS,
-terminates TLS, and proxies the public API under `/api/`.
-
-Use this explicit HTTPS sequence:
+Use HTTPS when proving the public boundary: run
+[`scripts/setup/02-setup-local-https.sh`](../../scripts/setup/02-setup-local-https.sh) to install
+developer-trusted certificates, then start the `ingress` profile. The Nginx edge redirects port 80
+to HTTPS, terminates TLS, and proxies the public API under `/api/`.
 
 ```bash
 # Edit .env and set API_OBS_LOCAL_HTTPS=true before continuing.
 bash scripts/setup/02-setup-local-https.sh
 docker compose --profile ingress up -d --build
-curl --fail https://127.0.0.1/api/health --insecure
-TLS_VERIFY=false just --justfile just/labs.just lab-ingress-smoke
 ```
 
 Return to the normal HTTP stack with `docker compose --profile ingress down` followed by `just dev-up`.
@@ -103,8 +90,6 @@ requirement.
   generator replaces it atomically with user-only permissions (`0600`); never commit or share it.
 - [`services/ingestor/config.py`](../../services/ingestor/config.py) owns ingestor defaults,
   validation, feature flags, and secret classification.
-- [`services/inference/config.py`](../../services/inference/config.py) and
-  [`services/mcp/config.py`](../../services/mcp/config.py) own their service-specific settings.
 - [`docker-compose.yml`](../../docker-compose.yml) owns service wiring, ports, profiles, and
   container-to-container addresses.
 
@@ -118,25 +103,8 @@ notifications, background workers, external AI providers, and demo routes remain
 feature-gated. Host processes use `127.0.0.1`; containers use Compose DNS names such as `ingestor-db`,
 `cache`, and `broker`.
 
-Local secrets may come from the ignored `.env`. Cloud secret delivery is infrastructure-owned; the
-application only consumes environment variables declared by the
-[deployment contract](../07-deployment/app-repo-contract.md).
-
-For a local database client such as DBeaver or pgAdmin, use `127.0.0.1`, user `postgres`, and the
-matching namespaced database/password pair: `5432` / `api_obs_ingestor` /
-`API_OBS_INGESTOR_DB_PASSWORD` for the ingestor, or `5433` / `api_obs_inference` /
-`API_OBS_INFERENCE_DB_PASSWORD` for inference. Obtain the password from your ignored `.env`; never
-paste it into documentation, shell history, or committed client configuration.
-
-For an interactive local terminal session, use the explicit local Compose service:
-
-```bash
-docker compose exec ingestor-db psql -U postgres -d api_obs_ingestor
-docker compose exec inference-db psql -U postgres -d api_obs_inference
-```
-
-These commands target the active local Compose project. Cloud database operations behind a VPN use
-native `psql` with an infrastructure-supplied `DATABASE_URL`.
+Cloud secret delivery is infrastructure-owned; the application only consumes environment variables
+declared by the [deployment contract](../07-deployment/app-repo-contract.md).
 
 ## Service Map
 
@@ -231,23 +199,19 @@ and teardown remain infra-owned and require the separately approved delivery gat
 
 ## Optional Local Capabilities
 
-- HTTPS/edge parity is owned by the Compose `ingress` profile and the local certificate setup
-  script named in the [HTTP and HTTPS split](#http-and-https-split).
 - Image/dependency scanning is owned by pre-commit and [CI workflows](../../.github/workflows/).
-- pgvector is provisioned by the inference database image and migration under
-  [`services/inference/`](../../services/inference/).
 - Performance and fault work starts from the
   [performance/failure worksheet](../05-development/performance-and-failure-lab.md), which links the
   maintained scripts.
 
-Qdrant, a production frontend replacement, ECS on Fargate, EKS, and additional IaaS providers are
-not active setup modes. The AWS learning order and production adoption triggers live in the
+Production frontend replacements, ECS on Fargate, EKS, and additional IaaS providers are not active
+setup modes. The AWS learning order and production adoption triggers live in the
 [roadmap](../03-planning/mvp-roadmap.md).
 
 ## Verification and Troubleshooting
 
 Use `just doctor`, service health/readiness endpoints, and the focused test recipes in the
-[`Justfile`](../../Justfile). If startup fails, inspect native Compose state and logs first:
+[`Justfile`](../../Justfile). If startup fails, inspect Compose state and logs first:
 
 ```bash
 docker compose ps
@@ -257,13 +221,31 @@ docker compose logs --tail=100 <service>
 Then check migrations and the owning settings module rather than copying command sequences into this
 guide.
 
-If `just dev-up` exits before Compose reports the stack healthy, inspect the running services before
-retrying:
-
-```bash
-docker compose ps
-docker compose logs --tail=100 ingestor-db ingestor
-```
-
 For the development loop and proof selection, continue with
 [development workflows](../05-development/dev-workflows.md).
+
+## FAQ
+
+### Docker daemon not running
+
+Run `just doctor` first. It checks the daemon and Compose path. If Docker Desktop is installed but the daemon is stopped, start it and wait for `docker info` to succeed.
+
+### Port conflicts
+
+`just dev-up` uses `8000` (ingestor), `8501` (dashboard), `5432` (ingestor PostgreSQL), and `5433` (inference PostgreSQL). Stop the conflicting process or change the port in `.env` before restarting.
+
+### `.env` generation
+
+Never edit `.env` manually. Copy `.env.example`, then run `just generate-secrets` to create a local `.env` with user-only permissions (`0600`).
+
+### testcontainers vs. local stack
+
+`just test-integration` and other testcontainer-based recipes provision their own temporary PostgreSQL inside Docker. Do not run `just dev-up` first; the tests manage their own lifecycle.
+
+### Migrations not applied
+
+`just dev-up` returns only after services are healthy, but migrations are explicit. Run `just db-migrate` (and `just db-inference-migrate` for inference) after startup.
+
+### MCP not starting
+
+MCP is a local stdio process, not a Compose service. Follow the [MCP service README](../../services/mcp/README.md) for its one-time service-account setup and launch command.

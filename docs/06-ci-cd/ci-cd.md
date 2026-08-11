@@ -7,9 +7,11 @@ control plane.
 
 ## Branch and Review Flow
 
-Short-lived task branches merge into `main` through a pull request. The stable `CI / Merge gate`
-protects `main`; it covers the internal quality, test, migration, contract, and image-smoke graph.
-Protect the app `main` branch with required PRs and that check before enabling AWS gates.
+Short-lived task branches merge into `main` through a pull request. The core CI checks
+(`CI / Quality`, `CI / Unit and contract tests`) protect `main`. Additional job graphs
+(integration, capability, image-smoke) run conditionally; publish and deploy enforce their own
+gating via workflow `if:` conditions. Protect the app `main` branch with required PRs and the core
+checks before enabling AWS gates.
 
 Application CI has no AWS credentials. Only the post-gate image publisher receives the separate
 `aws-image-publish` OIDC identity. The deployment workflow receives the different `aws-dev` OIDC

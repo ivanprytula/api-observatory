@@ -54,9 +54,11 @@ git push -u origin HEAD
 gh pr create --base main --fill
 ```
 
-Merge only after `CI / Merge gate` succeeds and review conversations are resolved. Before AWS
-delivery is enabled, configure `main` to require both the pull request and that stable check. Manual
-assurance is not a routine merge requirement; post-gate image publication runs only for deployable
+Merge only after core CI checks (`CI / Quality`, `CI / Unit and contract tests`) succeed and
+review conversations are resolved. Before AWS delivery is enabled, configure `main` to require both
+the pull request and those stable checks. Manual assurance is not a routine merge requirement;
+post-gate image publication runs only for deployable app changes and is gated by workflow
+conditions.
 changes and remains disabled unless its explicit AWS gate is true.
 
 ## Cross-Repository Delivery

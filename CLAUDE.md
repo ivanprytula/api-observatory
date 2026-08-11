@@ -96,7 +96,7 @@ change):
   deferred feature became active.
 - **Changing infra topology** (new local emulator/sandbox env, new real-cloud environment, or
   something moves between local/cloud ownership) → update
-  `docs/02-architecture/infrastructure-architecture.md` and, if ownership moved, the sibling
+  `docs/07-deployment/app-repo-contract.md` and, if ownership moved, the sibling
   infra repo's `docs/.plans/repo-split-app-infra.md` ownership table, in the same change.
 - **Yearly (June)** → run the OWASP review in
   `docs/02-architecture/security-architecture.md` (OWASP Top 10 Coverage & Review Cadence); file gaps

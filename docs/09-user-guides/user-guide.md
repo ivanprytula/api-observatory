@@ -20,15 +20,7 @@ API Observatory continuously checks the health and reliability of your external 
 
 ## Quick Start [Core]
 
-Follow the [Canonical Onboarding and Delivery Checklist](../05-development/onboarding-and-delivery-checklist.md) for setup. Then open `http://127.0.0.1:8501` to access the dashboard.
-
-An empty dashboard confirms that the UI is running. Protected actions such as source management
-require the authenticated local demo state; run `just db-auto-init` when following the populated walkthrough.
-
-The Docker-first Compose workflow is the supported setup. Host-process hot reload is an optional
-follow-up described in the [Setup Guide](../04-setup/setup-guide.md). MCP is separate from the
-Compose stack: after its one-time service-account setup, run
-`uv run python -m services.mcp.main` as a local stdio process.
+Follow the [Canonical Onboarding and Delivery Checklist](../05-development/onboarding-and-delivery-checklist.md) for setup, then open `http://127.0.0.1:8501`. Protected actions such as source management require the authenticated local demo state; run `just db-auto-init` when following the populated walkthrough. MCP is separate from the Compose stack: after its one-time service-account setup, run `uv run python -m services.mcp.main` as a local stdio process.
 
 ### Monitor Your First API
 
@@ -142,13 +134,7 @@ AI-powered analysis of observations via LangGraph StateGraph:
 - **Sentiment Analysis**: Health trend detection
 - **Draft Analysis**: optional provider-backed analysis after deterministic classification
 
-Runs support a human-in-the-loop pause and explicit approve/reject resume. The current agent
-flow does not expose an SSE stream.
-
-### Operations UI Direction [Decision]
-
-Streamlit is the current dashboard. An HTMX/Jinja2 operations UI was explored in an ADR but
-is not a running service; it should be adopted only if Streamlit prevents a required workflow.
+Runs support a human-in-the-loop pause and explicit approve/reject resume.
 
 ### Vector Search [Core Optional Path]
 
@@ -164,9 +150,7 @@ configured in a deployed environment.
 ### Dependency Incident Lifecycle [Core]
 
 Repeated availability failures, configured latency breaches, and breaking drift create one
-tenant-scoped incident instead of one alert per event. Operators can acknowledge and resolve
-incidents through `/api/v1/incidents`; successful health probes automatically resolve availability
-and latency incidents. See the [operations guide](../08-operations/dependency-incidents.md).
+tenant-scoped incident instead of one alert per event. See the [operations guide](../08-operations/dependency-incidents.md).
 
 ---
 
@@ -175,7 +159,6 @@ and latency incidents. See the [operations guide](../08-operations/dependency-in
 - Detect dependency outages and latency degradation before users report them.
 - Preserve contract-change evidence instead of relying on transient alerts.
 - Prioritize incidents using uptime, latency, drift severity, and operator state.
-- Compare dependency reliability without claiming a production SLA from local evidence.
 
 ---
 

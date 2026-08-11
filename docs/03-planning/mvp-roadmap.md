@@ -1,8 +1,6 @@
 # Current Roadmap and Evolution Triggers
 
-The repository is a locally runnable backend/platform portfolio project. The standing product
-example is a small SaaS developer monitoring third-party APIs; permanent hosting, billing,
-customer acquisition, and speculative scale work are out of scope.
+The repository is a locally runnable backend/platform portfolio project. See the [README](../../README.md) for the project purpose and standing product example. Permanent hosting, billing, customer acquisition, and speculative scale work are out of scope.
 
 ## Current State
 
