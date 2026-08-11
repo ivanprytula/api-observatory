@@ -81,7 +81,8 @@ fi
 # Protect one stable aggregate gate so internal CI jobs can evolve without
 # requiring branch-protection changes. Manual assurance and publication remain excluded.
 default_contexts_json='[
-	"CI / Merge gate"
+ 	"CI / Quality",
+ 	"CI / Unit and contract tests"
 ]'
 
 for branch in "${branches[@]}"; do

@@ -84,6 +84,15 @@ def write_lock(path: Path, lock: dict[str, Any]) -> None:
     os.replace(temporary_path, path)
 
 
+def promote(metadata: dict[str, Any], lock_path: Path = DEFAULT_LOCK) -> None:
+    """Validate release metadata and write the updated image lock."""
+    errors = validate_metadata(metadata)
+    if errors:
+        raise ValueError("; ".join(errors))
+    current_lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    write_lock(lock_path, build_lock(metadata, current_lock))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("metadata", type=Path)
@@ -91,13 +100,9 @@ def main() -> int:
     args = parser.parse_args()
 
     metadata = json.loads(args.metadata.read_text(encoding="utf-8"))
-    current_lock = json.loads(args.lock.read_text(encoding="utf-8"))
-    if not isinstance(metadata, dict) or not isinstance(current_lock, dict):
-        parser.error("release metadata and image lock must be JSON objects")
-    errors = validate_metadata(metadata)
-    if errors:
-        parser.error("; ".join(errors))
-    write_lock(args.lock, build_lock(metadata, current_lock))
+    if not isinstance(metadata, dict):
+        parser.error("release metadata must be a JSON object")
+    promote(metadata, args.lock)
     print(f"Updated {args.lock}; review and commit the desired-state diff.")
     return 0
 

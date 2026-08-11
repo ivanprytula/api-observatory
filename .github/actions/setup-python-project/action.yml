@@ -1,0 +1,32 @@
+name: "Setup Python project"
+description: "Checkout source, install uv, and sync dependencies."
+inputs:
+  fetch-depth:
+    description: "Git fetch depth for actions/checkout"
+    required: false
+    default: "1"
+  cache-dependency-glob:
+    description: "Glob pattern for uv cache key"
+    required: false
+    default: "uv.lock"
+  install-args:
+    description: "Extra arguments for uv sync"
+    required: false
+    default: "--frozen --all-packages"
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: ${{ inputs.fetch-depth }}
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      with:
+        enable-cache: true
+        cache-dependency-glob: ${{ inputs.cache-dependency-glob }}
+
+    - name: Sync dependencies
+      shell: bash
+      run: uv sync ${{ inputs.install-args }}

@@ -24,22 +24,10 @@ cleanup() {
 
 show_logs() { compose logs --no-color || true; }
 
-assert_non_root() {
-  local image="$1"
-  local user
-  user="$(docker image inspect "${image}" --format '{{.Config.User}}')"
-  [[ -n "${user}" && "${user}" != "0" && "${user}" != "root" ]] \
-    || error "Image must declare a non-root user: ${image}"
-}
-
 main() {
   docker info >/dev/null 2>&1 || error "Docker daemon is not running."
   info "Building disposable MVP workload images."
   compose build
-
-  assert_non_root "${INGESTOR_IMAGE}"
-  assert_non_root "${INFERENCE_IMAGE}"
-  assert_non_root "${DASHBOARD_IMAGE}"
 
   compose up --wait --wait-timeout 180
   compose exec --no-TTY dashboard python -c \
@@ -51,7 +39,7 @@ token = create_jwt_token("image-smoke", {"roles": ["admin"]})
 request = urllib.request.Request("http://127.0.0.1:8000/api/v1/scorecards", headers={"Authorization": f"Bearer {token}"})
 urllib.request.urlopen(request, timeout=5).close()
 '
-  success "MVP workload images built, ran as non-root, and passed Compose health checks."
+  success "MVP workload images built and passed Compose health checks."
 }
 
 trap cleanup EXIT

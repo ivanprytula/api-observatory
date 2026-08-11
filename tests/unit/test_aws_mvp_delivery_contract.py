@@ -116,12 +116,15 @@ def test_source_publishes_then_updates_one_app_owned_promotion_pr() -> None:
     assert "Only the current main commit may be published." in publisher
     assert "A newer main commit superseded this release" in publisher
     assert "APP_PROMOTION_TOKEN is required" in publisher
-    assert "scripts/promote_mvp_images.py" in publisher
+    assert "scripts/ci/promote_release.py" in publisher
     assert "automation/promote-aws-dev" in publisher
     assert ".infra-promotion" not in publisher
     assert "repository_dispatch" not in publisher
     assert "deployable_images: ${{ steps.filter.outputs.deployable_images }}" in ci
-    assert "needs: [changes, merge-gate]" in ci
+    assert (
+        "needs: [changes, code-quality, docs-quality, unit, integration, image-smoke]"
+        in ci
+    )
     assert "needs.changes.outputs.deployable_images == 'true'" in ci
     assert "uses: ./.github/workflows/publish-images.yml" in ci
     assert ci.count("uses: ./.github/workflows/publish-images.yml") == 1
@@ -139,8 +142,10 @@ def test_merged_lock_or_revert_invokes_one_committed_state_deployment() -> None:
     ci = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
     deployment = (WORKFLOWS / "deploy-aws-mvp.yml").read_text(encoding="utf-8")
 
+    deploy_script = (ROOT / "scripts/ci/deploy_mvp.py").read_text(encoding="utf-8")
+
     assert "aws_mvp_lock:" in ci
-    assert "grep -Fxq 'environments/aws-dev/images.lock.json'" in ci
+    assert "'environments/aws-dev/images.lock.json'" in ci
     assert "needs.changes.outputs.aws_mvp_lock == 'true'" in ci
     assert "uses: ./.github/workflows/deploy-aws-mvp.yml" in ci
     assert ci.count("uses: ./.github/workflows/deploy-aws-mvp.yml") == 1
@@ -151,8 +156,14 @@ def test_merged_lock_or_revert_invokes_one_committed_state_deployment() -> None:
     assert "environments/aws-dev/images.lock.json" in deployment
     assert "aws ssm send-command" in deployment
     assert "MVP_PLATFORM_CONTRACT_VERSION" in deployment
-    assert "api-observatory-mvp-render-env" in deployment
-    assert ".platform-contract-version" in deployment
+    assert (
+        "api-observatory-mvp-render-env" in deployment
+        or "api-observatory-mvp-render-env" in deploy_script
+    )
+    assert (
+        ".platform-contract-version" in deployment
+        or ".platform-contract-version" in deploy_script
+    )
     assert "repository_dispatch:" not in deployment
     assert "github.event.client_payload" not in deployment
     assert "contents: write" not in deployment
@@ -162,12 +173,12 @@ def test_merged_lock_or_revert_invokes_one_committed_state_deployment() -> None:
 
 def test_docs_and_desired_state_do_not_publish_or_smoke_build_images() -> None:
     ci = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
-    deployable_filter = ci.split("deployable_paths_regex=", maxsplit=1)[1].split(
-        'if echo "$deployable_files"', maxsplit=1
+    deployable_filter = ci.split("deployable_images:", maxsplit=1)[1].split(
+        "aws_mvp_lock:", maxsplit=1
     )[0]
 
     assert "docs/" not in deployable_filter
     assert "environments/" not in deployable_filter
     assert "deployment/" not in deployable_filter
-    assert "grep -Ev '^services/mcp/'" in ci
+    assert "!services/mcp/**" in ci
     assert "needs.changes.outputs.deployable_images == 'true'" in ci

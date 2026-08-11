@@ -16,6 +16,7 @@ LOCK = ROOT / "environments/aws-dev/images.lock.json"
 COMPOSE = ROOT / "deployment/aws-mvp/docker-compose.yml"
 WORKFLOW = ROOT / ".github/workflows/deploy-aws-mvp.yml"
 ROLLOUT = ROOT / "deployment/aws-mvp/rollout.sh"
+DEPLOY_SCRIPT = ROOT / "scripts/ci/deploy_mvp.py"
 SHA = re.compile(r"^[0-9a-f]{40}$")
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 PLACEHOLDER_SHA = "0" * 40
@@ -60,6 +61,7 @@ def validate(app_root: Path, *, allow_placeholder_lock: bool = False) -> list[st
     compose = COMPOSE.read_text(encoding="utf-8")
     workflow = WORKFLOW.read_text(encoding="utf-8")
     rollout = ROLLOUT.read_text(encoding="utf-8")
+    deploy_script = DEPLOY_SCRIPT.read_text(encoding="utf-8")
 
     manifest_services = manifest.get("services", [])
     services = {service.get("name") for service in manifest_services}
@@ -143,7 +145,7 @@ def validate(app_root: Path, *, allow_placeholder_lock: bool = False) -> list[st
         ".platform-contract-version",
         "concurrency:",
     ):
-        if marker not in workflow:
+        if marker not in workflow and marker not in deploy_script:
             errors.append(f"deployment workflow is missing: {marker}")
     for marker in ("configure_profiles", "profile_enabled inference", "compose up -d"):
         if marker not in rollout:

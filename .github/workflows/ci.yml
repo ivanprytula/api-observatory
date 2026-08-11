@@ -29,85 +29,77 @@ jobs:
       aws_mvp_lock: ${{ steps.filter.outputs.aws_mvp_lock }}
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: ./.github/actions/setup-python-project
         with:
-          fetch-depth: 0
+          fetch-depth: 1
+          install-args: --frozen --all-packages --all-extras
 
-      - name: Determine changed paths
+      - name: Detect relevant changes
         id: filter
-        shell: bash
-        run: |
-          set -euo pipefail
-          base="${{ github.event.pull_request.base.sha || github.event.before }}"
-          head="${{ github.event.pull_request.head.sha || github.sha }}"
-          if [[ -n "$base" && "$base" != "0000000000000000000000000000000000000000" ]]; then
-            git fetch --no-tags --depth=2 origin "$base" "$head" >/dev/null 2>&1 || true
-            changed_files=$(git diff --name-only "$base" "$head")
-          else
-            changed_files=$(git diff-tree --no-commit-id --name-only -r "$head")
-          fi
-          echo "$changed_files"
-          app_paths_regex='^(services/|libs/|tests/|alembic/|scripts/|pyproject.toml|uv.lock|'
-          app_paths_regex+='\.python-version|Dockerfile|docker-compose[^/]*\.yml|release/'
-          app_paths_regex+='|\.github/workflows/(ci|publish-images|assurance)\.yml)'
-          if echo "$changed_files" | grep -Eq "$app_paths_regex"; then
-            echo "app=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "app=false" >> "$GITHUB_OUTPUT"
-          fi
-          delivery_paths_regex='^(deployment/aws-mvp/|environments/aws-dev/images\.lock\.json|'
-          delivery_paths_regex+='scripts/(promote_mvp_images|validate_mvp_contract)\.py|'
-          delivery_paths_regex+='tests/unit/test_aws_mvp_delivery_contract\.py|'
-          delivery_paths_regex+='\.github/workflows/(ci|publish-images|deploy-aws-mvp)\.yml)'
-          if echo "$changed_files" | grep -Eq "$delivery_paths_regex"; then
-            echo "delivery=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "delivery=false" >> "$GITHUB_OUTPUT"
-          fi
-          docs_paths_regex='^(docs/|README\.md|CONTRIBUTING\.md|\.github/workflows/ci\.yml|'
-          docs_paths_regex+='\.github/workflows/publish-images\.yml|\.github/workflows/assurance\.yml|'
-          docs_paths_regex+='pyproject\.toml|uv\.lock|\.python-version)'
-          if echo "$changed_files" | grep -Eq "$docs_paths_regex"; then
-            echo "docs=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "docs=false" >> "$GITHUB_OUTPUT"
-          fi
-          deployable_paths_regex='^(\.dockerignore|Dockerfile|pyproject\.toml|uv\.lock|alembic\.ini|alembic/'
-          deployable_paths_regex+='|libs/|release/services\.json|services/)'
-          deployable_files=$(echo "$changed_files" | grep -Ev '^services/mcp/' || true)
-          if echo "$deployable_files" | grep -Eq "$deployable_paths_regex"; then
-            echo "deployable_images=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "deployable_images=false" >> "$GITHUB_OUTPUT"
-          fi
-          if echo "$changed_files" | grep -Fxq 'environments/aws-dev/images.lock.json'; then
-            echo "aws_mvp_lock=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "aws_mvp_lock=false" >> "$GITHUB_OUTPUT"
-          fi
+        uses: dorny/paths-filter@v3
+        with:
+          predicate-quantifier: 'some-with-excludes'
+          filters: |
+            app:
+              - 'services/**'
+              - 'libs/**'
+              - 'tests/**'
+              - 'alembic/**'
+              - 'scripts/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.python-version'
+              - 'Dockerfile'
+              - 'docker-compose*.yml'
+              - 'release/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/publish-images.yml'
+              - '.github/workflows/assurance.yml'
+            delivery:
+              - 'deployment/aws-mvp/**'
+              - 'environments/aws-dev/images.lock.json'
+              - 'scripts/promote_mvp_images.py'
+              - 'scripts/validate_mvp_contract.py'
+              - 'tests/unit/test_aws_mvp_delivery_contract.py'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/publish-images.yml'
+              - '.github/workflows/deploy-aws-mvp.yml'
+            docs:
+              - 'docs/**'
+              - 'README.md'
+              - 'CONTRIBUTING.md'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/publish-images.yml'
+              - '.github/workflows/assurance.yml'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.python-version'
+            deployable_images:
+              - 'Dockerfile'
+              - 'docker-compose*.yml'
+              - '.dockerignore'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'alembic.ini'
+              - 'alembic/**'
+              - 'release/services.json'
+              - '!services/mcp/**'
+            aws_mvp_lock:
+              - 'environments/aws-dev/images.lock.json'
 
-  quality:
-    name: "Quality"
+  code-quality:
+    name: "Code quality"
     needs: [changes]
     if: >-
-      needs.changes.outputs.app == 'true' || needs.changes.outputs.docs == 'true' ||
-      needs.changes.outputs.delivery == 'true'
+      needs.changes.outputs.app == 'true' || needs.changes.outputs.delivery == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: ./.github/actions/setup-python-project
         with:
-          fetch-depth: 0
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-
-      - name: Sync workspace
-        run: uv sync --frozen --all-packages --all-extras
+          fetch-depth: 1
+          install-args: --frozen --all-packages --all-extras
 
       - name: Validate workspace and service boundaries
         run: |
@@ -133,19 +125,51 @@ jobs:
       - name: Lint GitHub Actions workflows
         uses: devops-actions/actionlint@e7ee33fbf5aa8c9f9ee1145137f3e52e25d6a35b # v0.1.3 (upstream actionlint v1.7.12)
 
-      - name: Lint, format, docs, and type checks
+      - name: Lint, format, and type checks
         run: |
           uv run ruff check services libs scripts tests
           uv run ruff format --check services libs scripts tests
           uv run bandit -c pyproject.toml -r services libs scripts
           uv run python scripts/ci/check_test_markers.py
-          uv run python scripts/ci/docs_quality_check.py
           uv run ty check services libs
 
       - name: Detect committed secrets
         uses: docker://ghcr.io/gitleaks/gitleaks@sha256:0e99e8821643ea5b235718642b93bb32486af9c8162c8b8731f7cbdc951a7f46 # v8.21.2
         with:
           args: detect --source=/github/workspace --verbose --no-banner
+
+  docs-quality:
+    name: "Docs quality"
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: ./.github/actions/setup-python-project
+        with:
+          fetch-depth: 1
+          install-args: --frozen --all-packages --all-extras
+
+      - name: Validate workflow action references
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t workflow_files < <(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) | sort)
+          mutable_refs=$(grep -nE 'uses:\s*[^#]+@(v[0-9]+|latest|main|master|develop)\b' "${workflow_files[@]}" || true)
+          mutable_docker_refs=$(grep -nE 'uses:\s*docker://' "${workflow_files[@]}" | grep -v '@sha256:' || true)
+          if [[ -n "${mutable_refs}" || -n "${mutable_docker_refs}" ]]; then
+            echo "Mutable action reference detected."
+            echo "${mutable_refs}"
+            echo "${mutable_docker_refs}"
+            exit 1
+          fi
+
+      - name: Lint GitHub Actions workflows
+        uses: devops-actions/actionlint@e7ee33fbf5aa8c9f9ee1145137f3e52e25d6a35b # v0.1.3 (upstream actionlint v1.7.12)
+
+      - name: Lint markdown documentation
+        run: uv run python scripts/ci/docs_quality_check.py
 
   unit:
     name: "Unit and contract tests"
@@ -158,16 +182,12 @@ jobs:
       CACHE_ENABLED: "false"
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        uses: ./.github/actions/setup-python-project
         with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-
-      - name: Sync dependencies
-        run: uv sync --frozen --all-packages --extra ai --extra messaging --extra etl
+          fetch-depth: 1
+          install-args: >-
+            --frozen --all-packages
+            --extra ai --extra messaging --extra etl
 
       - name: Run unit, MCP, and OpenAPI contract tests
         run: |
@@ -177,8 +197,12 @@ jobs:
 
   integration:
     name: "Core PostgreSQL integration and migrations"
-    needs: [changes, unit]
-    if: needs.changes.outputs.app == 'true'
+    needs: [changes, code-quality, unit]
+    if: >-
+      needs.changes.outputs.app == 'true' &&
+      always() &&
+      needs.code-quality.result == 'success' &&
+      needs.unit.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     services:
@@ -212,16 +236,12 @@ jobs:
         capability_ai and not full_optional
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        uses: ./.github/actions/setup-python-project
         with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-
-      - name: Sync workspace
-        run: uv sync --frozen --all-packages --extra ai --extra messaging --extra etl
+          fetch-depth: 1
+          install-args: >-
+            --frozen --all-packages
+            --extra ai --extra messaging --extra etl
 
       - name: Create isolated migration and inference databases
         run: |
@@ -232,21 +252,12 @@ jobs:
       - name: Validate ingestor migrations
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_ingestor_migrations
-        run: |
-          uv run alembic upgrade head
-          uv run alembic current --check-heads
-          uv run alembic downgrade -1
-          uv run alembic upgrade head
-          uv run alembic current --check-heads
-          uv run alembic check
+        run: uv run python scripts/ci/validate_migrations.py "$DATABASE_URL"
 
       - name: Validate inference migrations
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/api_obs_inference_migrations
-        run: |
-          uv run alembic -c services/inference/alembic.ini upgrade head
-          uv run alembic -c services/inference/alembic.ini current --check-heads
-          uv run alembic -c services/inference/alembic.ini check
+        run: uv run python scripts/ci/validate_migrations.py "$DATABASE_URL" --alembic-config services/inference/alembic.ini
 
       - name: Run core ingestor integration tests
         run: |
@@ -266,8 +277,12 @@ jobs:
 
   capability:
     name: "Capability: ${{ matrix.profile }}"
-    needs: [changes, unit]
-    if: needs.changes.outputs.app == 'true'
+    needs: [changes, code-quality, unit]
+    if: >-
+      needs.changes.outputs.app == 'true' &&
+      always() &&
+      needs.code-quality.result == 'success' &&
+      needs.unit.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
@@ -318,16 +333,12 @@ jobs:
       NOTIFICATION_DELIVERY_MODE: broker
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        uses: ./.github/actions/setup-python-project
         with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-
-      - name: Sync workspace
-        run: uv sync --frozen --all-packages --extra ai --extra messaging --extra etl
+          fetch-depth: 1
+          install-args: >-
+            --frozen --all-packages
+            --extra ai --extra messaging --extra etl
 
       - name: Run capability profile
         run: |
@@ -336,10 +347,14 @@ jobs:
   image-smoke:
     name: "Deployable image smoke"
     runs-on: ubuntu-latest
-    needs: [changes, quality, unit, integration]
+    needs: [changes, code-quality, unit, integration]
     if: >-
       needs.changes.outputs.app == 'true' &&
-      needs.changes.outputs.deployable_images == 'true'
+      needs.changes.outputs.deployable_images == 'true' &&
+      always() &&
+      needs.code-quality.result == 'success' &&
+      needs.unit.result == 'success' &&
+      needs.integration.result == 'success'
     timeout-minutes: 35
     steps:
       - name: Checkout
@@ -348,33 +363,19 @@ jobs:
       - name: Build and health-check MVP workload images
         run: scripts/ci/smoke-deployable-images.sh
 
-  merge-gate:
-    name: "Merge gate"
-    runs-on: ubuntu-latest
-    if: >-
-      always() && (needs.changes.outputs.app == 'true' || needs.changes.outputs.docs == 'true' ||
-      needs.changes.outputs.delivery == 'true')
-    needs: [changes, quality, unit, integration, image-smoke]
-    steps:
-      - name: Require every application CI job
-        env:
-          QUALITY_RESULT: ${{ needs.quality.result }}
-          UNIT_RESULT: ${{ needs.unit.result }}
-          INTEGRATION_RESULT: ${{ needs.integration.result }}
-          IMAGE_SMOKE_RESULT: ${{ needs.image-smoke.result }}
-        run: |
-          set -euo pipefail
-          for result in "$QUALITY_RESULT" "$UNIT_RESULT" "$INTEGRATION_RESULT" "$IMAGE_SMOKE_RESULT"; do
-            [[ "$result" == "success" || "$result" == "skipped" ]] || exit 1
-          done
-
   publish-images:
     name: "Publish immutable images"
-    needs: [changes, merge-gate]
+    needs: [changes, code-quality, docs-quality, unit, integration, image-smoke]
     if: >-
-      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      always() &&
+      needs.changes.outputs.app == 'true' &&
       needs.changes.outputs.deployable_images == 'true' &&
-      needs.merge-gate.result == 'success'
+      needs.code-quality.result == 'success' &&
+      (needs.docs-quality.result == 'success' || needs.docs-quality.result == 'skipped') &&
+      needs.unit.result == 'success' &&
+      needs.integration.result == 'success' &&
+      needs.image-smoke.result == 'success' &&
+      github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       checks: read
       contents: read
@@ -384,11 +385,16 @@ jobs:
 
   deploy-aws-mvp:
     name: Deploy AWS MVP desired state
-    needs: [changes, merge-gate]
+    needs: [changes, code-quality, docs-quality, unit, integration, image-smoke]
     if: >-
-      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      always() &&
       needs.changes.outputs.aws_mvp_lock == 'true' &&
-      needs.merge-gate.result == 'success'
+      (needs.code-quality.result == 'success' || needs.code-quality.result == 'skipped') &&
+      (needs.docs-quality.result == 'success' || needs.docs-quality.result == 'skipped') &&
+      (needs.unit.result == 'success' || needs.unit.result == 'skipped') &&
+      (needs.integration.result == 'success' || needs.integration.result == 'skipped') &&
+      (needs.image-smoke.result == 'success' || needs.image-smoke.result == 'skipped') &&
+      github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       checks: read
       contents: read
