@@ -26,11 +26,30 @@ cost remains a design constraint, not a permanent ceiling.
 
 ## Decision
 
-`inference` gets its own dedicated Postgres container (`inference-db` in `docker-compose.yml`),
-same pgvector-enabled image as the existing `ingestor-db` service (`infra/database/Dockerfile`), own
-volume, own credentials (`API_OBS_INFERENCE_DB_PASSWORD`), own port (`5433`). **No Qdrant, today.**
+`inference` is a separately deployed FastAPI service with its own PostgreSQL container
+(`inference-db`), own migrations, own Dockerfile, and own embedding model (`fastembed` +
+`BAAI/bge-small-en-v1.5`). The ingestor calls it over HTTP for embeddings. If the service is
+down, vector-search endpoints return 503 but core CRUD is unaffected.
 
-### Options considered
+`inference-db` uses the same pgvector-enabled image as `ingestor-db` (`infra/database/Dockerfile`),
+with own volume, own credentials (`API_OBS_INFERENCE_DB_PASSWORD`), and own port (`5433`).
+**No Qdrant, today.**
+
+### Service-boundary rationale
+
+- **Separation of concerns**: The ingestor handles observation CRUD, scheduling, auth, and
+  notifications. The inference service handles embedding generation and vector search. Mixing
+  them would couple two independently scalable workloads.
+- **Resource isolation**: Embedding models consume significant RAM and CPU. Keeping them in a
+  separate process prevents the ingestor's API workers from being starved by model inference.
+- **Failure isolation**: If the inference service crashes or the model download fails, the
+  ingestor continues serving observations. Vector search degrades gracefully (503) rather than
+  taking down the entire API.
+- **Independent deployment**: The inference service can be updated, scaled, or replaced without
+  redeploying the ingestor. This matters for a portfolio project because it demonstrates
+  microservice awareness even in a Compose-based local stack.
+
+### Database options considered
 
 - **Shared pgvector** (Phase 2's original shape): simplest, lowest resource cost, but couples two
   independently-deployable services to one physical database process — a real service-boundary
