@@ -28,9 +28,13 @@ jobs:
       MVP_PLATFORM_CONTRACT_VERSION: '1'
     steps:
       - name: Checkout
-        uses: ./.github/actions/setup-python-project
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+
+      - name: Setup Python project
+        uses: ./.github/actions/setup-python-project
+        with:
           install-args: --frozen --no-dev
 
       - name: Require a CI-green current main commit
