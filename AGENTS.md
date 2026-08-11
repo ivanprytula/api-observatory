@@ -31,6 +31,10 @@ Default shape: result, key validation, next step if needed. Keep explanations sh
 
 Never use `git add .` or `git add -A`. When staging for commit, explicitly list only the files relevant to the current task. If the task scope is unclear, ask before staging.
 
+## Commit messages
+
+Write a short headline using the conventional commits framework (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, etc.). Optionally add a commit body that explains why the change was made and the motivation, but do not list the files changed — that is already visible in `git diff`.
+
 ## Privacy and file access
 
 ### Respect `.gitignore`
