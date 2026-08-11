@@ -25,7 +25,6 @@ def _run_alembic(
 ) -> None:
     env = {
         "DATABASE_URL": database_url,
-        "PYTHONPATH": str(cwd) if cwd else "",
     }
     cmd = [sys.executable, "-m", "alembic", *args]
     result = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True)
@@ -43,7 +42,7 @@ def validate(database_url: str, *, alembic_config: Path | None = None) -> None:
     for command in REQUIRED_MIGRATIONS:
         args = command.split()
         if alembic_config:
-            args = ["-c", str(alembic_config), *args]
+            args = ["-c", alembic_config.name, *args]
         _run_alembic(args, cwd=cwd, database_url=database_url)
 
 
