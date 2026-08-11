@@ -12,7 +12,7 @@ Primary backend surface:
 - `services/ingestor/auth.py`: session and JWT auth helpers
 - `services/ingestor/security/`: authn/authz/security helpers
 - `services/ingestor/repositories/`: async persistence helpers
-- `services/ingestor/models.py`: SQLAlchemy ORM models
+- `services/ingestor/models/`: SQLAlchemy ORM models
 - `services/ingestor/api_schemas/`: Pydantic request/response schemas
 - `services/ingestor/database.py`: engine, sessionmaker, DB dependency
 - `libs/platform/`: shared cross-service code; `libs/*` must not import from `services/*`

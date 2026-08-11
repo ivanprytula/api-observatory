@@ -22,7 +22,7 @@ periodically probes it, records health samples, and computes scorecards.
 **Evidence**:
 
 - `services/ingestor/jobs_registry.py` — job registration
-- `services/ingestor/jobs.py:run_source_probe` — probe execution
+- `services/ingestor/jobs/probes.py:run_source_probe` — probe execution
 - `services/ingestor/repositories/scorecards.py` — aggregation
 - `services/ingestor/repositories/incidents.py` — incident lifecycle
 - Integration tests at `services/ingestor/tests/integration/test_source_probe_jobs.py`

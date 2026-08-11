@@ -60,7 +60,7 @@ notifications while occurrence counts continue to increase.
 
 ## Evidence
 
-- Model and policy: [`models.py`](../../services/ingestor/models.py) and
+- Model and policy: [`models/`](../../services/ingestor/models/) and
   [`repositories/incidents.py`](../../services/ingestor/repositories/incidents.py)
 - Application orchestration: [`incident_lifecycle.py`](../../services/ingestor/incident_lifecycle.py)
 - API: [`routers/incidents.py`](../../services/ingestor/routers/incidents.py)
