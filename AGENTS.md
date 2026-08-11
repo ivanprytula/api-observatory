@@ -27,6 +27,10 @@ Default shape: result, key validation, next step if needed. Keep explanations sh
 - When a product decision is ambiguous, present concrete options and wait for direction.
 - Favor operationally simple solutions with explicit failure modes and useful observability.
 
+## Git operations
+
+Never use `git add .` or `git add -A`. When staging for commit, explicitly list only the files relevant to the current task. If the task scope is unclear, ask before staging.
+
 ## Privacy and file access
 
 ### Respect `.gitignore`
