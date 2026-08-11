@@ -304,6 +304,12 @@ jobs:
             rls_enabled: "false"
             broker_enabled: "false"
             notifications_enabled: "false"
+          - profile: full-optional
+            marker: full_optional
+            rls_enabled: "true"
+            broker_enabled: "true"
+            notifications_enabled: "true"
+            anthropic_enabled: "true"
     services:
       postgres:
         image: pgvector/pgvector:pg17-trixie
@@ -326,7 +332,7 @@ jobs:
       BACKGROUND_WORKERS_ENABLED: "false"
       RETENTION_ENABLED: "false"
       OPENAI_ENABLED: "false"
-      ANTHROPIC_ENABLED: "false"
+      ANTHROPIC_ENABLED: ${{ matrix.anthropic_enabled || 'false' }}
       RLS_ENABLED: ${{ matrix.rls_enabled }}
       BROKER_ENABLED: ${{ matrix.broker_enabled }}
       NOTIFICATIONS_ENABLED: ${{ matrix.notifications_enabled }}
