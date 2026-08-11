@@ -370,6 +370,24 @@ class Settings(BaseSettings):
         description="HTTP timeout (seconds) for AI gateway index and search requests.",
     )
 
+    # ============ SSRF Prevention ============
+    ssrf_allowed_domains: str | None = Field(
+        default=None,
+        description=(
+            "Comma-separated allow-list of domains permitted for source probe URLs. "
+            "When unset, all external domains are allowed (IP-based SSRF check still "
+            "applies). Example: 'api.example.com,health.check.io'"
+        ),
+    )
+
+    ssrf_strict_ports: bool = Field(
+        default=True,
+        description=(
+            "When True, restrict source probe outbound requests to HTTPS standard "
+            "port 443."
+        ),
+    )
+
     # ============ OpenAPI / Swagger ============
     openapi_servers: str = Field(
         default="http://127.0.0.1:8000,https://127.0.0.1/api",

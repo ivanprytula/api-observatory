@@ -14,6 +14,7 @@ from services.ingestor.constants import SOURCE_HEALTH_TIMEOUT_SECONDS
 from services.ingestor.fetch import get_http_client
 from services.ingestor.incident_lifecycle import record_health_sample
 from services.ingestor.models import SourceProfile
+from services.ingestor.repositories.source_registry import validate_source_base_url
 
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,45 @@ async def run_source_probe(db: AsyncSession, source_id: int) -> dict[str, Any]:
             extra={"source_id": source_id, "target_url": target_url},
         )
         return {"source_id": source_id, "skipped": True, "reason": "circuit_open"}
+
+    # Re-validate the target URL immediately before the outbound request.
+    # This defeats DNS-rebinding: the IP allow-list is checked again at
+    # request time, not just at registration.
+    try:
+        await validate_source_base_url(target_url)
+    except ValueError as exc:
+        error_message = f"SSRF validation failed: {exc}"
+        logger.warning(
+            "source_probe_ssrf_blocked",
+            extra={
+                "source_id": source_id,
+                "target_url": target_url,
+                "error": error_message,
+            },
+        )
+        await record_health_sample(
+            db,
+            HealthSampleCreate(
+                source_id=source_id,
+                sampled_at=datetime.now(UTC),
+                latency_ms=0.0,
+                is_success=False,
+                http_status=None,
+                response_body_hash=None,
+                error_message=error_message,
+                region=None,
+                tenant_id=profile.tenant_id,
+            ),
+        )
+        return {
+            "source_id": source_id,
+            "target_url": target_url,
+            "status_code": None,
+            "latency_ms": 0.0,
+            "response_body_hash": None,
+            "is_success": False,
+            "error": error_message,
+        }
 
     start = time.monotonic()
     sampled_at = datetime.now(UTC)
@@ -127,6 +167,18 @@ async def run_source_contract_snapshot(
 
     if breaker.is_open:
         return {"source_id": source_id, "skipped": True, "reason": "circuit_open"}
+
+    # Re-validate the target URL immediately before the outbound request.
+    # This defeats DNS-rebinding: the IP allow-list is checked again at
+    # request time, not just at registration.
+    try:
+        await validate_source_base_url(target_url)
+    except ValueError as exc:
+        logger.warning(
+            "source_contract_snapshot_ssrf_blocked",
+            extra={"source_id": source_id, "target_url": target_url, "error": str(exc)},
+        )
+        return {"source_id": source_id, "skipped": True, "reason": "ssrf_blocked"}
 
     try:
         client = await get_http_client()

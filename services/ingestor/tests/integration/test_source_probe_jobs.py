@@ -21,6 +21,17 @@ from services.ingestor.models import ContractSnapshot, DriftEvent, SourceProfile
 pytestmark = [pytest.mark.integration, pytest.mark.core]
 
 
+@pytest.fixture(autouse=True)
+def _mock_ssrf_validation():
+    """By default, SSRF runtime validation is a no-op so existing tests that mock
+    get_http_client don't accidentally trigger real DNS resolution."""
+    with patch(
+        "services.ingestor.jobs.probes.validate_source_base_url",
+        new_callable=AsyncMock,
+    ) as mock:
+        yield mock
+
+
 def _make_profile(
     source_id: int = 1,
     base_url: str = "https://api.example.com",
@@ -86,7 +97,8 @@ class TestRunSourceProbe:
         breaker.is_open = True
 
         with patch(
-            "services.ingestor.jobs._get_source_probe_breaker", return_value=breaker
+            "services.ingestor.jobs.probes._get_source_probe_breaker",
+            return_value=breaker,
         ):
             result = await run_source_probe(db, source_id=1)
 
@@ -107,14 +119,14 @@ class TestRunSourceProbe:
 
         with (
             patch(
-                "services.ingestor.jobs._get_source_probe_breaker",
+                "services.ingestor.jobs.probes._get_source_probe_breaker",
             ) as mock_breaker_fn,
             patch(
-                "services.ingestor.jobs.get_http_client",
+                "services.ingestor.jobs.probes.get_http_client",
                 return_value=mock_client,
             ),
             patch(
-                "services.ingestor.jobs.record_health_sample",
+                "services.ingestor.jobs.probes.record_health_sample",
                 new_callable=AsyncMock,
             ) as mock_persist,
         ):
@@ -140,10 +152,10 @@ class TestRunSourceProbe:
 
         with (
             patch(
-                "services.ingestor.jobs._get_source_probe_breaker",
+                "services.ingestor.jobs.probes._get_source_probe_breaker",
             ) as mock_breaker_fn,
             patch(
-                "services.ingestor.jobs.record_health_sample",
+                "services.ingestor.jobs.probes.record_health_sample",
                 new_callable=AsyncMock,
             ) as mock_persist,
         ):
@@ -168,10 +180,10 @@ class TestRunSourceProbe:
 
         with (
             patch(
-                "services.ingestor.jobs._get_source_probe_breaker",
+                "services.ingestor.jobs.probes._get_source_probe_breaker",
             ) as mock_breaker_fn,
             patch(
-                "services.ingestor.jobs.record_health_sample",
+                "services.ingestor.jobs.probes.record_health_sample",
                 new_callable=AsyncMock,
             ) as mock_persist,
         ):
@@ -194,7 +206,7 @@ class TestRunSourceProbe:
         db = _mock_db_with_profile(profile)
 
         with patch(
-            "services.ingestor.jobs._get_source_probe_breaker",
+            "services.ingestor.jobs.probes._get_source_probe_breaker",
         ) as mock_breaker_fn:
             breaker = MagicMock(spec=CircuitBreaker)
             breaker.is_open = False
@@ -217,10 +229,10 @@ class TestRunSourceProbe:
 
         with (
             patch(
-                "services.ingestor.jobs._get_source_probe_breaker",
+                "services.ingestor.jobs.probes._get_source_probe_breaker",
             ) as mock_breaker_fn,
             patch(
-                "services.ingestor.jobs.record_health_sample",
+                "services.ingestor.jobs.probes.record_health_sample",
                 new_callable=AsyncMock,
             ),
         ):
@@ -232,6 +244,47 @@ class TestRunSourceProbe:
             result = await run_source_probe(db, source_id=1)
 
         assert result["target_url"] == "https://api.example.com/v1/health"
+
+    @pytest.mark.asyncio
+    async def test_ssrf_blocked_records_failure_and_skips_http(
+        self, _mock_ssrf_validation: AsyncMock
+    ) -> None:
+        """When runtime SSRF validation fails (DNS rebinding), the probe records
+        a failed sample and never makes the outbound HTTP request."""
+        profile = _make_profile()
+        db = _mock_db_with_profile(profile)
+        _mock_ssrf_validation.side_effect = ValueError(
+            "base_url resolves to private or local IP space."
+        )
+
+        with (
+            patch(
+                "services.ingestor.jobs.probes._get_source_probe_breaker",
+            ) as mock_breaker_fn,
+            patch(
+                "services.ingestor.jobs.probes.get_http_client",
+            ) as mock_get_client,
+            patch(
+                "services.ingestor.jobs.probes.record_health_sample",
+                new_callable=AsyncMock,
+            ) as mock_record,
+        ):
+            breaker = MagicMock(spec=CircuitBreaker)
+            breaker.is_open = False
+            mock_breaker_fn.return_value = breaker
+
+            result = await run_source_probe(db, source_id=1)
+
+        assert result["is_success"] is False
+        assert result["status_code"] is None
+        assert "SSRF validation failed" in result["error"]
+        _mock_ssrf_validation.assert_called_once()
+        mock_get_client.assert_not_called()
+        breaker.call.assert_not_called()
+        mock_record.assert_called_once()
+        sample = mock_record.call_args[0][1]
+        assert sample.is_success is False
+        assert "SSRF validation failed" in sample.error_message
 
 
 # ============================================================================
@@ -258,7 +311,8 @@ class TestRunSourceContractSnapshot:
         breaker.is_open = True
 
         with patch(
-            "services.ingestor.jobs._get_source_probe_breaker", return_value=breaker
+            "services.ingestor.jobs.probes._get_source_probe_breaker",
+            return_value=breaker,
         ):
             result = await run_source_contract_snapshot(db, source_id=1)
 
@@ -276,13 +330,13 @@ class TestRunSourceContractSnapshot:
 
         with (
             patch(
-                "services.ingestor.jobs._get_source_probe_breaker",
+                "services.ingestor.jobs.probes._get_source_probe_breaker",
             ) as mock_breaker_fn,
             patch(
-                "services.ingestor.jobs.get_http_client",
+                "services.ingestor.jobs.probes.get_http_client",
             ) as mock_get_client,
             patch(
-                "services.ingestor.jobs.create_contract_snapshot",
+                "services.ingestor.repositories.contract_drift.create_contract_snapshot",
                 new_callable=AsyncMock,
                 return_value=(snapshot, None),
             ),
@@ -315,13 +369,13 @@ class TestRunSourceContractSnapshot:
 
         with (
             patch(
-                "services.ingestor.jobs._get_source_probe_breaker",
+                "services.ingestor.jobs.probes._get_source_probe_breaker",
             ) as mock_breaker_fn,
             patch(
-                "services.ingestor.jobs.get_http_client",
+                "services.ingestor.jobs.probes.get_http_client",
             ) as mock_get_client,
             patch(
-                "services.ingestor.jobs.create_contract_snapshot",
+                "services.ingestor.repositories.contract_drift.create_contract_snapshot",
                 new_callable=AsyncMock,
                 return_value=(snapshot, drift_event),
             ),
@@ -347,10 +401,10 @@ class TestRunSourceContractSnapshot:
 
         with (
             patch(
-                "services.ingestor.jobs._get_source_probe_breaker",
+                "services.ingestor.jobs.probes._get_source_probe_breaker",
             ) as mock_breaker_fn,
             patch(
-                "services.ingestor.jobs.get_http_client",
+                "services.ingestor.jobs.probes.get_http_client",
             ) as mock_get_client,
         ):
             breaker = MagicMock(spec=CircuitBreaker)
@@ -369,6 +423,37 @@ class TestRunSourceContractSnapshot:
         assert result["reason"] == "fetch_failed"
 
     @pytest.mark.asyncio
+    async def test_ssrf_blocked_returns_skipped(
+        self, _mock_ssrf_validation: AsyncMock
+    ) -> None:
+        """When runtime SSRF validation fails (DNS rebinding), no HTTP call is made."""
+        profile = _make_profile()
+        db = _mock_db_with_profile(profile)
+        _mock_ssrf_validation.side_effect = ValueError(
+            "base_url resolves to private or local IP space."
+        )
+
+        with (
+            patch(
+                "services.ingestor.jobs.probes._get_source_probe_breaker",
+            ) as mock_breaker_fn,
+            patch(
+                "services.ingestor.jobs.probes.get_http_client",
+            ) as mock_get_client,
+        ):
+            breaker = MagicMock(spec=CircuitBreaker)
+            breaker.is_open = False
+            mock_breaker_fn.return_value = breaker
+
+            result = await run_source_contract_snapshot(db, source_id=1)
+
+        assert result["skipped"] is True
+        assert result["reason"] == "ssrf_blocked"
+        _mock_ssrf_validation.assert_called_once()
+        mock_get_client.assert_not_called()
+        breaker.call.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_non_dict_response_returns_skipped(self) -> None:
         profile = _make_profile()
         db = _mock_db_with_profile(profile)
@@ -376,10 +461,10 @@ class TestRunSourceContractSnapshot:
 
         with (
             patch(
-                "services.ingestor.jobs._get_source_probe_breaker",
+                "services.ingestor.jobs.probes._get_source_probe_breaker",
             ) as mock_breaker_fn,
             patch(
-                "services.ingestor.jobs.get_http_client",
+                "services.ingestor.jobs.probes.get_http_client",
             ) as mock_get_client,
         ):
             breaker = MagicMock(spec=CircuitBreaker)
@@ -407,10 +492,10 @@ class TestRunSourceContractSnapshot:
 
         with (
             patch(
-                "services.ingestor.jobs._get_source_probe_breaker",
+                "services.ingestor.jobs.probes._get_source_probe_breaker",
             ) as mock_breaker_fn,
             patch(
-                "services.ingestor.jobs.get_http_client",
+                "services.ingestor.jobs.probes.get_http_client",
             ) as mock_get_client,
         ):
             breaker = MagicMock(spec=CircuitBreaker)
@@ -433,10 +518,10 @@ class TestRunSourceContractSnapshot:
 
         with (
             patch(
-                "services.ingestor.jobs._get_source_probe_breaker",
+                "services.ingestor.jobs.probes._get_source_probe_breaker",
             ) as mock_breaker_fn,
             patch(
-                "services.ingestor.jobs.get_http_client",
+                "services.ingestor.jobs.probes.get_http_client",
             ) as mock_get_client,
         ):
             breaker = MagicMock(spec=CircuitBreaker)

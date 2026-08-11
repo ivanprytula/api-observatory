@@ -61,6 +61,48 @@ class TestRegisterSource:
         )
         assert response.status_code == 422
 
+    async def test_cloud_metadata_rejected(self, client: AsyncClient) -> None:
+        """Link-local cloud metadata endpoints are rejected."""
+        response = await client.post(
+            "/api/v1/sources",
+            json={
+                **_SOURCE,
+                "name": "metadata-source",
+                "base_url": "https://169.254.169.254",
+            },
+        )
+        assert response.status_code == 422
+
+    @pytest.mark.parametrize(
+        "scheme,url",
+        [
+            ("file", "file:///etc/passwd"),
+            ("gopher", "gopher://127.0.0.1:6379/x"),
+            ("dict", "dict://127.0.0.1:11211/stats"),
+        ],
+    )
+    async def test_dangerous_scheme_rejected(
+        self, client: AsyncClient, scheme: str, url: str
+    ) -> None:
+        """Non-HTTP schemes (file://, gopher://, dict://) are rejected by schema."""
+        response = await client.post(
+            "/api/v1/sources",
+            json={**_SOURCE, "name": f"dangerous-{scheme}", "base_url": url},
+        )
+        assert response.status_code == 422
+
+    async def test_non_standard_port_rejected(self, client: AsyncClient) -> None:
+        """HTTPS on a non-standard port (e.g. :8080) is rejected for SSRF safety."""
+        response = await client.post(
+            "/api/v1/sources",
+            json={
+                **_SOURCE,
+                "name": "non-standard-port",
+                "base_url": "https://1.1.1.1:8080",
+            },
+        )
+        assert response.status_code == 422
+
     async def test_duplicate_name_returns_409(self, client: AsyncClient) -> None:
         """Registering the same name twice returns 409 Conflict."""
         await client.post("/api/v1/sources", json=_SOURCE)

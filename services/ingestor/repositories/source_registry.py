@@ -18,9 +18,11 @@ from services.ingestor.api_schemas.source_registry import (
     SourceProfileUpdate,
     SourceSummaryResponse,
 )
+from services.ingestor.config import settings
 from services.ingestor.constants import (
     SOURCE_HEALTH_TIMEOUT_SECONDS,
     SOURCE_HEALTH_UNHEALTHY_THRESHOLD_MS,
+    SSRF_HTTPS_PORTS,
 )
 from services.ingestor.models import SourceProfile, _utcnow
 
@@ -39,7 +41,18 @@ def _is_forbidden_ip(ip_value: str) -> bool:
 
 
 async def validate_source_base_url(base_url: str, *, allow_http: bool = False) -> None:
-    """Validate base URL scheme and resolved IPs to prevent SSRF."""
+    """Validate base URL scheme, domain allow-list, port, and resolved IPs to prevent SSRF.
+
+    Checks (in order):
+    1. Scheme must be https (or http only when allow_http=True).
+    2. Hostname must resolve to at least one address.
+    3. Resolved IPs must not fall in private/linkback/loopback/reserved ranges.
+    4. When ``settings.ssrf_allowed_domains`` is set, the hostname must match.
+    5. When ``settings.ssrf_strict_ports`` is True, only port 443 is permitted.
+
+    This function must be called both at registration time (POST/PATCH) and
+    immediately before every outbound HTTP request to defeat DNS rebinding.
+    """
     parsed = urlsplit(base_url)
     if parsed.scheme not in {"https", "http"}:
         raise ValueError("base_url must use https scheme.")
@@ -48,7 +61,24 @@ async def validate_source_base_url(base_url: str, *, allow_http: bool = False) -
     if parsed.hostname is None:
         raise ValueError("base_url must include a valid hostname.")
 
+    # --- Domain allow-list (when configured) ---
+    if settings.ssrf_allowed_domains:
+        allowed = {
+            d.strip().lower()
+            for d in settings.ssrf_allowed_domains.split(",")
+            if d.strip()
+        }
+        if parsed.hostname.lower() not in allowed:
+            raise ValueError(
+                "base_url hostname is not in the configured SSRF allow-list."
+            )
+
+    # --- Port restriction (when strict) ---
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    if settings.ssrf_strict_ports and port not in SSRF_HTTPS_PORTS:
+        raise ValueError("base_url must use HTTPS port 443.")
+
+    # --- DNS resolution + IP-space check ---
     loop = asyncio.get_running_loop()
     try:
         infos = await loop.getaddrinfo(
@@ -240,6 +270,23 @@ async def probe_source_health(
     )
     threshold = profile.latency_threshold_ms or SOURCE_HEALTH_UNHEALTHY_THRESHOLD_MS
     start = time.perf_counter()
+
+    # Re-validate the target URL immediately before the outbound request.
+    # This defeats DNS-rebinding: the IP space is checked again at request
+    # time, not just at registration.
+    try:
+        await validate_source_base_url(target_url)
+    except ValueError as exc:
+        elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+        return SourceHealthResponse(
+            source_id=profile.id,
+            target_url=target_url,
+            reachable=False,
+            status_code=None,
+            latency_ms=elapsed_ms,
+            sla_breach=True,
+            error=str(exc),
+        )
 
     try:
         async with httpx.AsyncClient(

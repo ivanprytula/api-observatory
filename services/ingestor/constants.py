@@ -93,6 +93,9 @@ SOURCE_PROFILE_DESCRIPTION_MAX: int = 1024
 SOURCE_HEALTH_TIMEOUT_SECONDS: float = 10.0  # probe timeout
 SOURCE_HEALTH_UNHEALTHY_THRESHOLD_MS: int = 5000  # >5 s → "degraded"
 
+# SSRF — standard HTTPS port enforced when ssrf_strict_ports is enabled
+SSRF_HTTPS_PORTS: tuple[int, ...] = (443,)
+
 # ---------------------------------------------------------------------------
 # Contract & Drift Detection
 # ---------------------------------------------------------------------------
