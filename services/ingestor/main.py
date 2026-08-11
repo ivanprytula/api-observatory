@@ -399,13 +399,6 @@ _OPENAPI_TAGS: list[dict[str, str]] = [
         "description": "Aggregated analytics queries over the observations table (read-only).",
     },
     {
-        "name": "scraper",
-        "description": (
-            "On-demand web scraper that fetches external URLs and stores "
-            "results as observations."
-        ),
-    },
-    {
         "name": "vector-search",
         "description": "Semantic indexing and querying against vectorized observations.",
     },
@@ -583,7 +576,6 @@ _ADMIN_PROTECTED_ROUTERS = {
     "background_processing",
     "health_ingestion_jobs",
     "notifications",
-    "scraper",
 }
 _WRITER_PROTECTED_ROUTERS = {"etl"}
 

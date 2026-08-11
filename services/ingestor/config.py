@@ -210,14 +210,6 @@ class Settings(BaseSettings):
         description="Enable broker event publishing. Disabled by default (safe for tests w/o broker).",  # noqa: E501
     )
 
-    broker_strangler_adapter_enabled: bool = Field(
-        default=False,
-        description=(
-            "Enable strangler adapter path for broker publishing. "
-            "When False, the legacy direct producer path is used."
-        ),
-    )
-
     # ============ OpenTelemetry ============
     otel_enabled: bool = Field(
         default=False,
