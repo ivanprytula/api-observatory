@@ -29,7 +29,7 @@ Default shape: result, key validation, next step if needed. Keep explanations sh
 
 ## Git operations
 
-Never use `git add .` or `git add -A`. When staging for commit, explicitly list only the files relevant to the current task. If the task scope is unclear, ask before staging.
+Never use `git add .` or `git add -A`. When staging for commit, explicitly list only the files relevant to the current task. If the task scope is unclear, ask before staging. Never drop git stashes in any repository; preserve them across sessions.
 
 ## Commit messages
 
