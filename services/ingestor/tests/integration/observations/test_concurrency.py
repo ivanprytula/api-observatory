@@ -1,14 +1,3 @@
-"""Integration tests for concurrent operations (Steps 8–9, Phase 2).
-
-Tests asyncio.gather concurrency patterns:
-  - TestAsyncGather: N concurrent enrich requests all succeed
-  - TestRaceConditionHandling: concurrent upserts with race condition demo
-
-Pattern: asyncio.gather fires requests in parallel, simulating real-world
-load on the pipeline. Enrich tests work on any DB (aiosqlite or PostgreSQL).
-Upsert race tests may skip on SQLite due to session isolation limitations.
-"""
-
 import asyncio
 
 import pytest

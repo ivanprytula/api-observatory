@@ -1,5 +1,3 @@
-"""Tests for storage layer (MinIO client and watermark manager)."""
-
 from __future__ import annotations
 
 import sys
@@ -48,10 +46,7 @@ def _get_watermark_manager_class() -> type:
 
 
 class TestMinIOClient:
-    """Test MinIO backup and audit storage behavior."""
-
     async def test_backup_raw_payload_uploads_and_returns_s3_path(self) -> None:
-        """backup_raw_payload uploads bytes and returns canonical S3 path."""
         minio_client_cls = _get_minio_client_class()
         mock_minio_client = MagicMock()
         mock_minio_client.bucket_exists.return_value = True

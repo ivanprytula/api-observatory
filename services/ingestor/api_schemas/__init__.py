@@ -1,5 +1,3 @@
-"""API schema modules grouped by bounded context."""
-
 from . import (
     contract_drift,
     etl,

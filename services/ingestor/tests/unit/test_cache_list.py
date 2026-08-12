@@ -1,5 +1,3 @@
-"""Tests for list cache helpers (Phase 13.4) using fakeredis."""
-
 from __future__ import annotations
 
 import fakeredis.aioredis

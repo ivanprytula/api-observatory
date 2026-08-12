@@ -1,5 +1,3 @@
-"""Repository/CRUD modules grouped by bounded context."""
-
 from . import (
     contract_drift,
     etl,

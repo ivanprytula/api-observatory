@@ -1,14 +1,3 @@
-"""Integration tests for Step 8 — concurrent observation enrichment endpoint.
-
-Tests POST /api/v2/observations/enrich:
-  - Happy path with mocked fetch
-  - Partial failures (some observations fail, others succeed)
-  - Missing observation IDs (not found in DB)
-  - All observations fail
-  - Semaphore limits concurrency
-  - Request validation (too many IDs, empty list)
-"""
-
 import asyncio
 from unittest.mock import AsyncMock, patch
 

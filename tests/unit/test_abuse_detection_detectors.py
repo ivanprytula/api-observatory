@@ -1,5 +1,3 @@
-"""Unit tests for the abuse detection signal evaluators."""
-
 from __future__ import annotations
 
 import pytest
@@ -23,8 +21,6 @@ pytestmark = pytest.mark.unit
 # evaluate_source_noise
 # ---------------------------------------------------------------------------
 class TestEvaluateSourceNoise:
-    """Pure function: returns AbuseSignalCreate or None based on call ratio."""
-
     def test_below_threshold_returns_none(self) -> None:
         result = evaluate_source_noise(
             source_name="src-001",

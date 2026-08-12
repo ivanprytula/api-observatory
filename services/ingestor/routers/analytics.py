@@ -1,5 +1,3 @@
-"""Analytics routes — CTE aggregations and window function queries."""
-
 from __future__ import annotations
 
 import logging

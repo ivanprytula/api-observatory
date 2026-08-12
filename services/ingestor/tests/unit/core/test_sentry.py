@@ -1,5 +1,3 @@
-"""Unit tests for Sentry setup logic."""
-
 from __future__ import annotations
 
 from typing import Any

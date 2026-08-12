@@ -1,13 +1,3 @@
-"""Unit tests for libs.platform.auth — internal JWT generation and verification.
-
-Covers:
-- Valid token is generated and verified
-- Expired token is rejected
-- Wrong issuer is rejected
-- Missing header is rejected (FastAPI dependency)
-- Invalid/tampered token is rejected
-"""
-
 from __future__ import annotations
 
 import time
@@ -134,8 +124,6 @@ class TestVerifyInternalToken:
 
 
 class TestRequireInternalAuth:
-    """Tests for the FastAPI dependency require_internal_auth."""
-
     @pytest.mark.asyncio
     async def test_valid_header_returns_claims(self) -> None:
         token = generate_internal_token("ingestor")

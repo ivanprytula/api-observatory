@@ -1,12 +1,3 @@
-"""Integration tests for materialized views and table partitioning.
-
-Tests for:
-- pgvector extension and vector operations
-- Materialized view: observations_hourly_stats (CTE aggregations)
-- Partitioned table: observations_archive (range partitioning by month)
-- CQRS Analytics endpoints (window functions, CTEs, materialized views)
-"""
-
 from datetime import UTC, datetime, timedelta
 
 import pytest

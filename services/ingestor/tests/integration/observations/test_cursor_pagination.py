@@ -1,11 +1,3 @@
-"""Tests for cursor-based pagination (api/v2/observations/cursor).
-
-Cursor pagination is ideal for high-load scenarios where:
-- Offset/limit pagination would require counting total observations
-- Concurrent inserts can cause offset to shift (skipped/duplicate observations)
-- Cache efficiency matters (cursor is tied to a specific observation position)
-"""
-
 import pytest
 from httpx import AsyncClient
 

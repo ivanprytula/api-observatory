@@ -1,5 +1,3 @@
-"""Integration tests for date range queries and timestamp index usage."""
-
 from datetime import UTC, datetime, timedelta
 
 import pytest

@@ -1,5 +1,3 @@
-"""Unit tests for the tabular ETL engine."""
-
 from __future__ import annotations
 
 import pytest

@@ -1,5 +1,3 @@
-"""Unit tests for PriorityJobQueue and IngestionCommand scheduling logic."""
-
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta

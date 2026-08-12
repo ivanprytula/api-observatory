@@ -1,5 +1,3 @@
-"""Unit tests for notification outbox routing and backoff."""
-
 import json
 
 import pytest

@@ -1,9 +1,3 @@
-"""Unit tests for advanced rate-limiting algorithms.
-
-Pure logic tests — no database, no ASGI client.
-Covers apply_jitter (thundering-herd prevention).
-"""
-
 import pytest
 
 from services.ingestor.rate_limiting_advanced import apply_jitter
@@ -14,8 +8,6 @@ from services.ingestor.rate_limiting_advanced import apply_jitter
 # ---------------------------------------------------------------------------
 @pytest.mark.unit
 class TestApplyJitter:
-    """Unit tests for the thundering-herd jitter function."""
-
     def test_jitter_no_offset(self) -> None:
         """Zero jitter returns the base value unchanged."""
         result = apply_jitter(10.0, 0.0, 0.0)

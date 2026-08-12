@@ -1,14 +1,3 @@
-"""Unit tests for circuit breaker pattern implementation.
-
-Test coverage:
-- State transitions: CLOSED → OPEN → HALF_OPEN → CLOSED
-- Failure threshold counting
-- Recovery timeout logic
-- Lock safety under concurrent access
-- CircuitOpenError propagation
-- Success resets failure count
-"""
-
 import asyncio
 
 import pytest

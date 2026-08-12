@@ -46,12 +46,10 @@ request_cid: ContextVar[str | None] = ContextVar("request_cid", default=None)
 
 
 def get_cid() -> str | None:
-    """Get the current request's correlation ID, or None outside a request."""
     return request_cid.get()
 
 
 def set_cid(cid: str) -> None:
-    """Set the correlation ID for the current request context."""
     request_cid.set(cid)
 
 

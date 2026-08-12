@@ -1,5 +1,3 @@
-"""Unit tests for deterministic, offline incident-triage evaluation."""
-
 from __future__ import annotations
 
 from pathlib import Path

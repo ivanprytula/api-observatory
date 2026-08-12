@@ -1,10 +1,3 @@
-"""Unit tests for contract drift repository async DB functions.
-
-Mock-based tests for get_active_contract_baseline, _clear_candidate,
-get_source_snapshots, get_source_drift_events, get_compatibility_report,
-accept_contract_baseline, and create_contract_snapshot.
-"""
-
 from __future__ import annotations
 
 from datetime import datetime

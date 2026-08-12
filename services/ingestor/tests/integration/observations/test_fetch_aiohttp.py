@@ -1,11 +1,3 @@
-"""Tests for aiohttp external API fetch with retry logic.
-
-Step 7 Alternative: Real async HTTP with aiohttp (alternative to httpx).
-Uses REST Countries API (restcountries.com) for country data fetching.
-Demonstrates aiohttp-specific patterns: ClientSession lifecycle, TCPConnector pooling,
-timeout configuration, and error handling.
-"""
-
 import asyncio
 import logging
 from unittest.mock import AsyncMock, patch
@@ -78,7 +70,6 @@ async def test_http_session_lifecycle(cleanup_http_session) -> None:
 
 @pytest.mark.integration
 async def test_fetch_success_without_failures(cleanup_http_session) -> None:
-    """Test successful fetch when simulate_failures=False."""
 
     async def mock_fetch(resource: str, simulate_failures: bool = False) -> dict:
         return MOCK_COUNTRY_RESPONSE
@@ -180,7 +171,6 @@ async def test_concurrent_fetches(cleanup_http_session) -> None:
 
 @pytest.mark.integration
 async def test_http_session_lifecycle_multiple_rounds(cleanup_http_session) -> None:
-    """Test multiple cycles of get/close."""
     for _ in range(3):
         session = await get_http_session()
         assert session is not None

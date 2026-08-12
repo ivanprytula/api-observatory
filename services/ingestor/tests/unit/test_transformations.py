@@ -1,11 +1,3 @@
-"""Tests for transformation pipeline (Strategy, Decorator, Factory patterns).
-
-Tests verify:
-- Each strategy validates correctly (Strategy pattern)
-- Decorators compose correctly (Decorator pattern)
-- Factory builds right pipeline from config (Factory pattern)
-"""
-
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -164,8 +156,6 @@ class TestStrategyPattern:
 
 
 class TestDecoratorPattern:
-    """Test transformer decorators (Decorator pattern)."""
-
     @pytest.mark.asyncio
     async def test_validator_transformer_valid(self) -> None:
         """ValidatorTransformer passes valid observation to next."""

@@ -1,15 +1,3 @@
-"""Connection pool demonstration tests — Phase 1 Step 6.
-
-Tests basic pool functionality and concurrent behavior.
-
-Pool Configuration:
-- pool_size: 5 (permanent connections)
-- max_overflow: 10 (temporary connections)
-- pool_timeout: 30 (seconds to wait)
-
-Each test demonstrates how the pool handles different scenarios.
-"""
-
 import pytest
 from httpx import AsyncClient
 
@@ -20,8 +8,6 @@ pytestmark = pytest.mark.integration
 
 
 class TestConnectionPoolBasics:
-    """Test connection pool basic functionality."""
-
     async def test_single_request_uses_pool(self, client: AsyncClient) -> None:
         """Verify a single request succeeds (pool is working)."""
         response = await client.post("/api/v1/observations", json=OBSERVATION_API)

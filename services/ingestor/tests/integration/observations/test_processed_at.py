@@ -1,12 +1,3 @@
-"""Integration tests for processed_at timestamp functionality.
-
-Tests verify that:
-- processed_at is set when mark_processed is called
-- processed_at is not overwritten on subsequent mark_processed calls (idempotent)
-- processed_at is backfilled from created_at for existing processed observations
-- processed_at is None for new or unprocessed observations
-"""
-
 import asyncio
 from datetime import datetime
 

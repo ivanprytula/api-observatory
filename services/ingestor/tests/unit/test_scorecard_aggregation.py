@@ -1,10 +1,3 @@
-"""Unit tests for scorecard business-logic helpers.
-
-These tests cover ``_scorecard_from_agg`` and ``_row_to_kwargs`` directly —
-no database, no HTTP client.  They are the fast lane for verifying metric
-formulas and edge cases.
-"""
-
 from __future__ import annotations
 
 from types import SimpleNamespace

@@ -1,10 +1,3 @@
-"""Tests for source probe and contract snapshot job handlers.
-
-Coverage:
-- run_source_probe: health check probing, circuit breaker, error handling
-- run_source_contract_snapshot: fetch + drift detection, error paths
-"""
-
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch

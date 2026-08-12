@@ -1,5 +1,3 @@
-"""Subscription and delivery read models built from existing operational data."""
-
 from __future__ import annotations
 
 from datetime import UTC, datetime

@@ -1,11 +1,3 @@
-"""Comprehensive middleware and edge case tests.
-
-Tests for:
-- Correlation ID middleware behavior
-- Error handling
-- Boundary conditions
-"""
-
 import uuid
 
 import pytest

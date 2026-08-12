@@ -1,9 +1,3 @@
-"""Unit tests for pubsub.py — no Cache required.
-
-Tests cover envelope structure, fail-open behavior, and the new
-``publish_drift_event`` wrapper using monkeypatch to capture publish calls.
-"""
-
 from __future__ import annotations
 
 from typing import Any

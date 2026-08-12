@@ -1,8 +1,3 @@
-"""Unit tests for MongoDB storage operations (Phase 2).
-
-Tests Motor async client interactions: insert, find, update, delete operations.
-"""
-
 import pytest
 
 

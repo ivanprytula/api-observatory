@@ -1,10 +1,3 @@
-"""Unit tests for CRUD functions in observations repository.
-
-Pure logic tests using mocked sessions — no real database.
-Covers edge cases like empty batch early-return, not-found handling,
-tenant isolation, and idempotent operations.
-"""
-
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch

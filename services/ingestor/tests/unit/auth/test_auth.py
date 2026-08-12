@@ -1,14 +1,3 @@
-"""Unit tests for the ingestor authentication helpers.
-
-Covers:
-- static bearer-token verification
-- stateless session verification
-- JWT creation, verification, and role guards
-- stateless refresh token lifecycle (MVP: no Redis)
-
-Note: No @pytest.mark.asyncio — asyncio_mode='auto' is set in pyproject.toml.
-"""
-
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta

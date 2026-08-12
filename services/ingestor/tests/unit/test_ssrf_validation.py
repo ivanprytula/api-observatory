@@ -1,14 +1,3 @@
-"""Unit tests for SSRF validation in source_registry.
-
-Covers:
-- Scheme rejection (file://, gopher://, dict://, http)
-- Domain allow-list enforcement (when configured)
-- Port restriction (non-443 rejection)
-- Private/loopback/link-local/multicast IP rejection
-- DNS rebinding: validation called again at request time catches IPs that
-  were public at registration but private at probe time
-"""
-
 from __future__ import annotations
 
 import socket

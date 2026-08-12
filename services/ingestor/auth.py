@@ -149,17 +149,6 @@ def create_jwt_token(
     sub: str,
     custom_claims: dict[str, Any] | None = None,
 ) -> str:
-    """Create JWT token.
-
-    Args:
-        sub: Subject (user ID or identifier)
-        custom_claims: Additional claims to encode
-
-    Returns:
-        JWT token string.
-
-    Security note: In production, rotate secrets periodically.
-    """
     now = datetime.now(UTC)
     expires_at = now + timedelta(minutes=settings.jwt_expiry_minutes)
 
@@ -282,7 +271,6 @@ async def create_session(
 
 
 async def delete_session(session_id: str) -> None:
-    """Delete a session (no-op for stateless MVP)."""
     logger.info("session_deleted", extra={"session_id": session_id})
 
 
@@ -306,11 +294,6 @@ async def verify_session(
 async def verify_bearer_token(
     authorization: str | None = Header(None),
 ) -> str:
-    """Verify v1 bearer token from Authorization header.
-
-    Usage: @router.post("/endpoint", dependencies=[Depends(verify_bearer_token)])
-    or: api_key: str = Depends(verify_bearer_token)
-    """
     if not settings.api_v1_bearer_token:
         return "public"  # Auth disabled
 

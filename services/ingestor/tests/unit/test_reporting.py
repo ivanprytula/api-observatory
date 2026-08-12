@@ -1,9 +1,3 @@
-"""Unit tests for reporting repository read models.
-
-Pure helpers and mock-DB coverage for BI/reporting read models —
-no real database required.
-"""
-
 from __future__ import annotations
 
 from datetime import datetime

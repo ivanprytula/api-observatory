@@ -1,5 +1,3 @@
-"""Observations repository — facade re-exporting crud and queries modules."""
-
 from services.ingestor.repositories.observations_crud import (
     _apply_tenant_filter,
     add_tenant_to_user,

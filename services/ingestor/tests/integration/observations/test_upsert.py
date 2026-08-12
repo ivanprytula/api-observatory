@@ -1,15 +1,3 @@
-"""Integration tests for Step 9 — idempotent upsert + race condition demo.
-
-Tests POST /api/v2/observations/upsert:
-  - Happy path: first insert returns 201 with created=True
-  - Idempotent repeat: same source+timestamp returns 200, created=False, same ID
-  - Different source or timestamp → new observation (201)
-  - Strict mode: first → 201, repeat → 409
-  - Race condition: two concurrent upserts with same key → one 201, one 200
-  - Invalid mode parameter → 422
-  - Standard field validations still apply (future timestamp, localhost source)
-"""
-
 import asyncio
 
 import pytest

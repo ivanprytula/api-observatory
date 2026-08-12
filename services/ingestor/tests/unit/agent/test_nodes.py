@@ -1,11 +1,3 @@
-"""Unit tests for individual agent nodes — each node called directly with a
-crafted state, external dependencies (LLM, RAG, notifications) mocked.
-
-`human_review` is excluded here: `interrupt()` only behaves correctly inside
-a running LangGraph graph (see test_graph.py for the full pause/resume
-cycle, including human_review).
-"""
-
 from __future__ import annotations
 
 from types import SimpleNamespace

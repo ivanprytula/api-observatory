@@ -134,8 +134,6 @@ class TestJobScheduler:
 
 
 class TestJobHealthMetrics:
-    """Test suite for JobHealthMetrics."""
-
     def test_success_rate_no_runs(self) -> None:
         """Test success_rate when no jobs have run."""
         metrics = JobHealthMetrics()
@@ -180,8 +178,6 @@ class TestJobHealthMetrics:
 
 
 class TestHandlerWrapper:
-    """Test suite for wrap_job_handler."""
-
     @pytest.mark.asyncio
     async def test_handler_success_updates_metrics(self) -> None:
         """Test that successful handler execution updates metrics."""
@@ -294,8 +290,6 @@ class TestHandlerWrapper:
 
 
 class TestJobsRegistry:
-    """Test suite for register_jobs function."""
-
     def test_register_jobs_creates_jobs(self) -> None:
         """Test that register_jobs() populates scheduler with jobs."""
         scheduler = JobScheduler()

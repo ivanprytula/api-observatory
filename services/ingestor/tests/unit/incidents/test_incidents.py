@@ -1,9 +1,3 @@
-"""Unit tests for incidents repository and lifecycle.
-
-Covers deduplication, tenant isolation, state transitions,
-and notification cooldown logic using mocked sessions.
-"""
-
 from __future__ import annotations
 
 from datetime import datetime, timedelta

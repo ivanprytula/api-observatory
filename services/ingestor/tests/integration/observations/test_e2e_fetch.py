@@ -1,5 +1,3 @@
-"""Opt-in live smoke test for the external demonstration endpoint."""
-
 from __future__ import annotations
 
 from collections.abc import AsyncIterator

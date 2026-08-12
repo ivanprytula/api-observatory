@@ -1,9 +1,3 @@
-"""Unit tests for observations repository helpers and user management.
-
-Pure helpers (_encode_cursor, _decode_cursor, _apply_tenant_filter) and
-user/tenant management functions with mocked sessions.
-"""
-
 from __future__ import annotations
 
 import base64

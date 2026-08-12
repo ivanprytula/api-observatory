@@ -1,5 +1,3 @@
-"""ORM models (async stack — domain-specific modules)."""
-
 from services.ingestor.core.utils import _utcnow
 from services.ingestor.models.agent import AgentRun
 from services.ingestor.models.base import TimestampMixin

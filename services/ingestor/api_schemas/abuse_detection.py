@@ -1,5 +1,3 @@
-"""Pydantic v2 request/response schemas for the Abuse Detection module."""
-
 from __future__ import annotations
 
 from datetime import datetime

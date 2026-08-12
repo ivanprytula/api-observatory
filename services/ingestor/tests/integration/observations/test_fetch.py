@@ -59,7 +59,6 @@ async def test_http_client_lifecycle(cleanup_http_client) -> None:
 
 @pytest.mark.integration
 async def test_fetch_success_without_failures(cleanup_http_client) -> None:
-    """Test successful fetch when simulate_failures=False."""
 
     async def mock_fetch(url: str, simulate_failures: bool = False) -> dict:
         return MOCK_POST_RESPONSE
@@ -155,7 +154,6 @@ async def test_concurrent_fetches(cleanup_http_client) -> None:
 
 @pytest.mark.integration
 async def test_http_client_lifecycle_multiple_rounds(cleanup_http_client) -> None:
-    """Test multiple cycles of get/close."""
     for _ in range(3):
         client = await get_http_client()
         assert client is not None

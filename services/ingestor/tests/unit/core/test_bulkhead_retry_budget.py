@@ -1,5 +1,3 @@
-"""Unit tests for bulkhead isolation and retry budget behavior."""
-
 import asyncio
 
 import httpx

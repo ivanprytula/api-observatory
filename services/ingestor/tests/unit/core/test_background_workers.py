@@ -1,5 +1,3 @@
-"""Unit tests for the in-process background worker pool."""
-
 from __future__ import annotations
 
 import asyncio

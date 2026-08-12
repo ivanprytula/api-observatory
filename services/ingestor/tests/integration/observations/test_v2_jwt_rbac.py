@@ -1,5 +1,3 @@
-"""Integration tests for v2 JWT + RBAC endpoints."""
-
 from __future__ import annotations
 
 import pytest

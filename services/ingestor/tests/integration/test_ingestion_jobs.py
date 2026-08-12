@@ -36,16 +36,12 @@ pytestmark = pytest.mark.integration
 
 
 class TestIdempotencyKeyTracker:
-    """Test suite for IdempotencyKeyTracker."""
-
     def test_tracker_initialization(self) -> None:
-        """Test tracker initializes with empty dict and TTL."""
         tracker = IdempotencyKeyTracker(ttl_seconds=3600)
         assert tracker.ttl_seconds == 3600
         assert len(tracker._seen) == 0
 
     def test_mark_seen_and_is_duplicate(self) -> None:
-        """Test marking keys as seen and checking duplicates."""
         tracker = IdempotencyKeyTracker()
 
         # First call: not seen
@@ -93,11 +89,8 @@ class TestIdempotencyKeyTracker:
 
 
 class TestApiIngestion:
-    """Test suite for API ingestion patterns."""
-
     @pytest.mark.asyncio
     async def test_ingest_api_single_success(self) -> None:
-        """Test single observation ingestion succeeds."""
         mock_db = AsyncMock(spec=AsyncSession)
 
         test_observation = Observation(
@@ -244,11 +237,8 @@ class TestApiIngestion:
 
 
 class TestScheduledBatchIngestion:
-    """Test suite for scheduled batch ingestion."""
-
     @pytest.mark.asyncio
     async def test_ingest_scheduled_batch_template(self) -> None:
-        """Test scheduled batch ingestion template."""
         mock_db = AsyncMock(spec=AsyncSession)
 
         with patch(
@@ -274,13 +264,11 @@ class TestScheduledBatchIngestion:
 
 
 class TestArchiveJob:
-    """Test suite for archive job."""
-
     @pytest.mark.asyncio
     async def test_archive_old_observations_reports_empty_dry_run(
-        self, db: AsyncSession
+        self,
+        db: AsyncSession,
     ) -> None:
-        """The enabled job is non-destructive unless explicitly applied."""
         result = await archive_old_observations(db)
 
         assert result["status"] == "empty"

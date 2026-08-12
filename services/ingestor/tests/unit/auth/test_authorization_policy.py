@@ -1,5 +1,3 @@
-"""Unit tests for the central policy-as-code authorization evaluator."""
-
 from __future__ import annotations
 
 import pytest

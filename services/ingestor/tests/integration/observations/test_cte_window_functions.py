@@ -1,13 +1,3 @@
-"""Integration tests for CTE and window function SQL patterns.
-
-Tests for:
-- Materialized view refresh patterns
-- Partition pruning and range optimization
-- Complex CTE patterns (multi-step aggregations)
-- Window function edge cases (PERCENT_RANK, RANK with ties)
-- PostgreSQL 17-specific features
-"""
-
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import text

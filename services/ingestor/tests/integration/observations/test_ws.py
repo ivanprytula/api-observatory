@@ -1,11 +1,3 @@
-"""Integration tests for WebSocket endpoint (/ws/observations/stream).
-
-Tests cover auth, cache-disabled fallback, connection lifecycle, and
-event forwarding from pub/sub to connected WebSocket clients.
-Since httpx.AsyncClient does not support WebSocket handshakes, these tests
-call the ``observations_stream`` handler directly with mock WebSocket objects.
-"""
-
 from __future__ import annotations
 
 import asyncio

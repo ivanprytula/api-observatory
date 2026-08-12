@@ -1,9 +1,3 @@
-"""Unit tests for contract drift pure-Python helpers.
-
-All helpers are deterministic and operate only on in-memory data structures —
-no database, no HTTP client needed.
-"""
-
 from __future__ import annotations
 
 import pytest

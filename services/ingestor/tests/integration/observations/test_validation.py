@@ -361,10 +361,6 @@ async def test_validation_batch_validates_each_observation(client: AsyncClient) 
 # ---------------------------------------------------------------------------
 @pytest.mark.integration
 async def test_validation_error_messages_helpful(client: AsyncClient) -> None:
-    """Error messages are descriptive enough to guide users.
-
-    Week 2 Milestone 5: "Error messages are helpful"
-    """
     # Send localhost
     r = await client.post(
         "/api/v1/observations", json={**_OBSERVATION, "source": "localhost"}

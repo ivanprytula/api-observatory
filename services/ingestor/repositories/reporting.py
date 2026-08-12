@@ -1,5 +1,3 @@
-"""Reporting repository — facade re-exporting domain-specific modules."""
-
 from services.ingestor.repositories.reporting_cost_value import get_cost_value_chart
 from services.ingestor.repositories.reporting_executive import get_executive_summary
 from services.ingestor.repositories.reporting_freshness import (

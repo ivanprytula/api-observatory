@@ -8,7 +8,6 @@ from services.ingestor.core.logging import get_cid, set_cid, setup_logging
 
 @pytest.mark.unit
 def test_logging_setup_respects_environment_setting():
-    """Test that setup_logging creates appropriate formatters based on environment."""
     # Development environment
     root_logger = logging.getLogger()
     for handler in root_logger.handlers[:]:
@@ -38,7 +37,6 @@ def test_logging_setup_respects_environment_setting():
 
 @pytest.mark.unit
 def test_logging_respects_global_log_level():
-    """Test that LOG_LEVEL setting controls root logger level."""
     root_logger = logging.getLogger()
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
@@ -83,7 +81,6 @@ def test_uvicorn_logs_use_application_format_without_duplicate_access_lines():
 
 @pytest.mark.unit
 def test_correlation_id_context_vars():
-    """Test that CID get/set work correctly."""
     # Initially None
     assert get_cid() is None
 
@@ -100,7 +97,6 @@ def test_correlation_id_context_vars():
 
 @pytest.mark.unit
 def test_logger_methods_callable():
-    """Test that standard logger methods work as expected (no exceptions)."""
     root_logger = logging.getLogger()
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)

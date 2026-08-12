@@ -1,10 +1,3 @@
-"""Integration tests for authenticated routes and public documentation.
-
-Tests cache-backed sessions, bearer tokens, JWT-protected operations, and rate limits.
-
-`asyncio_mode='auto'` handles async test execution; the module marker classifies this suite.
-"""
-
 from __future__ import annotations
 
 from datetime import datetime

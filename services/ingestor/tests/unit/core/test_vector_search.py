@@ -1,5 +1,3 @@
-"""Unit tests for the Pillar 9 AI gateway bridge."""
-
 from __future__ import annotations
 
 from datetime import datetime
