@@ -134,6 +134,7 @@ Default to these when writing or reviewing code. Do not suggest custom alternati
 ## SSRF Prevention (required for all user-supplied URLs)
 
 Any URL supplied by a user that will be used in a server-side HTTP request must be validated before use:
+
 - Scheme: `https` only (or explicitly allowed `http` per config flag)
 - Resolved IP must not fall in private ranges: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `::1`
 - Use `ipaddress` stdlib module to check the resolved IP after DNS resolution

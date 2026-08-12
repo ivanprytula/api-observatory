@@ -18,7 +18,7 @@ Only two sources are allowed (in order of precedence):
 echo "SERVICE_VERSION=$(git describe --tags --always --dirty --abbrev=7)" >> $GITHUB_ENV
 ```
 
-2. `VERSION` file at the repository root (convenient for local development)
+1. `VERSION` file at the repository root (convenient for local development)
    - Create a text file named `VERSION` containing the SemVer string (e.g. `1.2.3+gdeadbee`).
 
 Behavior

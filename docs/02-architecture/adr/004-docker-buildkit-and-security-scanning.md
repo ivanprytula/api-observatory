@@ -54,6 +54,7 @@ As of April 22, 2026, Dockerfiles lacked:
 **Choice**: Integrate **Trivy** (Aqua Security) + **pip-audit** (PyPA) for multi-layer security scanning.
 
 **Rejected Alternatives**:
+
 - Snyk: powerful but requires commercial subscription
 - Clair: requires separate infrastructure
 - Grype: good but Trivy is more Docker-optimized

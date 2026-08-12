@@ -54,7 +54,7 @@ checks, and health checks all start by looking up a `SourceProfile`.
 | `probe_interval_seconds` | How often a scheduler fires a probe for this source                                        |
 | `is_active`              | Soft-disable without deleting; inactive sources are excluded from scheduling               |
 
-#### Invariants:
+#### Invariants
 
 - `name` is globally unique — two sources cannot share an identifier.
 - `health_check_path` must be an absolute path (starts with `/`).
@@ -70,6 +70,7 @@ intent to all downstream contexts through the `is_active` flag rather than a har
 ## Reliability Monitoring
 
 ### Aggregate Root: `ProviderHealthSample`
+
 ### Computed view: `ProviderScorecard` (no ORM table — derived by SQL aggregation)
 
 ### ProviderHealthSample
@@ -113,6 +114,7 @@ is this source right now?" — derived, never stored, always fresh.
 ## Contract Drift
 
 ### Aggregate Root: `ContractSnapshot`
+
 ### Domain Event: `DriftEvent`
 
 ### ContractSnapshot
@@ -170,7 +172,7 @@ external source. This is the primary write path of the service.
 | `processed_at` | When processing completed                                                       |
 | `tenant_id`    | Optional tenant scope for multi-tenant deployments                              |
 
-#### Invariants:
+#### Invariants
 
 - `(source, timestamp)` is unique — the same source cannot produce two observations at
   identical timestamps. This drives idempotent upsert: a retry with the same pair returns
@@ -202,7 +204,7 @@ The authentication principal. Carries coarse role-based access control.
 | `is_active`          | Soft-disable without deletion                              |
 | `tenant_id`          | Default tenant scope for this user                         |
 
-#### Roles:
+#### Roles
 
 - `viewer` — read-only access to observations and scorecards
 - `writer` — can create/update observations and submit contract snapshots

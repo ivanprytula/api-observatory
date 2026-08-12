@@ -23,6 +23,7 @@ This document analyzes the indexing strategy for the data model, identifies pote
 #### Recommendations: Observations Table
 
 **1. Partial Index on `(source, processed)` is Low Value** ❌
+
 - **Issue**: `ix_observations_processed` on a boolean column has poor selectivity
   - 50/50 split: half rows are processed, half aren't
   - Index is often ignored by planner (sequential scan is cheaper)
@@ -31,7 +32,9 @@ This document analyzes the indexing strategy for the data model, identifies pote
   - This filters to ~5% of rows (faster for typical "get unprocessed" queries)
 
 **2. Missing Composite Index for Common Query Pattern** 📌
+
 - **Query Pattern**: "Get unprocessed observations from source X in time range Y"
+
   ```python
   # Common query in CRUD layer
   observations = await db.execute(
@@ -47,21 +50,26 @@ This document analyzes the indexing strategy for the data model, identifies pote
       .limit(1000)
   )
   ```
+
 - **Current Plan**: Uses partial index on `source` (deleted_at IS NULL) + sequential scan on processed/timestamp
   - Estimated 95K rows scanned before applying filters
 - **Recommendation**: Add composite partial index:
+
   ```sql
   CREATE INDEX ix_observations_unprocessed_by_source_timestamp
   ON observations (source, timestamp DESC)
   WHERE deleted_at IS NULL AND processed = false;
   ```
+
   - Reduces full-table scan to ~5K rows (unprocessed only)
   - Index is ordered by timestamp DESC (useful for `ORDER BY timestamp DESC LIMIT N`)
 
 **3. Archive Table Index Strategy** 🗂️
+
 - **Current**: Basic timestamp index on each partition
 - **Issue**: Partitions already segregate by month; timestamp index is redundant within a partition
 - **Recommendation**: Prioritize `(source, timestamp)` composite index for lookups within a partition
+
   ```sql
   -- On each partition
   CREATE INDEX idx_observations_archive_202604_source_ts
@@ -84,7 +92,9 @@ This document analyzes the indexing strategy for the data model, identifies pote
 #### Recommendations: Processed Events
 
 **1. Composite Index for Event Lookup** 📌
+
 - **Query Pattern**: "Find all pending events for topic X created after time Y"
+
   ```sql
   SELECT * FROM processed_events
   WHERE kafka_topic = 'orders'
@@ -92,16 +102,20 @@ This document analyzes the indexing strategy for the data model, identifies pote
     AND created_at > NOW() - INTERVAL '24 hours'
   ORDER BY created_at ASC;
   ```
+
 - **Current Plan**: Full table scan (no compound index)
 - **Recommendation**: Add partial composite index
+
   ```sql
   CREATE INDEX ix_events_pending_by_topic
   ON processed_events (kafka_topic, created_at)
   WHERE status = 'pending' AND deleted_at IS NULL;
   ```
+
   - Reduces rows to scan from 10M+ down to ~1K (pending events only)
 
 **2. Kafka Offset Index for Consumer Tracking** ✅
+
 - **Current**: Simple B-tree on `kafka_offset`
 - **Issue**: Offset is mostly monotonically increasing (poor for B-tree)
 - **Alternative**: Consider removing if queries typically use `ORDER BY created_at` instead
@@ -115,6 +129,7 @@ This document analyzes the indexing strategy for the data model, identifies pote
 ### Write Hotspots
 
 #### 1. Observations Table (High Volume Insert)
+
 - **Risk**: Concurrent inserts into `observations` table (indexed on `source`, `timestamp`)
 - **Symptom**: Lock contention on B-tree leaf pages
 - **Mitigation**:
@@ -123,6 +138,7 @@ This document analyzes the indexing strategy for the data model, identifies pote
   - Requires schema change and backfill (post-v1.0)
 
 #### 2. Idempotency Key Index (UQ Constraint)
+
 - **Risk**: Unique index on `idempotency_key` becomes bottleneck for high-velocity event processing
 - **Symptom**: Lock waits during concurrent event deduplication
 - **Mitigation**:
@@ -132,6 +148,7 @@ This document analyzes the indexing strategy for the data model, identifies pote
 ### Read Hotspots
 
 #### 1. Observations by Source (Common Query)
+
 - **Risk**: All queries filtered by `source` cause contention on `ix_observations_active_source`
 - **Symptom**: Cache pressure on B-tree root pages
 - **Mitigation**:
@@ -139,6 +156,7 @@ This document analyzes the indexing strategy for the data model, identifies pote
   - Consider list partitioning if reads exceed 10K/sec per source
 
 #### 2. Unprocessed Observations (Batch Jobs)
+
 - **Risk**: Batch processing jobs scan `WHERE processed = false` multiple times per day
 - **Symptom**: Redundant scans of ~50% of table even with index on `processed`
 - **Mitigation**:
@@ -194,17 +212,20 @@ ORDER BY (idx_blk_hit + idx_blk_read) DESC;
 ## Implementation Checklist
 
 ### Phase 1: Hotspot Mitigation (Immediate)
+
 - [ ] Add partial index `ix_observations_unprocessed_by_source_timestamp` (reduces scan from 95K to 5K rows)
 - [ ] Monitor `ix_observations_processed` usage; remove if not used by planner
 - [ ] Add composite index `ix_events_pending_by_topic` for event processing queries
 
 ### Phase 2: Performance Validation (Week 1–2)
+
 - [ ] Run query benchmarks before/after index changes
 - [ ] Collect `pg_stat_statements` data for 48 hours
 - [ ] Compare P95 latencies for common query patterns
 - [ ] Verify no regressions in insert performance (check `INSERT` contention)
 
 ### Phase 3: Long-Term Optimization (Post-v1.0)
+
 - [ ] Implement list partitioning on observations table (by source hash)
 - [ ] Consider sharded idempotency keys for event deduplication
 - [ ] Archive old partitions to cold storage (integrate with data retention job)

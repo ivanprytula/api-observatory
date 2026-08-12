@@ -16,18 +16,23 @@ not import the ingestor's internals, and never bypasses its JWT auth.
    local stdio only; it is not a Compose service.
 2. Create the ignored MCP configuration, restrict it to your user, and choose a strong local
    password:
+
    ```bash
    cp services/mcp/.env.example services/mcp/.env
    chmod 600 services/mcp/.env
    ```
+
    Edit `services/mcp/.env`:
+
    ```dotenv
    INGESTOR_URL=http://localhost:8000
    MCP_SERVICE_USERNAME=mcp-service
    MCP_SERVICE_PASSWORD=<choose-a-strong-password>
    ```
+
 3. Register the service account (idempotent — safe to re-run) in a subshell. The password stays
     out of shell history and the parent shell remains unchanged:
+
     ```bash
     just mcp-register-user
     ```

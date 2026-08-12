@@ -2,7 +2,6 @@
 
 Track: C — Architecture and Platform Strategy
 
-
 ## Goal
 
 Build a highly automated delivery model with:

@@ -1,0 +1,37 @@
+{
+  "ignores": [
+    ".venv/**",
+    ".remember/**",
+    "node_modules/**",
+    "vendor/**",
+    ".kilo/**"
+  ],
+  "globs": [
+    "**/*.md"
+  ],
+  "config": {
+    "MD001": true,
+    "MD003": false,
+    "MD007": false,
+    "MD009": false,
+    "MD013": false,
+    "MD024": false,
+    "MD025": false,
+    "MD026": false,
+    "MD029": false,
+    "MD030": false,
+    "MD031": false,
+    "MD032": false,
+    "MD034": false,
+    "MD036": false,
+    "MD040": false,
+    "MD041": false,
+    "MD046": false,
+    "MD048": false,
+    "MD049": false,
+    "MD051": false,
+    "MD052": false,
+    "MD053": false,
+    "MD060": false
+  }
+}

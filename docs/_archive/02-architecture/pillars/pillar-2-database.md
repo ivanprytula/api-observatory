@@ -2,7 +2,6 @@
 
 Track: E — Archive and Historical Snapshots
 
-
 **Tier**: Foundation (🟢) + Middle (🟡) + Senior (🔴)
 **Project**: Critical for most backend roles
 **Building in**: `api-observatory` / `services/ingestor/` (models.py, database.py, crud.py)

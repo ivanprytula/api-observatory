@@ -53,6 +53,7 @@ Both mechanisms exist because they solve different problems:
 | Failure mode | In-memory fallback | 503 if Redis unavailable |
 
 Consolidating to one mechanism would require either:
+
 - Downgrading authenticated routes to IP-based slowapi (loses tenant isolation), or
 - Upgrading `/health` to JWT-dependent token bucket (breaks unauthenticated monitoring).
 

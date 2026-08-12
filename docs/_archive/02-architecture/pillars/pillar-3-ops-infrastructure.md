@@ -2,7 +2,6 @@
 
 Track: E — Archive and Historical Snapshots
 
-
 **Tier**: Foundation (🟢) + Middle (🟡) + Senior (🔴)
 **Project**: Proves production-readiness
 **Building in**: `Dockerfile`, `docker-compose.yml`, `.github/workflows/`, infra manifests

@@ -2,7 +2,6 @@
 
 Track: C — Architecture and Platform Strategy
 
-
 ## Status
 
 Accepted (May 2026)

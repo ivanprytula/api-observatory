@@ -2,7 +2,6 @@
 
 Track: C — Architecture and Platform Strategy
 
-
 **Status**: Accepted (Qdrant primary, pgvector secondary for comparison)
 **Date**: April 18, 2026
 **Part of**: [Architecture — Data Zoo Platform](../architecture.md)

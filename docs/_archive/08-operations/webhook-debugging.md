@@ -2,7 +2,6 @@
 
 Track: C — Architecture and Platform Strategy
 
-
 This guide covers common failure modes and how to diagnose and resolve them.
 
 ## Query the Audit Log

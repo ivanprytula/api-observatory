@@ -2,7 +2,6 @@
 
 Track: B — Engineering Execution
 
-
 Audit of writable filesystem paths per service to support `readOnlyRootFilesystem: true` hardening.
 
 ## Methodology

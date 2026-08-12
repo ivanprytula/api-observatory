@@ -2,7 +2,6 @@
 
 Track: C — Architecture and Platform Strategy
 
-
 Single-repository, multi-service Python monorepo. One `uv.lock`, one `pyproject.toml`
 for tooling, six independently deployable services.
 

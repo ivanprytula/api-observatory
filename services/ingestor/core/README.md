@@ -3,6 +3,7 @@
 Purpose: Core utilities and infrastructure modules for the ingestor service: logging, scheduling, multi-tenancy, and background job processing.
 
 Modules:
+
 - `logging.py` — Structured logging setup (JSON format, context-aware fields)
 - `scheduler.py` — APScheduler configuration and job registry
 - `sentry.py` — Sentry error reporting integration

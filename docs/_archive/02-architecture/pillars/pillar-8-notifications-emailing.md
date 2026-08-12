@@ -2,7 +2,6 @@
 
 Track: E — Archive and Historical Snapshots
 
-
 **Tier**: Middle (🟡) with operational impact
 **Status**: Baseline implemented (April 23, 2026)
 

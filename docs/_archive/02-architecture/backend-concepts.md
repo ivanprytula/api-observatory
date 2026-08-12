@@ -2,7 +2,6 @@
 
 Track: C — Architecture and Platform Strategy
 
-
 > **Target Audience**: Strong Middle backend engineers. Mental frameworks that unlock system design, performance optimization, and production decision-making.
 >
 > **How to Use**: Read one section per week. Apply to real code in your project.

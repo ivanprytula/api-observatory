@@ -28,7 +28,7 @@ uv sync                     # sync Python dependencies
 just init                   # print curl commands for manual bootstrap
 ```
 
-### Expected output:
+### Expected output
 
 ```sh
 ✓ Services healthy
@@ -151,7 +151,7 @@ gh api --method PUT \
 
 ### Services Started
 
-### `just up` starts (core MVP stack):
+### `just up` starts (core MVP stack)
 
 ```text
 PostgreSQL 17          127.0.0.1:5432   → Primary persistence (scorecards, observations, drift events)
@@ -161,13 +161,13 @@ Ingestor API           127.0.0.1:8000   → FastAPI — probes, scorecards, agen
 Dashboard (Streamlit)  127.0.0.1:8501   → Visual UI for scorecards, drift, live stream
 ```
 
-### Optional services:
+### Optional services
 
 ```text
 Floci (AWS emulator)   127.0.0.1:4566   → pre-deploy sandbox only: just floci-up
 ```
 
-### Additional services (optional):
+### Additional services (optional)
 
 ```text
 PostgreSQL (tests)     auto-provisioned → ephemeral DB via testcontainers
@@ -192,6 +192,7 @@ Python dependencies are installed in `.venv/`:
 ---
 
 ## Common Next Steps
+
 For canonical command workflows, use **Daily Development** and **Commands Reference**.
 
 ---
@@ -209,6 +210,7 @@ docker ps
 **`ERR_CERT_AUTHORITY_INVALID` in Chrome/Chromium** — see Local HTTPS Setup for troubleshooting.
 
 **`curl: (60) SSL certificate problem`** when running `curl`:
+
 ```bash
 # The system CA trust store may not have mkcert's CA.
 # Re-install the CA:
@@ -220,8 +222,10 @@ ls -la "$(mkcert -CAROOT)"
 ```
 
 **Nginx returns "404 Not Found"** on `https://127.0.0.1/`:
+
 - The root location block (`location /`) was commented out in `infra/nginx/nginx.conf`. Ensure it is uncommented and proxies to the dashboard upstream (or whichever service should serve the root path).
 - After editing `infra/nginx/nginx.conf`, reload edge:
+
   ```bash
   docker compose exec edge nginx -s reload
   ```

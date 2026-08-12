@@ -148,6 +148,7 @@ just up-https
 - mkcert is **dev-only** (browser/OS auto-trusts, saves time)
 
 ## Common Issues & Solutions
+
 | Issue                          | Solution                                                                  |
 | ------------------------------ | ------------------------------------------------------------------------- |
 | Browser shows "Not Secure"     | Reinstall mkcert CA: `mkcert -install`                                    |

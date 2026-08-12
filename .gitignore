@@ -215,6 +215,9 @@ examples/
 # Copilot local memory artifacts
 .copilot/memories/
 
+# Kilo session recall artifacts
+.remember/
+
 secrets-findings.json
 
 # Local planning docs

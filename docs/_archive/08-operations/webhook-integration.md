@@ -2,7 +2,6 @@
 
 Track: C — Architecture and Platform Strategy
 
-
 This guide explains how to configure and integrate with the webhook gateway service.
 
 ## Overview

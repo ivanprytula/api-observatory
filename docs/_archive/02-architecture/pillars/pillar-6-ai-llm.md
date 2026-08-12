@@ -2,7 +2,6 @@
 
 Track: E — Archive and Historical Snapshots
 
-
 **Tier**: Middle (🟡 partial) → Senior (🟡 LangGraph shipped)
 **Project**: The 2025-2030 multiplier
 **Implementation**: `services/ingestor/agent/`, `services/ingestor/routers/agent.py`

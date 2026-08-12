@@ -30,6 +30,7 @@ BuildKit is enabled by default in this project — see `DOCKER_BUILDKIT=1` in th
 ### 1. pip-audit (Python Dependency Scanner)
 
 #### Installation
+
 ```bash
 # One-time install in your environment
 pip install pip-audit

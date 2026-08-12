@@ -2,7 +2,6 @@
 
 Track: B — Engineering Execution
 
-
 Learn from mistakes without making them yourself.
 
 ---

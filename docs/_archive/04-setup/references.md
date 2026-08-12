@@ -2,7 +2,6 @@
 
 Track: B — Engineering Execution
 
-
 **Official documentation, tutorials, libraries, and tools** for each pillar.
 
 ---

@@ -14,6 +14,7 @@
 `ruff format` and `ruff check` run automatically as pre-commit hooks on every `git commit`. Do **not** run them manually before staging — it is redundant.
 
 **Only run ruff manually when you need to know whether code is clean before committing**, e.g. to catch errors early during a multi-file edit session:
+
 ```bash
 uv run ruff format <files> && uv run ruff check --fix <files>
 ```

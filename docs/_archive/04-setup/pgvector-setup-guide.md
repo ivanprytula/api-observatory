@@ -2,7 +2,6 @@
 
 Track: B — Engineering Execution
 
-
 ## Overview
 
 This project uses PostgreSQL 17 with the pgvector extension for Phase 5 (vector similarity + Qdrant comparison).

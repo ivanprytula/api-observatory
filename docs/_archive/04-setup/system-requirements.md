@@ -85,7 +85,6 @@ just doctor
 Use `.local-dev/` for verbose local outputs and raw dumps during troubleshooting.
 The folder is gitignored and can be created/recreated by `just doctor`.
 
-
 ## Floci-Specific Commands
 
 ```bash

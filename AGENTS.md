@@ -169,5 +169,6 @@ Whenever you add or update an instruction file listed in **Progressive-loading r
 ## Central agent standards
 
 Shared agent standards are maintained in `agent-forge`:
+
 - Git workflow → `../agent-forge/instructions/git-workflow.instructions.md`
 - Repo standards (privacy, read scope, response style) → `../agent-forge/skills/repo-standards/SKILL.md`

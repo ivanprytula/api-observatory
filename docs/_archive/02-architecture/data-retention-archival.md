@@ -2,7 +2,6 @@
 
 Track: C — Architecture and Platform Strategy
 
-
 ## Overview
 
 This document defines the data retention and archival policy for the Data Pipeline platform. The strategy balances operational needs (recent data performance), compliance (audit trails), and cost efficiency (archival storage).
@@ -12,6 +11,7 @@ This document defines the data retention and archival policy for the Data Pipeli
 ## Retention Tiers
 
 ### Tier 1: Active Observations (0–30 days)
+
 - **Purpose**: Fast queries, real-time dashboards, API responses
 - **Storage**: Main `observations` table (hot tier, optimized for OLTP queries)
 - **Indexes**: All active indexes (partial indexes on `deleted_at IS NULL`)
@@ -19,6 +19,7 @@ This document defines the data retention and archival policy for the Data Pipeli
 - **SLA**: P50 <50ms, P99 <500ms
 
 ### Tier 2: Warm Archive (30–90 days)
+
 - **Purpose**: Historical analysis, compliance lookups
 - **Storage**: Partitioned `observations_archive` table (range-partitioned by month)
 - **Indexes**: Limited indexes (timestamp range lookups only)
@@ -27,6 +28,7 @@ This document defines the data retention and archival policy for the Data Pipeli
 - **SLA**: P50 <1s, P99 <10s
 
 ### Tier 3: Cold Archive (90+ days)
+
 - **Purpose**: Regulatory compliance, long-term audit trail
 - **Storage**: Cold storage (S3/GCS with object expiration policy)
 - **Indexes**: None (sequential scans only)
@@ -39,9 +41,11 @@ This document defines the data retention and archival policy for the Data Pipeli
 ## Archival Jobs & Automation
 
 ### Job 1: Daily Tier 1 → Tier 2 Migration (runs 02:00 UTC)
+
 **Purpose**: Move observations older than 30 days from `observations` → `observations_archive`
 
 **Logic**:
+
 ```sql
 -- Nightly job: move observations older than 30 days to archive table
 INSERT INTO observations_archive (id, source, timestamp, raw_data, tags, processed, processed_at, created_at, updated_at, deleted_at)
@@ -62,9 +66,11 @@ WHERE created_at < NOW() - INTERVAL '30 days'
 **Idempotency**: ON CONFLICT DO NOTHING ensures safe re-runs
 
 ### Job 2: Weekly Tier 2 → Tier 3 Backup Export (runs Sundays 01:00 UTC)
+
 **Purpose**: Export observations older than 90 days to cold storage (S3/GCS)
 
 **Logic**:
+
 ```bash
 # Pseudo-code: export observations older than 90 days
 psql -d data_pipeline -c "
@@ -86,9 +92,11 @@ psql -d data_pipeline -c "
 **Monitoring**: Alert if export fails or takes >30min
 
 ### Job 3: Soft-Deleted Observations Cleanup (runs daily 03:00 UTC)
+
 **Purpose**: Physically remove soft-deleted observations after grace period
 
 **Logic**:
+
 ```sql
 -- Remove soft-deleted observations older than 90 days
 DELETE FROM observations
@@ -109,13 +117,16 @@ WHERE deleted_at IS NOT NULL
 ## Soft-Delete Behavior
 
 ### Design Pattern
+
 All tables with `deleted_at` column follow a "soft delete" pattern:
+
 - **Logical deletion**: Set `deleted_at = NOW()` instead of removing the row
 - **Audit trail**: Complete lifecycle remains queryable
 - **Recovery**: Undelete by setting `deleted_at = NULL`
 - **Compliance**: Audit logs always include deleted records
 
 ### Query Filtering
+
 By default, queries should **exclude soft-deleted observations**:
 
 ```python
@@ -136,6 +147,7 @@ async def get_all_observations_including_deleted(db: AsyncSession) -> list[Obser
 ```
 
 ### Database View for Active Observations
+
 For convenience, create a view that filters automatically:
 
 ```sql
@@ -192,12 +204,14 @@ WHERE deleted_at IS NULL;
 ## Compliance & Audit
 
 ### Audit Trail Requirements
+
 - All records (including deleted) must be queryable for 90 days minimum
 - Deleted records must retain `deleted_at` timestamp for compliance
 - Archive exports must be immutable (no updates after export)
 - Access logs required for any query accessing data >30 days old
 
 ### GDPR / Data Subject Rights
+
 - **Right to Erasure**: Supported via soft-delete → grace period → hard delete
 - **Right to Data Portability**: Export via cold storage jobs
 - **Data Retention**: Automatic cleanup after 90-day grace period respects GDPR minimization principle

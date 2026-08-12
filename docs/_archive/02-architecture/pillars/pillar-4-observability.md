@@ -2,7 +2,6 @@
 
 Track: E — Archive and Historical Snapshots
 
-
 **Tier**: Middle (🟡) → Senior (🔴)
 **Project**: Essential for debugging + production support
 
