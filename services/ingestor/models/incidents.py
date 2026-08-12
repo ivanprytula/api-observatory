@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Index, Integer, String
+from sqlalchemy import JSON, CheckConstraint, DateTime, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from services.ingestor.core.utils import _utcnow
@@ -13,6 +13,14 @@ class DependencyIncident(Base, TimestampMixin):
 
     __tablename__ = "dependency_incidents"
     __table_args__ = (
+        CheckConstraint(
+            "status IN ('open', 'acknowledged', 'resolved')",
+            name="ck_dependency_incidents_status",
+        ),
+        CheckConstraint(
+            "trigger_type IN ('availability', 'latency', 'drift')",
+            name="ck_dependency_incidents_trigger_type",
+        ),
         Index("ix_dependency_incidents_tenant_status", "tenant_id", "status"),
         Index("ix_dependency_incidents_source_status", "source_id", "status"),
         Index("ix_dependency_incidents_last_seen_at", "last_seen_at"),
