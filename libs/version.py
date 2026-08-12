@@ -43,7 +43,8 @@ def get_contracts_version() -> str:
     if not CONTRACTS_VERSION_FILE.exists():
         raise RuntimeError(
             f"Missing contracts VERSION file: {CONTRACTS_VERSION_FILE}. "
-            "Run scripts/bump_contracts_version.py to create/update it."
+            "Run scripts/bump_contracts_version.py "
+            "(or the check-contracts-version pre-commit hook) to create/update it."
         )
     v = _read_text(CONTRACTS_VERSION_FILE)
     if not v:
