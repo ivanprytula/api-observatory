@@ -127,5 +127,6 @@ repos:
         stages: [manual]
 
 ci:
-  # pre-commit.ci does not allow network calls — pip-audit runs as a GitHub Actions job instead
+  autofix_commit_msg: "chore: auto-fix pre-commit hooks"
+  autofix_prs: true
   skip: [pip-audit]
