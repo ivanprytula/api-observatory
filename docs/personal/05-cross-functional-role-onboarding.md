@@ -17,7 +17,7 @@ For product and delivery roles, start with the [README](../../README.md), [Appli
 ### First Focus
 
 - Validate core user and API flows in the [Development Workflows](../05-development/dev-workflows.md).
-- Expand regression scenarios from the [Justfile](../../Justfile).
+- Expand regression scenarios from the Justfile.
 - Keep defect notes with clear reproduction and API payloads in `.local-dev/dumps`.
 
 ### Contribution Pattern
@@ -119,7 +119,7 @@ For product and delivery roles, start with the [README](../../README.md), [Appli
 
 ### First Focus
 
-- Review the current app delivery contract and [infrastructure deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md).
+- Review the current app delivery contract and infrastructure deployment guide.
 - Validate the boundary between disposable AWS API rehearsal and real `aws-dev` evidence.
 - Check infra drift and promotion workflow quality.
 

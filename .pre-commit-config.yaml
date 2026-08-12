@@ -62,7 +62,7 @@ repos:
       - id: markdownlint-cli2
         args: [--config, .markdownlint-cli2.jsonc, --fix]
         files: \.(md|markdown)$
-        exclude: ^(\.venv/|\.remember/|node_modules/|vendor/)
+        exclude: ^(\.venv/|\.remember/|node_modules/|vendor/|\.claude/|\.kilo/|\.codex/|\.cursor/|\.windsurf/|\.github/copilot/)
 
   - repo: https://github.com/tcort/markdown-link-check
     rev: v3.15.0
@@ -70,6 +70,7 @@ repos:
       - id: markdown-link-check
         args: [--config, .markdown-link-check.json]
         files: \.(md|markdown)$
+        exclude: ^docs/_archive/
 
   - repo: https://github.com/hadolint/hadolint
     rev: v2.15.1

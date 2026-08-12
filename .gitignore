@@ -229,3 +229,5 @@ event.json
 
 # Git hooks (user-local, not committed)
 .githooks/
+.learnings/
+.codex/

@@ -15,7 +15,7 @@ tools and the Docker daemon/Compose path.
 Terraform, Ansible, cloud CLIs, Kubernetes tools, and database client utilities are not application
 onboarding requirements. Install them only for a task that owns that boundary, following the sibling
 infrastructure repository's
-[README](https://github.com/ivanprytula/api-observatory-infra/blob/main/README.md).
+README.
 
 Never read or commit a local `.env`. Copy the public, non-secret
 [`.env.example`](../../.env.example), then generate local credentials privately.

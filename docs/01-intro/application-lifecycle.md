@@ -81,7 +81,7 @@ Passing configuration or a Terraform plan is not runtime proof. Use the
 
 ## 6. Release and Delivery
 
-Application CI validates deployable images without publishing them. After a deployable `main` change passes CI, a separately gated publisher builds immutable `tree-<SHA>` images and maintains a same-repo reviewed `aws-dev` lock PR. Merging that PR is the human release decision; a green app `main` CI run then deploys the exact merged lock to the pre-bootstrapped EC2 Compose host. Delivery is an in-place recreate with best-effort rollback; it is not rolling, blue/green, canary, or zero-downtime. See the [application deployment contract](../07-deployment/app-repo-contract.md) and the [infrastructure deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md) for the full boundary.
+Application CI validates deployable images without publishing them. After a deployable `main` change passes CI, a separately gated publisher builds immutable `tree-<SHA>` images and maintains a same-repo reviewed `aws-dev` lock PR. Merging that PR is the human release decision; a green app `main` CI run then deploys the exact merged lock to the pre-bootstrapped EC2 Compose host. Delivery is an in-place recreate with best-effort rollback; it is not rolling, blue/green, canary, or zero-downtime. See the [application deployment contract](../07-deployment/app-repo-contract.md) and the infrastructure deployment guide for the full boundary.
 
 ## 7. Operate
 
@@ -91,7 +91,7 @@ production-oriented collection and routing. Current monitoring assets are local/
 evidence unless a live environment is separately exercised.
 
 Start with [application observability](../08-operations/observability.md), then use the infra
-[observability guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/operations/observability.md)
+observability guide
 and recovery guide for platform actions.
 
 ## 8. Maintain and Transform

@@ -1,7 +1,7 @@
 # Development Workflows
 
 This guide owns intent, proof selection, and stable development rules so command syntax is not
-duplicated in Markdown. The [`Justfile`](../../Justfile) is the command catalogue (see the
+duplicated in Markdown. The Justfile is the command catalogue (see the
 [setup guide](../04-setup/setup-guide.md)); [`just/labs.just`](../../just/labs.just) contains
 disposable Kubernetes, cloud, ingress, load, and chaos exercises. Branching, commits, pushes, and
 pull requests are owned by [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
@@ -64,7 +64,7 @@ the password is not placed in shell history and the parent shell remains unchang
 The ignored local `.env` is read only inside each subshell; never place its values in documentation,
 shell history, or committed files.
 
-The maintained test recipes and flags live in the [`Justfile`](../../Justfile); CI definitions live
+The maintained test recipes and flags live in the Justfile; CI definitions live
 under [`.github/workflows/`](../../.github/workflows/).
 
 ## Test Architecture
@@ -248,4 +248,4 @@ running every optional stack.
 - Performance and recovery records use the
   [performance/failure worksheet](performance-and-failure-lab.md).
 - Cloud provisioning and rollback belong to the infra
-  [deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md).
+  deployment guide.

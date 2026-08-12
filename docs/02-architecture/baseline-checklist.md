@@ -2,7 +2,7 @@
 
 These controls are the application quality/security floor. Tool configuration, CI, code, and tests
 are authoritative; this page records only durable invariants and their owners. The sibling infra
-[baseline](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/architecture/baseline-checklist.md)
+baseline
 owns Terraform, Kubernetes, and platform SRE controls.
 
 ## Quality and Compatibility

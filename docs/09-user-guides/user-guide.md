@@ -165,5 +165,5 @@ tenant-scoped incident instead of one alert per event. See the [operations guide
 ## Related Documents
 
 - [Application Architecture](../02-architecture/application-architecture.md) — service structure and data flows
-- [Infrastructure Deployment Guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md) — canonical cloud deploy and monitoring guide
+- Infrastructure Deployment Guide — canonical cloud deploy and monitoring guide
 - [Observability](../08-operations/observability.md) — metrics, tracing, logging

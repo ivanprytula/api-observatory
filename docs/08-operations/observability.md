@@ -30,7 +30,7 @@ queue depth, retention, authentication, and other bounded operational work.
 Operational queries and alert thresholds are owned by the provisioned Grafana dashboards and
 [`infra/monitoring/rules/`](../../infra/monitoring/rules/). The
 [Compose topology](../../docker-compose.yml) owns their runtime references, and the
-[Justfile](../../Justfile) owns supported validation syntax.
+Justfile owns supported validation syntax.
 
 ## Traces and Correlation
 

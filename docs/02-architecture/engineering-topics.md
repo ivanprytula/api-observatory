@@ -24,7 +24,7 @@ trigger to explain why the design should or should not change.
 | Transactions and concurrency | **Core** | [repositories](../../services/ingestor/repositories/), [concurrency tests](../../services/ingestor/tests/integration/observations/test_concurrency.py) | Add stronger coordination after measured contention or multi-writer conflicts |
 | Indexing and query performance | **Core** | migrations, scorecard SQL, [performance worksheet](../05-development/performance-and-failure-lab.md) | Change indexes from captured query plans and representative workloads |
 | Partitioning, replication, sharding | **Lab / Deferred** | [partitioning lab](../../labs/partitioning_sharding/) | A measured single-node limit remains after query, index, and retention work |
-| Retention and archival | **Core** | [`just retention-dry-run`](../../Justfile), [retention tests](../../services/ingestor/tests/integration/test_retention.py) | Add partition/cold storage when bounded batches cannot meet retention SLOs |
+| Retention and archival | **Core** | `just retention-dry-run`, [retention tests](../../services/ingestor/tests/integration/test_retention.py) | Add partition/cold storage when bounded batches cannot meet retention SLOs |
 | Caching and invalidation | **Core** | cache modules and tests under [`services/ingestor`](../../services/ingestor/) | Add cache tiers only after measured latency/load and an explicit invalidation rule |
 | Async I/O and backpressure | **Core** | [`libs/platform`](../../libs/platform/), background-worker tests | Separate workers when queue latency or API isolation needs independent scaling |
 | Kafka partitions and consumer groups | **Lab / Core seam** | [Kafka lab](../../labs/partitioning_sharding/), broker code under `services/ingestor` | Operate managed Kafka only for a real asynchronous workload and delivery objective |
@@ -34,7 +34,7 @@ trigger to explain why the design should or should not change.
 | Scheduling and locks | **Core** | [`jobs/`](../../services/ingestor/jobs/), scheduler tests | Single-instance APScheduler is a conscious design constraint for current scale; extract scheduler ownership before running multiple ingestor replicas |
 | Load balancing and autoscaling | **Lab / Deferred** | [gateway lab](../../labs/gateway_load_balancing/), local HPA manifests | Require saturation/availability evidence and a stateless request path |
 | Health, observability, SLOs, incidents | **Core / Lab stack** | [observability](../08-operations/observability.md), [dependency incidents](../08-operations/dependency-incidents.md) | Managed paging/retention follows a real on-call or SLO obligation |
-| IaC, deployment, rollback | **Decision** | [deployment contract](../07-deployment/app-repo-contract.md), [infra guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md) | Real cloud evidence requires approved provisioning, verification, rollback, and teardown |
+| IaC, deployment, rollback | **Decision** | [deployment contract](../07-deployment/app-repo-contract.md), infra guide | Real cloud evidence requires approved provisioning, verification, rollback, and teardown |
 | AI/RAG and evaluation | **Core optional path** | [`agent/`](../../services/ingestor/agent/), [`evals/`](../../services/ingestor/agent/evals/), [eval design](agent-evals.md) | Provider-backed evaluation or more autonomy requires measured value and human-review safety |
 
 ## Proof Route

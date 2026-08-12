@@ -5,7 +5,7 @@ Track: C — Architecture and Platform Strategy
 **Status**: Accepted
 **Date**: April 18, 2026
 **Part of**: [API Observatory application architecture](../application-architecture.md)
-**Related ADRs**: [ADR 002: Qdrant vs pgvector](002-qdrant-vs-pgvector.md) | [ADR 003: HTMX vs React](003-htmx-vs-react.md)
+**Related ADRs**: ADR 002: Qdrant vs pgvector (superseded)
 **Context**: API Observatory needs an executable reference for partitioned event delivery,
 idempotent publication, consumer state, and replay. Kafka is not required for every request path.
 

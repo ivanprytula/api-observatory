@@ -1,6 +1,6 @@
 # Setup Guide
 
-Local Docker Compose is the canonical runtime. The [`Justfile`](../../Justfile) owns core named
+Local Docker Compose is the canonical runtime. The Justfile owns core named
 recipes, while [`just/labs.just`](../../just/labs.just) owns explicitly invoked disposable labs.
 This guide explains which mode to choose, what it proves, and where native commands are clearer.
 The Docker-first `just dev-up` flow is the official onboarding path. Files under `.github/prompts/` are
@@ -23,7 +23,7 @@ Follow the [Canonical Onboarding and Delivery Checklist](../05-development/onboa
 
 Use `just --list` for the current core workflow commands. Real AWS MVP delivery is **Decision**
 evidence. Its application workload is versioned here and its platform bootstrap is handled by the sibling infra
-[deployment guide](https://github.com/ivanprytula/api-observatory-infra/blob/main/docs/deployment/deployment-guide.md);
+deployment guide;
 it is not a local environment profile.
 
 ## What You Don't Need
@@ -31,7 +31,7 @@ it is not a local environment profile.
 To contribute to the application, you do not need Terraform, Ansible, cloud CLIs, Kubernetes tools,
 production TLS certificates, or real notification providers (Slack, email, webhooks). Install them
 only for a task that owns that boundary, following the sibling infrastructure repository's
-[README](https://github.com/ivanprytula/api-observatory-infra/blob/main/README.md).
+README.
 
 ## Optional Labs
 
@@ -60,7 +60,7 @@ migrations and tests from terminal 2 once `/readyz` returns `200`.
 ### Manual Compose Watch
 
 For Compose-specific debugging (container reload, image rebuild, service networking), see the
-[Compose Watch documentation](https://docs.docker.com/compose/how-tos/watch/). The project's
+Compose Watch documentation. The project's
 `just --justfile just/labs.just` recipes cover the same boundary without maintaining a local copy
 of generic Compose syntax. Do not run the watcher alongside another local stack.
 
@@ -210,7 +210,7 @@ setup modes. The AWS learning order and production adoption triggers live in the
 ## Verification and Troubleshooting
 
 Use `just doctor`, service health/readiness endpoints, and the focused test recipes in the
-[`Justfile`](../../Justfile). If startup fails, inspect Compose state and logs first:
+Justfile. If startup fails, inspect Compose state and logs first:
 
 ```bash
 docker compose ps

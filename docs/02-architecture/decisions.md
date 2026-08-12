@@ -9,8 +9,8 @@ Current implementation status belongs in the
 | Question | Current decision | Rationale and record |
 | --- | --- | --- |
 | Broker | Redpanda locally; managed Kafka deferred | Kafka protocol enables replay/partition exercises without claiming the MVP needs a managed broker. [ADR 001](adr/001-kafka-vs-rabbitmq.md) |
-| Vector database | Dedicated pgvector PostgreSQL for inference | Preserves service data ownership without another database engine. [ADR 015](adr/015-inference-dedicated-pgvector-postgres.md); [superseded ADR 002](adr/002-qdrant-vs-pgvector.md) |
-| Frontend | Keep Streamlit until workflow complexity justifies replacement | Avoid a second build/runtime without a stable product trigger. [ADR 003](adr/003-htmx-vs-react.md) |
+| Vector database | Dedicated pgvector PostgreSQL for inference | Preserves service data ownership without another database engine. [ADR 015](adr/015-inference-dedicated-pgvector-postgres.md) |
+| Frontend | Keep Streamlit until workflow complexity justifies replacement | Avoid a second build/runtime without a stable product trigger. |
 | Image build/security | BuildKit, dependency audit, and container scanning | Reproducible, cached builds with standard supply-chain checks. [ADR 004](adr/004-docker-buildkit-and-security-scanning.md) |
 | Cloud authentication | GitHub OIDC; no long-lived AWS keys in GitHub | Short-lived, scoped credentials with auditable assumptions |
 | Terraform state | S3 backend with native lockfile locking | Remote versioned state for recovery; no DynamoDB lock dependency |

@@ -2,8 +2,7 @@
 
 ## Status
 
-Accepted (2026-07-11). Supersedes [ADR 002](002-qdrant-vs-pgvector.md) (orphaned — see that
-file's stub for why).
+Accepted (2026-07-11). Supersedes the earlier Qdrant evaluation.
 
 ## Context
 

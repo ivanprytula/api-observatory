@@ -98,4 +98,4 @@ Detailed setup instructions, tool installation, usage examples, troubleshooting,
 
 - [ADR 001: Kafka vs RabbitMQ](001-kafka-vs-rabbitmq.md) (event streaming)
 - Docker Security Scanning Setup (Setup Guide)
-- [Base-image digest updater](../../Justfile)
+- Base-image digest updater

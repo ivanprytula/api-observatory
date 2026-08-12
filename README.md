@@ -107,7 +107,7 @@ app-to-infra release handoff.
 
 ## Repository Ownership
 
-The `api-observatory` repository owns application behavior, contracts, migrations, service images, local and MVP Compose, reviewed `aws-dev` desired state, deployment/rollback, tests, and developer bootstrap. The sibling [`api-observatory-infra`](https://github.com/ivanprytula/api-observatory-infra) repository owns real-cloud Terraform/state, IAM, networking, runtime secrets, Docker/SSM bootstrap, backups/restores, and platform monitoring.
+The `api-observatory` repository owns application behavior, contracts, migrations, service images, local and MVP Compose, reviewed `aws-dev` desired state, deployment/rollback, tests, and developer bootstrap. The sibling api-observatory-infra repository owns real-cloud Terraform/state, IAM, networking, runtime secrets, Docker/SSM bootstrap, backups/restores, and platform monitoring.
 
 The machine-readable AWS MVP service contract is [`release/services.json`](release/services.json). AWS is the primary portfolio direction; no completed live deployment is claimed. See the [application deployment contract](docs/07-deployment/app-repo-contract.md) for the full delivery narrative.
 

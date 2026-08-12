@@ -4,6 +4,7 @@
     { "pattern": "^http://127.0.0.1" },
     { "pattern": "^https://example\\.com" },
     { "pattern": "^#" },
-    { "pattern": "^src/" }
+    { "pattern": "^src/" },
+    { "pattern": "^docs/_archive/" }
   ]
 }

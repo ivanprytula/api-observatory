@@ -4,8 +4,7 @@ Track: C — Architecture and Platform Strategy
 
 **Status**: Accepted (Qdrant primary, pgvector secondary for comparison)
 **Date**: April 18, 2026
-**Part of**: [Architecture — Data Zoo Platform](../architecture.md)
-**Related ADRs**: [ADR 001: Kafka vs RabbitMQ](001-kafka-vs-rabbitmq.md) | [ADR 003: HTMX vs React](../../adr/003-htmx-vs-react.md)
+**Related ADRs**: ADR 001: Kafka vs RabbitMQ | ADR 003: HTMX vs React
 **Context**: Data Zoo needs semantic search over 100K+ documents. Phase 4 introduces AI gateway; Phase 5 adds database alternatives.
 
 ---
@@ -62,14 +61,14 @@ Track: C — Architecture and Platform Strategy
 
 ## Rationale
 
-**Primary: Qdrant (Phase 3–6)**
+Primary: Qdrant (Phase 3–6)
 
 1. **Separation of Concerns**: Vector search is conceptually different from relational queries. Dedicated tools teach better architecture.
 2. **Performance**: HNSW indexes are state-of-the-art; teaches you what production vector DBs look like (OpenSearch, Elasticsearch, Pinecone).
 3. **Scalability**: Independent scaling of semantic search doesn't impact PostgreSQL performance.
 4. **Learning**: You learn two distinct data models (relational + vector), a real-world skill.
 
-**Secondary: pgvector (Phase 5, comparison study)**
+Secondary: pgvector (Phase 5, comparison study)
 
 1. **Trade-offs**: Demonstrates YAGNI — sometimes PostgreSQL is enough.
 2. **Simplicity**: If you have <50K vectors, pgvector is simpler operationally.

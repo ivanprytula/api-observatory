@@ -351,8 +351,8 @@ To consolidate 5 years of production experience into a **reference implementatio
 
 ## Contact & Projects
 
-- **GitHub**: [github.com/ivanpytula](https://github.com/ivanpytula)
-- **api-observatory (Learning Project)**: [github.com/ivanpytula/api-observatory](https://github.com/ivanpytula/api-observatory)
+- **GitHub**: github.com/ivanpytula
+- **api-observatory (Learning Project)**: github.com/ivanpytula/api-observatory
 - **Email**: [Available on request]
 
 ---
