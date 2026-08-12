@@ -6,26 +6,22 @@ applyTo: "scripts/**/*.sh, bin/**/*.sh, **/*.sh"
 
 # Bash Code Standards
 
+## Comment Policy
+
+Do not write comments that restate the obvious. The file name, path, and usage are already visible in the repo. Comments should explain non-obvious behavior, trade-offs, or gotchas. Remove obvious headers like `# Script:`, `# Description:`, and `# Usage:`.
+
+---
+
 ## Script Header & Shebang
 
-Always start with a shebang and include metadata:
+Always start with a shebang and strict mode:
 ```bash
-#!/bin/bash
-
-################################################################################
-# Script: start.sh
-# Description: Spin up Docker Compose services
-# Usage: ./start.sh [--build]
-# Author: api-observatory
-################################################################################
+#!/usr/bin/env bash
 
 set -o errexit      # Exit on error
 set -o pipefail     # Exit on pipe failure
 set -o nounset      # Exit on undefined variable
 set -o errtrace     # Inherit ERR trap
-
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ```
 
 ### Strict Mode Options

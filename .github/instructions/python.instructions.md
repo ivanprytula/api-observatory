@@ -1152,6 +1152,15 @@ async def get_from_cache(key: str) -> str | None:
 
 ## Docstrings & Comments
 
+### Comment & Docstring Policy
+
+Do not write comments or docstrings that restate the obvious. The file name, module path, class name, and function signature are already visible in the repo. Comments and docstrings should explain non-obvious behavior, trade-offs, gotchas, or intent that cannot be inferred from the name alone.
+
+- Remove module-level docstrings that merely describe what the file contains (e.g., `"""ORM models..."""`, `"""Unit tests for..."""`).
+- Remove docstrings that parrot the function/class name (e.g., `"""Return X."""` on `get_x()`, `"""List X."""` on `list_x()`).
+- Remove test docstrings that duplicate the test name (e.g., `"""Test connection pool."""` on `test_connection_pool`).
+- Keep docstrings only when they document non-obvious parameters, return contracts, side effects, or rationale.
+
 ### Google-Style Docstrings
 
 - Use for all functions and classes, especially complex ones.
