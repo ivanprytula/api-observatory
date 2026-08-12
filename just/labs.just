@@ -28,3 +28,10 @@ lab-chaos:
     echo "Chaos mutates the running local database; use a disposable core stack."
     cd "{{ justfile_directory() }}/.." && \
         uv run pytest tests/e2e/test_chaos.py -v --no-cov --run-chaos
+
+# Prove the local inference bulkhead and circuit-breaker behavior.
+lab-resilience-fault:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    : "${BEARER_TOKEN:?Set BEARER_TOKEN to a writer/admin JWT (for example, from just smoke-token).}"
+    bash "{{ justfile_directory() }}/../scripts/verify-resilience-fault.sh" --confirm-fault-injection

@@ -156,3 +156,45 @@ dev-up-monitoring:
     fi
     docker compose --profile monitoring up -d prometheus grafana loki promtail tempo alertmanager mailpit
     echo "monitoring ready — Grafana http://127.0.0.1:3000, Prometheus http://127.0.0.1:9090, Tempo http://127.0.0.1:3200"
+
+# Generate local mkcert certificates for the optional HTTPS ingress profile.
+dev-up-ingress-setup:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    PROJECT_ROOT="{{justfile_directory()}}"
+    CERT_DIR="${PROJECT_ROOT}/infra/certs"
+    if [[ ! -f "${PROJECT_ROOT}/.env" ]] || ! grep -Eq '^API_OBS_LOCAL_HTTPS=true([[:space:]]*)$' "${PROJECT_ROOT}/.env"; then
+        echo "Set API_OBS_LOCAL_HTTPS=true in .env before enabling local HTTPS." >&2
+        exit 1
+    fi
+    if ! command -v mkcert >/dev/null 2>&1; then
+        echo "mkcert not found. Install: brew install mkcert / sudo apt-get install mkcert / sudo dnf install mkcert" >&2
+        exit 1
+    fi
+    if [[ -f "${CERT_DIR}/localhost+2.pem" && -f "${CERT_DIR}/localhost+2-key.pem" ]]; then
+        read -r -p "Certificates already exist at ${CERT_DIR}. Regenerate? (y/n) " -n 1 response
+        echo
+        if [[ "${response}" != "y" && "${response}" != "Y" ]]; then
+            echo "Using existing certificates."
+            exit 0
+        fi
+        rm -f "${CERT_DIR}/localhost+2.pem" "${CERT_DIR}/localhost+2-key.pem"
+    fi
+    mkdir -p "${CERT_DIR}"
+    mkcert -install
+    (cd "${CERT_DIR}" && mkcert localhost 127.0.0.1 "*.local")
+    echo "Certificates generated:"
+    echo "  ${CERT_DIR}/localhost+2.pem"
+    echo "  ${CERT_DIR}/localhost+2-key.pem"
+    echo "Next: docker compose --profile ingress up -d --build"
+
+# Update Dockerfile FROM lines to pin base images by digest.
+update-base-image-digest:
+    bash scripts/update-base-image-digest.sh
+
+# Register the MCP service user (idempotent).
+mcp-register-user:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    : "${MCP_SERVICE_PASSWORD:?Set MCP_SERVICE_PASSWORD}"
+    uv run python scripts/register_mcp_service_user.py --password "${MCP_SERVICE_PASSWORD}"

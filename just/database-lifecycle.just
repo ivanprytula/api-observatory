@@ -4,7 +4,7 @@
 db-reset confirmation_flag="" confirmation="":
     #!/usr/bin/env bash
     set -euo pipefail
-    # For retained data, run and verify `bash infra/scripts/backup.sh` before any reset.
+    # For retained data, run and verify `just db-backup` before any reset.
     if [[ "{{confirmation_flag}}" != "--confirm" || "{{confirmation}}" != "DELETE" ]]; then
         echo "Refusing destructive reset. Re-run with: just db-reset --confirm DELETE" >&2
         exit 2
@@ -16,6 +16,16 @@ db-reset confirmation_flag="" confirmation="":
 
 db-migrate:
     docker compose run --rm --no-deps ingestor alembic upgrade head
+
+db-backup:
+    bash infra/scripts/backup.sh
+
+# Retention management (see docs/02-architecture/engineering-topics.md).
+retention-dry-run:
+    uv run python scripts/run-retention.py --dry-run
+
+retention-apply:
+    uv run python scripts/run-retention.py --apply
 
 db-auto-init:
     #!/usr/bin/env bash
