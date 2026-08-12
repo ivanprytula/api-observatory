@@ -47,7 +47,7 @@ As of April 22, 2026, Dockerfiles lacked:
 **Rationale**: Prevents surprise base image updates, ensures reproducible builds across all developers and CI/CD runners. Allows controlled upgrades.
 
 **Trade-off**: Requires monthly digest review; base-image digests are updated with
-the [`scripts/update-base-image-digest.sh`](../../../scripts/update-base-image-digest.sh) helper.
+`just update-base-image-digest`.
 
 ### 3. Adopt Docker Image Vulnerability Scanning (APPROVED)
 
@@ -97,4 +97,4 @@ Detailed setup instructions, tool installation, usage examples, troubleshooting,
 
 - [ADR 001: Kafka vs RabbitMQ](001-kafka-vs-rabbitmq.md) (event streaming)
 - Docker Security Scanning Setup (Setup Guide)
-- [Base-image digest updater](../../../scripts/update-base-image-digest.sh)
+- [Base-image digest updater](../../Justfile)

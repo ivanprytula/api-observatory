@@ -3,7 +3,7 @@
 ################################################################################
 # Script: backup.sh
 # Description: Create and rotate local PostgreSQL backups for development data.
-# Usage: bash infra/scripts/backup.sh
+# Usage: bash infra/scripts/backup.sh (invoked via `just db-backup`)
 ################################################################################
 
 set -o errexit -o pipefail -o nounset -o errtrace

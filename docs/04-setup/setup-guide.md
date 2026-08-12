@@ -65,13 +65,12 @@ For Compose-specific debugging (container reload, image rebuild, service network
 of generic Compose syntax. Do not run the watcher alongside another local stack.
 
 Use HTTPS when proving the public boundary: run
-[`scripts/setup/02-setup-local-https.sh`](../../scripts/setup/02-setup-local-https.sh) to install
-developer-trusted certificates, then start the `ingress` profile. The Nginx edge redirects port 80
+`just dev-up-ingress-setup` to install developer-trusted certificates, then start the `ingress` profile. The Nginx edge redirects port 80
 to HTTPS, terminates TLS, and proxies the public API under `/api/`.
 
 ```bash
 # Edit .env and set API_OBS_LOCAL_HTTPS=true before continuing.
-bash scripts/setup/02-setup-local-https.sh
+just dev-up-ingress-setup
 docker compose --profile ingress up -d --build
 ```
 
@@ -143,7 +142,7 @@ registered real observations, real API URLs, or any other data you want to keep.
 stop/start containers without resetting volumes. `db-reset` waits for the recreated core services;
 then run `just db-migrate` and `just db-auto-init` when you need demo data.
 Before any destructive database operation, create and verify a manual backup with
-`bash infra/scripts/backup.sh`; do not proceed until the dump is known to be usable.
+`just db-backup`; do not proceed until the dump is known to be usable.
 
 Compose startup waits for declared service healthchecks; migrations and demo seeding remain explicit.
 For inference work use:
@@ -159,7 +158,7 @@ just db-inference-migrate
 | Redis integration | `API_OBS_CACHE_ENABLED=true` | Set the flag first, then `just dev-up-cache` |
 | Broker integration | `API_OBS_BROKER_ENABLED=true` | Set the flag first, then `just dev-up-broker` |
 | OpenTelemetry | `API_OBS_OTEL_ENABLED=true` | Restart `ingestor`, then run `just dev-up-monitoring` |
-| HTTPS ingress | `API_OBS_LOCAL_HTTPS=true` | `bash scripts/setup/02-setup-local-https.sh` then `docker compose --profile ingress up -d --build` |
+| HTTPS ingress | `API_OBS_LOCAL_HTTPS=true` | `just dev-up-ingress-setup` then `docker compose --profile ingress up -d --build` |
 
 After changing a cache, broker, or telemetry flag, restart the ingestor so it receives the new
 configuration. The broker carries general application events and the opt-in notification delivery

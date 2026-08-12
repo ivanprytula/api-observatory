@@ -45,9 +45,8 @@ production capacity claim.
 | Notification provider | timeout/5xx stub | notification result, breaker, incident retained | later bounded attempt without duplicate incident |
 | Inference/LLM | timeout/invalid response | agent state, resilience metrics | deterministic incident guidance remains usable |
 
-The executable resilience exercise is
-[`verify-resilience-fault.sh`](../../scripts/verify-resilience-fault.sh); keep its invocation and
-failure-injection details in the script rather than duplicating them here.
+The executable resilience exercise is `just --justfile just/labs.just lab-resilience-fault`; keep its invocation and
+failure-injection details in the just recipe rather than duplicating them here.
 
 Measure **time to detection**, **time to containment**, **time to recovery**, and whether queued or
 retried work drains safely. Merely observing an exception is not recovery evidence.

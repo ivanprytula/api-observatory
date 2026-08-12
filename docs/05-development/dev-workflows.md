@@ -241,8 +241,10 @@ running every optional stack.
   example sources) and its payloads are copy-pasteable JSON.
 - Authenticated k6 smoke ownership lives in the manual
   [`assurance.yml`](../../.github/workflows/assurance.yml) workflow and its script.
-- Contract versioning is owned by [`libs/contracts`](../../libs/contracts/) and
-  [`scripts/bump_contracts_version.py`](../../scripts/bump_contracts_version.py).
+- Contract versioning is owned by [`libs/contracts`](../../libs/contracts/). The
+  [`scripts/bump_contracts_version.py`](../../scripts/bump_contracts_version.py) check runs as a
+  manual pre-commit hook (`check-contracts-version`) and can be invoked directly for CI or manual
+  verification.
 - Performance and recovery records use the
   [performance/failure worksheet](performance-and-failure-lab.md).
 - Cloud provisioning and rollback belong to the infra
