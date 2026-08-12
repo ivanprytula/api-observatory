@@ -19,6 +19,7 @@ def release_metadata() -> dict[str, object]:
         "source_repository": "ivanprytula/api-observatory",
         "source_commit_sha": "1" * 40,
         "source_tree_sha": "2" * 40,
+        "contracts_version": "1.0.0",
         "images": {
             name: {
                 "repository": f"api-observatory/{name}",
@@ -155,7 +156,7 @@ def test_merged_lock_or_revert_invokes_one_committed_state_deployment() -> None:
     assert "vars.AWS_APP_DEPLOY_ROLE_ARN" in deployment
     assert "environments/aws-dev/images.lock.json" in deployment
     assert "aws ssm send-command" in deployment
-    assert "MVP_PLATFORM_CONTRACT_VERSION" in deployment
+    assert "contracts_version" in deployment
     assert (
         "api-observatory-mvp-render-env" in deployment
         or "api-observatory-mvp-render-env" in deploy_script

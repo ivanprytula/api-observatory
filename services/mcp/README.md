@@ -27,15 +27,10 @@ not import the ingestor's internals, and never bypasses its JWT auth.
    MCP_SERVICE_PASSWORD=<choose-a-strong-password>
    ```
 3. Register the service account (idempotent — safe to re-run) in a subshell. The password stays
-   out of shell history and the parent shell remains unchanged:
-   ```bash
-   (
-     set -a
-     source services/mcp/.env
-     set +a
-     uv run python scripts/register_mcp_service_user.py
-   )
-   ```
+    out of shell history and the parent shell remains unchanged:
+    ```bash
+    just mcp-register-user
+    ```
 
 ## Run it
 

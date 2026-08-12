@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     ingestor_url: str = "http://localhost:8000"
 
     # Credentials for the dedicated `mcp-service` account (see
-    # scripts/register_mcp_service_user.py) — no default password, must be
+    # `just mcp-register-user`) — no default password, must be
     # supplied via the environment or services/mcp/.env so it never lands in source control.
     mcp_service_username: str = "mcp-service"
     mcp_service_password: str

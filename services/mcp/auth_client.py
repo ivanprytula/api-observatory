@@ -3,7 +3,7 @@
 Authenticates as a real registered user via the ingestor's actual
 `POST /api/v1/auth/token` (OAuth2 password flow) — not in-process JWT minting —
 so this server exercises the same auth surface any other API client does. See
-`scripts/register_mcp_service_user.py` for the one-time account setup.
+`just mcp-register-user` for the one-time account setup.
 """
 
 from __future__ import annotations
