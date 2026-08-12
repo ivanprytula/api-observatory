@@ -24,8 +24,6 @@ jobs:
       vars.AWS_APP_DEPLOY_ROLE_ARN != '' && vars.AWS_REGION != '' &&
       vars.AWS_EC2_INSTANCE_ID_DEV != ''
     environment: aws-dev
-    env:
-      MVP_PLATFORM_CONTRACT_VERSION: '1'
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -61,6 +59,11 @@ jobs:
           ref=$(grep '^ref=' "$GITHUB_OUTPUT" | cut -d= -f2)
           echo "ref=${ref}" >> "$GITHUB_OUTPUT"
 
+      - id: contracts-version
+        name: Read contracts version from lock file
+        run: |
+          echo "contracts_version=$(jq -r '.contracts_version' environments/aws-dev/images.lock.json)" >> "$GITHUB_OUTPUT"
+
       - name: Check out the exact image source commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -80,13 +83,14 @@ jobs:
         env:
           INSTANCE_ID: ${{ vars.AWS_EC2_INSTANCE_ID_DEV }}
           REGISTRY: ${{ vars.AWS_ECR_REGISTRY }}
+          CONTRACTS_VERSION: ${{ steps.contracts-version.outputs.contracts_version }}
         run: |
           set -euo pipefail
           uv run python scripts/ci/deploy_mvp.py build-ssm-payload \
             --lock environments/aws-dev/images.lock.json \
             --registry "${REGISTRY}" \
             --instance-id "${INSTANCE_ID}" \
-            --contract-version "${MVP_PLATFORM_CONTRACT_VERSION}" \
+            --contract-version "${CONTRACTS_VERSION}" \
             --compose deployment/aws-mvp/docker-compose.yml \
             --prometheus deployment/aws-mvp/prometheus.yml \
             --rollout deployment/aws-mvp/rollout.sh \
