@@ -61,27 +61,27 @@ Do not reproduce by reading the credential file. Pivot to: (a) the hook's source
 
 For each topic below, the principles are listed inline; long-form guidance lives in the linked project file. Read it before producing significant code in that area.
 
-### Security (OWASP Top 10) → `.github/instructions/security-and-owasp.instructions.md`
+### Security (OWASP Top 10) → `../agent-forge/instructions/security-and-owasp.instructions.md`
 
 Deny by default. Validate user-supplied input. Use parameterized queries. Encrypt PII at rest. Never hardcode secrets. Validate deserialized data. Default to HTTPS. Set security headers. Rate-limit auth endpoints.
 
-### Markdown → `.github/instructions/markdown.instructions.md`
+### Markdown → `../agent-forge/instructions/markdown.instructions.md`
 
 Use H1 once, H2 for major sections, H3 for subsections. Never use emphasis-only headings (MD036).
 
-### Bash → `.github/instructions/bash.instructions.md`
+### Bash → `../agent-forge/instructions/bash.instructions.md`
 
 Use strict mode, quote variables, lint with shellcheck.
 
-### Design principles → `CLAUDE.md` (ACROSS) + `.github/instructions/solid-principles.instructions.md`
+### Design principles → `CLAUDE.md` (ACROSS) + `../agent-forge/instructions/solid-principles.instructions.md`
 
 Use ACROSS as the primary design lens. SOLID as secondary. Prefer composition and pragmatic interfaces over rigid purity.
 
-### Design patterns → `.github/instructions/design-patterns.instructions.md`
+### Design patterns → `../agent-forge/instructions/design-patterns.instructions.md`
 
 Diagnose friction before picking a pattern. Prefer plain functions, dataclasses, or models over patterns when they solve the problem with less code.
 
-### SSRF prevention → `.github/instructions/security-and-owasp.instructions.md`
+### SSRF prevention → `../agent-forge/instructions/security-and-owasp.instructions.md`
 
 Validate scheme, resolve host, check resolved IP against private ranges for all user-supplied URLs.
 
@@ -96,68 +96,67 @@ Prefer stdlib or well-known packages. Flag abstractions with fewer than 3 caller
 ## Progressive-loading routes
 
 For security-sensitive changes:
-  read `.github/instructions/security-and-owasp.instructions.md`
+  read `../agent-forge/instructions/security-and-owasp.instructions.md`
 
 For Bash scripts:
-  read `.github/instructions/bash.instructions.md`
+  read `../agent-forge/instructions/bash.instructions.md`
 
 For Markdown documentation:
-  read `.github/instructions/markdown.instructions.md`
+  read `../agent-forge/instructions/markdown.instructions.md`
 
 For Python code:
-  read `.github/instructions/python.instructions.md`
-  read `.github/instructions/pydantic.instructions.md`
+  read `../agent-forge/instructions/python.instructions.md`
+  read `../agent-forge/instructions/pydantic.instructions.md`
 
 For FastAPI:
-  read `.github/instructions/fastapi.instructions.md`
-  read `.github/instructions/fastapi-testing.instructions.md`
+  read `../agent-forge/instructions/fastapi.instructions.md`
+  read `../agent-forge/instructions/fastapi-testing.instructions.md`
 
 For database/SQL:
-  read `.github/instructions/sql.instructions.md`
+  read `../agent-forge/instructions/sql.instructions.md`
 
 For testing:
-  read `.github/instructions/tests.instructions.md`
+  read `../agent-forge/instructions/tests.instructions.md`
 
 For Docker/containers:
-  read `.github/instructions/containerization-docker-best-practices.instructions.md`
-  read `.github/instructions/docker-ci-guide.md`
+  read `../agent-forge/instructions/containerization-docker-best-practices.instructions.md`
 
 For infrastructure-as-code:
-  read `.github/instructions/terraform.instructions.md`
-  read `.github/instructions/ansible.instructions.md`
+  read `../agent-forge/instructions/terraform.instructions.md`
+  read `../agent-forge/instructions/ansible.instructions.md`
 
 For Kubernetes:
-  read `.github/instructions/kubernetes-deployment-best-practices.instructions.md`
+  read `../agent-forge/instructions/kubernetes-deployment-best-practices.instructions.md`
 
 For design/architecture decisions:
-  read `.github/instructions/design-patterns.instructions.md`
-  read `.github/instructions/solid-principles.instructions.md`
+  read `../agent-forge/instructions/design-patterns.instructions.md`
+  read `../agent-forge/instructions/solid-principles.instructions.md`
 
 For GitHub Actions workflow changes:
-  read `.github/instructions/yaml.instructions.md`
-  read `.github/instructions/github-actions-ci-cd-best-practices.instructions.md`
+  read `../agent-forge/instructions/yaml.instructions.md`
+  read `../agent-forge/instructions/github-actions-ci-cd-best-practices.instructions.md`
 
 For API/docs:
-  read `.github/instructions/api-docs.instructions.md`
+  read `../agent-forge/instructions/api-docs.instructions.md`
 
 For async/concurrency:
-  read `.github/instructions/async-patterns.instructions.md`
+  read `../agent-forge/instructions/async-patterns.instructions.md`
 
 For performance:
-  read `.github/instructions/performance-optimization.instructions.md`
+  read `../agent-forge/instructions/performance-optimization.instructions.md`
 
 For models/CRUD:
-  read `.github/instructions/models.instructions.md`
-  read `.github/instructions/crud.instructions.md`
+  read `../agent-forge/instructions/models.instructions.md`
+  read `../agent-forge/instructions/crud.instructions.md`
 
 For TOML:
-  read `.github/instructions/toml.instructions.md`
+  read `../agent-forge/instructions/toml.instructions.md`
 
 For HTML/CSS:
-  read `.github/instructions/html-css.instructions.md`
+  read `../agent-forge/instructions/html-css.instructions.md`
 
 For LangChain:
-  read `.github/instructions/langchain-python.instructions.md`
+  read `../agent-forge/instructions/langchain-python.instructions.md`
 
 For project architecture, product decisions, or engineering topic lookups:
   read `docs/PROJECT_CONTEXT.md`
@@ -166,3 +165,9 @@ For project architecture, product decisions, or engineering topic lookups:
 ## Instruction sync rule
 
 Whenever you add or update an instruction file listed in **Progressive-loading routes**, check whether the sibling infra repository has the same instruction file. If it does, update both repos to keep them in sync. If the sibling repo does not have it, update only the repo you were asked to modify, or the repo relevant to the specific action/question.
+
+## Central agent standards
+
+Shared agent standards are maintained in `agent-forge`:
+- Git workflow → `../agent-forge/instructions/git-workflow.instructions.md`
+- Repo standards (privacy, read scope, response style) → `../agent-forge/skills/repo-standards/SKILL.md`

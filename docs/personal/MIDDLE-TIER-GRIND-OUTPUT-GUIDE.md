@@ -8,7 +8,7 @@ Track: E — Archive and Historical Snapshots
 
 ## Quick Summary
 
-The instruction (**[.github/instructions/middle-tier-grind-tracking.md](../../.github/instructions/middle-tier-grind-tracking.md)**) defines:
+The instruction (**project-local `middle-tier-grind-tracking.md`**) defines:
 
 - **10 weeks** (70 days) organized into 7 phases (events → scrapers → docker+ci → AI+vectors → testing → database → security → terraform)
 - **7 core interview questions** (one per phase) with follow-ups and design scenarios
@@ -212,7 +212,7 @@ This template answers all 3 yes.
 
 ## Related Files
 
-- **Instruction**: [.github/instructions/middle-tier-grind-tracking.md](../../.github/instructions/middle-tier-grind-tracking.md)
+- **Instruction**: project-local `middle-tier-grind-tracking.md`
 - **Portfolio Template**: portfolio-phase-2-scrapers.md
 - **Phase 2 Output**: `docs/weekly-progress-phase-2.md` ← *Example*
 - **Phase 2 Portfolio**: portfolio-phase-2-scrapers.md

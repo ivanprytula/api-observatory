@@ -125,7 +125,7 @@ configuration and severity thresholds.
 
 This maps OWASP themes (Web Top 10 and API Top 10) to the control that owns them in this repo.
 The coding rules behind these controls live in
-[security-and-owasp.instructions.md](../../.github/instructions/security-and-owasp.instructions.md);
+[security-and-owasp.instructions.md](../../../agent-forge/instructions/security-and-owasp.instructions.md);
 this table records *which enforcement* covers each theme so gaps are visible.
 
 | OWASP theme | Owned by | Where |

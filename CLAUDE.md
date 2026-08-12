@@ -33,8 +33,8 @@ uv run ruff format <files> && uv run ruff check --fix <files>
 
 Follow ACROSS (see `~/.claude/CLAUDE.md` for the full rule set: Abstractions & Decomposition, Composition by
 Default, escape the Rabbit hole, Optimize for change, Simple as possible, Screaming contract). Use SOLID as a
-secondary reference — see `.github/instructions/solid-principles.instructions.md`. Architecture decision
-checklists: `.github/instructions/design-patterns.instructions.md`.
+secondary reference — see `../agent-forge/instructions/solid-principles.instructions.md`. Architecture decision
+checklists: `../agent-forge/instructions/design-patterns.instructions.md`.
 
 ---
 

@@ -42,7 +42,7 @@ memory:
   decisions: docs/adr/
 
 hooks:
-  project_hook_root: .github/hooks/
+  project_hook_root: ../agent-forge/hooks/
   available:
     - governance-audit
     - tool-guardian

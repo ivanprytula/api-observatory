@@ -38,7 +38,7 @@ Primary stack:
 ## Local AI Rules Worth Remembering
 
 - Read `.github/copilot-instructions.md` first.
-- Prefer local `.github/instructions/` files over global defaults when they exist.
+- Prefer centralized `../agent-forge/instructions/` files for shared standards. Project-local overrides live in `CLAUDE.md` and `.github/copilot-instructions.md`.
 - `libs/*` must not import from `services/*`.
 - Alembic is the schema source of truth.
 - Use `uv run` for Python tooling.
