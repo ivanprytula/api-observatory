@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
 
-# Script: chaos.sh
-# Description: Inject a disposable local PostgreSQL blackout and restore the database on exit.
-# Usage: infra/scripts/chaos.sh db
-
 set -o errexit -o pipefail -o nounset -o errtrace
 
 # Local-only PostgreSQL blackout exercise for the current Compose stack.

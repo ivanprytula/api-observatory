@@ -1,11 +1,5 @@
 #!/usr/bin/env bash
 
-################################################################################
-# Script: run-lane.sh
-# Description: Run a standard test lane without embedding long commands in Just.
-# Usage: scripts/test/run-lane.sh {unit|integration|e2e|live}
-################################################################################
-
 set -o errexit -o pipefail -o nounset -o errtrace
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

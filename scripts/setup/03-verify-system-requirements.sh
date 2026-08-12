@@ -1,11 +1,5 @@
 #!/usr/bin/env bash
 
-################################################################################
-# Script: 03-verify-system-requirements.sh
-# Description: Verify only the local prerequisites used by the core workflow.
-# Usage: scripts/setup/03-verify-system-requirements.sh
-################################################################################
-
 set -o errexit -o pipefail -o nounset -o errtrace
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

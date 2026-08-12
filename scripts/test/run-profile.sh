@@ -1,11 +1,5 @@
 #!/usr/bin/env bash
 
-################################################################################
-# Script: run-profile.sh
-# Description: Run one explicit ingestor test capability profile.
-# Usage: scripts/test/run-profile.sh {core|rls|broker|ai}
-################################################################################
-
 set -o errexit -o pipefail -o nounset -o errtrace
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

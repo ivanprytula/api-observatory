@@ -1,12 +1,5 @@
 #!/usr/bin/env bash
 
-################################################################################
-# Script: verify-resilience-fault.sh
-# Description: Prove the local inference bulkhead and circuit-breaker behavior.
-# Usage: scripts/verify-resilience-fault.sh --confirm-fault-injection
-# Author: api-observatory
-################################################################################
-
 set -o errexit -o pipefail -o nounset -o errtrace
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

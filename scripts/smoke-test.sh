@@ -1,10 +1,5 @@
 #!/usr/bin/env bash
 
-# Script: smoke-test.sh
-# Description: Probe an already-ready public ingestor boundary and, when authorized, its write path.
-# Usage: scripts/smoke-test.sh [BASE_URL]
-# Environment: SMOKE_JWT optionally enables authenticated API checks.
-
 set -o errexit -o pipefail -o nounset -o errtrace
 
 readonly DEFAULT_BASE_URL="http://127.0.0.1:8000"

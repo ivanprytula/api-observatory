@@ -1,11 +1,5 @@
 #!/usr/bin/env bash
 
-################################################################################
-# Script: run-full-optional.sh
-# Description: Run the deterministic composed optional operational flow.
-# Usage: scripts/test/run-full-optional.sh
-################################################################################
-
 set -o errexit -o pipefail -o nounset -o errtrace
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

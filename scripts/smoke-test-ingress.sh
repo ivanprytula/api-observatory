@@ -1,10 +1,5 @@
 #!/usr/bin/env bash
 
-# Script: smoke-test-ingress.sh
-# Description: Probe HTTPS ingress routing, public documentation, and dashboard reachability.
-# Usage: scripts/smoke-test-ingress.sh [GATEWAY_URL]
-# Environment: TLS_VERIFY=false accepts a local development certificate.
-
 set -o errexit -o pipefail -o nounset -o errtrace
 
 readonly DEFAULT_GATEWAY_URL='https://127.0.0.1'
