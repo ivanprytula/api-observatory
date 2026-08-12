@@ -9,7 +9,7 @@ updates:
   - package-ecosystem: uv
     directory: "/"
     schedule:
-      interval: weekly
+      interval: biweekly
       day: monday
       time: "03:00"
       timezone: "UTC"
@@ -46,7 +46,7 @@ updates:
   - package-ecosystem: uv
     directory: "/services/dashboard"
     schedule:
-      interval: weekly
+      interval: biweekly
       day: monday
       time: "03:00"
       timezone: "UTC"
@@ -83,7 +83,7 @@ updates:
   - package-ecosystem: docker
     directory: "/"
     schedule:
-      interval: weekly
+      interval: biweekly
       day: tuesday
       time: "03:00"  # 3 AM UTC
       timezone: "UTC"
@@ -111,7 +111,7 @@ updates:
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
-      interval: weekly
+      interval: biweekly
       day: wednesday
       time: "03:00"  # 3 AM UTC
       timezone: "UTC"
