@@ -36,6 +36,9 @@ FROM python:3.14-slim@sha256:a7fb1e634c4a578f9e0bd6327f11a3cde11b7a9395f48e24360
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /app
 
+ARG CONTRACTS_VERSION=unknown
+LABEL api-observatory.contracts.version="${CONTRACTS_VERSION}"
+
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get upgrade -y --no-install-recommends && apt-get install -y --no-install-recommends \

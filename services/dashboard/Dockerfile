@@ -20,6 +20,9 @@ FROM python:3.14-slim@sha256:a7fb1e634c4a578f9e0bd6327f11a3cde11b7a9395f48e24360
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /app
 
+ARG CONTRACTS_VERSION=unknown
+LABEL api-observatory.contracts.version="${CONTRACTS_VERSION}"
+
 # Create non-root user
 RUN groupadd --gid 10001 appgroup && \
     useradd --uid 10001 --gid appgroup --shell /bin/false --no-create-home appuser
