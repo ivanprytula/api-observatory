@@ -17,6 +17,7 @@ COMPOSE = ROOT / "deployment/aws-mvp/docker-compose.yml"
 WORKFLOW = ROOT / ".github/workflows/deploy-aws-mvp.yml"
 ROLLOUT = ROOT / "deployment/aws-mvp/rollout.sh"
 DEPLOY_SCRIPT = ROOT / "scripts/ci/deploy_mvp.py"
+CONTRACTS_VERSION_FILE = ROOT / "libs" / "contracts" / "VERSION"
 SHA = re.compile(r"^[0-9a-f]{40}$")
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 PLACEHOLDER_SHA = "0" * 40
@@ -83,6 +84,21 @@ def validate(app_root: Path, *, allow_placeholder_lock: bool = False) -> list[st
         errors.append("image lock schema version must be 1")
     source_commit_sha = lock.get("source_commit_sha", "")
     source_tree_sha = lock.get("source_tree_sha", "")
+    lock_contracts_version = lock.get("contracts_version", "")
+    if (
+        not isinstance(lock_contracts_version, str)
+        or not lock_contracts_version.strip()
+    ):
+        errors.append("image lock must contain a non-empty contracts_version")
+    elif CONTRACTS_VERSION_FILE.exists():
+        app_contracts_version = CONTRACTS_VERSION_FILE.read_text(
+            encoding="utf-8"
+        ).strip()
+        if lock_contracts_version != app_contracts_version:
+            errors.append(
+                f"image lock contracts_version ({lock_contracts_version}) does not match "
+                f"app source ({app_contracts_version})"
+            )
     for field, value in (
         ("source_commit_sha", source_commit_sha),
         ("source_tree_sha", source_tree_sha),
@@ -140,7 +156,8 @@ def validate(app_root: Path, *, allow_placeholder_lock: bool = False) -> list[st
         "source_commit_sha",
         "enabled_profiles",
         "ENABLED_PROFILES",
-        "MVP_PLATFORM_CONTRACT_VERSION",
+        "contracts_version",
+        "CONTRACTS_VERSION",
         "api-observatory-mvp-render-env",
         ".platform-contract-version",
         "concurrency:",

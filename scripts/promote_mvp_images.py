@@ -34,6 +34,9 @@ def validate_metadata(metadata: dict[str, Any]) -> list[str]:
         value = metadata.get(field, "")
         if not SHA.fullmatch(value) or value == PLACEHOLDER_SHA:
             errors.append(f"{field} must be a non-placeholder full SHA")
+    contracts_version = metadata.get("contracts_version", "")
+    if not isinstance(contracts_version, str) or not contracts_version.strip():
+        errors.append("release metadata must contain a non-empty contracts_version")
     images = metadata.get("images", {})
     if not isinstance(images, dict) or set(images) != EXPECTED_SERVICES:
         errors.append("release metadata must contain exactly three deployable images")
@@ -66,6 +69,7 @@ def build_lock(
         "schema_version": 1,
         "source_commit_sha": metadata["source_commit_sha"],
         "source_tree_sha": metadata["source_tree_sha"],
+        "contracts_version": metadata["contracts_version"],
         "enabled_profiles": profiles,
         "images": metadata["images"],
     }

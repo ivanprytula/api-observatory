@@ -17,10 +17,19 @@ def _run(cmd: list[str]) -> str:
     return result.stdout.strip()
 
 
+ROOT = Path(__file__).resolve().parents[2]
+CONTRACTS_VERSION_FILE = ROOT / "libs" / "contracts" / "VERSION"
+
+
+def _read_contracts_version() -> str:
+    return CONTRACTS_VERSION_FILE.read_text(encoding="utf-8").strip()
+
+
 def _build_push_and_digest(
     service: dict[str, object],
     registry: str,
     tree_sha: str,
+    contracts_version: str,
 ) -> tuple[str, str]:
     name = service["name"]
     dockerfile = service["dockerfile"]
@@ -28,7 +37,18 @@ def _build_push_and_digest(
     repository = f"api-observatory/{name}"
     image = f"{registry}/{repository}:tree-{tree_sha}"
 
-    _run(["docker", "build", "--file", str(dockerfile), "--tag", image, str(context)])
+    build_args = [
+        "docker",
+        "build",
+        "--file",
+        str(dockerfile),
+        "--tag",
+        image,
+        "--build-arg",
+        f"CONTRACTS_VERSION={contracts_version}",
+        str(context),
+    ]
+    _run(build_args)
     _run(["docker", "push", image])
 
     digest = _run(
@@ -67,19 +87,21 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     services_doc = json.loads(args.services.read_text(encoding="utf-8"))
+    contracts_version = _read_contracts_version()
 
     metadata: dict[str, object] = {
         "schema_version": 1,
         "source_repository": os.environ.get("GITHUB_REPOSITORY", ""),
         "source_commit_sha": args.commit_sha,
         "source_tree_sha": args.tree_sha,
+        "contracts_version": contracts_version,
         "images": {},
     }
 
     for service in services_doc["services"]:
         name = service["name"]
         repository, digest = _build_push_and_digest(
-            service, args.registry, args.tree_sha
+            service, args.registry, args.tree_sha, contracts_version
         )
         metadata["images"][name] = {"repository": repository, "digest": digest}
 
