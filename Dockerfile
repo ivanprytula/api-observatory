@@ -1,9 +1,13 @@
 # syntax=docker/dockerfile:1.4
-FROM python:3.14-slim@sha256:a7fb1e634c4a578f9e0bd6327f11a3cde11b7a9395f48e24360c0988bcc5c2bc AS builder
+FROM python:3.14-slim@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4 AS base
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+COPY --from=ghcr.io/astral-sh/uv:0.12.3 /uv /usr/local/bin/uv
+WORKDIR /app
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PYTHONPATH=/app
 
-# uv — fast dependency installer
-COPY --from=ghcr.io/astral-sh/uv:0.11.21 /uv /usr/local/bin/uv
+FROM base AS builder
 
 # Install system dependencies for asyncpg/postgresql
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -12,11 +16,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     build-essential=12.12 \
     libpq-dev=17.10-0+deb13u1 \
     && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-ENV UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy
 
 # Install deps first (better layer caching)
 # --extra ai: the LangGraph incident-triage agent (Phase 3) and /analyze's RAG
@@ -29,26 +28,22 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --no-dev --frozen --no-install-project --extra ai --extra tracing --extra messaging
 
 # Stage 2: Final image — slim, no build tools, non-root user
-FROM python:3.14-slim@sha256:a7fb1e634c4a578f9e0bd6327f11a3cde11b7a9395f48e24360c0988bcc5c2bc AS runtime
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+FROM python:3.14-slim@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4 AS runtime
 WORKDIR /app
 
 ARG CONTRACTS_VERSION=unknown
-LABEL api-observatory.contracts.version="${CONTRACTS_VERSION}"
-
-# Install system deps for asyncpg
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get upgrade -y --no-install-recommends && apt-get install -y --no-install-recommends \
-    libpq5=17.10-0+deb13u1 \
-    && rm -rf /var/lib/apt/lists/*
+LABEL org.opencontainers_image.source="https://github.com/ivan-pi/rpi-api-observatory" \
+      org.opencontainers_image.licenses="MIT" \
+      org.opencontainers_image.revision="${CONTRACTS_VERSION}" \
+      api-observatory.contracts.version="${CONTRACTS_VERSION}"
 
 # Create non-root user for security
 RUN groupadd --gid 10001 appgroup && \
     useradd --uid 10001 --gid appgroup --shell /bin/false --no-create-home appuser
 
-# Copy Python environment from builder (avoid extra layer from recursive chown)
+# Copy Python environment and runtime libs from builder
 COPY --from=builder --chown=appuser:appgroup /app/.venv /app/.venv
+COPY --from=builder --chown=appuser:appgroup /usr/lib/x86_64-linux-gnu/libpq* /usr/lib/x86_64-linux-gnu/
 # HOME set to /tmp for Streamlit config/cache (read_only rootfs compatible)
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app" \

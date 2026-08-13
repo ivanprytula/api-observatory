@@ -1,6 +1,7 @@
 """Executive summary read model."""
 
 import asyncio
+from typing import cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -159,7 +160,9 @@ async def get_executive_summary(
         r for r in cost.rows if r.cost_per_insight_usd is not None
     ]
     if cost_rows_with_insight:
-        max_cpi = max(r.cost_per_insight_usd for r in cost_rows_with_insight)
+        max_cpi = max(
+            cast(float, r.cost_per_insight_usd) for r in cost_rows_with_insight
+        )
         for row in cost_rows_with_insight:
             if (
                 row.cost_per_insight_usd is not None

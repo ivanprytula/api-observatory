@@ -231,6 +231,7 @@ ai = [
     { name = "langgraph" },
     { name = "langgraph-checkpoint-postgres" },
     { name = "openai" },
+    { name = "pgvector" },
 ]
 etl = [
     { name = "pandas" },
@@ -240,6 +241,7 @@ full = [
     { name = "aiohttp" },
     { name = "aiokafka" },
     { name = "anthropic" },
+    { name = "fastmcp" },
     { name = "langchain-anthropic" },
     { name = "langgraph" },
     { name = "langgraph-checkpoint-postgres" },
@@ -249,11 +251,15 @@ full = [
     { name = "opentelemetry-instrumentation-sqlalchemy" },
     { name = "opentelemetry-sdk" },
     { name = "pandas" },
+    { name = "pgvector" },
     { name = "polars", extra = ["rtcompat"] },
     { name = "sentry-sdk", extra = ["fastapi"] },
 ]
 http = [
     { name = "aiohttp" },
+]
+mcp = [
+    { name = "fastmcp" },
 ]
 messaging = [
     { name = "aiokafka" },
@@ -301,6 +307,8 @@ requires-dist = [
     { name = "argon2-cffi", specifier = ">=23.1.0" },
     { name = "asyncpg", specifier = ">=0.30.0" },
     { name = "fastapi", specifier = ">=0.141.1" },
+    { name = "fastmcp", marker = "extra == 'full'", specifier = ">=0.4.0" },
+    { name = "fastmcp", marker = "extra == 'mcp'", specifier = ">=0.4.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "langchain-anthropic", marker = "extra == 'ai'", specifier = ">=1.5.4" },
     { name = "langchain-anthropic", marker = "extra == 'full'", specifier = ">=1.5.4" },
@@ -320,6 +328,8 @@ requires-dist = [
     { name = "opentelemetry-sdk", marker = "extra == 'tracing'", specifier = ">=1.44.0" },
     { name = "pandas", marker = "extra == 'etl'", specifier = ">=3.0.5" },
     { name = "pandas", marker = "extra == 'full'", specifier = ">=3.0.5" },
+    { name = "pgvector", marker = "extra == 'ai'", specifier = ">=0.3.0" },
+    { name = "pgvector", marker = "extra == 'full'", specifier = ">=0.3.0" },
     { name = "polars", extras = ["rtcompat"], marker = "extra == 'etl'", specifier = ">=1.30.0" },
     { name = "polars", extras = ["rtcompat"], marker = "extra == 'full'", specifier = ">=1.30.0" },
     { name = "prometheus-fastapi-instrumentator", specifier = ">=8.1.0" },
@@ -338,7 +348,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.51.0" },
     { name = "websockets", specifier = ">=14.0" },
 ]
-provides-extras = ["tracing", "messaging", "ai", "etl", "monitoring", "http", "full"]
+provides-extras = ["tracing", "messaging", "ai", "etl", "monitoring", "http", "mcp", "full"]
 
 [package.metadata.requires-dev]
 dev = [

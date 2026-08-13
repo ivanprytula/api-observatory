@@ -109,6 +109,17 @@ jobs:
         with:
           install-args: --frozen --all-packages --all-extras
 
+      - name: Lint Dockerfiles
+        run: |
+          docker run --rm \
+            -v "$PWD:/repo" \
+            hadolint/hadolint:v2.15.1 \
+            hadolint --failure-threshold warning \
+            /repo/Dockerfile \
+            /repo/services/inference/Dockerfile \
+            /repo/services/dashboard/Dockerfile \
+            /repo/infra/database/Dockerfile
+
   docs-quality:
     name: "Docs quality"
     needs: [changes]

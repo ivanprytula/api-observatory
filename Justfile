@@ -3,22 +3,6 @@ import? 'just/testing.just'
 import? 'just/database-lifecycle.just'
 
 
-ci-prime:
-    act -j unit --pull -e event.json -W .github/workflows
-
-ci-unit:
-    act -j unit --pull=false -e event.json -W .github/workflows
-
-ci: ci-unit
-
-pre-commit:
-    just ci-unit
-
-pre-push:
-    just test-unit
-    just ci-unit
-
-
 help-core:
     @echo "Core: just doctor → cp .env.example .env → just generate-secrets → just dev-up → just db-migrate"
     @echo "Proof: just test-unit (isolated) | just test-smoke (running core stack) | just test-smoke-auth (authenticated API path)"
@@ -75,7 +59,7 @@ dev:
     uv run uvicorn services.ingestor.main:app --port 8000 --reload --reload-dir services/ingestor
 
 dev-up:
-    docker compose up -d --build --wait ingestor-db ingestor dashboard
+    docker compose up -d --build --pull --wait ingestor-db ingestor dashboard
     echo "stack ready — run 'just db-migrate' before using http://127.0.0.1:8000 or http://127.0.0.1:8501"
 
 dev-up-cache:
@@ -99,7 +83,7 @@ dev-up-broker:
     docker compose --profile broker up -d broker
 
 dev-up-inference:
-    docker compose --profile inference up -d --build --wait ingestor-db ingestor dashboard inference-db inference
+    docker compose --profile inference up -d --build --pull --wait ingestor-db ingestor dashboard inference-db inference
     echo "inference stack ready — run 'just db-migrate' and 'just db-inference-migrate' before testing"
 
 dev-up-extended:
@@ -114,7 +98,7 @@ dev-up-extended:
         echo "Set API_OBS_BROKER_ENABLED=true in .env before starting the extended stack." >&2
         exit 1
     fi
-    docker compose --profile cache --profile broker --profile inference up -d --build --wait ingestor-db cache broker ingestor dashboard inference-db inference
+    docker compose --profile cache --profile broker --profile inference up -d --build --pull --wait ingestor-db cache broker ingestor dashboard inference-db inference
     echo "extended stack ready — run 'just db-migrate' and 'just db-inference-migrate' before testing"
 
 dev-up-monitoring:

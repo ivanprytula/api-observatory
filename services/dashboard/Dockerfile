@@ -1,27 +1,27 @@
 # syntax=docker/dockerfile:1.4
-FROM python:3.14-slim@sha256:a7fb1e634c4a578f9e0bd6327f11a3cde11b7a9395f48e24360c0988bcc5c2bc AS builder
+FROM python:3.14-slim@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4 AS base
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-
-# uv — fast dependency installer
-COPY --from=ghcr.io/astral-sh/uv:0.11.21 /uv /usr/local/bin/uv
-
+COPY --from=ghcr.io/astral-sh/uv:0.12.3 /uv /usr/local/bin/uv
 WORKDIR /app
-
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     PYTHONPATH=/app
+
+FROM base AS builder
 
 # Install dashboard-specific deps (streamlit + httpx + pydantic only)
 COPY services/dashboard/pyproject.toml .
 RUN uv sync --no-dev --no-install-project
 
 # Stage 2: slim production image
-FROM python:3.14-slim@sha256:a7fb1e634c4a578f9e0bd6327f11a3cde11b7a9395f48e24360c0988bcc5c2bc AS runtime
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+FROM python:3.14-slim@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4 AS runtime
 WORKDIR /app
 
 ARG CONTRACTS_VERSION=unknown
-LABEL api-observatory.contracts.version="${CONTRACTS_VERSION}"
+LABEL org.opencontainers_image.source="https://github.com/ivan-pi/rpi-api-observatory" \
+      org.opencontainers_image.licenses="MIT" \
+      org.opencontainers_image.revision="${CONTRACTS_VERSION}" \
+      api-observatory.contracts.version="${CONTRACTS_VERSION}"
 
 # Create non-root user
 RUN groupadd --gid 10001 appgroup && \

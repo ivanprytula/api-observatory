@@ -28,8 +28,15 @@ dependencies = [
 description = "API observability platform — multi-service system for monitoring API reliability, drift detection, semantic search, and scorecard reporting"
 readme = "README.md"
 license = "Apache-2.0"
-license-files = ["LICEN[CS]E.*"]
-keywords = ["api", "observatory", "async", "ivan-prytula"]
+license-files = [
+  "LICEN[CS]E.*",
+]
+keywords = [
+  "api",
+  "observatory",
+  "async",
+  "ivan-prytula",
+]
 
 
 [project.optional-dependencies]
@@ -39,20 +46,30 @@ tracing = [
   "opentelemetry-instrumentation-sqlalchemy>=0.64b0",
   "opentelemetry-exporter-otlp>=1.43.0",
 ]
-messaging = ["aiokafka>=0.11"]
+messaging = [
+  "aiokafka>=0.11",
+]
 ai = [
   "openai>=2.53.0",
   "anthropic>=0.121.0",
   "langgraph>=1.2.10",
   "langgraph-checkpoint-postgres>=3.1.2",
   "langchain-anthropic>=1.5.4",
+  "pgvector>=0.3.0",
 ]
 etl = [
   "pandas>=3.0.5",
   "polars[rtcompat]>=1.30.0",
 ]
-monitoring = ["sentry-sdk[fastapi]>=2.19.2"]
-http = ["aiohttp>=3.14.3"]
+monitoring = [
+  "sentry-sdk[fastapi]>=2.19.2",
+]
+http = [
+  "aiohttp>=3.14.3",
+]
+mcp = [
+  "fastmcp>=0.4.0",
+]
 full = [
   "opentelemetry-sdk>=1.44.0",
   "opentelemetry-instrumentation-fastapi>=0.64b0",
@@ -68,6 +85,8 @@ full = [
   "polars[rtcompat]>=1.30.0",
   "sentry-sdk[fastapi]>=2.19.2",
   "aiohttp>=3.14.3",
+  "pgvector>=0.3.0",
+  "fastmcp>=0.4.0",
 ]
 
 [project.urls]
@@ -77,11 +96,20 @@ Issues = "https://github.com/ivanprytula/api-observatory/issues"
 LinkedIn = "https://linkedin.com/in/ivanprytula"
 
 [tool.uv]
-environments = ["sys_platform == 'linux'"]
-constraint-dependencies = ["msgpack>=1.2.1"]
+environments = [
+  "sys_platform == 'linux'",
+]
+constraint-dependencies = [
+  "msgpack>=1.2.1",
+]
 
 [tool.uv.workspace]
-members = ["services/ingestor", "services/dashboard", "services/inference", "services/mcp"]
+members = [
+  "services/ingestor",
+  "services/dashboard",
+  "services/inference",
+  "services/mcp",
+]
 
 [dependency-groups]
 dev = [
@@ -113,7 +141,10 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "services/ingestor/tests"]
+testpaths = [
+  "tests",
+  "services/ingestor/tests",
+]
 asyncio_mode = "auto"
 # Limit coverage collection to the package under test to avoid "module X was never imported" warnings
 addopts = "--cov=services/ingestor --cov-report=term-missing --cov-report=html -q -m 'not e2e and not demo'"
@@ -140,7 +171,9 @@ markers = [
 
 
 [tool.coverage.run]
-source = ["services.ingestor"]
+source = [
+  "services.ingestor",
+]
 omit = [
   "services/ingestor/__main__.py",
   "*/services/ingestor/tests/*",
@@ -171,7 +204,9 @@ line-length = 88
 # Keep formatter output compatible with the CI boundary parser. Ruff's py314
 # formatter emits the unparenthesized multi-exception syntax from PEP 758.
 target-version = "py313"
-extend-exclude = ["alembic/versions"]
+extend-exclude = [
+  "alembic/versions",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
@@ -188,14 +223,25 @@ max-doc-length = 100
 max-line-length = 100
 
 [[tool.ty.overrides]]
-include = ["tests", "services/*/tests", "labs"]
+include = [
+  "tests",
+  "services/*/tests",
+  "labs",
+  "services/inference/**",
+  "services/mcp/**",
+  "services/dashboard/**",
+]
 
 [tool.ty.overrides.rules]
 # Tests and learning labs intentionally use dynamic fixtures, optional extras, and mocks.
+# Inference and MCP services depend on optional packages (pgvector, fastmcp) that may
+# not be installed in every environment.
+# Dashboard depends on streamlit, whose dynamic API is not fully typed.
 # Keep application type checks actionable instead of maintaining local stub trees.
 invalid-argument-type = "ignore"
 invalid-assignment = "ignore"
 unresolved-attribute = "ignore"
+unresolved-import = "ignore"
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv", "venv"]

@@ -40,6 +40,7 @@ def _build_push_and_digest(
     build_args = [
         "docker",
         "build",
+        "--pull",
         "--file",
         str(dockerfile),
         "--tag",

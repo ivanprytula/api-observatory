@@ -27,7 +27,16 @@ show_logs() { compose logs --no-color || true; }
 main() {
   docker info >/dev/null 2>&1 || error "Docker daemon is not running."
   info "Building disposable MVP workload images."
-  compose build
+  compose build --pull
+
+  info "Scanning images for high/critical CVEs."
+  mkdir -p "${PROJECT_ROOT}/.local-dev/tmp/trivy-cache"
+  docker run --rm \
+    -v /var/run/docker.sock:/var/run/docker.sock:ro \
+    -v "${PROJECT_ROOT}/.local-dev/tmp/trivy-cache:/root/.cache/trivy" \
+    aquasec/trivy:0.56.2 \
+    image --severity HIGH,CRITICAL --exit-code 1 \
+    "${INGESTOR_IMAGE}" "${INFERENCE_IMAGE}" "${DASHBOARD_IMAGE}"
 
   compose up --wait --wait-timeout 180
   compose exec --no-TTY dashboard python -c \
