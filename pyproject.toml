@@ -167,6 +167,7 @@ markers = [
   "browser: Browser-based tests using Playwright (may require system dependencies)",
   "live: Manual checks that call a public third-party service; never run in CI",
   "mongo: MongoDB-dependent tests (skipped if MongoDB unavailable)",
+  "ws_lab: WebSocket pub/sub consumer (Lab)",
 ]
 
 

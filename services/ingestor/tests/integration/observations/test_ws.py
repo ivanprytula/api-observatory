@@ -27,6 +27,7 @@ def _reset_manager():
 
 
 @pytest.mark.integration
+@pytest.mark.ws_lab
 async def test_ws_missing_token_rejected() -> None:
     """Client without ?token= is closed with code 4001 when auth is enabled."""
     ws_mock = AsyncMock(spec_set=["close", "accept", "send_json"])
@@ -45,6 +46,7 @@ async def test_ws_missing_token_rejected() -> None:
 
 
 @pytest.mark.integration
+@pytest.mark.ws_lab
 async def test_ws_invalid_token_rejected() -> None:
     """Client with a bad token is closed with code 4003."""
     ws_mock = AsyncMock(spec_set=["close", "accept", "send_json"])
@@ -63,6 +65,7 @@ async def test_ws_invalid_token_rejected() -> None:
 
 
 @pytest.mark.integration
+@pytest.mark.ws_lab
 async def test_ws_valid_token_accepted() -> None:
     """Client with a valid JWT is accepted when auth is enabled."""
     ws_mock = AsyncMock(spec_set=["close", "accept", "send_json"])
@@ -93,6 +96,7 @@ async def test_ws_valid_token_accepted() -> None:
 
 
 @pytest.mark.integration
+@pytest.mark.ws_lab
 async def test_ws_expired_token_rejected() -> None:
     """Client with an expired token is closed with code 4003."""
     ws_mock = AsyncMock(spec_set=["close", "accept", "send_json"])
@@ -118,6 +122,7 @@ async def test_ws_expired_token_rejected() -> None:
 
 
 @pytest.mark.integration
+@pytest.mark.ws_lab
 async def test_ws_auth_disabled_accepts_any_token() -> None:
     """When jwt_secret is empty, all clients are accepted regardless of token."""
     ws_mock = AsyncMock(spec_set=["close", "accept", "send_json"])
@@ -139,6 +144,7 @@ async def test_ws_auth_disabled_accepts_any_token() -> None:
 
 
 @pytest.mark.integration
+@pytest.mark.ws_lab
 async def test_ws_auth_disabled_ignores_invalid_token() -> None:
     """Even with a garbage token, auth-disabled mode accepts the connection."""
     ws_mock = AsyncMock(spec_set=["close", "accept", "send_json"])
@@ -165,6 +171,7 @@ async def test_ws_auth_disabled_ignores_invalid_token() -> None:
 
 
 @pytest.mark.integration
+@pytest.mark.ws_lab
 async def test_ws_cache_disabled_sends_info_and_idles() -> None:
     """When cache is disabled, handler sends info message then idles."""
     ws_mock = AsyncMock(spec_set=["close", "accept", "send_json"])
@@ -194,6 +201,7 @@ async def test_ws_cache_disabled_sends_info_and_idles() -> None:
 
 
 @pytest.mark.integration
+@pytest.mark.ws_lab
 async def test_ws_manager_tracks_connection_lifecycle() -> None:
     """_manager.connect / disconnect are called on accept / cleanup."""
     ws_mock = AsyncMock(spec_set=["close", "accept", "send_json"])
@@ -221,6 +229,7 @@ async def test_ws_manager_tracks_connection_lifecycle() -> None:
 
 
 @pytest.mark.integration
+@pytest.mark.ws_lab
 async def test_ws_disconnect_during_idle_handled_gracefully() -> None:
     """WebSocketDisconnect during _idle_until_disconnect does not propagate."""
     ws_mock = AsyncMock(spec_set=["close", "accept", "send_json"])
@@ -261,6 +270,7 @@ async def _fake_events(
 
 
 @pytest.mark.integration
+@pytest.mark.ws_lab
 async def test_ws_forwards_drift_event_to_client() -> None:
     """A drift.detected event from pub/sub is forwarded via send_json."""
     drift_event = {
@@ -286,6 +296,7 @@ async def test_ws_forwards_drift_event_to_client() -> None:
 
 
 @pytest.mark.integration
+@pytest.mark.ws_lab
 async def test_ws_forwards_multiple_events_in_order() -> None:
     """Multiple events are forwarded in the order they arrive."""
     events = [
@@ -310,6 +321,7 @@ async def test_ws_forwards_multiple_events_in_order() -> None:
 
 
 @pytest.mark.integration
+@pytest.mark.ws_lab
 async def test_ws_stream_handles_client_disconnect() -> None:
     """Client disconnecting mid-stream stops the reader gracefully."""
     from fastapi import WebSocketDisconnect
@@ -344,6 +356,7 @@ async def test_ws_stream_handles_client_disconnect() -> None:
 
 
 @pytest.mark.integration
+@pytest.mark.ws_lab
 async def test_ws_full_flow_with_cache_enabled() -> None:
     """End-to-end: auth disabled + cache enabled → events forwarded to client."""
     event = {

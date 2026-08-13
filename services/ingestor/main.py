@@ -599,7 +599,8 @@ for _name in _ROUTER_MODULES:
         )
 
 
-app.include_router(ws_router.router)
+if settings.cache_enabled:
+    app.include_router(ws_router.router)
 
 
 # ---------------------------------------------------------------------------

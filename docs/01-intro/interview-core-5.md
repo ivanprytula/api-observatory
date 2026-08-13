@@ -42,8 +42,9 @@ writes to PostgreSQL, and publishes an event for downstream consumers.
 
 1. `POST /api/v1/observations` — JWT-authenticated, rate-limited, validated by Pydantic.
 2. Repository layer inserts with `ON CONFLICT DO NOTHING` dedup.
-3. `publish_observation_created` emits to Redis pub/sub (for WebSocket fan-out)
-   and optionally to Kafka (when broker is enabled).
+3. `publish_observation_created` emits to Redis pub/sub (an optional,
+   fail-open side effect for WebSocket fan-out) and optionally to Kafka
+   (when broker is enabled).
 4. Response returns the created observation.
 
 **Evidence**:
@@ -55,9 +56,10 @@ writes to PostgreSQL, and publishes an event for downstream consumers.
 - `services/ingestor/routers/ws.py` — WebSocket fan-out
 
 **Interview line**: "PostgreSQL is the source of truth. The write path is
-synchronous and fails fast. Redis pub/sub is the primary fan-out path for
-real-time WebSocket updates. Kafka is a tertiary, feature-gated path for
-transactional outbox — it's a learning exercise, not the default."
+synchronous and fails fast. Redis pub/sub is an optional fail-open side effect
+for real-time WebSocket updates, not a primary path. Kafka is a tertiary,
+feature-gated path for transactional outbox — it's a learning exercise, not
+the default."
 
 ---
 

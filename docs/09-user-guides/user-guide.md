@@ -75,14 +75,14 @@ When APIs change their response structure, the system detects and classifies the
 - **Medium/Low**: Minor changes or additions
 - **Compatibility Score**: Quantitative measure of drift severity (0-100)
 
-Drift events stream to your dashboard in real-time via WebSocket.
+Drift events are visible via REST regardless of WebSocket.
 
 Full API details live in the [OpenAPI UI](http://127.0.0.1:8000/docs) and
 [`services/ingestor/routers/contract_drift.py`](../../services/ingestor/routers/contract_drift.py).
 
 ---
 
-## Live Stream (WebSocket) [Core]
+## Live Stream (WebSocket) [Lab]
 
 Real-time event stream at `WS /ws/observations/stream?token=<bearer_token>`.
 

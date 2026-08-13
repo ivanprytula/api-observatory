@@ -34,6 +34,7 @@ trigger to explain why the design should or should not change.
 | Scheduling and locks | **Core** | [`jobs/`](../../services/ingestor/jobs/), scheduler tests | Single-instance APScheduler is a conscious design constraint for current scale; extract scheduler ownership before running multiple ingestor replicas |
 | Load balancing and autoscaling | **Lab / Deferred** | [gateway lab](../../labs/gateway_load_balancing/), local HPA manifests | Require saturation/availability evidence and a stateless request path |
 | Health, observability, SLOs, incidents | **Core / Lab stack** | [observability](../08-operations/observability.md), [dependency incidents](../08-operations/dependency-incidents.md) | Managed paging/retention follows a real on-call or SLO obligation |
+| WebSocket / real-time push | **Lab** | [`routers/ws.py`](../../services/ingestor/routers/ws.py), [WebSocket tests](../../services/ingestor/tests/integration/observations/test_ws.py) | Adopt only when a real-time dashboard client requires live event streaming |
 | IaC, deployment, rollback | **Decision** | [deployment contract](../07-deployment/app-repo-contract.md), infra guide | Real cloud evidence requires approved provisioning, verification, rollback, and teardown |
 | AI/RAG and evaluation | **Core optional path** | [`agent/`](../../services/ingestor/agent/), [`evals/`](../../services/ingestor/agent/evals/), [eval design](agent-evals.md) | Provider-backed evaluation or more autonomy requires measured value and human-review safety |
 

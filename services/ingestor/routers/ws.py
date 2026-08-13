@@ -1,5 +1,9 @@
 """FastAPI WebSocket endpoint — real-time event stream.
 
+**Lab feature.** Gated behind ``CACHE_ENABLED=true``; the router is only
+mounted in ``main.py`` when Cache pub/sub is active.  The core ingestor is
+fully functional without this endpoint.
+
 Endpoint: ``WS /ws/observations/stream``
 
 Streams all ingestor events to connected browser (or any WS client) in

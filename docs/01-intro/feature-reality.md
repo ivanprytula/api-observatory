@@ -14,7 +14,7 @@ technologies.
 | Dependency incidents | **Core** | Auto-created on threshold breach | Integration |
 | Tenant RLS | **Core** | `RLS_ENABLED=true` (opt-in) | Integration (cross-tenant leak tests) |
 | Auth (JWT + roles) | **Core** | `just generate-secrets` then start | Unit + integration |
-| Redis pub/sub (WebSocket) | **Core** | `just dev-up-cache` | Integration |
+| Redis pub/sub (WebSocket) | **Lab** | `just dev-up-cache` | Integration |
 | Notifications (direct) | **Core** | Inline HTTP dispatch, fail-open | Unit |
 | Contract drift detection | **Core** | Scheduled snapshot job | Integration |
 | LangGraph incident agent | **Lab** | `ANTHROPIC_ENABLED=true` + API key | Unit + evals |
@@ -36,7 +36,7 @@ technologies.
 
 - **Primary**: Synchronous PostgreSQL write. This is the only path that runs
   with `just dev-up`. It is authoritative, transactional, and observable.
-- **Secondary**: Redis pub/sub for real-time WebSocket fan-out. Optional,
+- **Secondary**: Redis pub/sub for real-time WebSocket fan-out. Lab feature,
   fail-open, requires `just dev-up-cache`.
 - **Tertiary**: Kafka for async notification dispatch. Feature-gated behind
   `BROKER_ENABLED=true` and `notification_delivery_mode=broker`. The

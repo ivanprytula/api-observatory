@@ -29,6 +29,9 @@ jobs:
       - name: Run deterministic composed flow
         run: just test-full-optional
 
+      - name: Run WebSocket Lab tests
+        run: uv run pytest services/ingestor/tests -q -m ws_lab
+
       - name: Publish composed-flow coverage
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

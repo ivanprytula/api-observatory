@@ -181,7 +181,7 @@ flowchart LR
     G --> I[AI Triage + Human-in-the-Loop]
     I --> H
     H --> J[Notification Outbox]
-    J --> K[WebSocket / Email]
+    J --> K[Direct / Kafka]
     D --> L[Baseline Accept]
     L --> M[Compatibility Check]
 ```
@@ -199,5 +199,6 @@ flowchart LR
     G -->|Yes| H[Upsert Observation]
     G -->|No| I[Create DependencyIncident]
     H --> J[Update Scorecard]
-    I --> K[WebSocket Notification]
+    I --> K[Notification Outbox]
+    K --> L[Direct / Kafka]
 ```
