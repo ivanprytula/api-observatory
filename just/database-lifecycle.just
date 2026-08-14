@@ -9,9 +9,9 @@ db-reset confirmation_flag="" confirmation="":
         echo "Refusing destructive reset. Re-run with: just db-reset --confirm DELETE" >&2
         exit 2
     fi
-    docker compose rm -sfv ingestor ingestor-db || true
+    docker compose rm -sfv ingestor ingestor-db cache || true
     docker volume rm -f api-obs-ingestor-postgres-data api-observatory_ingestor_postgres_data || true
-    docker compose up -d --build --wait ingestor-db ingestor dashboard
+    docker compose up -d --build --wait ingestor-db cache ingestor dashboard
     echo "stack reset and ready — run 'just db-migrate' before using it"
 
 db-migrate:
@@ -63,8 +63,8 @@ _dev-internal-token service_name="local-dev":
     # shellcheck source=/dev/null
     source "${PROJECT_ROOT}/.env"
     set +a
-    if [[ -z "${API_OBS_INTERNAL_JWT_SECRET:-}" ]]; then
-        echo "internal-token: API_OBS_INTERNAL_JWT_SECRET is empty in .env" >&2
+    if [[ -z "${INTERNAL_JWT_SECRET:-}" ]]; then
+        echo "internal-token: INTERNAL_JWT_SECRET is empty in .env" >&2
         exit 1
     fi
-    cd "${PROJECT_ROOT}" && INTERNAL_JWT_SECRET="${API_OBS_INTERNAL_JWT_SECRET}" uv run python -c 'from libs.platform.auth import generate_internal_token; import sys; print(generate_internal_token(sys.argv[1]))' "{{service_name}}"
+    cd "${PROJECT_ROOT}" && INTERNAL_JWT_SECRET="${INTERNAL_JWT_SECRET}" uv run python -c 'from libs.platform.auth import generate_internal_token; import sys; print(generate_internal_token(sys.argv[1]))' "{{service_name}}"

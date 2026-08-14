@@ -15,6 +15,7 @@ _lab-k8s-build:
     registry="localhost:5000/api-obs"
     docker build -t "${registry}/ingestor:local" .
     docker build -t "${registry}/dashboard:local" -f services/dashboard/Dockerfile .
+    docker build -t "${registry}/cache:local" -f Dockerfile .
     docker build -t "${registry}/ingestor-db:local" infra/database
 
 _lab-k8s-push-images:
@@ -23,6 +24,7 @@ _lab-k8s-push-images:
     registry="localhost:5000/api-obs"
     docker push "${registry}/ingestor:local"
     docker push "${registry}/dashboard:local"
+    docker push "${registry}/cache:local"
     docker push "${registry}/ingestor-db:local"
 
 _lab-k8s-bootstrap:

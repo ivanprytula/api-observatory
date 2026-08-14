@@ -32,42 +32,33 @@ dev:
     set -euo pipefail
     export PYTHONPATH="${PWD}"
     set -a; source "${PWD}/.env"; set +a
-    export DATABASE_URL="postgresql+asyncpg://postgres:${API_OBS_INGESTOR_DB_PASSWORD}@127.0.0.1:5432/api_obs_ingestor"
-    export CACHE_URL="redis://:${API_OBS_CACHE_PASSWORD}@127.0.0.1:6379/0"
-    export CACHE_ENABLED="${API_OBS_CACHE_ENABLED:-false}"
-    export BROKER_ENABLED="${API_OBS_BROKER_ENABLED:-false}"
-    export OTEL_ENABLED="${API_OBS_OTEL_ENABLED:-false}"
-    export OPENAI_ENABLED="${API_OBS_OPENAI_ENABLED:-false}"
-    export ANTHROPIC_ENABLED="${API_OBS_ANTHROPIC_ENABLED:-false}"
-    export API_V1_BEARER_TOKEN="${API_OBS_API_V1_BEARER_TOKEN}"
-    export JWT_SECRET="${API_OBS_JWT_SECRET}"
-    export INTERNAL_JWT_SECRET="${API_OBS_INTERNAL_JWT_SECRET}"
+    export DATABASE_URL="postgresql+asyncpg://postgres:${INGESTOR_DB_PASSWORD}@127.0.0.1:5432/api_obs_ingestor"
     # Data-plane only — app services run locally with hot reload
-    docker compose up -d ingestor-db
+    docker compose up -d ingestor-db cache
     docker compose stop ingestor dashboard >/dev/null 2>&1 || true
     docker compose rm -f ingestor dashboard >/dev/null 2>&1 || true
     until docker compose exec -T ingestor-db pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
     just db-migrate
     # Streamlit hot-reloads .py files on save automatically
-    uv run streamlit run services/dashboard/ui/streamlit/app.py \
-        --server.port=8501 --server.address=0.0.0.0 --server.headless=true \
-        --server.fileWatcherType=auto &
-    DASHBOARD_PID=$!
-    trap "kill $DASHBOARD_PID 2>/dev/null || true" EXIT INT TERM
-    echo "dashboard  → http://localhost:8501  (pid $DASHBOARD_PID, hot-reload on)"
-    echo "ingestor   → http://localhost:8000  (uvicorn --reload)"
-    uv run uvicorn services.ingestor.main:app --port 8000 --reload --reload-dir services/ingestor
+    # uv run streamlit run services/dashboard/ui/streamlit/app.py \
+    #     --server.port=8501 --server.address=0.0.0.0 --server.headless=true \
+    #     --server.fileWatcherType=auto &
+    # DASHBOARD_PID=$!
+    # trap "kill $DASHBOARD_PID 2>/dev/null || true" EXIT INT TERM
+    # echo "dashboard  → http://localhost:8501  (pid $DASHBOARD_PID, hot-reload on)"
+    # echo "ingestor   → http://localhost:8000  (uvicorn --reload)"
+    # uv run uvicorn services.ingestor.main:app --port 8000 --reload --reload-dir services/ingestor
 
 dev-up:
-    docker compose up -d --build --pull --wait ingestor-db ingestor dashboard
+    docker compose up -d --build --wait --pull=always ingestor-db cache ingestor dashboard
     echo "stack ready — run 'just db-migrate' before using http://127.0.0.1:8000 or http://127.0.0.1:8501"
 
 dev-up-cache:
     #!/usr/bin/env bash
     set -euo pipefail
     set -a; source "${PWD}/.env"; set +a
-    if [[ "${API_OBS_CACHE_ENABLED:-false}" != "true" ]]; then
-        echo "Set API_OBS_CACHE_ENABLED=true in .env before starting Redis." >&2
+    if [[ "${CACHE_ENABLED:-false}" != "true" ]]; then
+        echo "Set CACHE_ENABLED=true in .env before starting Redis." >&2
         exit 1
     fi
     docker compose --profile cache up -d cache
@@ -76,8 +67,8 @@ dev-up-broker:
     #!/usr/bin/env bash
     set -euo pipefail
     set -a; source "${PWD}/.env"; set +a
-    if [[ "${API_OBS_BROKER_ENABLED:-false}" != "true" ]]; then
-        echo "Set API_OBS_BROKER_ENABLED=true in .env before starting Redpanda." >&2
+    if [[ "${BROKER_ENABLED:-false}" != "true" ]]; then
+        echo "Set BROKER_ENABLED=true in .env before starting Redpanda." >&2
         exit 1
     fi
     docker compose --profile broker up -d broker
@@ -90,12 +81,12 @@ dev-up-extended:
     #!/usr/bin/env bash
     set -euo pipefail
     set -a; source "${PWD}/.env"; set +a
-    if [[ "${API_OBS_CACHE_ENABLED:-false}" != "true" ]]; then
-        echo "Set API_OBS_CACHE_ENABLED=true in .env before starting the extended stack." >&2
+    if [[ "${CACHE_ENABLED:-false}" != "true" ]]; then
+        echo "Set CACHE_ENABLED=true in .env before starting the extended stack." >&2
         exit 1
     fi
-    if [[ "${API_OBS_BROKER_ENABLED:-false}" != "true" ]]; then
-        echo "Set API_OBS_BROKER_ENABLED=true in .env before starting the extended stack." >&2
+    if [[ "${BROKER_ENABLED:-false}" != "true" ]]; then
+        echo "Set BROKER_ENABLED=true in .env before starting the extended stack." >&2
         exit 1
     fi
     docker compose --profile cache --profile broker --profile inference up -d --build --pull --wait ingestor-db cache broker ingestor dashboard inference-db inference
@@ -105,8 +96,8 @@ dev-up-monitoring:
     #!/usr/bin/env bash
     set -euo pipefail
     set -a; source "${PWD}/.env"; set +a
-    if [[ "${API_OBS_OTEL_ENABLED:-false}" != "true" ]]; then
-        echo "Set API_OBS_OTEL_ENABLED=true in .env, then restart the application services before starting monitoring." >&2
+    if [[ "${OTEL_ENABLED:-false}" != "true" ]]; then
+        echo "Set OTEL_ENABLED=true in .env, then restart the application services before starting monitoring." >&2
         exit 1
     fi
     docker compose --profile monitoring up -d prometheus grafana loki promtail tempo alertmanager mailpit
@@ -117,10 +108,8 @@ dev-up-ingress-setup:
     set -euo pipefail
     PROJECT_ROOT="{{justfile_directory()}}"
     CERT_DIR="${PROJECT_ROOT}/infra/certs"
-    if [[ ! -f "${PROJECT_ROOT}/.env" ]] || ! grep -Eq '^API_OBS_LOCAL_HTTPS=true([[:space:]]*)$' "${PROJECT_ROOT}/.env"; then
-        echo "Set API_OBS_LOCAL_HTTPS=true in .env before enabling local HTTPS." >&2
-        exit 1
-    fi
+    if [[ ! -f "${PROJECT_ROOT}/.env" ]] || ! grep -Eq '^LOCAL_HTTPS=true([[:space:]]*)$' "${PROJECT_ROOT}/.env"; then
+        echo "Set LOCAL_HTTPS=true in .env before enabling local HTTPS." >&2
     if ! command -v mkcert >/dev/null 2>&1; then
         echo "mkcert not found. Install: brew install mkcert / sudo apt-get install mkcert / sudo dnf install mkcert" >&2
         exit 1
