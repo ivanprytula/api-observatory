@@ -16,6 +16,10 @@
     "dashboard": {
       "repository": "api-observatory/dashboard",
       "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "cache": {
+      "repository": "api-observatory/cache",
+      "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
     }
   }
 }

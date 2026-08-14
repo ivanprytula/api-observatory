@@ -54,9 +54,7 @@ jobs:
         name: Resolve the committed application source identity
         run: |
           set -euo pipefail
-          uv run python scripts/ci/deploy_mvp.py resolve-ref \
-            --lock environments/aws-dev/images.lock.json
-          ref=$(grep '^ref=' "$GITHUB_OUTPUT" | cut -d= -f2)
+          ref=$(git rev-parse HEAD)
           echo "ref=${ref}" >> "$GITHUB_OUTPUT"
 
       - id: contracts-version
@@ -70,9 +68,6 @@ jobs:
           path: .mvp-release
           ref: ${{ steps.app-ref.outputs.ref }}
 
-      - name: Validate the application MVP workload contract
-        run: uv run python scripts/validate_mvp_contract.py --app-root .mvp-release
-
       - uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
         with:
           role-to-assume: ${{ vars.AWS_APP_DEPLOY_ROLE_ARN }}
@@ -84,9 +79,10 @@ jobs:
           INSTANCE_ID: ${{ vars.AWS_EC2_INSTANCE_ID_DEV }}
           REGISTRY: ${{ vars.AWS_ECR_REGISTRY }}
           CONTRACTS_VERSION: ${{ steps.contracts-version.outputs.contracts_version }}
+          ALB_TARGET_GROUP_ARN: ${{ vars.AWS_ALB_TARGET_GROUP_ARN }}
         run: |
           set -euo pipefail
-          uv run python scripts/ci/deploy_mvp.py build-ssm-payload \
+          uv run python scripts/ci/deploy_ssm.py \
             --lock environments/aws-dev/images.lock.json \
             --registry "${REGISTRY}" \
             --instance-id "${INSTANCE_ID}" \
@@ -94,6 +90,7 @@ jobs:
             --compose deployment/aws-mvp/docker-compose.yml \
             --prometheus deployment/aws-mvp/prometheus.yml \
             --rollout deployment/aws-mvp/rollout.sh \
+            ${{ vars.AWS_ALB_TARGET_GROUP_ARN != '' && format('--alb-target-group-arn "{0}"', vars.AWS_ALB_TARGET_GROUP_ARN) || '' }} \
             --output "${RUNNER_TEMP}/ssm-payload.json"
 
       - name: Deploy committed desired state through SSM

@@ -4,7 +4,8 @@
   "services": [
     {"name": "ingestor", "dockerfile": "Dockerfile", "build_context": ".", "port": 8000, "health_path": "/health", "readiness_path": "/readyz"},
     {"name": "inference", "dockerfile": "services/inference/Dockerfile", "build_context": ".", "port": 8001, "health_path": "/health", "readiness_path": "/readyz"},
-    {"name": "dashboard", "dockerfile": "services/dashboard/Dockerfile", "build_context": ".", "port": 8501, "health_path": "/_stcore/health", "readiness_path": "/_stcore/health"}
+    {"name": "dashboard", "dockerfile": "services/dashboard/Dockerfile", "build_context": ".", "port": 8501, "health_path": "/_stcore/health", "readiness_path": "/_stcore/health"},
+    {"name": "cache", "dockerfile": "Dockerfile", "build_context": ".", "port": 6379, "health_path": null, "readiness_path": null}
   ],
   "non_deployable_services": [{"name": "mcp", "reason": "Local stdio process; it has no container deployment contract."}]
 }
