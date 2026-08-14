@@ -89,11 +89,11 @@ async def _consume(key: str) -> tuple[bool, float, int | None]:
             V1_TOKEN_BUCKET_REFILL_PER_SEC,
             ttl_seconds,
         )
-    except RedisError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Rate limiter is unavailable",
-        ) from exc
+    except RedisError:
+        allowed, remaining = await _local_bucket.consume(key)
+        retry_after = (
+            math.ceil(_local_bucket.seconds_until_token(key)) if not allowed else None
+        )
     return bool(int(allowed)), float(remaining), int(retry_after) or None
 
 

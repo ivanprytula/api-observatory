@@ -199,6 +199,11 @@ class Settings(BaseSettings):
         description="Enable cache backend. Disabled by default (tests use fakeredis)",
     )
 
+    websocket_enabled: bool = Field(
+        default=False,
+        description="Enable WebSocket endpoints. Independent of cache.",
+    )
+
     # ============ Event Broker / Redpanda ============
     broker_url: str = Field(
         default="localhost:9092",

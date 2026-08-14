@@ -29,6 +29,7 @@ from libs.version import get_contracts_version, get_version_payload
 from services.ingestor.auth import (
     jwt_role_guard,
 )
+from services.ingestor.cache import get_redis_client
 from services.ingestor.config import settings
 from services.ingestor.constants import APP_DESCRIPTION, HEALTH_RATE_LIMIT
 from services.ingestor.core.background_workers import (
@@ -599,7 +600,7 @@ for _name in _ROUTER_MODULES:
         )
 
 
-if settings.cache_enabled:
+if settings.websocket_enabled:
     app.include_router(ws_router.router)
 
 
@@ -707,6 +708,22 @@ async def readyz(db: DbDep) -> dict[str, object]:
     except Exception as e:
         checks["db"] = "unreachable"
         failed.append(f"db: {e}")
+
+    if not settings.cache_enabled:
+        checks["cache"] = "not_configured"
+    else:
+        try:
+            cache_client = get_redis_client()
+            if cache_client is not None:
+                await cache_client.ping()
+                checks["cache"] = "ok"
+            else:
+                checks["cache"] = "unreachable"
+        except Exception as e:
+            checks["cache"] = "unreachable"
+            failed.append(f"cache: {e}")
+
+    checks["websocket"] = "enabled" if settings.websocket_enabled else "disabled"
 
     svc_version = os.getenv("SERVICE_VERSION") or settings.app_version
     try:
