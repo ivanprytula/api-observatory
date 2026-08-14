@@ -7,9 +7,8 @@ Split into:
 
 from __future__ import annotations
 
-import httpx
-
 from services.dashboard.core.api_client import (
+    API_REQUEST_ERRORS,
     DashboardApiError,
     api,
 )
@@ -26,7 +25,7 @@ def use_sources(token: str = "") -> dict:
     try:
         sources = api.sources.list(token=token)
         return {"sources": sources, "error": None}
-    except (httpx.HTTPStatusError, DashboardApiError) as e:
+    except API_REQUEST_ERRORS as e:
         return {"sources": [], "error": e}
 
 
@@ -36,7 +35,7 @@ def use_source_by_id(token: str = "", source_id: int = 0) -> dict:
         for s in sources:
             if s.id == source_id:
                 return {"source": s}
-    except (httpx.HTTPStatusError, DashboardApiError):
+    except API_REQUEST_ERRORS:
         pass
     return {"source": None}
 
@@ -170,22 +169,20 @@ def _render_source_list(ui: UIAdapter, auth: AuthManager, data: dict) -> None:
 
     sources = data["sources"]
     if not sources:
-        ui.show_info("No sources registered yet — use the form above to add one.")
         return
 
     for src in sources:
         with ui.container():
-            c1, c2, c3, c4, c5, c6 = ui.columns([2, 3, 1, 1, 1, 1])
+            c1, c2, c3, c4, c5 = ui.columns([3, 1, 1, 1, 1])
             c1.markdown(f"**{src.name}**")
-            c2.caption(f"`{src.base_url}{src.health_check_path}`")
-            c3.caption(f"⏱ {src.probe_interval_seconds}s")
-            c4.caption("🟢" if src.is_active else "🔴")
+            c2.caption(f"⏱ {src.probe_interval_seconds}s")
+            c3.caption("🟢" if src.is_active else "🔴")
 
-            if c5.button("✏️", key=f"src_edit_{src.id}", help="Edit source"):
+            if c4.button("✏️", key=f"src_edit_{src.id}", help="Edit source"):
                 ui.set("src_edit_id", src.id)
                 ui.rerun()
 
-            if c6.button("🗑", key=f"src_del_{src.id}", help="Delete source"):
+            if c5.button("🗑", key=f"src_del_{src.id}", help="Delete source"):
                 try:
                     api.sources.delete(source_id=src.id, token=auth.access_token)
                     ui.show_success(f"Source '{src.name}' deleted.")

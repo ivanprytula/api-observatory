@@ -10,7 +10,7 @@ from __future__ import annotations
 import httpx
 
 from services.dashboard.core.api_client import (
-    DashboardApiError,
+    API_REQUEST_ERRORS,
     api,
     fetch_prometheus_metrics,
     fetch_scheduler_jobs,
@@ -52,7 +52,7 @@ def _friendly_probe_error(exc: Exception) -> str:
 def use_sources(token: str = "") -> dict:
     try:
         sources = api.sources.list(token=token)
-    except (httpx.HTTPStatusError, DashboardApiError):
+    except API_REQUEST_ERRORS:
         sources = []
     return {"sources": sources}
 
@@ -60,12 +60,16 @@ def use_sources(token: str = "") -> dict:
 def use_queue_retry_metrics() -> dict:
     try:
         metrics = fetch_prometheus_metrics()
-    except (httpx.HTTPStatusError, DashboardApiError):
+    except API_REQUEST_ERRORS:
         metrics = ""
     return {
-        "dlq_depth": parse_metric_value(metrics, "dead_letter_queue_depth") or 0,
-        "retries_total": parse_prometheus_counter(metrics, "retry_total"),
-        "failed_total": parse_prometheus_counter(metrics, "jobs_failed_total"),
+        "queue_depth": parse_metric_value(metrics, "pipeline_background_jobs_in_queue") or 0,
+        "retries_total": parse_prometheus_counter(
+            metrics, "pipeline_job_executions_total", labels={"status": "failed"}
+        ),
+        "failed_total": parse_prometheus_counter(
+            metrics, "pipeline_background_jobs_processed_total", labels={"status": "failed"}
+        ),
     }
 
 
@@ -85,7 +89,6 @@ def render_probe_scheduler(ui: UIAdapter, auth: AuthManager) -> None:
     data = use_sources(token=auth.access_token)
     sources = data["sources"]
     if not sources:
-        ui.show_info("No sources registered yet — run `just seed-probes` first.")
         return
 
     probe_results = ui.probe_results
@@ -140,7 +143,7 @@ def render_probe_scheduler(ui: UIAdapter, auth: AuthManager) -> None:
 
     with ui.expander("Scheduler job status", expanded=False):
         try:
-            jobs = fetch_scheduler_jobs()
+            jobs = fetch_scheduler_jobs(auth=auth)
             running = jobs.get("scheduler_running", False)
             running_icon = "✅" if running else "❌"
             ui.caption(
@@ -157,7 +160,7 @@ def render_probe_scheduler(ui: UIAdapter, auth: AuthManager) -> None:
                 next_run = jinfo.get("next_run_time", "—")
                 next_str = str(next_run)[:19] if next_run else "—"
                 c3.caption(f"next: {next_str}")
-        except (httpx.HTTPStatusError, DashboardApiError) as exc:
+        except API_REQUEST_ERRORS as exc:
             ui.show_warning(f"Could not fetch scheduler status: {exc}")
 
 
@@ -166,18 +169,18 @@ def render_queue_retry_health(ui: UIAdapter, auth: AuthManager) -> None:
     ui.header("📦 Queue & Retry Health")
 
     data = use_queue_retry_metrics()
-    dlq_depth = data["dlq_depth"]
+    queue_depth = data["queue_depth"]
     retries_total = data["retries_total"]
     failed_total = data["failed_total"]
 
     q1, q2, q3 = ui.columns(3)
-    q1.metric("Dead-letter queue depth", f"{dlq_depth:,.0f}")
-    q2.metric("Retries (total)", f"{retries_total:,.0f}")
-    q3.metric("Failed jobs (total)", f"{failed_total:,.0f}")
+    q1.metric("Queue depth", f"{queue_depth:,.0f}")
+    q2.metric("Job failures (total)", f"{retries_total:,.0f}")
+    q3.metric("Background failures (total)", f"{failed_total:,.0f}")
 
-    if dlq_depth > 0:
+    if queue_depth > 0:
         ui.show_warning(
-            f"DLQ has {dlq_depth:,.0f} messages — review with the ops runbook."
+            f"Queue has {queue_depth:,.0f} pending jobs — review worker health."
         )
     else:
-        ui.show_success("Dead-letter queue is empty.")
+        ui.show_success("Queue is empty.")

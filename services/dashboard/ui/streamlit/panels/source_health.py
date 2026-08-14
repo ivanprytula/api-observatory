@@ -10,9 +10,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-import httpx
-
 from services.dashboard.core.api_client import (
+    API_REQUEST_ERRORS,
     DashboardApiError,
     api,
     fetch_prometheus_metrics,
@@ -33,7 +32,7 @@ from services.dashboard.ui.protocols import UIAdapter
 def use_source_health_table(token: str = "") -> dict:
     try:
         scorecards_resp = api.scorecards.list(token=token)
-    except (httpx.HTTPStatusError, DashboardApiError):
+    except API_REQUEST_ERRORS:
         return {"scorecards": []}
     return {"scorecards": scorecards_resp.items if scorecards_resp else []}
 
@@ -55,11 +54,11 @@ def use_ingestion_throughput() -> dict:
 def use_freshness_heatmap(token: str = "") -> dict:
     try:
         sources = api.sources.list(token=token)
-    except (httpx.HTTPStatusError, DashboardApiError):
+    except API_REQUEST_ERRORS:
         sources = []
     try:
         jobs = api.health.scheduler_jobs().get("jobs", {})
-    except (httpx.HTTPStatusError, DashboardApiError):
+    except API_REQUEST_ERRORS:
         jobs = {}
     return {"sources": sources, "jobs": jobs}
 

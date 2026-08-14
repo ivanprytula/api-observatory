@@ -282,8 +282,8 @@ class HealthResource:
                 results[label] = {"status_code": None, "body": None, "error": str(exc)}
         return results
 
-    def scheduler_jobs(self) -> Mapping[str, Any]:
-        data = self._c.request("GET", "/health/jobs-metrics")
+    def scheduler_jobs(self, token: str = "") -> Mapping[str, Any]:
+        data = self._c.request("GET", "/health/jobs-metrics", token=token)
         return _expect_mapping(data, "scheduler jobs")
 
 
@@ -357,6 +357,12 @@ api = API()
 # ---------------------------------------------------------------------------
 
 import httpx  # noqa: E402 — import after httpx.HTTPStatusError reference
+
+
+API_REQUEST_ERRORS: tuple[type[Exception], ...] = (
+    httpx.HTTPError,
+    DashboardApiError,
+)
 
 
 def _extract_token(auth: AuthManager | None = None) -> str:
@@ -438,8 +444,11 @@ def fetch_health_status(timeout: float | None = None) -> dict[str, dict]:
     return api.health.probes()
 
 
-def fetch_scheduler_jobs(timeout: float | None = None) -> Mapping[str, Any]:
-    return api.health.scheduler_jobs()
+def fetch_scheduler_jobs(
+    auth: AuthManager,
+    timeout: float | None = None,
+) -> Mapping[str, Any]:
+    return api.health.scheduler_jobs(token=_extract_token(auth))
 
 
 def fetch_prometheus_metrics(timeout: float | None = None) -> str:

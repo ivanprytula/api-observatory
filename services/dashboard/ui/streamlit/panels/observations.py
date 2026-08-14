@@ -7,10 +7,8 @@ Split into:
 
 from __future__ import annotations
 
-import httpx
-
 from services.dashboard.core.api_client import (
-    DashboardApiError,
+    API_REQUEST_ERRORS,
     api,
 )
 from services.dashboard.core.auth import AuthManager
@@ -30,20 +28,20 @@ _OBS_SESSION_DEFAULTS: dict[str, object] = {
 
 
 def use_observations_page(
-    token: str = "", page: int = 1, source_filter: str = ""
+    token: str = "", page: int = 1, page_size: int = 25, source_filter: str = ""
 ) -> dict:
     try:
         resp = api.observations.list(
             token=token,
             page=page,
-            page_size=25,
+            page_size=page_size,
             source_filter=source_filter or None,
         )
         return {
             "observations": resp.observations,
             "pagination": resp.pagination,
         }
-    except (httpx.HTTPStatusError, DashboardApiError):
+    except API_REQUEST_ERRORS:
         return {"observations": [], "pagination": None}
 
 
@@ -53,7 +51,7 @@ def use_observation_detail(token: str = "", observation_id: int | None = None) -
     try:
         obs = api.observations.get(observation_id, token=token)
         return {"observation": obs}
-    except (httpx.HTTPStatusError, DashboardApiError) as e:
+    except API_REQUEST_ERRORS as e:
         return {"observation": None, "error": e}
     except Exception as exc:
         return {"observation": None, "error": exc}
@@ -78,22 +76,31 @@ def render_observations_panel(ui: UIAdapter, auth: AuthManager) -> None:
     )
     ui.set("obs_source_filter", source_filter)
 
-    col_prev, col_page, col_next = ui.columns(3)
+    col_size, col_prev, col_page, col_next = ui.columns([2, 1, 1, 1])
+    with col_size:
+        page_size = ui.selectbox(
+            "Page size",
+            options=[10, 25, 50, 100],
+            index=[10, 25, 50, 100].index(ui.get("obs_page_size", 25)),
+            key="obs_page_size",
+        )
+
+    page = ui.get("obs_page", 1)
     with col_prev:
-        page = ui.get("obs_page", 1)
-        if ui.button("← Previous", key="obs_prev") and page > 1:
+        if ui.button("← Prev", key="obs_prev") and page > 1:
             ui.set("obs_page", page - 1)
             ui.rerun()
     with col_page:
-        ui.write(f"Page {ui.get('obs_page', 1)}")
+        ui.write(f"Page {page}")
     with col_next:
         if ui.button("Next →", key="obs_next"):
-            ui.set("obs_page", ui.get("obs_page", 1) + 1)
+            ui.set("obs_page", page + 1)
             ui.rerun()
 
     data = use_observations_page(
         token=auth.access_token,
-        page=ui.get("obs_page", 1),
+        page=page,
+        page_size=page_size,
         source_filter=source_filter,
     )
     observations = data["observations"]
@@ -118,10 +125,11 @@ def render_observations_panel(ui: UIAdapter, auth: AuthManager) -> None:
                 ui.rerun()
         ui.divider()
 
+    start = (page - 1) * page_size + 1
+    end = start + len(observations) - 1
     ui.caption(
-        f"Total: {pagination.total} | "
-        f"Showing {len(observations)} on page {ui.get('obs_page', 1)} | "
-        f"Has more: {'Yes' if pagination.has_more else 'No'}"
+        f"Showing {start}–{end} of {pagination.total} observations"
+        + (f" | Page {page}" if page_size < pagination.total else "")
     )
 
     ui.divider()
@@ -171,5 +179,6 @@ def render_observations_panel(ui: UIAdapter, auth: AuthManager) -> None:
                         ui.write(f"- {tag}")
                 else:
                     ui.write("(none)")
-            ui.write("**Data Payload**")
-            ui.json(obs.raw_data)
+
+            with ui.expander("Raw payload", expanded=False):
+                ui.json(obs.raw_data)

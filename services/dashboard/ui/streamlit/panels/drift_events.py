@@ -7,10 +7,8 @@ Split into:
 
 from __future__ import annotations
 
-import httpx
-
 from services.dashboard.core.api_client import (
-    DashboardApiError,
+    API_REQUEST_ERRORS,
     api,
 )
 from services.dashboard.core.auth import AuthManager
@@ -25,7 +23,7 @@ from services.dashboard.ui.protocols import UIAdapter
 def use_drift_events(token: str = "") -> dict:
     try:
         sources = api.sources.list(token=token)
-    except (httpx.HTTPStatusError, DashboardApiError):
+    except API_REQUEST_ERRORS:
         sources = []
 
     events: list[dict] = []
@@ -47,7 +45,7 @@ def use_drift_events(token: str = "") -> dict:
                         "removed_fields": len(e.removed_fields or []),
                     }
                 )
-        except (httpx.HTTPStatusError, DashboardApiError):
+        except API_REQUEST_ERRORS:
             pass
 
     events.sort(key=lambda x: x["created_at"], reverse=True)

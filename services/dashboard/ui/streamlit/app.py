@@ -6,11 +6,9 @@ Refactored to use framework-agnostic core modules and UI panels.
 from __future__ import annotations
 
 import sys
-import time
 from pathlib import Path
 
 import streamlit as st
-from services.dashboard.core.config import config
 from services.dashboard.ui.streamlit.adapter import StreamlitUIAdapter
 from services.dashboard.ui.streamlit.components.auth_sidebar import render_auth_sidebar
 from services.dashboard.ui.streamlit.panels.drift_events import render_drift_events
@@ -47,7 +45,6 @@ def main() -> None:
     )
 
     st.title("🔭 API Observatory")
-    st.caption(f"Ingestor: `{config.ingestor_url}`")
 
     ui = StreamlitUIAdapter()
     manager = ui.auth_manager_from_session()
@@ -63,79 +60,73 @@ def main() -> None:
         if not refreshed:
             st.warning("Session expired — please log in again.")
 
-    render_onboarding_guide(ui, manager)
-
     features = ui.fetch_stack_features()
-    if not features.get("cache", False):
-        st.warning(
-            "Live Stream is disabled — Redis cache is not enabled. "
-            "Set `API_OBS_CACHE_ENABLED=true` to unlock real-time events."
-        )
+    render_onboarding_guide(ui, manager, features)
+
+    cache_status = features.get("cache_status", "unknown")
+    websocket_status = features.get("websocket_status", "unknown")
+    live_enabled = features.get("cache", False) and features.get("websocket", False)
+    if not live_enabled:
+        parts = []
+        if not features.get("cache", False):
+            if cache_status == "not_configured":
+                parts.append("Redis cache is not enabled")
+            elif cache_status == "unreachable":
+                parts.append("Redis cache is unreachable")
+            else:
+                parts.append("Redis cache status is unknown")
+        if not features.get("websocket", False):
+            if websocket_status == "disabled":
+                parts.append("WebSocket endpoint is disabled")
+            elif websocket_status != "enabled":
+                parts.append("WebSocket status is unknown")
+        if parts:
+            st.info("Live Stream disabled: " + " and ".join(parts) + ".")
     if not features.get("has_sources", False):
         st.info(
-            "No sources yet. Add a source in Step 1 to unlock probes, "
-            "observations, and health data."
+            "No sources yet. Add a source to unlock probes, observations, and health data."
         )
 
-    ui.subheader("Step 1: Add your sources")
+    ui.subheader("Sources")
     render_source_manager(ui, manager)
 
-    ui.subheader("Step 2: Run probes")
+    ui.subheader("Probes")
     render_probe_scheduler(ui, manager)
     render_queue_retry_health(ui, manager)
 
-    ui.subheader("Step 3: Explore data")
+    ui.subheader("Observations")
     render_observations_panel(ui, manager)
     render_drift_events(ui, manager)
     render_incidents(ui, manager)
-    if features.get("cache", False):
+    if features.get("cache", False) and features.get("websocket", False):
         render_live_stream(ui, manager)
-    else:
-        with st.expander("📡 Live Stream (disabled — cache required)", expanded=False):
-            st.caption("Enable Redis cache to see real-time events.")
 
-    ui.subheader("Step 4: Monitor health")
+    ui.subheader("Health")
     render_source_health_table(ui, manager)
     render_ingestion_throughput(ui)
     render_freshness_heatmap(ui, manager)
     render_service_health(ui, manager)
 
-    st.divider()
-    col_r, col_auto = st.columns([3, 1])
-    col_r.caption(
-        f"Data last fetched from `{config.ingestor_url}` — cache TTL {config.refresh_interval}s"
-    )
-    if col_auto.button("🔄 Refresh now"):
-        st.cache_data.clear()
-        st.session_state.last_refresh = time.time()
-        st.rerun()
 
-
-def render_onboarding_guide(ui: StreamlitUIAdapter, manager) -> None:
-    """Collapsible getting-started guide with auto-completing steps."""
-    with st.expander("🚀 Getting Started", expanded=not manager.state.logged_in):
-        st.markdown("Follow these steps to start using the API Observatory:")
+def render_onboarding_guide(ui: StreamlitUIAdapter, manager, features: dict) -> None:
+    """Simplified getting-started checklist."""
+    with st.expander("Getting Started", expanded=not manager.state.logged_in):
         logged_in = manager.state.logged_in
+        has_sources = features.get("has_sources", False)
+        has_observations = features.get("has_observations", False)
 
-        col1, col2, col3 = st.columns([1, 4, 2])
-        col1.markdown("1. **Log in**")
-        if logged_in:
-            col2.success("✅ Done")
-        else:
-            col2.warning("⏳ Pending")
-        col3.markdown("Enter credentials in the sidebar")
-
-        col1.markdown("2. **Add sources**")
-        col2.info("⏸ Next")
-        col3.markdown("Add source URLs in the *Source Manager* section below")
-
-        col1.markdown("3. **Run probes**")
-        col2.info("⏸ Next")
-        col3.markdown("Click *Probe All* in the Probe Scheduler section")
-
-        col1.markdown("4. **Explore data**")
-        col2.info("⏸ Next")
-        col3.markdown("View observations, drift events, and health metrics")
+        st.markdown(
+            f"**Log in** — {'Done' if logged_in else 'Enter credentials in the sidebar'}"
+        )
+        st.markdown(
+            f"**Add sources** — {'Done' if has_sources else 'Add source URLs below'}"
+        )
+        st.markdown(
+            f"**Run probes** — {'Done' if has_observations else 'Use Probe All below'}"
+        )
+        st.markdown(
+            "**Explore data** — View observations, drift events, and health metrics"
+        )
 
 
 if __name__ == "__main__":

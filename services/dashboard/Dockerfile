@@ -40,6 +40,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
 COPY --chown=appuser:appgroup services/__init__.py ./services/
 COPY --chown=appuser:appgroup libs/contracts/ ./libs/contracts/
 COPY --chown=appuser:appgroup services/dashboard/ ./services/dashboard/
+COPY --chown=appuser:appgroup .streamlit/ .streamlit/
 
 USER appuser
 

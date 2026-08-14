@@ -49,9 +49,12 @@ def _fetch_json(base_url: str, path: str, token: str | None) -> Any:
 
 
 @st.cache_data(ttl=30)
-def _fetch_stack_features(base_url: str, token: str | None) -> dict[str, bool]:
-    features: dict[str, bool] = {
+def _fetch_stack_features(base_url: str, token: str | None) -> dict[str, object]:
+    features: dict[str, object] = {
         "cache": False,
+        "cache_status": "unknown",
+        "websocket": False,
+        "websocket_status": "unknown",
         "broker": False,
         "has_sources": False,
     }
@@ -59,6 +62,9 @@ def _fetch_stack_features(base_url: str, token: str | None) -> dict[str, bool]:
         readyz = _fetch_json(base_url, "/readyz", token)
         if isinstance(readyz, dict):
             features["cache"] = readyz.get("cache") == "ok"
+            features["cache_status"] = readyz.get("cache", "unknown")
+            features["websocket"] = readyz.get("websocket") == "enabled"
+            features["websocket_status"] = readyz.get("websocket", "unknown")
     except (DashboardApiError, Exception):
         pass
 
@@ -67,6 +73,13 @@ def _fetch_stack_features(base_url: str, token: str | None) -> dict[str, bool]:
         if isinstance(sources, dict):
             items = sources.get("items", [])
             features["has_sources"] = len(items) > 0
+    except (DashboardApiError, Exception):
+        pass
+
+    try:
+        obs = _fetch_json(base_url, "/api/v1/observations?limit=1", token)
+        if isinstance(obs, dict):
+            features["has_observations"] = len(obs.get("observations", [])) > 0
     except (DashboardApiError, Exception):
         pass
 
@@ -199,7 +212,7 @@ class StreamlitUIAdapter:
     def empty(self) -> Any:
         return st.empty()
 
-    def fetch_stack_features(self) -> dict[str, bool]:
+    def fetch_stack_features(self) -> dict[str, object]:
         auth = self._session.get("_auth_manager")
         token = auth.access_token if auth and auth.access_token else None
         return _fetch_stack_features(config.ingestor_url, token)
@@ -280,6 +293,10 @@ class StreamlitUIAdapter:
         st.write(text)
 
     def selectbox(
-        self, label: str, options: Sequence[Any], key: str | None = None
+        self,
+        label: str,
+        options: Sequence[Any],
+        index: int = 0,
+        key: str | None = None,
     ) -> Any:
-        return st.selectbox(label, options, key=key)
+        return st.selectbox(label, options, index=index, key=key)
