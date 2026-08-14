@@ -25,8 +25,8 @@ main() {
     echo "════════════════════════════════════════════════════════════════════════════"
     echo ""
 
-    if [[ ! -f "${PROJECT_ROOT}/.env" ]] || ! grep -Eq '^API_OBS_LOCAL_HTTPS=true([[:space:]]*)$' "${PROJECT_ROOT}/.env"; then
-        error "Set API_OBS_LOCAL_HTTPS=true in the ignored .env before enabling local HTTPS."
+    if [[ ! -f "${PROJECT_ROOT}/.env" ]] || ! grep -Eq '^LOCAL_HTTPS=true([[:space:]]*)$' "${PROJECT_ROOT}/.env"; then
+        error "Set LOCAL_HTTPS=true in the ignored .env before enabling local HTTPS."
         exit 1
     fi
 

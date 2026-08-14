@@ -11,6 +11,7 @@ readonly COMPOSE_PROJECT="api-obs-image-smoke-${GITHUB_RUN_ID:-local}-${RANDOM}"
 readonly INGESTOR_IMAGE="api-obs/ingestor:ci-smoke"
 readonly INFERENCE_IMAGE="api-obs/inference:ci-smoke"
 readonly DASHBOARD_IMAGE="api-obs/dashboard:ci-smoke"
+readonly CACHE_IMAGE="redis:7-alpine"
 
 info() { echo "[INFO] $*" >&2; }
 success() { echo "[SUCCESS] $*" >&2; }
@@ -31,12 +32,13 @@ main() {
 
   info "Scanning images for high/critical CVEs."
   mkdir -p "${PROJECT_ROOT}/.local-dev/tmp/trivy-cache"
+  docker pull "${CACHE_IMAGE}" >/dev/null 2>&1 || true
   docker run --rm \
     -v /var/run/docker.sock:/var/run/docker.sock:ro \
     -v "${PROJECT_ROOT}/.local-dev/tmp/trivy-cache:/root/.cache/trivy" \
     aquasec/trivy:0.56.2 \
     image --severity HIGH,CRITICAL --exit-code 1 \
-    "${INGESTOR_IMAGE}" "${INFERENCE_IMAGE}" "${DASHBOARD_IMAGE}"
+    "${INGESTOR_IMAGE}" "${INFERENCE_IMAGE}" "${DASHBOARD_IMAGE}" "${CACHE_IMAGE}"
 
   compose up --wait --wait-timeout 180
   compose exec --no-TTY dashboard python -c \
