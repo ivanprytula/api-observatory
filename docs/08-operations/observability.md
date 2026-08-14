@@ -2,7 +2,7 @@
 
 Use metrics, logs, traces, and health probes together to diagnose the current system. The
 monitoring stack is opt-in; `just dev-up` starts the core application stack, while
-`just dev-up-monitoring` starts the monitoring profile. It requires `API_OBS_OTEL_ENABLED=true`;
+`just dev-up-monitoring` starts the monitoring profile. It requires `OTEL_ENABLED=true`;
 restart the application services before starting monitoring.
 
 ## Current Signal Stack

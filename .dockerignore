@@ -36,8 +36,8 @@ build/
 .kilo/
 .copilot/
 
-# Streamlit local config
-.streamlit/
+# Streamlit local config (needed in dashboard image for theme)
+# .streamlit/
 
 # Terraform state/cache
 .terraform/

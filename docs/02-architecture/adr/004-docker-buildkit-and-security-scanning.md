@@ -10,8 +10,7 @@ Track: C — Architecture and Platform Strategy
 
 ## Context
 
-The original decision assumed six application services. The current deployable HTTP contract is
-ingestor, inference, and dashboard; local Compose also runs their dependencies. The security and
+The original decision assumed six application services. The current deployable contract is ingestor, inference, dashboard, and cache; local Compose also runs their dependencies. The security and
 reproducibility decision remains applicable even though the old service inventory does not.
 
 1. **Ingestor** — FastAPI REST API and background work

@@ -69,7 +69,7 @@ Use HTTPS when proving the public boundary: run
 to HTTPS, terminates TLS, and proxies the public API under `/api/`.
 
 ```bash
-# Edit .env and set API_OBS_LOCAL_HTTPS=true before continuing.
+# Edit .env and set LOCAL_HTTPS=true before continuing.
 just dev-up-ingress-setup
 docker compose --profile ingress up -d --build
 ```
@@ -93,7 +93,7 @@ requirement.
   container-to-container addresses.
 
 The local namespace is intentionally explicit: Docker images and containers use `api-obs-*`,
-local `.env` controls use `API_OBS_*`, and physical database names use `api_obs_<service>`.
+local `.env` controls use short names, and physical database names use `api_obs_<service>`.
 Inside a running service, conventional variables such as `DATABASE_URL` remain service-local and
 are populated by Compose or cloud secret delivery.
 
@@ -155,10 +155,10 @@ just db-inference-migrate
 
 | Capability | `.env` setting | Start command |
 | --- | --- | --- |
-| Redis integration | `API_OBS_CACHE_ENABLED=true` | Set the flag first, then `just dev-up-cache` |
-| Broker integration | `API_OBS_BROKER_ENABLED=true` | Set the flag first, then `just dev-up-broker` |
-| OpenTelemetry | `API_OBS_OTEL_ENABLED=true` | Restart `ingestor`, then run `just dev-up-monitoring` |
-| HTTPS ingress | `API_OBS_LOCAL_HTTPS=true` | `just dev-up-ingress-setup` then `docker compose --profile ingress up -d --build` |
+| Redis integration | `CACHE_ENABLED=true` | Set the flag first, then `just dev-up-cache` |
+| Broker integration | `BROKER_ENABLED=true` | Set the flag first, then `just dev-up-broker` |
+| OpenTelemetry | `OTEL_ENABLED=true` | Restart `ingestor`, then run `just dev-up-monitoring` |
+| HTTPS ingress | `LOCAL_HTTPS=true` | `just dev-up-ingress-setup` then `docker compose --profile ingress up -d --build` |
 
 After changing a cache, broker, or telemetry flag, restart the ingestor so it receives the new
 configuration. The broker carries general application events and the opt-in notification delivery

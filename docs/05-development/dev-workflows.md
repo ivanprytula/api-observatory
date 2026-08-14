@@ -42,21 +42,21 @@ the password is not placed in shell history and the parent shell remains unchang
   set -a
   source .env
   set +a
-  DATABASE_URL="postgresql+asyncpg://postgres:${API_OBS_INFERENCE_DB_PASSWORD}@127.0.0.1:5433/api_obs_inference" \
+  DATABASE_URL="postgresql+asyncpg://postgres:${INFERENCE_DB_PASSWORD}@127.0.0.1:5433/api_obs_inference" \
     uv run alembic -c services/inference/alembic.ini revision --autogenerate -m "describe_change"
 )
 (
   set -a
   source .env
   set +a
-  DATABASE_URL="postgresql+asyncpg://postgres:${API_OBS_INFERENCE_DB_PASSWORD}@127.0.0.1:5433/api_obs_inference" \
+  DATABASE_URL="postgresql+asyncpg://postgres:${INFERENCE_DB_PASSWORD}@127.0.0.1:5433/api_obs_inference" \
     uv run alembic -c services/inference/alembic.ini upgrade head
 )
 (
   set -a
   source .env
   set +a
-  DATABASE_URL="postgresql+asyncpg://postgres:${API_OBS_INFERENCE_DB_PASSWORD}@127.0.0.1:5433/api_obs_inference" \
+  DATABASE_URL="postgresql+asyncpg://postgres:${INFERENCE_DB_PASSWORD}@127.0.0.1:5433/api_obs_inference" \
     uv run alembic -c services/inference/alembic.ini downgrade -1
 )
 ```
@@ -185,7 +185,7 @@ automatic in a deployed environment.
 Goal: operate the optional dependencies deliberately and explain which component owns each failure
 mode without turning the extended stack into the default development path.
 
-1. Enable `API_OBS_CACHE_ENABLED=true` and `API_OBS_BROKER_ENABLED=true` in `.env`, then start and
+1. Enable `CACHE_ENABLED=true` and `BROKER_ENABLED=true` in `.env`, then start and
    verify the extended stack:
 
    ```bash
@@ -200,8 +200,8 @@ mode without turning the extended stack into the default development path.
    PostgreSQL authority for the incident lifecycle.
 
 2. Keep notification delivery precise. Direct delivery is the default. To start the separate broker
-   consumer, also set `API_OBS_NOTIFICATIONS_ENABLED=true` and
-   `API_OBS_NOTIFICATION_DELIVERY_MODE=broker`, then run:
+    consumer, also set `NOTIFICATIONS_ENABLED=true` and
+    `NOTIFICATION_DELIVERY_MODE=broker`, then run:
 
    ```bash
    docker compose --profile broker up -d notification-consumer

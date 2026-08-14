@@ -16,6 +16,15 @@ Use tools immediately when the user asks to change files. Use `apply_patch` for 
 
 **Validate Python edits immediately.** After editing any `.py` file, run `python -m py_compile <file>` or `ruff check <file>` on that file before moving on. Do not batch edits across many files and validate only at the end. Catch syntax/indentation errors per file, then continue.
 
+
+## Mode gating
+
+At the start of each turn, check the current execution mode (ask, code, plan, etc.) before performing file operations. In ask/read-only modes, only read files; never write, edit, or execute side-effecting commands. File writes and edits are permitted only in code/plan modes.
+
+## Patterns & Gotchas
+
+- `docker compose up` with `--pull` followed immediately by service names breaks because `--pull` takes an optional argument (`always`/`missing`/`never`). Always use `--pull=always` or place `--wait` before `--pull` so service names aren’t consumed as the pull mode.
+
 ## Response style
 
 Default shape: result, key validation, next step if needed. Keep explanations short and technical. Prefer prose over lists unless the content is inherently list-shaped. For simple tasks, one short paragraph is enough.
@@ -31,7 +40,7 @@ Default shape: result, key validation, next step if needed. Keep explanations sh
 
 ## Git operations
 
-Never use `git add .` or `git add -A`. When staging for commit, explicitly list only the files relevant to the current task. If the task scope is unclear, ask before staging. Never drop git stashes in any repository; preserve them across sessions.
+Never use `git add .` or `git add -A`. When staging for commit, explicitly list only the files relevant to the current task. If the task scope is unclear, ask before staging. Never drop git stashes in any repository; preserve them across sessions. **Never git push code unless explicitly given such a task.**
 
 ## Commit messages
 
@@ -201,7 +210,7 @@ When a workflow repeats — especially across projects — promote it to a skill
 
 1. **Stale map?** If you discover that the Codebase Map above doesn't match reality, **update it now** before continuing your task. Don't leave it for later.
 
-2. **User correction?** If a human corrects your behavior (e.g., "don't use that API", "run tests this way"), add the correction to the appropriate section of this file (Local Norms, Guardrails, or Patterns & Gotchas) so future sessions inherit it.
+2. **User correction?** If a human corrects your behavior (e.g., "don't use that API", "run tests this way"), add the correction to the appropriate section of this file (Local Norms, Guardrails, or Patterns & Gotchas) **before continuing any other work**. Do not defer this to the end of the task. Future sessions depend on it.
 
 3. **Repeated friction?** If you notice yourself doing the same multi-step workflow more than once, consider creating a new skill in the appropriate agent skills directory. Use the [self-improving-agent skill](.claude/skills/self-improving-agent/SKILL.md) for the procedure.
 

@@ -9,7 +9,7 @@ tooling. PostgreSQL runs in application-owned Compose containers on the EC2 volu
 database is part of this MVP.
 
 [`release/services.json`](../../release/services.json) remains the portable release manifest. It
-defines the three deployable HTTP images and the immutable `tree-<full-tree-SHA>` tag convention.
+defines the four deployable images and the immutable `tree-<full-tree-SHA>` tag convention.
 `SERVICE_VERSION=tree-<SHA>` is release provenance, not the semantic application version.
 `APP_VERSION` remains an independently managed API/OpenAPI version, while
 `libs/contracts/VERSION` records shared-contract compatibility.

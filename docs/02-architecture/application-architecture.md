@@ -55,7 +55,7 @@ flowchart TB
 ```
 
 Core, always-on: Ingestor + PostgreSQL. Cache and Broker are optional and feature-flagged
-(`API_OBS_CACHE_ENABLED` / `API_OBS_BROKER_ENABLED`). Inference, the agent, and MCP are real
+(`CACHE_ENABLED` / `BROKER_ENABLED`). Inference, the agent, and MCP are real
 components; see the Containers diagram for their boundaries and ownership.
 
 ## Router / Feature Map

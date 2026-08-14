@@ -135,8 +135,8 @@ celerybeat.pid
 # For per-environment overrides (e.g. .env.development.local, .env.production.local, etc.) that should not be shared
 .env.*.local
 
-# Legacy local secret output — keep ignored for safe cleanup; the generator now updates .env.
-.generated.secrets.env
+# Generated secret output — never commit; copy values into .env manually
+.env.generated
 
 .venv
 env/

@@ -31,7 +31,7 @@ cost remains a design constraint, not a permanent ceiling.
 down, vector-search endpoints return 503 but core CRUD is unaffected.
 
 `inference-db` uses the same pgvector-enabled image as `ingestor-db` (`infra/database/Dockerfile`),
-with own volume, own credentials (`API_OBS_INFERENCE_DB_PASSWORD`), and own port (`5433`).
+with own volume, own credentials (`INFERENCE_DB_PASSWORD`), and own port (`5433`).
 **No Qdrant, today.**
 
 ### Service-boundary rationale
