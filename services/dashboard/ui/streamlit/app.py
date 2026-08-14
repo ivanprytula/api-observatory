@@ -46,6 +46,10 @@ def main() -> None:
 
     st.title("🔭 API Observatory")
 
+    if st.button("↻ Refresh"):
+        st.cache_data.clear()
+        st.rerun()
+
     ui = StreamlitUIAdapter()
     manager = ui.auth_manager_from_session()
 
@@ -115,18 +119,17 @@ def render_onboarding_guide(ui: StreamlitUIAdapter, manager, features: dict) -> 
         has_sources = features.get("has_sources", False)
         has_observations = features.get("has_observations", False)
 
-        st.markdown(
-            f"**Log in** — {'Done' if logged_in else 'Enter credentials in the sidebar'}"
-        )
-        st.markdown(
-            f"**Add sources** — {'Done' if has_sources else 'Add source URLs below'}"
-        )
-        st.markdown(
-            f"**Run probes** — {'Done' if has_observations else 'Use Probe All below'}"
-        )
-        st.markdown(
-            "**Explore data** — View observations, drift events, and health metrics"
-        )
+        steps = [
+            ("Log in", "Done" if logged_in else "Enter credentials in the sidebar"),
+            ("Add sources", "Done" if has_sources else "Add source URLs below"),
+            ("Run probes", "Done" if has_observations else "Use Probe All below"),
+            (
+                "Explore data",
+                "View observations, drift events, and health metrics",
+            ),
+        ]
+        for label, status in steps:
+            st.markdown(f"**{label}** — {status}")
 
 
 if __name__ == "__main__":
