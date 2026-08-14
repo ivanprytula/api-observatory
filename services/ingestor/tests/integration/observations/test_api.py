@@ -41,6 +41,52 @@ async def test_readyz_returns_200_when_db_available(client: AsyncClient) -> None
     body = r.json()
     assert body["status"] == "ready"
     assert body["db"] == "ok"
+    assert body["cache"] == "not_configured"
+    assert body["websocket"] == "disabled"
+
+
+@pytest.mark.integration
+async def test_readyz_reports_cache_ok_when_connected(
+    client_with_cache: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Readiness probe reports cache=ok when Redis is connected."""
+    from services.ingestor import main as main_module
+
+    monkeypatch.setattr(main_module.settings, "cache_enabled", True)
+    r = await client_with_cache.get("/readyz")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["cache"] == "ok"
+
+
+@pytest.mark.integration
+async def test_readyz_reports_cache_unreachable_when_enabled_but_not_connected(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Readiness probe reports cache=unreachable when cache_enabled=true but Redis client is None."""
+    from services.ingestor import cache
+    from services.ingestor import main as main_module
+
+    monkeypatch.setattr(main_module.settings, "cache_enabled", True)
+    cache._client = None
+    r = await client.get("/readyz")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["cache"] == "unreachable"
+
+
+@pytest.mark.integration
+async def test_readyz_reports_websocket_enabled(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Readiness probe reports websocket=enabled when WEBSOCKET_ENABLED=true."""
+    from services.ingestor import main as main_module
+
+    monkeypatch.setattr(main_module.settings, "websocket_enabled", True)
+    r = await client.get("/readyz")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["websocket"] == "enabled"
 
 
 @pytest.mark.integration

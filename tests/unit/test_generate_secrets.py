@@ -16,12 +16,12 @@ pytestmark = pytest.mark.unit
 
 _SCRIPT = Path(__file__).parents[2] / "scripts/tools/generate-secrets.py"
 _CORE_SECRET_KEYS = (
-    "API_OBS_INGESTOR_DB_PASSWORD",
-    "API_OBS_INFERENCE_DB_PASSWORD",
-    "API_OBS_CACHE_PASSWORD",
-    "API_OBS_JWT_SECRET",
-    "API_OBS_API_V1_BEARER_TOKEN",
-    "API_OBS_INTERNAL_JWT_SECRET",
+    "INGESTOR_DB_PASSWORD",
+    "INFERENCE_DB_PASSWORD",
+    "CACHE_PASSWORD",
+    "JWT_SECRET",
+    "API_V1_BEARER_TOKEN",
+    "INTERNAL_JWT_SECRET",
 )
 _GENERATION_COMMENT = re.compile(
     r"^# Generated at \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2} UTC "
@@ -39,24 +39,27 @@ def _run_generator(tmp_path: Path, *arguments: str) -> subprocess.CompletedProce
     )
 
 
-def _env_values(env_path: Path) -> dict[str, str]:
+def _generated_values(tmp_path: Path) -> dict[str, str]:
+    generated = tmp_path / ".env.generated"
     return {
         key: value
-        for line in env_path.read_text(encoding="utf-8").splitlines()
+        for line in generated.read_text(encoding="utf-8").splitlines()
         if "=" in line
         for key, value in [line.split("=", maxsplit=1)]
     }
 
 
-def test_generator_requires_existing_env_file(tmp_path: Path) -> None:
+def test_generator_creates_generated_file_without_env(tmp_path: Path) -> None:
     result = _run_generator(tmp_path)
 
-    assert result.returncode == 1
-    assert "Copy .env.example to .env" in result.stderr
-    assert not (tmp_path / ".generated.secrets.env").exists()
+    assert result.returncode == 0
+    generated = tmp_path / ".env.generated"
+    assert generated.exists()
+    assert stat.S_IMODE(generated.stat().st_mode) == 0o600
+    assert not (tmp_path / ".env").exists()
 
 
-def test_generator_adds_core_credentials_without_exposing_them(tmp_path: Path) -> None:
+def test_generator_does_not_touch_existing_env(tmp_path: Path) -> None:
     env_path = tmp_path / ".env"
     env_path.write_text(
         "# Generic local settings\nENVIRONMENT=development\n", encoding="utf-8"
@@ -65,52 +68,42 @@ def test_generator_adds_core_credentials_without_exposing_them(tmp_path: Path) -
     result = _run_generator(tmp_path)
 
     assert result.returncode == 0
-    assert result.stdout == "Updated 6 local credential value(s) in .env.\n"
-    values = _env_values(env_path)
-    assert "# Generic local settings" in env_path.read_text(encoding="utf-8")
-    assert values["ENVIRONMENT"] == "development"
-    assert all(key in values for key in _CORE_SECRET_KEYS)
-    assert (
-        values["API_OBS_INGESTOR_DB_PASSWORD"]
-        != values["API_OBS_INFERENCE_DB_PASSWORD"]
+    assert env_path.read_text(encoding="utf-8") == (
+        "# Generic local settings\nENVIRONMENT=development\n"
     )
-    assert values["API_OBS_INGESTOR_DB_PASSWORD"].isalnum()
-    assert values["API_OBS_INFERENCE_DB_PASSWORD"].isalnum()
+    values = _generated_values(tmp_path)
+    assert all(key in values for key in _CORE_SECRET_KEYS)
+    assert values["INGESTOR_DB_PASSWORD"] != values["INFERENCE_DB_PASSWORD"]
+    assert values["INGESTOR_DB_PASSWORD"].isalnum()
+    assert values["INFERENCE_DB_PASSWORD"].isalnum()
     comments = [
         line
-        for line in env_path.read_text(encoding="utf-8").splitlines()
+        for line in (tmp_path / ".env.generated").read_text(encoding="utf-8").splitlines()
         if line.startswith("# Generated")
+        and "UTC by scripts/tools/generate-secrets.py" in line
     ]
-    assert len(comments) == len(_CORE_SECRET_KEYS)
+    assert len(comments) == 1
     assert all(_GENERATION_COMMENT.fullmatch(comment) for comment in comments)
     generated_values = [values[key] for key in _CORE_SECRET_KEYS]
     assert all(value not in result.stdout for value in generated_values)
-    assert stat.S_IMODE(env_path.stat().st_mode) == 0o600
 
 
-def test_generator_rotates_one_credential_without_duplicate_keys(
-    tmp_path: Path,
-) -> None:
+def test_generator_writes_selected_key_to_generated_file(tmp_path: Path) -> None:
     env_path = tmp_path / ".env"
     env_path.write_text(
-        "API_OBS_CACHE_ENABLED=false\nAPI_OBS_CACHE_PASSWORD=old-value\n",
-        encoding="utf-8",
+        "CACHE_ENABLED=false\n", encoding="utf-8"
     )
 
     result = _run_generator(tmp_path, "--redis")
 
     assert result.returncode == 0
-    values = _env_values(env_path)
-    assert values["API_OBS_CACHE_ENABLED"] == "false"
-    assert values["API_OBS_CACHE_PASSWORD"] != "old-value"
-    assert env_path.read_text(encoding="utf-8").count("API_OBS_CACHE_PASSWORD=") == 1
-    assert any(
-        _GENERATION_COMMENT.fullmatch(line)
-        for line in env_path.read_text(encoding="utf-8").splitlines()
-    )
+    assert env_path.read_text(encoding="utf-8") == "CACHE_ENABLED=false\n"
+    values = _generated_values(tmp_path)
+    assert values["CACHE_PASSWORD"] != ""
+    assert (tmp_path / ".env.generated").read_text(encoding="utf-8").count("CACHE_PASSWORD=") == 1
 
 
-def test_generator_rejects_removed_unsupported_secret_flags(tmp_path: Path) -> None:
+def test_generator_rejects_unsupported_secret_flags(tmp_path: Path) -> None:
     (tmp_path / ".env").write_text("ENVIRONMENT=development\n", encoding="utf-8")
 
     result = _run_generator(tmp_path, "--session")
@@ -119,54 +112,19 @@ def test_generator_rejects_removed_unsupported_secret_flags(tmp_path: Path) -> N
     assert "unrecognized arguments: --session" in result.stderr
 
 
-def test_generator_removes_retired_generic_secret_names(tmp_path: Path) -> None:
-    env_path = tmp_path / ".env"
-    env_path.write_text(
-        "# Generated at 2026-01-01T00:00:00 UTC by scripts/tools/generate-secrets.py\n"
-        "POSTGRES_PASSWORD=old\nINFERENCE_DB_PASSWORD=old\nENVIRONMENT=development\n",
-        encoding="utf-8",
-    )
-
+def test_generator_uses_short_names_only(tmp_path: Path) -> None:
     result = _run_generator(tmp_path)
 
     assert result.returncode == 0
-    values = _env_values(env_path)
-    assert "POSTGRES_PASSWORD" not in values
-    assert "INFERENCE_DB_PASSWORD" not in values
-    assert "API_OBS_INGESTOR_DB_PASSWORD" in values
-    assert "API_OBS_INFERENCE_DB_PASSWORD" in values
-    assert "2026-01-01T00:00:00 UTC" not in env_path.read_text(encoding="utf-8")
+    values = _generated_values(tmp_path)
+    assert all(key in values for key in _CORE_SECRET_KEYS)
+    assert not any(key.startswith("API_OBS_") for key in values)
+    assert not any(key in {"POSTGRES_PASSWORD", "REDIS_PASSWORD"} for key in values)
 
 
-def test_generator_renames_retired_local_feature_settings(tmp_path: Path) -> None:
-    env_path = tmp_path / ".env"
-    env_path.write_text(
-        "CACHE_ENABLED=true\nBROKER_ENABLED=false\nLOCAL_HTTPS=true\n",
-        encoding="utf-8",
-    )
-
-    result = _run_generator(tmp_path, "--redis")
-
-    assert result.returncode == 0
-    values = _env_values(env_path)
-    assert values["API_OBS_CACHE_ENABLED"] == "true"
-    assert values["API_OBS_BROKER_ENABLED"] == "false"
-    assert values["API_OBS_LOCAL_HTTPS"] == "true"
-    assert "CACHE_ENABLED" not in values
-    assert "BROKER_ENABLED" not in values
-    assert "LOCAL_HTTPS" not in values
-
-
-def test_generator_removes_retired_inference_workflow_setting(tmp_path: Path) -> None:
-    env_path = tmp_path / ".env"
-    env_path.write_text(
-        "INFERENCE_ENABLED=true\nAPI_OBS_INFERENCE_ENABLED=true\n",
-        encoding="utf-8",
-    )
-
+def test_generator_removed_settings_not_in_generated(tmp_path: Path) -> None:
     result = _run_generator(tmp_path, "--inference-db")
 
     assert result.returncode == 0
-    values = _env_values(env_path)
+    values = _generated_values(tmp_path)
     assert "INFERENCE_ENABLED" not in values
-    assert "API_OBS_INFERENCE_ENABLED" not in values
