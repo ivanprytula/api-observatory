@@ -1,0 +1,6 @@
+{
+  "skills": {
+    "paths": [".opencode/skills"]
+  },
+  "instructions": ["SECURITY.md"]
+}

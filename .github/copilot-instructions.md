@@ -139,3 +139,11 @@ Any URL supplied by a user that will be used in a server-side HTTP request must 
 - Resolved IP must not fall in private ranges: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `::1`
 - Use `ipaddress` stdlib module to check the resolved IP after DNS resolution
 - This applies to: `SourceProfile.base_url`, webhook URLs, scraper targets, any other user-controlled URL
+
+## Shared Standards
+
+Centralized standards in `../agent-forge/`:
+
+- Skills → `../agent-forge/skills/<name>/SKILL.md` (linked into `.github/copilot/skills/`)
+- Instructions → `../agent-forge/instructions/<topic>.instructions.md`
+- Read the matching file before producing significant code in that area.
