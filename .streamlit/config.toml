@@ -1,23 +1,12 @@
-# Streamlit server configuration
-# Security-focused settings for production-like deployment
-
-[server]
-# Headless mode for container deployment
-headless = true
-# Disable CORS for same-origin deployment (controlled by nginx)
-enableCORS = false
-# Disable XSRF protection since we're behind nginx with auth
-enableXsrfProtection = false
-# Port and address (overridden by env vars)
-port = 8501
-address = "0.0.0.0"
-
-[browser]
-# Don't open browser automatically in container
-gatherUsageStats = false
-
 [theme]
-primaryColor = "#3b82f6"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f3f4f6"
-textColor = "#111827"
+baseFontSize = 12
+# font = "sans-serif"
+# headingFont = "sans-serif"
+# codeFont = "monospace"
+# codeFontSize = "0.8rem"
+# primaryColor = "#ff4b4b"
+
+# [theme.sidebar]
+# font = "sans-serif"
+# headingFont = "sans-serif"
+# codeFont = "monospace"

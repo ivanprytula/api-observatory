@@ -62,8 +62,8 @@ jobs:
             delivery:
               - 'deployment/aws-mvp/**'
               - 'environments/aws-dev/images.lock.json'
-              - 'scripts/promote_mvp_images.py'
-              - 'scripts/validate_mvp_contract.py'
+              - 'scripts/ci/promote_lock.py'
+              - 'scripts/ci/deploy_ssm.py'
               - 'tests/unit/test_aws_mvp_delivery_contract.py'
               - '.github/workflows/ci.yml'
               - '.github/workflows/publish-images.yml'

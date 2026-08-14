@@ -124,7 +124,7 @@ jobs:
           RELEASE_METADATA: ${{ needs.publish.outputs.release_metadata }}
         run: |
           set -euo pipefail
-          uv run python scripts/ci/promote_release.py \
+          uv run python scripts/ci/promote_lock.py \
             --metadata-base64 "$RELEASE_METADATA" \
             --lock environments/aws-dev/images.lock.json
 

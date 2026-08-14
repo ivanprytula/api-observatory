@@ -81,19 +81,26 @@ jobs:
             dockerfile: services/inference/Dockerfile
           - service: dashboard
             dockerfile: services/dashboard/Dockerfile
+          - service: cache
+            dockerfile: null
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Build image locally
+        if: matrix.dockerfile != null
         env:
           IMAGE: assurance-${{ matrix.service }}:scan
         run: docker build --file "${{ matrix.dockerfile }}" --tag "${IMAGE}" .
 
+      - name: Pull base image for scan
+        if: matrix.dockerfile == null
+        run: docker pull redis:7-alpine
+
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: assurance-${{ matrix.service }}:scan
+          image-ref: ${{ matrix.dockerfile != null && format('assurance-{0}:scan', matrix.service) || 'redis:7-alpine' }}
           format: table
           ignore-unfixed: true
           scanners: vuln
