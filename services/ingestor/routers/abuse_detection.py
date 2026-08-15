@@ -1,13 +1,13 @@
 """Abuse Detection API endpoints.
 
-All routes require a valid API key with abuse scopes:
-- ``abuse:read``  — listing and querying signals, summary stats
-- ``abuse:write`` — creating and resolving signals
+All routes require JWT authentication with the appropriate role:
+- ``user`` / ``admin``  — listing and querying signals, summary stats
+- ``user`` / ``admin``  — creating and resolving signals
 """
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,15 +19,18 @@ from services.ingestor.api_schemas.abuse_detection import (
     AbuseSignalResponse,
     AbuseSummaryResponse,
 )
+from services.ingestor.auth import casbin_guard
 from services.ingestor.constants import API_V1_PREFIX, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from services.ingestor.database import get_db
 from services.ingestor.repositories import abuse_detection as repo
-from services.ingestor.security.api_keys import require_scope
 
 
 router = APIRouter(prefix=f"{API_V1_PREFIX}/abuse", tags=["abuse-detection"])
 
 type DbDep = Annotated[AsyncSession, Depends(get_db)]
+
+ReadJwtDep = Annotated[dict[str, Any], Depends(casbin_guard("user", "admin"))]
+WriteJwtDep = Annotated[dict[str, Any], Depends(casbin_guard("user", "admin"))]
 
 
 # ---------------------------------------------------------------------------
@@ -44,10 +47,10 @@ type DbDep = Annotated[AsyncSession, Depends(get_db)]
         "signal type, severity, actor type, and resolved status. "
         "Tenant-admin callers must supply their ``tenant_id`` to scope results."
     ),
-    dependencies=[Depends(require_scope("abuse:read"))],
 )
 async def list_signals(
     db: DbDep,
+    _claims: ReadJwtDep,
     tenant_id: int | None = Query(
         None, ge=1, description="Scope to a specific tenant."
     ),
@@ -55,7 +58,8 @@ async def list_signals(
     severity: str | None = Query(None, description="low | medium | high | critical"),
     actor_type: str | None = Query(None, description="Filter by actor type."),
     resolved: bool | None = Query(
-        None, description="True=only resolved, False=only open."
+        None,
+        description="True=only resolved, False=only open.",
     ),
     page: int = Query(1, ge=1, description="1-based page number."),
     page_size: int = Query(
@@ -110,10 +114,10 @@ async def list_signals(
     status_code=status.HTTP_201_CREATED,
     summary="Manually raise an abuse signal",
     description="Admin-only endpoint to manually create an abuse signal.",
-    dependencies=[Depends(require_scope("abuse:write"))],
 )
 async def create_signal(
     db: DbDep,
+    _claims: WriteJwtDep,
     payload: AbuseSignalCreate,
 ) -> AbuseSignalResponse:
     signal = await repo.create_signal(db, payload=payload)
@@ -130,10 +134,10 @@ async def create_signal(
     "/signals/{signal_id}",
     response_model=AbuseSignalResponse,
     summary="Get a single abuse signal",
-    dependencies=[Depends(require_scope("abuse:read"))],
 )
 async def get_signal(
     db: DbDep,
+    _claims: ReadJwtDep,
     signal_id: int,
     tenant_id: int | None = Query(None, ge=1, description="Scope lookup to a tenant."),
 ) -> AbuseSignalResponse:
@@ -155,10 +159,10 @@ async def get_signal(
     response_model=AbuseSignalResponse,
     summary="Resolve an open abuse signal",
     description="Mark a signal as resolved. No-op if already resolved.",
-    dependencies=[Depends(require_scope("abuse:write"))],
 )
 async def resolve_signal(
     db: DbDep,
+    _claims: WriteJwtDep,
     signal_id: int,
     payload: AbuseSignalResolve,
 ) -> AbuseSignalResponse:
@@ -190,10 +194,10 @@ async def resolve_signal(
         "Returns open/resolved counts, breakdown by severity, and top actors. "
         "Optionally scoped to a tenant."
     ),
-    dependencies=[Depends(require_scope("abuse:read"))],
 )
 async def get_summary(
     db: DbDep,
+    _claims: ReadJwtDep,
     tenant_id: int | None = Query(None, ge=1, description="Scope stats to a tenant."),
 ) -> AbuseSummaryResponse:
     return await repo.get_summary(db, tenant_id=tenant_id)

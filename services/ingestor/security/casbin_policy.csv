@@ -1,0 +1,5 @@
+g, admin, manager, *
+g, manager, user, *
+p, user, *, *, access
+p, manager, *, *, access
+p, admin, *, *, access

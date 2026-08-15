@@ -17,7 +17,7 @@ from services.ingestor.api_schemas.source_registry import (
     SourceProfileUpdate,
     SourceSummaryResponse,
 )
-from services.ingestor.auth import jwt_role_guard, verify_jwt_token
+from services.ingestor.auth import casbin_guard, verify_jwt_token
 from services.ingestor.constants import (
     API_V1_PREFIX,
     MAX_PAGE_SIZE,
@@ -53,7 +53,7 @@ def set_scheduler(scheduler: Any) -> None:
 
 type DbDep = Annotated[AsyncSession, Depends(get_db)]
 type JwtDep = Annotated[dict[str, Any], Depends(verify_jwt_token)]
-type AdminJwtDep = Annotated[dict[str, Any], Depends(jwt_role_guard("admin"))]
+type AdminJwtDep = Annotated[dict[str, Any], Depends(casbin_guard("admin"))]
 
 # ---------------------------------------------------------------------------
 # Shared error-response docs
@@ -106,6 +106,10 @@ async def register_source(
     try:
         await validate_source_base_url(str(payload.base_url))
     except ValueError as exc:
+        logger.warning(
+            "source_registration_failed",
+            extra={"base_url": str(payload.base_url), "reason": str(exc)},
+        )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
@@ -239,6 +243,14 @@ async def patch_source(
         try:
             await validate_source_base_url(str(patch.base_url))
         except ValueError as exc:
+            logger.warning(
+                "source_update_failed",
+                extra={
+                    "source_id": source_id,
+                    "base_url": str(patch.base_url),
+                    "reason": str(exc),
+                },
+            )
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=str(exc),

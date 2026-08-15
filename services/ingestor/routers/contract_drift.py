@@ -19,7 +19,7 @@ from services.ingestor.api_schemas.contract_drift import (
     DriftEventListResponse,
     DriftEventResponse,
 )
-from services.ingestor.auth import jwt_role_guard, verify_jwt_token
+from services.ingestor.auth import casbin_guard, get_casbin_enforcer, verify_jwt_token
 from services.ingestor.constants import API_V1_PREFIX, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from services.ingestor.database import get_db
 from services.ingestor.repositories.contract_drift import (
@@ -40,11 +40,9 @@ router = APIRouter(prefix=f"{API_V1_PREFIX}/contracts", tags=["contract-drift"])
 type DbDep = Annotated[AsyncSession, Depends(get_db)]
 type JwtDep = Annotated[dict[str, Any], Depends(verify_jwt_token)]
 # operator: data-ingest agents; admin: full access — both can ingest contract snapshots
-type OperatorJwtDep = Annotated[
-    dict[str, Any], Depends(jwt_role_guard("operator", "admin"))
-]
+type OperatorJwtDep = Annotated[dict[str, Any], Depends(casbin_guard("user", "admin"))]
 type BaselineEditorJwtDep = Annotated[
-    dict[str, Any], Depends(jwt_role_guard("writer", "tenant_admin", "admin"))
+    dict[str, Any], Depends(casbin_guard("user", "admin"))
 ]
 
 _R404_SOURCE = {
@@ -56,15 +54,11 @@ _R404_SOURCE = {
 
 
 def _roles(claims: dict[str, Any]) -> set[str]:
-    raw_roles = claims.get("roles", [])
-    roles = (
-        {str(role).lower() for role in raw_roles}
-        if isinstance(raw_roles, list)
-        else set()
-    )
-    if role := claims.get("role"):
-        roles.add(str(role).lower())
-    return roles
+    sub = claims.get("sub") or ""
+    tenant_id = claims.get("tenant_id")
+    domain = str(tenant_id) if tenant_id is not None else "*"
+    enforcer = get_casbin_enforcer()
+    return set(enforcer.get_roles_for_user_in_domain(sub, domain))
 
 
 async def _require_scoped_source(

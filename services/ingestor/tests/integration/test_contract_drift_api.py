@@ -9,7 +9,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.ingestor.auth import verify_jwt_token
+from services.ingestor.auth import get_casbin_enforcer, verify_jwt_token
 from services.ingestor.main import app
 from services.ingestor.models import (
     AgentRun,
@@ -655,11 +655,13 @@ class TestContractBaselineLifecycle:
         async def _other_tenant() -> dict[str, Any]:
             return {
                 "sub": "other-tenant-writer",
-                "role": "writer",
                 "tenant_id": 99,
             }
 
         app.dependency_overrides[verify_jwt_token] = _other_tenant
+        get_casbin_enforcer().add_role_for_user_in_domain(
+            "other-tenant-writer", "writer", "99"
+        )
         try:
             response = await client.get(
                 f"/api/v1/contracts/sources/{source_id}/baseline"

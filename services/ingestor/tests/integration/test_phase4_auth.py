@@ -13,10 +13,13 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.ingestor.auth import create_jwt_token, verify_jwt_token
+from services.ingestor.auth import (
+    create_jwt_token,
+    get_casbin_enforcer,
+    verify_jwt_token,
+)
 from services.ingestor.main import app
 from services.ingestor.models import Observation
-from services.ingestor.security.api_keys import verify_api_key
 
 
 pytestmark = pytest.mark.integration
@@ -57,9 +60,10 @@ async def test_v1_admin_operation_rejects_viewer(
     previous = app.dependency_overrides.get(verify_jwt_token)
 
     async def _viewer_claims() -> dict[str, Any]:
-        return {"sub": "viewer", "roles": ["viewer"]}
+        return {"sub": "viewer"}
 
     app.dependency_overrides[verify_jwt_token] = _viewer_claims
+    get_casbin_enforcer().add_role_for_user_in_domain("viewer", "viewer", "*")
     try:
         response = await client.post("/api/v1/analytics/refresh-materialized-view")
     finally:
@@ -88,7 +92,8 @@ async def test_jwt_tenant_claim_beats_conflicting_header(
     client: AsyncClient, db: AsyncSession
 ) -> None:
     """An untrusted header cannot override a verified JWT tenant claim."""
-    token = create_jwt_token("tenant-user", {"roles": ["writer"], "tenant_id": 7})
+    token = create_jwt_token("tenant-user", {"tenant_id": 7})
+    get_casbin_enforcer().add_role_for_user_in_domain("tenant-user", "user", "7")
     with _without_test_jwt_override():
         response = await client.post(
             "/api/v1/observations",
@@ -121,7 +126,7 @@ async def test_public_registration_creates_viewer_with_personal_tenant(
     )
 
     assert response.status_code == 201
-    assert response.json()["role"] == "viewer"
+    assert response.json()["role"] == "user"
     assert response.json()["tenant_id"] is not None
 
 
@@ -137,7 +142,7 @@ def test_default_route_inventory_excludes_opt_in_features() -> None:
 
 def _has_auth_dependency(route: APIRoute) -> bool:
     """Return whether a route's dependency tree reaches an auth verifier."""
-    verifiers = {verify_jwt_token, verify_api_key}
+    verifiers = {verify_jwt_token}
 
     def _walk(dependencies: list[Any]) -> bool:
         for dependency in dependencies:

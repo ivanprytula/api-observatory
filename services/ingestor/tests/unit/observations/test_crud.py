@@ -11,7 +11,6 @@ from services.ingestor.api_schemas.observations import (
 )
 from services.ingestor.models import Observation
 from services.ingestor.repositories.observations import (
-    claim_pending_events,
     create_observation,
     create_observations_batch,
     delete_observation,
@@ -21,6 +20,7 @@ from services.ingestor.repositories.observations import (
     update_observation,
     upsert_observation,
 )
+from services.ingestor.storage.events import claim_pending_events
 
 
 def _make_result(scalars_all=None, scalar_one=None):

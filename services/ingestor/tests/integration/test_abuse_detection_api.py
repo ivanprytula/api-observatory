@@ -8,33 +8,35 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from services.ingestor.auth import get_casbin_enforcer, verify_jwt_token
 from services.ingestor.main import app
-from services.ingestor.security import api_keys as _api_keys_module
 
 
 pytestmark = pytest.mark.integration
 
 
 # ---------------------------------------------------------------------------
-# Auth helper: override verify_api_key so all routes pass scope checks
+# Auth helper: override verify_jwt_token to supply test role claims
 # ---------------------------------------------------------------------------
 
 
-def _make_api_key_ctx(scopes: list[str]) -> dict[str, Any]:
+def _make_jwt_claims(sub: str, tenant_id: int | None = None) -> dict[str, Any]:
     return {
-        "api_key_id": 1,
-        "tenant_id": None,
-        "scopes": scopes,
-        "key_hash": "test",
+        "sub": sub,
+        "tenant_id": tenant_id,
     }
 
 
-async def _full_access_ctx() -> dict[str, Any]:
-    return _make_api_key_ctx(["abuse:read", "abuse:write"])
+async def _user_claims() -> dict[str, Any]:
+    return _make_jwt_claims("abuse-user", tenant_id=1)
 
 
-async def _read_only_ctx() -> dict[str, Any]:
-    return _make_api_key_ctx(["abuse:read"])
+async def _admin_claims() -> dict[str, Any]:
+    return _make_jwt_claims("abuse-admin", tenant_id=1)
+
+
+async def _no_role_claims() -> dict[str, Any]:
+    return _make_jwt_claims("abuse-user", tenant_id=1)
 
 
 # ---------------------------------------------------------------------------
@@ -61,11 +63,12 @@ class TestCreateSignal:
     async def test_create_returns_201(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
-        app.dependency_overrides[_api_keys_module.verify_api_key] = _full_access_ctx
+        app.dependency_overrides[verify_jwt_token] = _user_claims
+        get_casbin_enforcer().add_role_for_user_in_domain("abuse-user", "user", "1")
         try:
             response = await client.post("/api/v1/abuse/signals", json=_SIGNAL_PAYLOAD)
         finally:
-            app.dependency_overrides.pop(_api_keys_module.verify_api_key, None)
+            app.dependency_overrides.pop(verify_jwt_token, None)
 
         assert response.status_code == 201
         body = response.json()
@@ -78,24 +81,34 @@ class TestCreateSignal:
     async def test_create_missing_required_field_returns_422(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
-        app.dependency_overrides[_api_keys_module.verify_api_key] = _full_access_ctx
+        app.dependency_overrides[verify_jwt_token] = _user_claims
+        get_casbin_enforcer().add_role_for_user_in_domain("abuse-user", "user", "1")
         try:
             payload = {k: v for k, v in _SIGNAL_PAYLOAD.items() if k != "signal_type"}
             response = await client.post("/api/v1/abuse/signals", json=payload)
         finally:
-            app.dependency_overrides.pop(_api_keys_module.verify_api_key, None)
+            app.dependency_overrides.pop(verify_jwt_token, None)
 
         assert response.status_code == 422
 
-    async def test_create_requires_write_scope(
+    async def test_create_denies_no_role(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
-        app.dependency_overrides[_api_keys_module.verify_api_key] = _read_only_ctx
+        app.dependency_overrides[verify_jwt_token] = _no_role_claims
+        enforcer = get_casbin_enforcer()
+        print(f"\nDEBUG deny: adapter={type(enforcer.adapter).__name__}")
+        print(
+            f"DEBUG deny: roles={enforcer.get_roles_for_user_in_domain('abuse-user', '1')}"
+        )
+        print(
+            f"DEBUG deny: enforce={enforcer.enforce('abuse-user', '1', 'user', 'access')}"
+        )
         try:
             response = await client.post("/api/v1/abuse/signals", json=_SIGNAL_PAYLOAD)
         finally:
-            app.dependency_overrides.pop(_api_keys_module.verify_api_key, None)
+            app.dependency_overrides.pop(verify_jwt_token, None)
 
+        print(f"DEBUG deny: response={response.status_code}")
         assert response.status_code == 403
 
 
@@ -106,11 +119,12 @@ class TestListSignals:
     """GET /api/v1/abuse/signals — list with optional filters."""
 
     async def test_empty_list(self, client: AsyncClient, db: AsyncSession) -> None:
-        app.dependency_overrides[_api_keys_module.verify_api_key] = _full_access_ctx
+        app.dependency_overrides[verify_jwt_token] = _user_claims
+        get_casbin_enforcer().add_role_for_user_in_domain("abuse-user", "user", "1")
         try:
             response = await client.get("/api/v1/abuse/signals")
         finally:
-            app.dependency_overrides.pop(_api_keys_module.verify_api_key, None)
+            app.dependency_overrides.pop(verify_jwt_token, None)
 
         assert response.status_code == 200
         body = response.json()
@@ -120,12 +134,13 @@ class TestListSignals:
     async def test_list_returns_created_signal(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
-        app.dependency_overrides[_api_keys_module.verify_api_key] = _full_access_ctx
+        app.dependency_overrides[verify_jwt_token] = _user_claims
+        get_casbin_enforcer().add_role_for_user_in_domain("abuse-user", "user", "1")
         try:
             await client.post("/api/v1/abuse/signals", json=_SIGNAL_PAYLOAD)
             response = await client.get("/api/v1/abuse/signals")
         finally:
-            app.dependency_overrides.pop(_api_keys_module.verify_api_key, None)
+            app.dependency_overrides.pop(verify_jwt_token, None)
 
         assert response.status_code == 200
         body = response.json()
@@ -136,7 +151,8 @@ class TestListSignals:
     async def test_filter_by_signal_type(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
-        app.dependency_overrides[_api_keys_module.verify_api_key] = _full_access_ctx
+        app.dependency_overrides[verify_jwt_token] = _user_claims
+        get_casbin_enforcer().add_role_for_user_in_domain("abuse-user", "user", "1")
         try:
             await client.post("/api/v1/abuse/signals", json=_SIGNAL_PAYLOAD)
             await client.post(
@@ -151,7 +167,7 @@ class TestListSignals:
                 "/api/v1/abuse/signals?signal_type=noisy_source"
             )
         finally:
-            app.dependency_overrides.pop(_api_keys_module.verify_api_key, None)
+            app.dependency_overrides.pop(verify_jwt_token, None)
 
         assert response.status_code == 200
         body = response.json()
@@ -159,7 +175,8 @@ class TestListSignals:
         assert body["items"][0]["signal_type"] == "noisy_source"
 
     async def test_pagination(self, client: AsyncClient, db: AsyncSession) -> None:
-        app.dependency_overrides[_api_keys_module.verify_api_key] = _full_access_ctx
+        app.dependency_overrides[verify_jwt_token] = _user_claims
+        get_casbin_enforcer().add_role_for_user_in_domain("abuse-user", "user", "1")
         try:
             for i in range(5):
                 await client.post(
@@ -168,24 +185,24 @@ class TestListSignals:
                 )
             response = await client.get("/api/v1/abuse/signals?limit=2&offset=0")
         finally:
-            app.dependency_overrides.pop(_api_keys_module.verify_api_key, None)
+            app.dependency_overrides.pop(verify_jwt_token, None)
 
         assert response.status_code == 200
         body = response.json()
         assert body["total"] == 5
         assert len(body["items"]) == 2
 
-    async def test_list_requires_read_scope(
+    async def test_list_denies_unauthenticated(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
-        async def _no_scope_ctx() -> dict[str, Any]:
-            return _make_api_key_ctx([])
-
-        app.dependency_overrides[_api_keys_module.verify_api_key] = _no_scope_ctx
+        app.dependency_overrides[verify_jwt_token] = _no_role_claims
+        enforcer = get_casbin_enforcer()
+        for role in list(enforcer.get_roles_for_user_in_domain("abuse-user", "1")):
+            enforcer.delete_roles_for_user_in_domain("abuse-user", role, "1")
         try:
             response = await client.get("/api/v1/abuse/signals")
         finally:
-            app.dependency_overrides.pop(_api_keys_module.verify_api_key, None)
+            app.dependency_overrides.pop(verify_jwt_token, None)
 
         assert response.status_code == 403
 
@@ -199,7 +216,8 @@ class TestGetSignal:
     async def test_get_existing_returns_200(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
-        app.dependency_overrides[_api_keys_module.verify_api_key] = _full_access_ctx
+        app.dependency_overrides[verify_jwt_token] = _user_claims
+        get_casbin_enforcer().add_role_for_user_in_domain("abuse-user", "user", "1")
         try:
             create_resp = await client.post(
                 "/api/v1/abuse/signals", json=_SIGNAL_PAYLOAD
@@ -207,7 +225,7 @@ class TestGetSignal:
             signal_id = create_resp.json()["id"]
             response = await client.get(f"/api/v1/abuse/signals/{signal_id}")
         finally:
-            app.dependency_overrides.pop(_api_keys_module.verify_api_key, None)
+            app.dependency_overrides.pop(verify_jwt_token, None)
 
         assert response.status_code == 200
         body = response.json()
@@ -217,11 +235,12 @@ class TestGetSignal:
     async def test_get_nonexistent_returns_404(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
-        app.dependency_overrides[_api_keys_module.verify_api_key] = _full_access_ctx
+        app.dependency_overrides[verify_jwt_token] = _user_claims
+        get_casbin_enforcer().add_role_for_user_in_domain("abuse-user", "user", "1")
         try:
             response = await client.get("/api/v1/abuse/signals/999999")
         finally:
-            app.dependency_overrides.pop(_api_keys_module.verify_api_key, None)
+            app.dependency_overrides.pop(verify_jwt_token, None)
 
         assert response.status_code == 404
 
@@ -235,7 +254,8 @@ class TestResolveSignal:
     async def test_resolve_open_signal_returns_200(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
-        app.dependency_overrides[_api_keys_module.verify_api_key] = _full_access_ctx
+        app.dependency_overrides[verify_jwt_token] = _user_claims
+        get_casbin_enforcer().add_role_for_user_in_domain("abuse-user", "user", "1")
         try:
             create_resp = await client.post(
                 "/api/v1/abuse/signals", json=_SIGNAL_PAYLOAD
@@ -246,7 +266,7 @@ class TestResolveSignal:
                 json={"resolved_by": "admin", "notes": "False positive."},
             )
         finally:
-            app.dependency_overrides.pop(_api_keys_module.verify_api_key, None)
+            app.dependency_overrides.pop(verify_jwt_token, None)
 
         assert response.status_code == 200
         body = response.json()
@@ -258,21 +278,23 @@ class TestResolveSignal:
     async def test_resolve_nonexistent_returns_404(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
-        app.dependency_overrides[_api_keys_module.verify_api_key] = _full_access_ctx
+        app.dependency_overrides[verify_jwt_token] = _user_claims
+        get_casbin_enforcer().add_role_for_user_in_domain("abuse-user", "user", "1")
         try:
             response = await client.patch(
                 "/api/v1/abuse/signals/999999/resolve",
                 json={"resolved_by": "admin"},
             )
         finally:
-            app.dependency_overrides.pop(_api_keys_module.verify_api_key, None)
+            app.dependency_overrides.pop(verify_jwt_token, None)
 
         assert response.status_code == 404
 
     async def test_resolve_already_resolved_returns_404(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
-        app.dependency_overrides[_api_keys_module.verify_api_key] = _full_access_ctx
+        app.dependency_overrides[verify_jwt_token] = _user_claims
+        get_casbin_enforcer().add_role_for_user_in_domain("abuse-user", "user", "1")
         try:
             create_resp = await client.post(
                 "/api/v1/abuse/signals", json=_SIGNAL_PAYLOAD
@@ -288,30 +310,34 @@ class TestResolveSignal:
                 json={"resolved_by": "admin"},
             )
         finally:
-            app.dependency_overrides.pop(_api_keys_module.verify_api_key, None)
+            app.dependency_overrides.pop(verify_jwt_token, None)
 
         assert response.status_code == 404
 
-    async def test_resolve_requires_write_scope(
+    async def test_resolve_denies_no_role(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
-        app.dependency_overrides[_api_keys_module.verify_api_key] = _full_access_ctx
+        app.dependency_overrides[verify_jwt_token] = _user_claims
+        get_casbin_enforcer().add_role_for_user_in_domain("abuse-user", "user", "1")
         try:
             create_resp = await client.post(
                 "/api/v1/abuse/signals", json=_SIGNAL_PAYLOAD
             )
             signal_id = create_resp.json()["id"]
         finally:
-            app.dependency_overrides.pop(_api_keys_module.verify_api_key, None)
+            app.dependency_overrides.pop(verify_jwt_token, None)
 
-        app.dependency_overrides[_api_keys_module.verify_api_key] = _read_only_ctx
+        app.dependency_overrides[verify_jwt_token] = _no_role_claims
+        enforcer = get_casbin_enforcer()
+        for role in list(enforcer.get_roles_for_user_in_domain("abuse-user", "1")):
+            enforcer.delete_roles_for_user_in_domain("abuse-user", role, "1")
         try:
             response = await client.patch(
                 f"/api/v1/abuse/signals/{signal_id}/resolve",
                 json={"resolved_by": "admin"},
             )
         finally:
-            app.dependency_overrides.pop(_api_keys_module.verify_api_key, None)
+            app.dependency_overrides.pop(verify_jwt_token, None)
 
         assert response.status_code == 403
 
@@ -323,11 +349,12 @@ class TestAbuseSummary:
     """GET /api/v1/abuse/summary — aggregate statistics."""
 
     async def test_empty_summary(self, client: AsyncClient, db: AsyncSession) -> None:
-        app.dependency_overrides[_api_keys_module.verify_api_key] = _full_access_ctx
+        app.dependency_overrides[verify_jwt_token] = _user_claims
+        get_casbin_enforcer().add_role_for_user_in_domain("abuse-user", "user", "1")
         try:
             response = await client.get("/api/v1/abuse/summary")
         finally:
-            app.dependency_overrides.pop(_api_keys_module.verify_api_key, None)
+            app.dependency_overrides.pop(verify_jwt_token, None)
 
         assert response.status_code == 200
         body = response.json()
@@ -339,7 +366,8 @@ class TestAbuseSummary:
     async def test_summary_counts_open_signals(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
-        app.dependency_overrides[_api_keys_module.verify_api_key] = _full_access_ctx
+        app.dependency_overrides[verify_jwt_token] = _user_claims
+        get_casbin_enforcer().add_role_for_user_in_domain("abuse-user", "user", "1")
         try:
             await client.post("/api/v1/abuse/signals", json=_SIGNAL_PAYLOAD)
             await client.post(
@@ -348,7 +376,7 @@ class TestAbuseSummary:
             )
             response = await client.get("/api/v1/abuse/summary")
         finally:
-            app.dependency_overrides.pop(_api_keys_module.verify_api_key, None)
+            app.dependency_overrides.pop(verify_jwt_token, None)
 
         assert response.status_code == 200
         body = response.json()
@@ -361,7 +389,8 @@ class TestAbuseSummary:
     async def test_summary_counts_resolved_signals(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
-        app.dependency_overrides[_api_keys_module.verify_api_key] = _full_access_ctx
+        app.dependency_overrides[verify_jwt_token] = _user_claims
+        get_casbin_enforcer().add_role_for_user_in_domain("abuse-user", "user", "1")
         try:
             create_resp = await client.post(
                 "/api/v1/abuse/signals", json=_SIGNAL_PAYLOAD
@@ -373,23 +402,23 @@ class TestAbuseSummary:
             )
             response = await client.get("/api/v1/abuse/summary")
         finally:
-            app.dependency_overrides.pop(_api_keys_module.verify_api_key, None)
+            app.dependency_overrides.pop(verify_jwt_token, None)
 
         assert response.status_code == 200
         body = response.json()
         assert body["open_count"] == 0
         assert body["resolved_count"] == 1
 
-    async def test_summary_requires_read_scope(
+    async def test_summary_denies_unauthenticated(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
-        async def _no_scope_ctx() -> dict[str, Any]:
-            return _make_api_key_ctx([])
-
-        app.dependency_overrides[_api_keys_module.verify_api_key] = _no_scope_ctx
+        app.dependency_overrides[verify_jwt_token] = _no_role_claims
+        enforcer = get_casbin_enforcer()
+        for role in list(enforcer.get_roles_for_user_in_domain("abuse-user", "1")):
+            enforcer.delete_roles_for_user_in_domain("abuse-user", role, "1")
         try:
             response = await client.get("/api/v1/abuse/summary")
         finally:
-            app.dependency_overrides.pop(_api_keys_module.verify_api_key, None)
+            app.dependency_overrides.pop(verify_jwt_token, None)
 
         assert response.status_code == 403

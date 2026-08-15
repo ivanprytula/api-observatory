@@ -26,8 +26,8 @@ from services.ingestor.api_schemas.observations import (
 )
 from services.ingestor.auth import (
     DEFAULT_ROLE,
+    casbin_guard,
     create_session,
-    jwt_role_guard,
     session_role_guard,
     verify_jwt_token,
     verify_session,
@@ -119,22 +119,15 @@ _R429 = {
 type DbDep = Annotated[AsyncSession, Depends(get_db)]
 type SessionDep = Annotated[dict[str, Any], Depends(verify_session)]
 type WriterSessionDep = Annotated[
-    dict[str, Any], Depends(session_role_guard("writer", "admin", "tenant_admin"))
+    dict[str, Any], Depends(session_role_guard("user", "admin"))
 ]
-type AdminSessionDep = Annotated[
-    dict[str, Any], Depends(session_role_guard("admin", "tenant_admin"))
-]
+type AdminSessionDep = Annotated[dict[str, Any], Depends(session_role_guard("admin"))]
 
 # JWT-based auth for the primary (non-teaching) CRUD/analyze routes below —
-# same jwt_role_guard pattern already applied in contract_drift.py,
-# source_registry.py and scorecards.py (audit-gaps.md gap 🟠#6).
+# same casbin_guard pattern applied in production routers.
 type JwtDep = Annotated[dict[str, Any], Depends(verify_jwt_token)]
-type WriterJwtDep = Annotated[
-    dict[str, Any], Depends(jwt_role_guard("writer", "admin", "tenant_admin"))
-]
-type AdminJwtDep = Annotated[
-    dict[str, Any], Depends(jwt_role_guard("admin", "tenant_admin"))
-]
+type WriterJwtDep = Annotated[dict[str, Any], Depends(casbin_guard("user", "admin"))]
+type AdminJwtDep = Annotated[dict[str, Any], Depends(casbin_guard("admin"))]
 
 
 # ---------------------------------------------------------------------------
@@ -447,7 +440,7 @@ async def get_observation_secured(
 
 @demo_router.patch(
     "/{observation_id}/secure/archive",
-    summary="Archive observation with session RBAC (writer/admin)",
+    summary="Archive observation with session RBAC (user/admin)",
     response_model=ObservationResponse,
     responses={**_R401, **_R403, **_R404},
 )
@@ -456,7 +449,7 @@ async def archive_observation_secured(
     db: DbDep,
     session: WriterSessionDep,
 ) -> ObservationResponse:
-    """Archive a observation with session RBAC (writer/admin)."""
+    """Archive a observation with session RBAC (user/admin)."""
     logger.info(
         "observation_archive_secure",
         extra={"id": observation_id, "user_id": session.get("user_id")},

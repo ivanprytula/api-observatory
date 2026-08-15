@@ -7,12 +7,12 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.ingestor.api_schemas.observations import ObservationRequest
-from services.ingestor.auth import verify_jwt_token
+from services.ingestor.auth import get_casbin_enforcer, verify_jwt_token
 from services.ingestor.main import app
 
 
 async def _viewer_claims() -> dict[str, str]:
-    return {"sub": "viewer-user", "role": "viewer"}
+    return {"sub": "viewer-user"}
 
 
 @pytest.mark.demo
@@ -240,6 +240,7 @@ class TestJwtAuthOnCoreRoutes:
     ) -> None:
         saved = app.dependency_overrides.get(verify_jwt_token)
         app.dependency_overrides[verify_jwt_token] = _viewer_claims
+        get_casbin_enforcer().add_role_for_user_in_domain("viewer-user", "viewer", "*")
         try:
             response = await client.post(
                 "/api/v1/observations",
@@ -275,9 +276,10 @@ class TestJwtAuthOnCoreRoutes:
         saved = app.dependency_overrides.get(verify_jwt_token)
 
         async def _writer_claims() -> dict[str, str]:
-            return {"sub": "writer-user", "role": "writer"}
+            return {"sub": "writer-user"}
 
         app.dependency_overrides[verify_jwt_token] = _writer_claims
+        get_casbin_enforcer().add_role_for_user_in_domain("writer-user", "writer", "*")
         try:
             response = await client.delete(f"/api/v1/observations/{observation.id}")
         finally:

@@ -21,7 +21,7 @@ from services.ingestor.api_schemas.observations import (
     VectorSearchQueryResponse,
     VectorSearchReindexRecentRequest,
 )
-from services.ingestor.auth import jwt_role_guard
+from services.ingestor.auth import casbin_guard
 from services.ingestor.constants import API_V1_PREFIX
 from services.ingestor.database import get_db
 from services.ingestor.models import Observation
@@ -29,7 +29,7 @@ from services.ingestor.models import Observation
 
 logger = logging.getLogger(__name__)
 type DbDep = Annotated[AsyncSession, Depends(get_db)]
-type AdminJwtDep = Annotated[dict[str, Any], Depends(jwt_role_guard("admin"))]
+type AdminJwtDep = Annotated[dict[str, Any], Depends(casbin_guard("admin"))]
 
 router = APIRouter(prefix=f"{API_V1_PREFIX}/vector-search", tags=["vector-search"])
 

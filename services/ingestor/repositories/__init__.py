@@ -16,6 +16,7 @@ from . import (
     reporting_utils,
     source_registry,
     subscriptions,
+    users,
 )
 
 
@@ -37,4 +38,5 @@ __all__ = [
     "reporting_utils",
     "source_registry",
     "subscriptions",
+    "users",
 ]

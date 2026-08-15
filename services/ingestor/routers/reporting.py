@@ -18,7 +18,7 @@ from services.ingestor.api_schemas.reporting import (
     FreshnessSLAResponse,
     MetricSeriesListResponse,
 )
-from services.ingestor.auth import jwt_role_guard
+from services.ingestor.auth import casbin_guard
 from services.ingestor.constants import (
     API_V1_PREFIX,
     MAX_PAGE_SIZE,
@@ -49,9 +49,7 @@ from services.ingestor.repositories.reporting import (
 router = APIRouter(prefix=f"{API_V1_PREFIX}/reporting", tags=["reporting"])
 
 type DbDep = Annotated[AsyncSession, Depends(get_db)]
-type WriterJwtDep = Annotated[
-    dict[str, Any], Depends(jwt_role_guard("writer", "tenant_admin", "admin"))
-]
+type WriterJwtDep = Annotated[dict[str, Any], Depends(casbin_guard("user", "admin"))]
 
 _R422 = {
     "422": {

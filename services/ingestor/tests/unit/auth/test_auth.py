@@ -7,12 +7,11 @@ import pytest
 from fastapi import HTTPException
 
 from services.ingestor.auth import (
-    _extract_roles,
+    casbin_guard,
     create_jwt_token,
     create_refresh_token,
     create_session,
-    jwt_role_guard,
-    require_roles,
+    get_casbin_enforcer,
     revoke_refresh_token,
     session_role_guard,
     verify_bearer_token,
@@ -71,15 +70,20 @@ class TestBearerToken:
 class TestRbacHelpers:
     """RBAC helper unit tests for role extraction and permission checks."""
 
-    def test_extract_roles_from_role_and_roles_fields(self) -> None:
-        """`role` and `roles` payloads normalize into a single lowercase role set."""
-        claims = {"role": "Admin", "roles": ["Writer", "viewer"]}
-        assert _extract_roles(claims) == {"admin", "writer", "viewer"}
+    async def test_casbin_guard_allows_admin(self) -> None:
+        """casbin_guard allows users with matching Casbin roles."""
+        enforcer = get_casbin_enforcer()
+        enforcer.add_role_for_user_in_domain("admin-user", "admin", "1")
+        guard = casbin_guard("admin")
+        claims = {"sub": "admin-user", "tenant_id": 1}
+        result = await guard(claims)
+        assert result["sub"] == "admin-user"
 
-    def test_require_roles_raises_403_when_missing(self) -> None:
-        """require_roles rejects auth contexts lacking required role membership."""
+    async def test_casbin_guard_denies_unauthorized(self) -> None:
+        """casbin_guard blocks principals lacking required role membership."""
+        guard = casbin_guard("admin")
         with pytest.raises(HTTPException) as exc:
-            require_roles({"admin"}, {"viewer"})
+            await guard({"sub": "plain-user", "tenant_id": 1})
         assert exc.value.status_code == 403
 
     async def test_session_role_guard_allows_admin(self) -> None:
@@ -88,13 +92,6 @@ class TestRbacHelpers:
         session_data = {"user_id": "u1", "role": "admin"}
         result = await guard(session_data)
         assert result["user_id"] == "u1"
-
-    async def test_jwt_role_guard_denies_viewer_for_writer_route(self) -> None:
-        """jwt_role_guard blocks insufficient roles with 403."""
-        guard = jwt_role_guard("writer", "admin")
-        with pytest.raises(HTTPException) as exc:
-            await guard({"sub": "u2", "roles": ["viewer"]})
-        assert exc.value.status_code == 403
 
 
 # ---------------------------------------------------------------------------
@@ -138,10 +135,9 @@ class TestJWT:
 
     async def test_custom_claims_included(self) -> None:
         """Custom claims are preserved in the encoded token."""
-        token = create_jwt_token("user-2", {"role": "admin", "tier": "pro"})
+        token = create_jwt_token("user-2", {"tier": "pro"})
         claims = await verify_jwt_token(f"Bearer {token}")
 
-        assert claims["role"] == "admin"
         assert claims["tier"] == "pro"
 
     async def test_missing_header_raises_401(self) -> None:

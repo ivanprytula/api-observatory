@@ -67,7 +67,16 @@ async def test_bearer_claims_take_priority_and_set_admin_role(
 
     monkeypatch.setattr(
         "services.ingestor.auth.decode_jwt_claims",
-        lambda _token: {"tenant_id": "7", "roles": ["admin"]},
+        lambda _token: {"tenant_id": "7", "sub": "admin-user"},
+    )
+
+    class _FakeEnforcer:
+        def get_roles_for_user_in_domain(self, _sub: str, _domain: str) -> list[str]:
+            return ["admin"]
+
+    monkeypatch.setattr(
+        "services.ingestor.auth.get_casbin_enforcer",
+        lambda: _FakeEnforcer(),
     )
 
     await TenantMiddleware(app)(

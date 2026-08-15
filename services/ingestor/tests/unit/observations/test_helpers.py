@@ -193,7 +193,7 @@ class TestUpdateUserRole:
         mock_session.refresh = AsyncMock()
 
         with patch(
-            "services.ingestor.repositories.observations_crud.get_user_by_username",
+            "services.ingestor.repositories.users.get_user_by_username",
             new=AsyncMock(return_value=user),
         ):
             result = await update_user_role(mock_session, "alice", "admin")
@@ -206,7 +206,7 @@ class TestUpdateUserRole:
     async def test_returns_none_when_user_not_found(self) -> None:
         mock_session = MagicMock()
         with patch(
-            "services.ingestor.repositories.observations_crud.get_user_by_username",
+            "services.ingestor.repositories.users.get_user_by_username",
             new=AsyncMock(return_value=None),
         ):
             result = await update_user_role(mock_session, "ghost", "admin")

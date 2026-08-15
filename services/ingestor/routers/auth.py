@@ -12,20 +12,22 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from libs.platform.auth import InternalAuthDep
 from services.ingestor.api_schemas.observations import (
     LogoutRequest,
     RefreshRequest,
     RoleAssignment,
     TokenResponse,
     UserCreate,
+    UserListResponse,
     UserResponse,
 )
 from services.ingestor.auth import (
+    casbin_guard,
     create_jwt_token,
     create_refresh_token,
     create_session,
     delete_session,
+    get_user_roles_in_domain,
     revoke_refresh_token,
     verify_jwt_token,
     verify_refresh_token,
@@ -34,10 +36,13 @@ from services.ingestor.config import settings
 from services.ingestor.constants import API_V1_PREFIX
 from services.ingestor.database import get_db
 from services.ingestor.rate_limiting_token_bucket import enforce_public_v1_token_bucket
-from services.ingestor.repositories.observations import (
+from services.ingestor.repositories.users import (
+    count_active_admins,
     create_user,
+    delete_user,
+    get_user_by_id,
     get_user_by_username,
-    update_user_role,
+    list_users,
 )
 
 
@@ -76,7 +81,7 @@ async def register(body: UserCreate, db: DbDep) -> UserResponse:
             username=body.username,
             email=body.email,
             password_hash=password_hash,
-            role="viewer",
+            role="user",
             tenant_id=None,
         )
     except IntegrityError:
@@ -85,7 +90,9 @@ async def register(body: UserCreate, db: DbDep) -> UserResponse:
             detail="Username or email already registered.",
         ) from None
     logger.info("user_registered", extra={"username": body.username})
-    return UserResponse.model_validate(user)
+    user_roles = await get_user_roles_in_domain(db, user.username, user.tenant_id)
+    role = list(user_roles)[0] if user_roles else "user"
+    return UserResponse.model_validate(user).model_copy(update={"role": role})
 
 
 @router.post("/users/{username}/role", response_model=UserResponse)
@@ -93,26 +100,28 @@ async def assign_role(
     username: str,
     body: RoleAssignment,
     db: DbDep,
-    claims: InternalAuthDep,
+    claims: Annotated[dict[str, Any], Depends(casbin_guard("admin"))],
 ) -> UserResponse:
-    """Assign a role to a user (internal service-to-service only).
+    """Assign a role to a user (admin only).
 
-    Public registration always creates a ``viewer``; roles are assigned here
-    through the internal-auth channel so the caller must present a valid
-    service JWT signed with INTERNAL_JWT_SECRET.
+    Requires a valid user JWT with admin role.
 
     Args:
         username: Target user to update.
         body: RoleAssignment payload with the new role.
         db: Injected async database session.
-        claims: Verified internal service claims (dependency injection).
+        claims: Verified JWT claims (dependency injection).
 
     Returns:
         200 UserResponse with the updated role.
-        401 if the internal JWT is missing or invalid.
+        401 if the JWT is missing or invalid.
+        403 if the caller is not an admin.
         404 if the target user does not exist.
     """
-    user = await update_user_role(db, username, body.role)
+    from services.ingestor.auth import assign_user_role
+
+    await assign_user_role(db, username, body.role)
+    user = await get_user_by_username(db, username)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -120,9 +129,68 @@ async def assign_role(
         )
     logger.info(
         "user_role_assigned",
-        extra={"username": username, "role": body.role, "by_service": claims.sub},
+        extra={
+            "username": username,
+            "role": body.role,
+            "by_service": claims.get("sub", ""),
+        },
     )
-    return UserResponse.model_validate(user)
+    user_roles = await get_user_roles_in_domain(db, user.username, user.tenant_id)
+    role = list(user_roles)[0] if user_roles else "user"
+    return UserResponse.model_validate(user).model_copy(update={"role": role})
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user_route(
+    user_id: int,
+    db: DbDep,
+    claims: Annotated[dict[str, Any], Depends(casbin_guard("admin"))],
+) -> None:
+    """Soft-delete a user by ID (internal service-to-service only).
+
+    Prevents the caller from deleting itself and protects the last active admin.
+
+    Args:
+        user_id: Target user primary key.
+        db: Injected async database session.
+        claims: Verified internal service claims.
+
+    Returns:
+        204 No Content on success.
+        403 if the caller attempts to delete itself.
+        404 if the target user does not exist.
+        409 if the target is the last active admin.
+    """
+    caller: str = claims.get("sub", "")
+
+    user = await get_user_by_id(db, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+
+    if user.username == caller:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Users cannot delete themselves.",
+        )
+
+    from services.ingestor.auth import has_role_in_domain
+
+    if await has_role_in_domain(db, user.username, "admin", user.tenant_id):
+        remaining_admins = await count_active_admins(db, exclude_username=user.username)
+        if remaining_admins == 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot delete the last active admin.",
+            )
+
+    await delete_user(db, user.id)
+    logger.info(
+        "user_deleted",
+        extra={"username": user.username, "by_service": claims.get("sub", "")},
+    )
 
 
 @router.post("/token", response_model=TokenResponse)
@@ -162,19 +230,17 @@ async def login(
     # Issue JWT with tenant_id claim
     token = create_jwt_token(
         sub=user.username,
-        custom_claims={"role": user.role, "tenant_id": user.tenant_id},
+        custom_claims={"tenant_id": user.tenant_id},
     )
 
     # Issue refresh token (Cache-backed, revocable)
     refresh_token = await create_refresh_token(
         sub=user.username,
-        custom_claims={"role": user.role, "tenant_id": user.tenant_id},
+        custom_claims={"tenant_id": user.tenant_id},
     )
 
     # Also create a Cache session with tenant_id and set session cookie
-    session_id, _ = await create_session(
-        user.username, {"role": user.role, "tenant_id": user.tenant_id}
-    )
+    session_id, _ = await create_session(user.username, {"tenant_id": user.tenant_id})
     response.set_cookie(
         key="session_id",
         value=session_id,
@@ -212,7 +278,9 @@ async def me(claims: JwtDep, db: DbDep) -> UserResponse:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or inactive.",
         )
-    return UserResponse.model_validate(user)
+    user_roles = await get_user_roles_in_domain(db, user.username, user.tenant_id)
+    role = list(user_roles)[0] if user_roles else "user"
+    return UserResponse.model_validate(user).model_copy(update={"role": role})
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -279,7 +347,7 @@ async def refresh(
     if old_jti:
         await revoke_refresh_token(old_jti)
 
-    custom_claims = {"role": user.role, "tenant_id": user.tenant_id}
+    custom_claims = {"tenant_id": user.tenant_id}
     new_access_token = create_jwt_token(sub=username, custom_claims=custom_claims)
     new_refresh_token = await create_refresh_token(
         sub=username, custom_claims=custom_claims
@@ -287,3 +355,99 @@ async def refresh(
 
     logger.info("token_refreshed", extra={"username": username})
     return TokenResponse(access_token=new_access_token, refresh_token=new_refresh_token)
+
+
+# ============================================================================
+# Superadmin-protected admin management routes
+# ============================================================================
+
+
+@router.post(
+    "/admin/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED
+)
+async def create_admin(
+    body: UserCreate,
+    db: DbDep,
+    claims: Annotated[dict[str, Any], Depends(casbin_guard("admin"))],
+) -> UserResponse:
+    """Create a new admin user (admin only).
+
+    Args:
+        body: UserCreate payload with username, email, and password.
+        db: Injected async database session.
+        claims: Verified JWT payload.
+
+    Returns:
+        201 UserResponse with the created admin.
+        403 if the caller is not an admin.
+        409 if username or email is already taken.
+    """
+    username: str | None = claims.get("sub")
+    if not username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token claims.",
+        )
+
+    password_hash = _ph.hash(body.password)
+    try:
+        user = await create_user(
+            session=db,
+            username=body.username,
+            email=body.email,
+            password_hash=password_hash,
+            role="admin",
+            tenant_id=body.tenant_id,
+        )
+    except IntegrityError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Username or email already registered.",
+        ) from None
+    logger.info(
+        "admin_created",
+        extra={"username": body.username, "by": username},
+    )
+    user_roles = await get_user_roles_in_domain(db, user.username, user.tenant_id)
+    role = list(user_roles)[0] if user_roles else "user"
+    return UserResponse.model_validate(user).model_copy(update={"role": role})
+
+
+@router.get("/admin/users", response_model=UserListResponse)
+async def list_users_route(
+    db: DbDep,
+    claims: Annotated[dict[str, Any], Depends(casbin_guard("admin"))],
+    limit: int = 100,
+    offset: int = 0,
+) -> UserListResponse:
+    """List all users (admin only).
+
+    Args:
+        db: Injected async database session.
+        claims: Verified JWT payload.
+        limit: Maximum number of users to return.
+        offset: Number of users to skip.
+
+    Returns:
+        200 UserListResponse with paginated users.
+        403 if the caller is not an admin.
+    """
+    username: str | None = claims.get("sub")
+    if not username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token claims.",
+        )
+
+    users, total = await list_users(db, limit=limit, offset=offset)
+    responses = []
+    for u in users:
+        user_roles = await get_user_roles_in_domain(db, u.username, u.tenant_id)
+        role = list(user_roles)[0] if user_roles else "user"
+        responses.append(
+            UserResponse.model_validate(u).model_copy(update={"role": role})
+        )
+    return UserListResponse(
+        users=responses,
+        total=total,
+    )

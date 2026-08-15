@@ -1,22 +1,15 @@
 from services.ingestor.repositories.observations_crud import (
     _apply_tenant_filter,
-    add_tenant_to_user,
-    claim_pending_events,
     create_observation,
     create_observations_batch,
     create_observations_batch_naive,
-    create_user,
     delete_observation,
     get_observation,
     get_observations,
     get_observations_by_date_range,
-    get_user_by_id,
-    get_user_by_username,
-    has_tenant_access,
     mark_processed,
     soft_delete_observation,
     update_observation,
-    update_user_role,
     upsert_observation,
 )
 from services.ingestor.repositories.observations_queries import (
@@ -27,11 +20,18 @@ from services.ingestor.repositories.observations_queries import (
     get_observations_with_tag_counts,
     get_observations_with_tag_counts_naive,
 )
+from services.ingestor.repositories.users import (
+    add_tenant_to_user,
+    create_user,
+    get_user_by_id,
+    get_user_by_username,
+    has_tenant_access,
+    update_user_role,
+)
 
 
 __all__ = [
     "add_tenant_to_user",
-    "claim_pending_events",
     "create_observation",
     "create_observations_batch",
     "create_observations_batch_naive",

@@ -18,7 +18,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.ingestor.auth import verify_jwt_token
+from services.ingestor.auth import get_casbin_enforcer, verify_jwt_token
 from services.ingestor.main import app
 from services.ingestor.models import AgentRun, Observation, User
 
@@ -27,7 +27,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.capability_ai]
 
 
 async def _viewer_claims() -> dict[str, str]:
-    return {"sub": "viewer-user", "role": "viewer"}
+    return {"sub": "viewer-user"}
 
 
 async def _create_user(db: AsyncSession, *, username: str) -> User:
@@ -35,7 +35,6 @@ async def _create_user(db: AsyncSession, *, username: str) -> User:
         username=username,
         email=f"{username}@example.com",
         password_hash="not-a-real-hash",
-        role="admin",
     )
     db.add(user)
     await db.commit()
@@ -242,6 +241,7 @@ class TestAgentRouterAuth:
 
         saved = app.dependency_overrides.get(verify_jwt_token)
         app.dependency_overrides[verify_jwt_token] = _viewer_claims
+        get_casbin_enforcer().add_role_for_user_in_domain("viewer-user", "viewer", "*")
         try:
             response = await client.post(
                 f"/api/v1/agent/runs/{agent_run.id}/resume", json={"approve": True}

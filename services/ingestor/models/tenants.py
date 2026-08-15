@@ -19,25 +19,23 @@ class Tenant(Base, TimestampMixin):
 
 
 class User(Base, TimestampMixin):
-    """Basic user model for authentication and RBAC role assignment."""
+    """Basic user model for authentication."""
 
     __tablename__ = "users"
     __table_args__ = (
         Index("ix_users_username", "username", unique=True),
         Index("ix_users_email", "email", unique=True),
-        Index("ix_users_role", "role"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     username: Mapped[str] = mapped_column(String(64), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[str] = mapped_column(String(32), default="viewer", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     tenant_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     def __repr__(self) -> str:
-        return f"<User id={self.id} username={self.username!r} role={self.role!r}>"
+        return f"<User id={self.id} username={self.username!r}>"
 
 
 class UserTenant(Base, TimestampMixin):

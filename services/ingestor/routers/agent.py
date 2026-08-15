@@ -9,11 +9,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.ingestor.api_schemas.agent import AgentRunResponse, AgentRunResumeRequest
-from services.ingestor.auth import jwt_role_guard, verify_jwt_token
+from services.ingestor.auth import casbin_guard, verify_jwt_token
 from services.ingestor.constants import API_V1_PREFIX
 from services.ingestor.database import get_db
 from services.ingestor.models import AgentRun
-from services.ingestor.repositories.observations import get_user_by_username
+from services.ingestor.repositories.users import get_user_by_username
 
 
 logger = logging.getLogger(__name__)
@@ -22,10 +22,8 @@ router = APIRouter(prefix=f"{API_V1_PREFIX}/agent", tags=["agent"])
 
 DbDep = Annotated[AsyncSession, Depends(get_db)]
 JwtDep = Annotated[dict[str, Any], Depends(verify_jwt_token)]
-# writer: can approve/reject a paused run; admin/tenant_admin: full access
-ReviewerJwtDep = Annotated[
-    dict[str, Any], Depends(jwt_role_guard("writer", "admin", "tenant_admin"))
-]
+# user: can approve/reject a paused run; admin: full access
+ReviewerJwtDep = Annotated[dict[str, Any], Depends(casbin_guard("user", "admin"))]
 
 
 @router.get("/runs/{run_id}", response_model=AgentRunResponse)

@@ -6,9 +6,8 @@ This module exists as a side-by-side comparison with v1 (*the "before"*).
   v2  POST /api/v2/observations/fixed-window   — fixed-window comparison
   v2  POST /api/v2/observations/token-bucket   — in-memory token-bucket comparison
   v2  POST /api/v2/observations/sliding-window — exact sliding window
-  v2  POST /api/v2/observations/jwt       — JWT-protected (auth example)
 
-The business logic (creating a observation) is identical in every route.  Only the
+  The business logic (creating a observation) is identical in every route.  Only the
 rate-limiting strategy or auth mechanism changes.  This makes the algorithmic
 difference the *only* variable, useful for demos, benchmarks, and architecture discussions.
 
@@ -35,7 +34,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
@@ -52,7 +51,6 @@ from services.ingestor.api_schemas.observations import (
     UpsertRequest,
     UpsertResponse,
 )
-from services.ingestor.auth import create_jwt_token, jwt_role_guard
 from services.ingestor.constants import (
     API_V2_PREFIX,
     ENRICH_SEMAPHORE_LIMIT,
@@ -83,7 +81,6 @@ from services.ingestor.repositories.observations import (
     get_observations_cursor_paginated,
     get_observations_with_tag_counts,
     get_observations_with_tag_counts_naive,
-    has_tenant_access,
     upsert_observation,
 )
 
@@ -101,18 +98,6 @@ _R404 = {
         "content": {
             "application/json": {"example": {"detail": "Observation not found"}}
         },
-    }
-}
-_R401 = {
-    401: {
-        "description": "Not authenticated - missing or invalid bearer token.",
-        "content": {"application/json": {"example": {"detail": "Not authenticated"}}},
-    }
-}
-_R403 = {
-    403: {
-        "description": "Forbidden - authenticated but lacking required tenant/role scope.",
-        "content": {"application/json": {"example": {"detail": "Insufficient role"}}},
     }
 }
 _R409 = {
@@ -350,139 +335,6 @@ async def create_observation_sliding_window(
 # ---------------------------------------------------------------------------
 # JWT authentication endpoint
 # ---------------------------------------------------------------------------
-
-
-@router.post(
-    "/token",
-    status_code=status.HTTP_200_OK,
-    summary="Issue JWT token",
-    responses={},
-    description=(
-        "Generate a JWT bearer token for stateless auth.\n\n"
-        "**Usage**:\n"
-        "1. GET this endpoint with `user_id` query param\n"
-        "2. Receive a JWT token (valid for 60 minutes by default)\n"
-        "3. Include in subsequent requests: `Authorization: Bearer <token>`\n\n"
-        "**Token contains**: `sub` (user ID), `exp` (expiry), `iat` (issued at), "
-        "`iss` (issuer).\n\n"
-        "**Production note**: In real deployments, tokens are issued by a dedicated "
-        "auth service, not by every API. Token expiry and secret rotation follow "
-        "security policy."
-    ),
-)
-async def issue_jwt_token(user_id: str) -> dict[str, str]:
-    """Issue JWT token for the given user_id (learning example)."""
-    token = create_jwt_token(
-        user_id, {"scope": "observations:write", "roles": ["writer"]}
-    )
-    logger.info("jwt_issued", extra={"user_id": user_id, "role": "writer"})
-    return {"access_token": token, "token_type": "bearer"}  # nosec B105
-
-
-@router.post(
-    "/jwt",
-    response_model=ObservationResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Create observation — JWT auth",
-    responses={**_R401, **_R422},
-    description=(
-        "Create a observation authenticated via JWT bearer token.\n\n"
-        "**Flow**:\n"
-        "1. Call `POST /api/v2/observations/token?user_id=alice` → get JWT\n"
-        "2. Call this endpoint with `Authorization: Bearer <jwt>`\n"
-        "3. Observation is created if token is valid (not expired, signature OK)\n\n"
-        "**Difference from v1**:\n"
-        "- v1 uses sessions (server state) or bearer tokens (fixed per client)\n"
-        "- v2 uses stateless JWT: server verifies signature, no lookup required\n"
-        "- Scales better: no shared session store needed\n"
-        "- More complex: requires key rotation, careful expiry handling\n\n"
-        "**Response**: Standard ObservationResponse; no rate-limit headers (JWT demo, not RL)."
-    ),
-)
-async def create_observation_jwt(
-    body: ObservationRequest,
-    db: DbDep,
-    claims: dict[str, Any] = Depends(jwt_role_guard("writer", "admin", "tenant_admin")),  # noqa: B008
-) -> ObservationResponse:
-    """Create a observation authenticated via JWT token."""
-    user_id = claims.get("sub", "unknown")
-    logger.info(
-        "jwt_create_observation", extra={"user_id": user_id, "source": body.source}
-    )
-    observation = await create_observation(db, body)
-    return ObservationResponse.model_validate(observation)
-
-
-@router.post(
-    "/impersonate",
-    status_code=status.HTTP_200_OK,
-    summary="Impersonate Tenant (Active Tenant Context)",
-    responses={**_R401, **_R403},
-    description=(
-        "Exchange your current JWT for a new one with a different active `tenant_id`.\n\n"
-        "**Flow**:\n"
-        "1. Authenticate with an existing JWT containing `tenant_admin` or `admin` role.\n"
-        "2. Request to impersonate `target_tenant_id`.\n"
-        "3. Receive a new JWT scoped *only* to that tenant.\n\n"
-        "**Why this pattern?**\n"
-        "Instead of complex `tenant_id IN (1, 2, 3)` RLS policies, the backend remains "
-        "provably secure by strictly enforcing a single `app.tenant_id` context. The "
-        "auth layer handles the complexity of verifying *if* the user can switch.\n\n"
-        "*(Note: In production, this would query a `user_tenants` junction table to "
-        "verify access. Here it acts as a showcase of the token-exchange pattern.)*"
-    ),
-)
-async def impersonate_tenant(
-    target_tenant_id: int,
-    db: DbDep,
-    claims: dict[str, Any] = Depends(jwt_role_guard("tenant_admin", "admin")),  # noqa: B008
-) -> dict[str, str]:
-    """Exchange current JWT for one scoped to a new tenant."""
-    user_id = claims.get("sub", "unknown")
-    roles = claims.get("roles", [])
-    if not roles:
-        # Fallback if the token used 'role' instead of 'roles'
-        roles = [claims.get("role", "tenant_admin")]
-
-    # Admin bypass: Platform admins can impersonate anyone
-    if "admin" not in roles:
-        try:
-            user_id_int = int(user_id)
-            has_access = await has_tenant_access(db, user_id_int, target_tenant_id)
-            if not has_access:
-                logger.warning(
-                    "impersonate_denied",
-                    extra={"user_id": user_id, "target_tenant_id": target_tenant_id},
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"User {user_id} is not authorized for tenant {target_tenant_id}",
-                )
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid user ID format for DB lookup",
-            ) from None
-
-    # Issue a new token with the target_tenant_id
-    new_token = create_jwt_token(
-        sub=user_id,
-        custom_claims={
-            "roles": roles,
-            "tenant_id": target_tenant_id,
-            "impersonator_id": user_id,  # Audit trail: who is *really* making the request
-        },
-    )
-
-    logger.info(
-        "tenant_impersonated",
-        extra={"user_id": user_id, "target_tenant_id": target_tenant_id},
-    )
-    return {
-        "access_token": new_token,
-        "token_type": "bearer",  # nosec B105
-        "active_tenant_id": str(target_tenant_id),
-    }
 
 
 # ---------------------------------------------------------------------------

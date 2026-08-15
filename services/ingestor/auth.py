@@ -3,27 +3,28 @@
 from __future__ import annotations
 
 import logging
+import os
 import uuid
-from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import jwt
+from casbin import Enforcer
+from casbin.util import key_match
+from casbin_sqlalchemy_adapter import Adapter as CasbinSQLAlchemyAdapter
 from fastapi import Cookie, Depends, Header, HTTPException, status
 from jwt.exceptions import DecodeError, ExpiredSignatureError, InvalidSignatureError
 
 from libs.platform.auth import _emit_security_audit_event as emit_security_audit_event
 from services.ingestor.config import settings
-from services.ingestor.security.authorization import (
-    AuthorizationInput,
-    evaluate_authorization,
-)
 
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
-# Simple role names for RBAC learning examples.
-DEFAULT_ROLE = "viewer"
+DEFAULT_ROLE = "user"
 
 
 # ============================================================================
@@ -387,80 +388,155 @@ async def verify_jwt_token_str(token: str) -> dict[str, Any]:
 
 
 # ============================================================================
-# RBAC guards (unchanged)
+# Casbin RBAC
 # ============================================================================
 
 
-def _normalize_roles(raw_roles: Any) -> set[str]:
-    """Normalize role claims from str/list/tuple into a lowercase role set."""
-    if raw_roles is None:
-        return set()
-    if isinstance(raw_roles, str):
-        return {raw_roles.strip().lower()} if raw_roles.strip() else set()
-    if isinstance(raw_roles, Iterable):
-        roles = {str(role).strip().lower() for role in raw_roles if str(role).strip()}
-        return roles
-    return set()
+_casbin_enforcer: Enforcer | None = None
 
 
-def _extract_roles(claims_or_session: dict[str, Any]) -> set[str]:
-    """Extract normalized roles from auth context."""
-    roles = set()
-    roles.update(_normalize_roles(claims_or_session.get("roles")))
-    roles.update(_normalize_roles(claims_or_session.get("role")))
-    if not roles and claims_or_session.get("scope") == "observations:write":
-        roles.add("writer")
-    return roles
+def _casbin_database_url() -> str:
+    """Return a synchronous database URL for the casbin SQLAlchemy adapter."""
+    url = settings.database_url
+    if "+asyncpg" in url:
+        url = url.replace("+asyncpg", "+psycopg")
+    elif "+psycopg" not in url:
+        url = url.replace("postgresql://", "postgresql+psycopg://")
+    return url
 
 
-def require_roles(
-    required_roles: set[str],
-    current_roles: set[str],
-    *,
-    tenant_id: int | None = None,
-    resource_tenant_id: int | None = None,
-) -> None:
-    """Raise 403 when the current role set does not satisfy policy checks."""
-    decision = evaluate_authorization(
-        AuthorizationInput(
-            action="role_guard",
-            principal_type="user",
-            tenant_id=tenant_id,
-            resource_tenant_id=resource_tenant_id,
-            roles=current_roles,
-            required_roles=required_roles,
+def get_casbin_enforcer() -> Enforcer:
+    """Lazily initialize and return the shared casbin Enforcer.
+
+    Uses the SQLAlchemy adapter backed by the ``casbin_rule`` table.
+    Falls back to a file adapter with default policies when the database
+    is unavailable (e.g., in unit tests).
+    The enforcer is cached on first call.
+    """
+    global _casbin_enforcer
+    if _casbin_enforcer is None:
+        model_path = os.path.join(
+            os.path.dirname(__file__), "security", "casbin_model.conf"
         )
-    )
-    if not decision.allow:
+        policy_path = os.path.join(
+            os.path.dirname(__file__), "security", "casbin_policy.csv"
+        )
+        try:
+            adapter = CasbinSQLAlchemyAdapter(
+                _casbin_database_url(), create_all_models=True
+            )
+            _casbin_enforcer = Enforcer(model_path, adapter)
+        except Exception as exc:
+            logger.warning(
+                "casbin_fallback_to_file_adapter",
+                extra={"error": str(exc), "policy_path": policy_path},
+            )
+            from casbin import FileAdapter
+
+            _casbin_enforcer = Enforcer(model_path, FileAdapter(policy_path))
+    _casbin_enforcer.add_named_domain_matching_func("g", key_match)
+    return _casbin_enforcer
+
+
+def casbin_guard(*required_roles: str):
+    """Create a JWT-based Casbin RBAC dependency.
+
+    Checks ``enforce()`` against persistent g-rules in the ``casbin_rule`` table.
+    The JWT must carry ``sub`` and ``tenant_id`` claims.
+    """
+    normalized_required = [role.lower() for role in required_roles]
+
+    async def _guard(
+        claims: dict[str, Any] = Depends(verify_jwt_token),
+    ) -> dict[str, Any]:
+        enforcer = get_casbin_enforcer()
+        sub = claims.get("sub") or ""
+        tenant_id = claims.get("tenant_id")
+        domain = str(tenant_id) if tenant_id is not None else "*"
+
+        for role in normalized_required:
+            if enforcer.enforce(sub, domain, role, "access"):
+                return claims
+
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Insufficient role permissions",
         )
 
+    return _guard
+
 
 def session_role_guard(*required_roles: str):
-    """Create a session-based RBAC dependency."""
-    normalized_required = {role.lower() for role in required_roles}
+    """Create a session-based RBAC dependency for demo routes."""
+    normalized_required = [role.lower() for role in required_roles]
 
     async def _guard(
         session: dict[str, Any] = Depends(verify_session),
     ) -> dict[str, Any]:
-        roles = _extract_roles(session)
-        require_roles(normalized_required, roles)
+        raw_roles = session.get("roles", [])
+        session_roles = (
+            {str(role).lower() for role in raw_roles}
+            if isinstance(raw_roles, list)
+            else set()
+        )
+        role = session.get("role")
+        if role:
+            session_roles.add(str(role).lower())
+
+        if not set(normalized_required).intersection(session_roles):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient role permissions",
+            )
         return session
 
     return _guard
 
 
-def jwt_role_guard(*required_roles: str):
-    """Create a JWT-based RBAC dependency."""
-    normalized_required = {role.lower() for role in required_roles}
+# ============================================================================
+# Role management helpers
+# ============================================================================
 
-    async def _guard(
-        claims: dict[str, Any] = Depends(verify_jwt_token),
-    ) -> dict[str, Any]:
-        roles = _extract_roles(claims)
-        require_roles(normalized_required, roles)
-        return claims
 
-    return _guard
+async def assign_user_role(
+    session: AsyncSession,
+    username: str,
+    role: str,
+    tenant_id: int | None = None,
+) -> None:
+    """Assign a Casbin g-rule mapping user -> role in domain."""
+    from sqlalchemy import text
+
+    enforcer = get_casbin_enforcer()
+    domain = str(tenant_id) if tenant_id is not None else "*"
+    enforcer.add_role_for_user_in_domain(username, role, domain)
+    await session.execute(
+        text(
+            "INSERT INTO casbin_rule (ptype, v0, v1, v2) VALUES ('g', :v0, :v1, :v2) "
+            "ON CONFLICT DO NOTHING"
+        ),
+        {"v0": username, "v1": role, "v2": domain},
+    )
+    await session.commit()
+
+
+async def get_user_roles_in_domain(
+    session: AsyncSession,
+    username: str,
+    tenant_id: int | None = None,
+) -> set[str]:
+    """Return Casbin roles for a user in a domain."""
+    enforcer = get_casbin_enforcer()
+    domain = str(tenant_id) if tenant_id is not None else "*"
+    return set(enforcer.get_roles_for_user_in_domain(username, domain))
+
+
+async def has_role_in_domain(
+    session: AsyncSession,
+    username: str,
+    role: str,
+    tenant_id: int | None = None,
+) -> bool:
+    """Check if user has a specific role in a domain."""
+    roles = await get_user_roles_in_domain(session, username, tenant_id)
+    return role.lower() in roles

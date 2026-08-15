@@ -27,7 +27,7 @@ from libs.platform.http_timeout import RequestTimeoutMiddleware
 from libs.platform.tracing import setup_tracing
 from libs.version import get_contracts_version, get_version_payload
 from services.ingestor.auth import (
-    jwt_role_guard,
+    casbin_guard,
 )
 from services.ingestor.cache import get_redis_client
 from services.ingestor.config import settings
@@ -36,6 +36,7 @@ from services.ingestor.core.background_workers import (
     BackgroundTaskStatus,
     BackgroundWorkerPool,
 )
+from services.ingestor.core.bootstrap import bootstrap_initial_admin
 from services.ingestor.core.logging import set_cid, setup_logging
 from services.ingestor.core.scheduler import JobScheduler
 from services.ingestor.core.sentry import setup_sentry
@@ -214,6 +215,16 @@ async def lifespan(app: FastAPI):
 
     # Initialize external services (Cache, Broker, MongoDB)
     await initialize_external_services()
+
+    # Bootstrap initial admin user on first startup (idempotent; skip if admin exists)
+    try:
+        async with AsyncSessionLocal() as session:
+            await bootstrap_initial_admin(session)
+    except Exception as exc:
+        logger.warning(
+            "initial_admin_bootstrap_failed",
+            extra={"error": str(exc)},
+        )
 
     if notification_outbox_publisher_enabled():
         _notification_outbox_publisher_task = asyncio.create_task(
@@ -569,26 +580,20 @@ _ROUTER_MODULES = [
     "reporting",
     "scorecards",
     "etl",
-    "api_keys",
     "abuse_detection",
 ]
 _ADMIN_PROTECTED_ROUTERS = {
-    "api_keys",
     "background_processing",
     "health_ingestion_jobs",
     "notifications",
+    "etl",
 }
-_WRITER_PROTECTED_ROUTERS = {"etl"}
 
 for _name in _ROUTER_MODULES:
     try:
         dependencies = [] if _name == "auth" else [Depends(enforce_v1_token_bucket)]
         if _name in _ADMIN_PROTECTED_ROUTERS:
-            dependencies.append(Depends(jwt_role_guard("admin")))
-        elif _name in _WRITER_PROTECTED_ROUTERS:
-            dependencies.append(
-                Depends(jwt_role_guard("writer", "tenant_admin", "admin"))
-            )
+            dependencies.append(Depends(casbin_guard("admin")))
         app.include_router(
             importlib.import_module(f"services.ingestor.routers.{_name}").router,
             dependencies=dependencies,

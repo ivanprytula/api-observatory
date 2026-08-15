@@ -1,12 +1,12 @@
 """Integration tests for /api/v1/auth endpoints."""
 
+from __future__ import annotations
+
 from typing import Any
 from unittest.mock import patch
 
 import pytest
 from httpx import AsyncClient
-
-from libs.platform.auth import generate_internal_token
 
 
 pytestmark = pytest.mark.integration
@@ -21,8 +21,6 @@ _TOKEN_URL = "/api/v1/auth/token"
 _ME_URL = "/api/v1/auth/me"
 _LOGOUT_URL = "/api/v1/auth/logout"
 _ROLE_URL = "/api/v1/auth/users/{username}/role"
-
-_INTERNAL_SECRET = "test-internal-secret-for-integration-tests"
 
 _USER: dict[str, str] = {
     "username": "testuser",
@@ -46,7 +44,7 @@ async def test_register_creates_user(client: AsyncClient) -> None:
     data: dict[str, Any] = resp.json()
     assert data["username"] == _USER["username"]
     assert data["email"] == _USER["email"]
-    assert data["role"] == "viewer"
+    assert data["role"] == "user"
     assert data["is_active"] is True
     assert "id" in data
     assert "password" not in data
@@ -167,33 +165,23 @@ async def test_logout_returns_204(session_id: str | None, client: AsyncClient) -
 
 
 # ---------------------------------------------------------------------------
-# Role assignment (internal service-to-service)
+# Role assignment (admin JWT required)
 # ---------------------------------------------------------------------------
 
 
-async def _internal_headers() -> dict[str, str]:
-    token = generate_internal_token("test-service")
-    return {"Authorization": f"Bearer {token}"}
-
-
-async def test_assign_role_with_internal_token(
-    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Internal JWT can promote a registered viewer to admin."""
-    monkeypatch.setenv("INTERNAL_JWT_SECRET", _INTERNAL_SECRET)
+async def test_assign_role_with_admin_token(client: AsyncClient) -> None:
+    """Admin JWT can promote a registered user to admin."""
     await client.post(_REGISTER_URL, json=_USER)
 
     resp = await client.post(
         _ROLE_URL.format(username=_USER["username"]),
         json={"role": "admin"},
-        headers=await _internal_headers(),
     )
     assert resp.status_code == 200
     data: dict[str, Any] = resp.json()
     assert data["role"] == "admin"
     assert data["username"] == _USER["username"]
 
-    # Login now returns an admin JWT claim.
     login = await client.post(
         _TOKEN_URL,
         data=_form_data(_USER["username"], _USER["password"]),
@@ -201,59 +189,174 @@ async def test_assign_role_with_internal_token(
     assert login.status_code == 200
 
 
-async def test_assign_role_missing_internal_token_returns_401(
-    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Role assignment without an internal JWT is rejected."""
-    monkeypatch.setenv("INTERNAL_JWT_SECRET", _INTERNAL_SECRET)
-    await client.post(_REGISTER_URL, json=_USER)
+async def test_assign_role_missing_token_returns_401(client: AsyncClient) -> None:
+    """Role assignment without a JWT is rejected."""
+    from services.ingestor.auth import verify_jwt_token
+    from services.ingestor.main import app
 
-    resp = await client.post(
-        _ROLE_URL.format(username=_USER["username"]),
-        json={"role": "admin"},
-    )
+    app.dependency_overrides.pop(verify_jwt_token, None)
+    try:
+        await client.post(_REGISTER_URL, json=_USER)
+        resp = await client.post(
+            _ROLE_URL.format(username=_USER["username"]),
+            json={"role": "admin"},
+        )
+    finally:
+
+        async def _mock_jwt() -> dict[str, Any]:
+            return {"sub": "testuser"}
+
+        app.dependency_overrides[verify_jwt_token] = _mock_jwt
+
     assert resp.status_code == 401
 
 
-async def test_assign_role_invalid_internal_token_returns_401(
-    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A tampered internal JWT is rejected."""
-    monkeypatch.setenv("INTERNAL_JWT_SECRET", _INTERNAL_SECRET)
-    await client.post(_REGISTER_URL, json=_USER)
+async def test_assign_role_non_admin_token_returns_403(client: AsyncClient) -> None:
+    """A non-admin JWT is rejected for role assignment."""
+    from services.ingestor.auth import get_casbin_enforcer, verify_jwt_token
+    from services.ingestor.main import app
 
-    resp = await client.post(
-        _ROLE_URL.format(username=_USER["username"]),
-        json={"role": "admin"},
-        headers={"Authorization": "Bearer invalid.internal.token"},
-    )
-    assert resp.status_code == 401
+    async def _user_jwt() -> dict[str, Any]:
+        return {"sub": "regular-user", "tenant_id": 1}
+
+    app.dependency_overrides[verify_jwt_token] = _user_jwt
+    get_casbin_enforcer().add_role_for_user_in_domain("regular-user", "user", "1")
+    try:
+        await client.post(_REGISTER_URL, json=_USER)
+        resp = await client.post(
+            _ROLE_URL.format(username=_USER["username"]),
+            json={"role": "admin"},
+        )
+    finally:
+
+        async def _mock_jwt() -> dict[str, Any]:
+            return {"sub": "testuser"}
+
+        app.dependency_overrides[verify_jwt_token] = _mock_jwt
+
+    assert resp.status_code == 403
 
 
-async def test_assign_role_unknown_user_returns_404(
-    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_assign_role_unknown_user_returns_404(client: AsyncClient) -> None:
     """Role assignment for a missing user returns 404."""
-    monkeypatch.setenv("INTERNAL_JWT_SECRET", _INTERNAL_SECRET)
-
     resp = await client.post(
         _ROLE_URL.format(username="ghost"),
         json={"role": "admin"},
-        headers=await _internal_headers(),
     )
     assert resp.status_code == 404
 
 
-async def test_assign_role_invalid_role_returns_422(
-    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_assign_role_invalid_role_returns_422(client: AsyncClient) -> None:
     """Roles outside the RBAC allow-list are rejected by validation."""
-    monkeypatch.setenv("INTERNAL_JWT_SECRET", _INTERNAL_SECRET)
     await client.post(_REGISTER_URL, json=_USER)
 
     resp = await client.post(
         _ROLE_URL.format(username=_USER["username"]),
         json={"role": "superuser"},
-        headers=await _internal_headers(),
     )
     assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# User deletion (admin JWT required)
+# ---------------------------------------------------------------------------
+
+
+async def test_delete_user_returns_204(client: AsyncClient) -> None:
+    """Admin JWT can soft-delete a registered user by user ID."""
+    victim = {**_USER, "username": "victim-user", "email": "victim@example.com"}
+    victim_resp = await client.post(_REGISTER_URL, json=victim)
+    assert victim_resp.status_code == 201
+    victim_id: int = victim_resp.json()["id"]
+
+    resp = await client.delete(f"/api/v1/auth/users/{victim_id}")
+    assert resp.status_code == 204
+
+    login = await client.post(
+        _TOKEN_URL,
+        data=_form_data(victim["username"], victim["password"]),
+    )
+    assert login.status_code == 401
+
+
+async def test_delete_self_returns_403(client: AsyncClient) -> None:
+    """A user cannot delete themselves, even with admin role."""
+    reg_resp = await client.post(_REGISTER_URL, json=_USER)
+    assert reg_resp.status_code == 201
+    user_id: int = reg_resp.json()["id"]
+
+    resp = await client.delete(f"/api/v1/auth/users/{user_id}")
+    assert resp.status_code == 403
+
+
+async def test_delete_last_admin_returns_403(client: AsyncClient) -> None:
+    """Deleting yourself when you are the sole active admin is rejected as self-delete."""
+    from services.ingestor.auth import get_casbin_enforcer, verify_jwt_token
+    from services.ingestor.main import app
+
+    admin1 = {**_USER, "username": "admin1", "email": "admin1@example.com"}
+    admin2 = {**_USER, "username": "admin2", "email": "admin2@example.com"}
+
+    admin1_resp = await client.post(_REGISTER_URL, json=admin1)
+    assert admin1_resp.status_code == 201
+    admin1_id: int = admin1_resp.json()["id"]
+
+    admin2_resp = await client.post(_REGISTER_URL, json=admin2)
+    assert admin2_resp.status_code == 201
+    admin2_id: int = admin2_resp.json()["id"]
+
+    await client.post(
+        _ROLE_URL.format(username=admin1["username"]),
+        json={"role": "admin"},
+    )
+    await client.post(
+        _ROLE_URL.format(username=admin2["username"]),
+        json={"role": "admin"},
+    )
+
+    async def _admin2_jwt() -> dict[str, Any]:
+        return {"sub": admin2["username"], "tenant_id": 1}
+
+    app.dependency_overrides[verify_jwt_token] = _admin2_jwt
+    get_casbin_enforcer().add_role_for_user_in_domain(admin2["username"], "admin", "1")
+    try:
+        await client.delete(f"/api/v1/auth/users/{admin1_id}")
+
+        resp = await client.delete(f"/api/v1/auth/users/{admin2_id}")
+    finally:
+
+        async def _mock_jwt() -> dict[str, Any]:
+            return {"sub": "testuser"}
+
+        app.dependency_overrides[verify_jwt_token] = _mock_jwt
+
+    assert resp.status_code == 403
+
+
+async def test_delete_user_missing_token_returns_401(client: AsyncClient) -> None:
+    """Deleting a user without a JWT is rejected."""
+    from services.ingestor.auth import verify_jwt_token
+    from services.ingestor.main import app
+
+    victim = {**_USER, "username": "victim-user", "email": "victim@example.com"}
+    victim_resp = await client.post(_REGISTER_URL, json=victim)
+    assert victim_resp.status_code == 201
+    victim_id: int = victim_resp.json()["id"]
+
+    app.dependency_overrides.pop(verify_jwt_token, None)
+    try:
+        resp = await client.delete(f"/api/v1/auth/users/{victim_id}")
+    finally:
+
+        async def _mock_jwt() -> dict[str, Any]:
+            return {"sub": "testuser"}
+
+        app.dependency_overrides[verify_jwt_token] = _mock_jwt
+
+    assert resp.status_code == 401
+
+
+async def test_delete_unknown_user_returns_404(client: AsyncClient) -> None:
+    """Deleting a missing user returns 404."""
+    resp = await client.delete("/api/v1/auth/users/999999")
+    assert resp.status_code == 404

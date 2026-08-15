@@ -24,6 +24,8 @@ dependencies = [
   "apscheduler>=3.11.3,<4.0",
   "websockets>=14.0",
   "python-multipart>=0.0.27",
+  "pycasbin>=2.8.0",
+  "casbin-sqlalchemy-adapter>=1.4.0",
 ]
 description = "API observability platform — multi-service system for monitoring API reliability, drift detection, semantic search, and scorecard reporting"
 readme = "README.md"

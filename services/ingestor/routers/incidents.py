@@ -11,7 +11,7 @@ from services.ingestor.api_schemas.incidents import (
     DependencyIncidentListResponse,
     DependencyIncidentResponse,
 )
-from services.ingestor.auth import jwt_role_guard, verify_jwt_token
+from services.ingestor.auth import casbin_guard, get_casbin_enforcer, verify_jwt_token
 from services.ingestor.constants import API_V1_PREFIX, MAX_PAGE_SIZE
 from services.ingestor.database import get_db
 from services.ingestor.metrics import dependency_incident_transitions_total
@@ -27,18 +27,15 @@ router = APIRouter(prefix=f"{API_V1_PREFIX}/incidents", tags=["incidents"])
 
 type DbDep = Annotated[AsyncSession, Depends(get_db)]
 type JwtDep = Annotated[dict[str, Any], Depends(verify_jwt_token)]
-type OperatorJwtDep = Annotated[
-    dict[str, Any], Depends(jwt_role_guard("operator", "admin"))
-]
+type OperatorJwtDep = Annotated[dict[str, Any], Depends(casbin_guard("user", "admin"))]
 
 
 def _roles(claims: dict[str, Any]) -> set[str]:
-    raw = claims.get("roles", [])
-    values = {str(value).lower() for value in raw} if isinstance(raw, list) else set()
-    role = claims.get("role")
-    if role:
-        values.add(str(role).lower())
-    return values
+    sub = claims.get("sub") or ""
+    tenant_id = claims.get("tenant_id")
+    domain = str(tenant_id) if tenant_id is not None else "*"
+    enforcer = get_casbin_enforcer()
+    return set(enforcer.get_roles_for_user_in_domain(sub, domain))
 
 
 def _scope(claims: dict[str, Any]) -> tuple[int | None, bool]:

@@ -222,6 +222,21 @@ async def _clear_observations(session: AsyncSession) -> None:
     await session.commit()
 
 
+def _clear_casbin() -> None:
+    """Remove all Casbin policies and role assignments from the enforcer,
+    then re-seed the default RBAC role hierarchy."""
+    from services.ingestor.auth import get_casbin_enforcer
+
+    enforcer = get_casbin_enforcer()
+    enforcer.remove_filtered_policy("", "", "", "")
+    enforcer.remove_filtered_grouping_policy("", "", "", "")
+    enforcer.add_policy("user", "*", "*", "access")
+    enforcer.add_policy("manager", "*", "*", "access")
+    enforcer.add_policy("admin", "*", "*", "access")
+    enforcer.add_grouping_policy("admin", "manager", "*")
+    enforcer.add_grouping_policy("manager", "user", "*")
+
+
 # ---------------------------------------------------------------------------
 # Timestamp Fixture (DRY: centralized test timestamp constant)
 # ---------------------------------------------------------------------------
@@ -318,9 +333,15 @@ async def client_with_cache(
     app.dependency_overrides[get_db] = _override_db
 
     async def _mock_jwt() -> dict:
-        return {"sub": "testuser", "role": "admin"}
+        return {"sub": "testuser"}
 
     app.dependency_overrides[verify_jwt_token] = _mock_jwt
+
+    # Seed Casbin so casbin_guard allows the default test user.
+    from services.ingestor.auth import get_casbin_enforcer
+
+    enforcer = get_casbin_enforcer()
+    enforcer.add_role_for_user_in_domain("testuser", "admin", "*")
 
     # Inject fake cache into cache module and auth module
     cache._client = fake_cache
@@ -438,6 +459,8 @@ async def db(apply_migrations: None) -> AsyncGenerator[AsyncSession]:
     assert _engine is not None, "_engine not initialized"
     assert _AsyncSessionLocal is not None, "_AsyncSessionLocal not initialized"
 
+    _clear_casbin()
+
     if not _is_postgres():
         async with _engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
@@ -495,9 +518,14 @@ async def client(db: AsyncSession, fake_cache) -> AsyncGenerator[AsyncClient]:
     app.dependency_overrides[get_db] = _override
 
     async def _mock_jwt() -> dict:
-        return {"sub": "testuser", "role": "admin"}
+        return {"sub": "testuser"}
 
     app.dependency_overrides[verify_jwt_token] = _mock_jwt
+
+    from services.ingestor.auth import get_casbin_enforcer
+
+    enforcer = get_casbin_enforcer()
+    enforcer.add_role_for_user_in_domain("testuser", "admin", "*")
 
     from services.ingestor import auth
 

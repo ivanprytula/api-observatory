@@ -60,14 +60,31 @@ class TenantMiddleware:
         if auth_header and auth_header.lower().startswith("bearer "):
             token_str = auth_header[7:].strip()
             try:
-                from services.ingestor.auth import decode_jwt_claims
+                from services.ingestor.auth import (
+                    decode_jwt_claims,
+                    get_casbin_enforcer,
+                )
 
                 payload = decode_jwt_claims(token_str)
                 tenant_id = payload.get("tenant_id")
-                roles = payload.get("roles", [])
-                user_role = "admin" if "admin" in roles else payload.get("role")
+                sub = payload.get("sub")
                 if tenant_id is not None and not isinstance(tenant_id, int):
                     tenant_id = int(tenant_id)
+                if sub and tenant_id is not None:
+                    enforcer = get_casbin_enforcer()
+                    domain = str(tenant_id)
+                    casbin_roles = set(
+                        enforcer.get_roles_for_user_in_domain(sub, domain)
+                    )
+                    user_role = (
+                        "admin"
+                        if "admin" in casbin_roles
+                        else (list(casbin_roles)[0] if casbin_roles else None)
+                    )
+                elif sub:
+                    user_role = payload.get("role")
+                else:
+                    user_role = None
             except Exception as exc:
                 logger.debug(
                     "jwt_tenant_context_unavailable", extra={"error": str(exc)}

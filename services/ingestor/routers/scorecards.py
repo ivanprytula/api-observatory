@@ -13,7 +13,7 @@ from services.ingestor.api_schemas.scorecards import (
     ProviderScorecard,
     ScorecardListResponse,
 )
-from services.ingestor.auth import jwt_role_guard, verify_jwt_token
+from services.ingestor.auth import casbin_guard, verify_jwt_token
 from services.ingestor.constants import (
     API_V1_PREFIX,
     MAX_PAGE_SIZE,
@@ -33,11 +33,9 @@ router = APIRouter(prefix=f"{API_V1_PREFIX}/scorecards", tags=["scorecards"])
 
 type DbDep = Annotated[AsyncSession, Depends(get_db)]
 type JwtDep = Annotated[dict[str, Any], Depends(verify_jwt_token)]
-type AdminJwtDep = Annotated[dict[str, Any], Depends(jwt_role_guard("admin"))]
-# operator: data-ingest agents; admin: full access — both can write probe telemetry
-type OperatorJwtDep = Annotated[
-    dict[str, Any], Depends(jwt_role_guard("operator", "admin"))
-]
+type AdminJwtDep = Annotated[dict[str, Any], Depends(casbin_guard("admin"))]
+# user: data-ingest agents and regular users; admin: full access — both can write probe telemetry
+type OperatorJwtDep = Annotated[dict[str, Any], Depends(casbin_guard("user", "admin"))]
 
 _R404 = {"404": {"description": "Source not found."}}
 _R422 = {

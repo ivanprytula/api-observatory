@@ -180,11 +180,24 @@ class Settings(BaseSettings):
         ),
     )
 
-    admin_token: str | None = Field(
+    init_admin_username: str | None = Field(
         default=None,
         description=(
-            "Privileged admin token for protected internal operations. "
-            "Injected by infra via secretKeyRef as ADMIN_TOKEN."
+            "Bootstrap this username as an admin on first startup when no admin exists. "
+            "Requires INIT_ADMIN_PASSWORD to also be set."
+        ),
+    )
+
+    init_admin_password: str | None = Field(
+        default=None,
+        description="Password for the bootstrap admin user created on first startup.",
+    )
+
+    init_admin_email: str | None = Field(
+        default=None,
+        description=(
+            "Email for the bootstrap admin user. "
+            "Defaults to <username>@example.com when unset."
         ),
     )
 
