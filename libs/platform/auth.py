@@ -1,7 +1,7 @@
 """Internal service-to-service JWT authentication.
 
-Provides token generation and verification for M2M calls within the data-zoo
-cluster. All services share a single INTERNAL_JWT_SECRET (from Secrets Manager).
+Provides token generation and verification for M2M calls within the cluster.
+All services share a single INTERNAL_JWT_SECRET (from Secrets Manager).
 
 Token claims:
 - iss: "api-observatory"

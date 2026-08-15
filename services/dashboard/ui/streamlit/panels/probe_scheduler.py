@@ -63,12 +63,15 @@ def use_queue_retry_metrics() -> dict:
     except API_REQUEST_ERRORS:
         metrics = ""
     return {
-        "queue_depth": parse_metric_value(metrics, "pipeline_background_jobs_in_queue") or 0,
+        "queue_depth": parse_metric_value(metrics, "pipeline_background_jobs_in_queue")
+        or 0,
         "retries_total": parse_prometheus_counter(
             metrics, "pipeline_job_executions_total", labels={"status": "failed"}
         ),
         "failed_total": parse_prometheus_counter(
-            metrics, "pipeline_background_jobs_processed_total", labels={"status": "failed"}
+            metrics,
+            "pipeline_background_jobs_processed_total",
+            labels={"status": "failed"},
         ),
     }
 
@@ -93,7 +96,7 @@ def render_probe_scheduler(ui: UIAdapter, auth: AuthManager) -> None:
 
     probe_results = ui.probe_results
 
-    col_all, col_clear = ui.columns([1, 5])
+    col_all, col_clear = ui.columns([2, 4])
     if col_all.button("Probe all", key="probe_all"):
         total = len(sources)
         status_holder = ui.empty()
@@ -114,7 +117,7 @@ def render_probe_scheduler(ui: UIAdapter, auth: AuthManager) -> None:
 
     for src in sources:
         sid = src.id
-        col_name, col_btn, col_result = ui.columns([2, 1, 4])
+        col_name, col_btn, col_result = ui.columns([3, 1, 3])
         col_name.markdown(f"**{src.name}** `#{sid}`")
 
         if col_btn.button("Probe", key=f"probe_{sid}"):
@@ -174,9 +177,21 @@ def render_queue_retry_health(ui: UIAdapter, auth: AuthManager) -> None:
     failed_total = data["failed_total"]
 
     q1, q2, q3 = ui.columns(3)
-    q1.metric("Queue depth", f"{queue_depth:,.0f}")
-    q2.metric("Job failures (total)", f"{retries_total:,.0f}")
-    q3.metric("Background failures (total)", f"{failed_total:,.0f}")
+    q1.metric(
+        "Queue depth",
+        f"{queue_depth:,.0f}",
+        help="Number of background jobs waiting to be processed.",
+    )
+    q2.metric(
+        "Job failures (total)",
+        f"{retries_total:,.0f}",
+        help="Total jobs that failed after all retry attempts.",
+    )
+    q3.metric(
+        "Background failures (total)",
+        f"{failed_total:,.0f}",
+        help="Total background task failures since service start.",
+    )
 
     if queue_depth > 0:
         ui.show_warning(

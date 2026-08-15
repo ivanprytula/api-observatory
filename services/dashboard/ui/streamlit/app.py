@@ -67,49 +67,31 @@ def main() -> None:
     features = ui.fetch_stack_features()
     render_onboarding_guide(ui, manager, features)
 
-    cache_status = features.get("cache_status", "unknown")
-    websocket_status = features.get("websocket_status", "unknown")
-    live_enabled = features.get("cache", False) and features.get("websocket", False)
-    if not live_enabled:
-        parts = []
-        if not features.get("cache", False):
-            if cache_status == "not_configured":
-                parts.append("Redis cache is not enabled")
-            elif cache_status == "unreachable":
-                parts.append("Redis cache is unreachable")
-            else:
-                parts.append("Redis cache status is unknown")
-        if not features.get("websocket", False):
-            if websocket_status == "disabled":
-                parts.append("WebSocket endpoint is disabled")
-            elif websocket_status != "enabled":
-                parts.append("WebSocket status is unknown")
-        if parts:
-            st.info("Live Stream disabled: " + " and ".join(parts) + ".")
-    if not features.get("has_sources", False):
+    if manager.state.logged_in:
+        st.divider()
+        st.subheader("Sources")
+        render_source_manager(ui, manager)
+
+        st.subheader("Probes")
+        render_probe_scheduler(ui, manager)
+        render_queue_retry_health(ui, manager)
+
+        render_observations_panel(ui, manager)
+        render_drift_events(ui, manager)
+        render_incidents(ui, manager)
+        if features.get("cache", False) and features.get("websocket", False):
+            render_live_stream(ui, manager)
+
+        st.subheader("Health")
+        render_source_health_table(ui, manager)
+        render_ingestion_throughput(ui)
+        render_freshness_heatmap(ui, manager)
+        render_service_health(ui, manager)
+    else:
         st.info(
-            "No sources yet. Add a source to unlock probes, observations, and health data."
+            "No sources yet. Log in and add a source to unlock "
+            "probes, observations, and health data."
         )
-
-    ui.subheader("Sources")
-    render_source_manager(ui, manager)
-
-    ui.subheader("Probes")
-    render_probe_scheduler(ui, manager)
-    render_queue_retry_health(ui, manager)
-
-    ui.subheader("Observations")
-    render_observations_panel(ui, manager)
-    render_drift_events(ui, manager)
-    render_incidents(ui, manager)
-    if features.get("cache", False) and features.get("websocket", False):
-        render_live_stream(ui, manager)
-
-    ui.subheader("Health")
-    render_source_health_table(ui, manager)
-    render_ingestion_throughput(ui)
-    render_freshness_heatmap(ui, manager)
-    render_service_health(ui, manager)
 
 
 def render_onboarding_guide(ui: StreamlitUIAdapter, manager, features: dict) -> None:

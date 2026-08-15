@@ -11,7 +11,6 @@ import asyncio
 import json
 import queue
 import threading
-import time
 from datetime import UTC, datetime
 
 from services.dashboard.core.auth import AuthManager
@@ -30,7 +29,14 @@ def use_ws_connection(ui: UIAdapter, auth: AuthManager) -> dict:
     Returns a dict with ``connected`` and ``messages`` keys.
     """
     if ui.ws_connected:
-        import websockets as _ws
+        try:
+            import websockets as _ws
+        except ImportError:
+            ui.ws_connected = False
+            return {
+                "connected": False,
+                "messages": ui.ws_messages[-config.max_stream_messages :],
+            }
 
         _stop = ui.ws_stop_event
         _buf = ui.ws_buffer
@@ -153,7 +159,7 @@ def render_live_stream(ui: UIAdapter, auth: AuthManager) -> None:
     data = use_ws_connection(ui, auth)
 
     if data["connected"]:
-        time.sleep(1)
+        ui.sleep(1000)
         ui.rerun()
 
     _render_messages(ui, data)

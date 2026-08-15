@@ -147,8 +147,8 @@ def _render_source_form(ui: UIAdapter, auth: AuthManager, data: dict) -> None:
                     ui.set("src_edit_id", None)
                     ui.clear_cache()
                     ui.rerun()
-                except DashboardApiError as e:
-                    if e.status_code == 403:
+                except API_REQUEST_ERRORS as e:
+                    if isinstance(e, DashboardApiError) and e.status_code == 403:
                         ui.show_error(
                             "Admin role required for this action. "
                             "Log in as an admin user from the sidebar."
@@ -188,8 +188,8 @@ def _render_source_list(ui: UIAdapter, auth: AuthManager, data: dict) -> None:
                     ui.show_success(f"Source '{src.name}' deleted.")
                     ui.clear_cache()
                     ui.rerun()
-                except DashboardApiError as e:
-                    if e.status_code == 403:
+                except API_REQUEST_ERRORS as e:
+                    if isinstance(e, DashboardApiError) and e.status_code == 403:
                         ui.show_error(
                             "Admin role required to delete sources. "
                             "Log in as an admin user from the sidebar."

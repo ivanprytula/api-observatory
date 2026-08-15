@@ -165,6 +165,28 @@ jobs:
           uv run pytest services/mcp/tests -q --no-cov
           uv run pytest services/ingestor/tests/contract -q -m contract --no-cov
 
+  dashboard-tests:
+    name: "Dashboard panel tests"
+    needs: [changes, code-quality]
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python project
+        uses: ./.github/actions/setup-python-project
+        with:
+          install-args: --frozen --all-packages
+
+      - name: Run dashboard tests
+        run: |
+          cd services/dashboard
+          uv run pytest tests/ -q --no-cov
+
   integration:
     name: "Core PostgreSQL integration and migrations"
     needs: [changes, code-quality, unit]

@@ -1,12 +1,15 @@
 [theme]
-baseFontSize = 12
-# font = "sans-serif"
-# headingFont = "sans-serif"
-# codeFont = "monospace"
-# codeFontSize = "0.8rem"
-# primaryColor = "#ff4b4b"
+baseFontSize = 14
+primaryColor = "#4A90D9"
+textColor = "#333333"
+font = "sans-serif"
+headingFont = "sans-serif"
+codeFont = "monospace"
+codeFontSize = "0.85rem"
 
-# [theme.sidebar]
-# font = "sans-serif"
-# headingFont = "sans-serif"
-# codeFont = "monospace"
+[theme.sidebar]
+primaryColor = "#4A90D9"
+textColor = "#333333"
+font = "sans-serif"
+headingFont = "sans-serif"
+codeFont = "monospace"

@@ -59,7 +59,15 @@ def render_incidents(ui: UIAdapter, auth: AuthManager) -> None:
     try:
         response = api.incidents.list(token=auth.access_token, limit=50)
     except API_REQUEST_ERRORS as exc:
-        ui.show_warning(f"Incident data unavailable: {_friendly_api_error(exc)}")
+        friendly = _friendly_api_error(exc)
+        if (
+            "401" in friendly
+            or "Missing Authorization" in friendly
+            or "Not authenticated" in friendly
+        ):
+            ui.show_info("Log in to view dependency incidents.")
+        else:
+            ui.show_warning(f"Incident data unavailable: {friendly}")
         return
 
     if not response.items:
@@ -92,7 +100,9 @@ def render_incidents(ui: UIAdapter, auth: AuthManager) -> None:
                     if incident.acknowledged_at
                     else "—"
                 )
-                meta_parts.append(f"Acknowledged by {incident.acknowledged_by} at {ack_ts}")
+                meta_parts.append(
+                    f"Acknowledged by {incident.acknowledged_by} at {ack_ts}"
+                )
             if incident.resolved_by:
                 res_ts = (
                     incident.resolved_at.isoformat()[:19]

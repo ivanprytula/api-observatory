@@ -76,7 +76,7 @@ def render_observations_panel(ui: UIAdapter, auth: AuthManager) -> None:
     )
     ui.set("obs_source_filter", source_filter)
 
-    col_size, col_prev, col_page, col_next = ui.columns([2, 1, 1, 1])
+    col_size, col_page = ui.columns([2, 1])
     with col_size:
         page_size = ui.selectbox(
             "Page size",
@@ -86,16 +86,30 @@ def render_observations_panel(ui: UIAdapter, auth: AuthManager) -> None:
         )
 
     page = ui.get("obs_page", 1)
-    with col_prev:
-        if ui.button("← Prev", key="obs_prev") and page > 1:
-            ui.set("obs_page", page - 1)
-            ui.rerun()
     with col_page:
         ui.write(f"Page {page}")
-    with col_next:
-        if ui.button("Next →", key="obs_next"):
-            ui.set("obs_page", page + 1)
-            ui.rerun()
+
+    data = use_observations_page(
+        token=auth.access_token,
+        page=page,
+        page_size=page_size,
+        source_filter=source_filter,
+    )
+    observations = data["observations"]
+    pagination = data["pagination"]
+
+    # Only show pagination buttons when there is data
+    if pagination and pagination.total > 0:
+        col_prev, _, col_next = ui.columns([1, 2, 1])
+        with col_prev:
+            if ui.button("← Prev", key="obs_prev") and page > 1:
+                ui.set("obs_page", page - 1)
+                ui.rerun()
+        with col_next:
+            total_pages = max(1, (pagination.total + page_size - 1) // page_size)
+            if ui.button("Next →", key="obs_next") and page < total_pages:
+                ui.set("obs_page", page + 1)
+                ui.rerun()
 
     data = use_observations_page(
         token=auth.access_token,
@@ -125,12 +139,10 @@ def render_observations_panel(ui: UIAdapter, auth: AuthManager) -> None:
                 ui.rerun()
         ui.divider()
 
-    start = (page - 1) * page_size + 1
-    end = start + len(observations) - 1
-    ui.caption(
-        f"Showing {start}–{end} of {pagination.total} observations"
-        + (f" | Page {page}" if page_size < pagination.total else "")
-    )
+    if pagination and pagination.total > 0:
+        start = (page - 1) * page_size + 1
+        end = start + len(observations) - 1
+        ui.caption(f"Showing {start}–{end} of {pagination.total} observations")
 
     ui.divider()
     ui.subheader("Detail View")

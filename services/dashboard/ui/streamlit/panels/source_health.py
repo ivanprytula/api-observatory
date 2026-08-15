@@ -105,9 +105,21 @@ def render_ingestion_throughput(ui: UIAdapter, metrics_text: str = "") -> None:
         else _parse_metrics_text(metrics_text)
     )
     c1, c2, c3 = ui.columns(3)
-    c1.metric("Observations received (total)", f"{data['observations_received']:,.0f}")
-    c2.metric("Queue lag", f"{data['queue_lag']:,.0f}")
-    c3.metric("Backfill batches (total)", f"{data['backfill_batches']:,.0f}")
+    c1.metric(
+        "Observations received (total)",
+        f"{data['observations_received']:,.0f}",
+        help="Total API observations ingested since the service started.",
+    )
+    c2.metric(
+        "Queue lag",
+        f"{data['queue_lag']:,.0f}",
+        help="Number of observations waiting in the ingestion queue.",
+    )
+    c3.metric(
+        "Backfill batches (total)",
+        f"{data['backfill_batches']:,.0f}",
+        help="Number of historical data batches reprocessed.",
+    )
 
 
 def _parse_metrics_text(metrics_text: str) -> dict:

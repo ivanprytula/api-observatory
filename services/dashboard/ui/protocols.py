@@ -81,6 +81,24 @@ class UIAdapter(Protocol):
     def setdefault(self, key: str, default: Any = None) -> Any:
         """Set a session value when it is absent."""
 
+    def has(self, key: str) -> bool:
+        """Return True if the session contains the key."""
+
+    def delete(self, key: str) -> None:
+        """Remove a key from session state."""
+
+    def clear(self) -> None:
+        """Clear all non-internal session state."""
+
+    def subscribe(self, key: str, callback: Callable[[Any], None]) -> Callable:
+        """Register a callback for session-state changes; returns an unsubscribe callable."""
+
+    def auth_manager_from_session(self) -> AuthManager:
+        """Return (or lazily create) the AuthManager for this session."""
+
+    def sync_auth_from_logged_in(self, manager: AuthManager) -> None:
+        """Sync auth state back into the session after a successful login/refresh."""
+
     @property
     def ws_messages(self) -> list[dict[str, Any]]:
         """Buffered WebSocket messages."""
@@ -116,6 +134,16 @@ class UIAdapter(Protocol):
 
     @probe_results.setter
     def probe_results(self, value: dict[int, dict[str, Any]]) -> None: ...
+
+    @property
+    def last_refresh(self) -> float:
+        """Timestamp of the last UI refresh."""
+
+    @last_refresh.setter
+    def last_refresh(self, value: float) -> None: ...
+
+    def fetch_stack_features(self) -> dict[str, object]:
+        """Return cached feature flags (cache, websocket, broker, sources)."""
 
     def header(self, text: str) -> None:
         """Render a section header."""
@@ -155,6 +183,33 @@ class UIAdapter(Protocol):
         """Render a button and return True when clicked."""
         ...
 
+    def toggle(
+        self,
+        label: str,
+        value: bool = False,
+        key: str | None = None,
+    ) -> bool:
+        """Render a toggle/switch and return its current value."""
+        ...
+
+    def selectbox(
+        self,
+        label: str,
+        options: Sequence[Any],
+        index: int = 0,
+        key: str | None = None,
+    ) -> Any:
+        """Render a selectbox and return the selected value."""
+        ...
+
+    def tabs(self, labels: list[str]) -> Any:
+        """Return a list of tab context-managers."""
+        ...
+
+    def spinner(self, text: str = "Loading...") -> Any:
+        """Return a spinner context-manager."""
+        ...
+
     def columns(self, spec: int | Sequence[int | float]) -> Any:
         """Return a list of column context-managers."""
         ...
@@ -191,6 +246,9 @@ class UIAdapter(Protocol):
 
     def markdown(self, text: str) -> None:
         """Render markdown text."""
+
+    def sleep(self, ms: float = 0.0) -> None:
+        """Pause execution for the given milliseconds (no-op in tests)."""
 
 
 # ---- Panel callbacks ----

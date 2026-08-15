@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import queue
 import threading
+import time
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Literal
 
@@ -300,3 +301,14 @@ class StreamlitUIAdapter:
         key: str | None = None,
     ) -> Any:
         return st.selectbox(label, options, index=index, key=key)
+
+    def toggle(
+        self,
+        label: str,
+        value: bool = False,
+        key: str | None = None,
+    ) -> bool:
+        return st.toggle(label, value=value, key=key)
+
+    def sleep(self, ms: float = 0.0) -> None:
+        time.sleep(max(ms, 0.0) / 1000.0)
