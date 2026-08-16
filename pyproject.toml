@@ -72,24 +72,6 @@ http = [
 mcp = [
   "fastmcp>=0.4.0",
 ]
-full = [
-  "opentelemetry-sdk>=1.44.0",
-  "opentelemetry-instrumentation-fastapi>=0.64b0",
-  "opentelemetry-instrumentation-sqlalchemy>=0.64b0",
-  "opentelemetry-exporter-otlp>=1.43.0",
-  "aiokafka>=0.11",
-  "openai>=2.53.0",
-  "anthropic>=0.121.0",
-  "langgraph>=1.2.10",
-  "langgraph-checkpoint-postgres>=3.1.2",
-  "langchain-anthropic>=1.5.4",
-  "pandas>=3.0.5",
-  "polars[rtcompat]>=1.30.0",
-  "sentry-sdk[fastapi]>=2.19.2",
-  "aiohttp>=3.14.3",
-  "pgvector>=0.3.0",
-  "fastmcp>=0.4.0",
-]
 
 [project.urls]
 Homepage = "https://github.com/ivanprytula/api-observatory"

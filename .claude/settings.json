@@ -19,6 +19,15 @@
             "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -qiE '(printenv|\\benv\\b|export|echo.*PASSWORD|echo.*SECRET|echo.*TOKEN|echo.*API_KEY)'; then echo 'BLOCKED: Command may leak secrets' >&2; exit 2; fi"
           }
         ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "../agent-forge/hooks/agent-cost-guardian/guard-tool.sh"
+          }
+        ]
       }
     ],
     "PostToolUse": [

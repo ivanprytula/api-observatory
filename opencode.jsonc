@@ -1,7 +1,11 @@
 {
   "$schema": "https://app.kilo.ai/config.json",
   "skills": {
-    "paths": [".opencode/skills"]
+    "paths": ["../agent-forge/skills"]
   },
-  "instructions": ["SECURITY.md"]
+  "instructions": ["SECURITY.md"],
+  "compaction": {
+    "auto": true,
+    "prune": true
+  }
 }
