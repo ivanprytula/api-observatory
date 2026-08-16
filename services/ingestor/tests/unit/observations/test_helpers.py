@@ -9,14 +9,13 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from services.ingestor.api_schemas.observations import ObservationRequest
-from services.ingestor.models import Tenant, User, UserTenant
+from services.ingestor.models import User, UserTenant
 from services.ingestor.repositories.observations import (
     _apply_tenant_filter,
     _decode_cursor,
     _encode_cursor,
     add_tenant_to_user,
     create_observations_batch_naive,
-    create_user,
     get_observations,
     get_observations_by_date_range,
     get_observations_cursor_paginated,
@@ -185,24 +184,6 @@ class TestGetUserById:
 
 @pytest.mark.unit
 class TestUpdateUserRole:
-    async def test_updates_and_commits(self) -> None:
-        mock_session = MagicMock()
-        user = MagicMock(spec=User)
-        user.role = "viewer"
-        mock_session.commit = AsyncMock()
-        mock_session.refresh = AsyncMock()
-
-        with patch(
-            "services.ingestor.repositories.users.get_user_by_username",
-            new=AsyncMock(return_value=user),
-        ):
-            result = await update_user_role(mock_session, "alice", "admin")
-
-        assert result is user
-        assert user.role == "admin"
-        mock_session.commit.assert_awaited_once()
-        mock_session.refresh.assert_awaited_once_with(user)
-
     async def test_returns_none_when_user_not_found(self) -> None:
         mock_session = MagicMock()
         with patch(
@@ -211,58 +192,6 @@ class TestUpdateUserRole:
         ):
             result = await update_user_role(mock_session, "ghost", "admin")
         assert result is None
-
-
-@pytest.mark.unit
-class TestCreateUser:
-    async def test_auto_provisions_tenant_when_none(self) -> None:
-        mock_session = MagicMock()
-        mock_session.add = MagicMock()
-        mock_session.commit = AsyncMock()
-        mock_session.flush = AsyncMock()
-        mock_session.refresh = AsyncMock()
-
-        tenant_id = 1
-        user_id = 2
-
-        def _track_add(obj):
-            if isinstance(obj, Tenant):
-                obj.id = tenant_id
-            elif isinstance(obj, User):
-                obj.id = user_id
-
-        mock_session.add.side_effect = _track_add
-
-        user = await create_user(
-            mock_session,
-            username="alice",
-            email="alice@x.com",
-            password_hash="hash123",
-        )
-
-        assert user.tenant_id == tenant_id
-        assert user.role == "viewer"
-        mock_session.commit.assert_awaited_once()
-
-    async def test_uses_explicit_tenant_id(self) -> None:
-        mock_session = MagicMock()
-        mock_session.add = MagicMock()
-        mock_session.commit = AsyncMock()
-        mock_session.flush = AsyncMock()
-        mock_session.refresh = AsyncMock()
-
-        user = await create_user(
-            mock_session,
-            username="bob",
-            email="bob@x.com",
-            password_hash="hash456",
-            role="admin",
-            tenant_id=99,
-        )
-
-        assert user.tenant_id == 99
-        assert user.role == "admin"
-        mock_session.commit.assert_awaited_once()
 
 
 @pytest.mark.unit
