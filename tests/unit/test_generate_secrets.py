@@ -78,7 +78,9 @@ def test_generator_does_not_touch_existing_env(tmp_path: Path) -> None:
     assert values["INFERENCE_DB_PASSWORD"].isalnum()
     comments = [
         line
-        for line in (tmp_path / ".env.generated").read_text(encoding="utf-8").splitlines()
+        for line in (tmp_path / ".env.generated")
+        .read_text(encoding="utf-8")
+        .splitlines()
         if line.startswith("# Generated")
         and "UTC by scripts/tools/generate-secrets.py" in line
     ]
@@ -90,9 +92,7 @@ def test_generator_does_not_touch_existing_env(tmp_path: Path) -> None:
 
 def test_generator_writes_selected_key_to_generated_file(tmp_path: Path) -> None:
     env_path = tmp_path / ".env"
-    env_path.write_text(
-        "CACHE_ENABLED=false\n", encoding="utf-8"
-    )
+    env_path.write_text("CACHE_ENABLED=false\n", encoding="utf-8")
 
     result = _run_generator(tmp_path, "--redis")
 
@@ -100,7 +100,9 @@ def test_generator_writes_selected_key_to_generated_file(tmp_path: Path) -> None
     assert env_path.read_text(encoding="utf-8") == "CACHE_ENABLED=false\n"
     values = _generated_values(tmp_path)
     assert values["CACHE_PASSWORD"] != ""
-    assert (tmp_path / ".env.generated").read_text(encoding="utf-8").count("CACHE_PASSWORD=") == 1
+    assert (tmp_path / ".env.generated").read_text(encoding="utf-8").count(
+        "CACHE_PASSWORD="
+    ) == 1
 
 
 def test_generator_rejects_unsupported_secret_flags(tmp_path: Path) -> None:
