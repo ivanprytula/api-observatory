@@ -178,6 +178,7 @@ cython_debug/
 .vscode/
 .kilo/
 .cursor/
+.claude/settings.local.json
 
 # Mac OS
 .DS_Store
