@@ -12,7 +12,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.ingestor.api_schemas.observations import (
+from services.ingestor.api_schemas.auth import (
     LogoutRequest,
     RefreshRequest,
     RoleAssignment,
@@ -20,6 +20,7 @@ from services.ingestor.api_schemas.observations import (
     UserCreate,
     UserListResponse,
     UserResponse,
+    UserUpdate,
 )
 from services.ingestor.auth import (
     casbin_guard,
@@ -43,6 +44,7 @@ from services.ingestor.repositories.users import (
     get_user_by_id,
     get_user_by_username,
     list_users,
+    update_user,
 )
 
 
@@ -59,9 +61,60 @@ type JwtDep = Annotated[dict[str, Any], Depends(verify_jwt_token)]
 
 _ph = PasswordHasher()
 
+_R404 = {
+    404: {
+        "description": "User not found.",
+        "content": {"application/json": {"example": {"detail": "User not found."}}},
+    }
+}
+_R401 = {
+    401: {
+        "description": "Not authenticated - missing or invalid JWT.",
+        "content": {"application/json": {"example": {"detail": "Not authenticated"}}},
+    }
+}
+_R403 = {
+    403: {
+        "description": "Forbidden - authenticated but lacking the required role.",
+        "content": {"application/json": {"example": {"detail": "Insufficient role"}}},
+    }
+}
+_R409 = {
+    409: {
+        "description": "Conflict - username or email already registered.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Username or email already registered."}
+            }
+        },
+    }
+}
+_R422 = {
+    422: {
+        "description": "Validation error - invalid request body or query parameters.",
+        "content": {
+            "application/json": {
+                "example": {
+                    "detail": [
+                        {
+                            "loc": ["body", "username"],
+                            "msg": "field required",
+                            "type": "value_error.missing",
+                        }
+                    ]
+                }
+            }
+        },
+    }
+}
+
 
 @router.post(
-    "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
+    "/register",
+    summary="Register a new user",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={**_R409, **_R422},
 )
 async def register(body: UserCreate, db: DbDep) -> UserResponse:
     """Register a new user account.
@@ -95,7 +148,12 @@ async def register(body: UserCreate, db: DbDep) -> UserResponse:
     return UserResponse.model_validate(user).model_copy(update={"role": role})
 
 
-@router.post("/users/{username}/role", response_model=UserResponse)
+@router.post(
+    "/users/{username}/role",
+    summary="Assign a role to a user",
+    response_model=UserResponse,
+    responses={**_R401, **_R403, **_R404, **_R422},
+)
 async def assign_role(
     username: str,
     body: RoleAssignment,
@@ -140,7 +198,12 @@ async def assign_role(
     return UserResponse.model_validate(user).model_copy(update={"role": role})
 
 
-@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/users/{user_id}",
+    summary="Soft-delete a user by ID",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={**_R401, **_R403, **_R404, **_R409},
+)
 async def delete_user_route(
     user_id: int,
     db: DbDep,
@@ -193,7 +256,12 @@ async def delete_user_route(
     )
 
 
-@router.post("/token", response_model=TokenResponse)
+@router.post(
+    "/token",
+    summary="Authenticate and return a JWT access token",
+    response_model=TokenResponse,
+    responses={**_R401, **_R422},
+)
 async def login(
     request: Request,
     form: Annotated[OAuth2PasswordRequestForm, Depends()],
@@ -254,7 +322,12 @@ async def login(
     return TokenResponse(access_token=token, refresh_token=refresh_token)
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get(
+    "/me",
+    summary="Return the current user profile",
+    response_model=UserResponse,
+    responses={**_R401, **_R404},
+)
 async def me(claims: JwtDep, db: DbDep) -> UserResponse:
     """Return the profile of the currently authenticated user.
 
@@ -283,7 +356,11 @@ async def me(claims: JwtDep, db: DbDep) -> UserResponse:
     return UserResponse.model_validate(user).model_copy(update={"role": role})
 
 
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/logout",
+    summary="Invalidate the current session and optionally revoke the refresh token",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
 async def logout(
     body: LogoutRequest | None = None,
     session_id: str | None = Cookie(default=None),
@@ -314,7 +391,12 @@ async def logout(
     logger.info("user_logout", extra={"session_id": session_id})
 
 
-@router.post("/refresh", response_model=TokenResponse)
+@router.post(
+    "/refresh",
+    summary="Issue a new access and refresh token pair from a valid refresh token",
+    response_model=TokenResponse,
+    responses={**_R401, **_R422},
+)
 async def refresh(
     body: RefreshRequest,
     db: DbDep,
@@ -363,7 +445,11 @@ async def refresh(
 
 
 @router.post(
-    "/admin/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED
+    "/admin/users",
+    summary="Create a new admin user",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={**_R401, **_R403, **_R409, **_R422},
 )
 async def create_admin(
     body: UserCreate,
@@ -413,7 +499,12 @@ async def create_admin(
     return UserResponse.model_validate(user).model_copy(update={"role": role})
 
 
-@router.get("/admin/users", response_model=UserListResponse)
+@router.get(
+    "/admin/users",
+    summary="List all users",
+    response_model=UserListResponse,
+    responses={**_R401, **_R403, **_R422},
+)
 async def list_users_route(
     db: DbDep,
     claims: Annotated[dict[str, Any], Depends(casbin_guard("admin"))],
@@ -451,3 +542,77 @@ async def list_users_route(
         users=responses,
         total=total,
     )
+
+
+@router.patch(
+    "/users/{user_id}",
+    summary="Update a user by ID",
+    response_model=UserResponse,
+    responses={**_R401, **_R403, **_R404, **_R409, **_R422},
+)
+async def update_user_route(
+    user_id: int,
+    body: UserUpdate,
+    db: DbDep,
+    claims: Annotated[dict[str, Any], Depends(casbin_guard("admin"))],
+) -> UserResponse:
+    """Update mutable fields of a user (admin only).
+
+    Args:
+        user_id: Target user primary key.
+        body: UserUpdate payload with fields to update.
+        db: Injected async database session.
+        claims: Verified JWT payload.
+
+    Returns:
+        200 UserResponse with the updated user.
+        401 if the JWT is missing or invalid.
+        403 if the caller is not an admin.
+        404 if the target user does not exist.
+        409 if the new email is already taken.
+    """
+    username: str | None = claims.get("sub")
+    if not username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token claims.",
+        )
+
+    user = await get_user_by_id(db, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+
+    update_data = body.model_dump(exclude_unset=True)
+    if not update_data:
+        return UserResponse.model_validate(user).model_copy(update={"role": "user"})
+
+    try:
+        user = await update_user(
+            session=db,
+            user_id=user_id,
+            email=update_data.get("email"),
+            is_active=update_data.get("is_active"),
+        )
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email already registered.",
+        ) from None
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+
+    logger.info(
+        "user_updated",
+        extra={"user_id": user_id, "by": username},
+    )
+    user_roles = await get_user_roles_in_domain(db, user.username, user.tenant_id)
+    role = list(user_roles)[0] if user_roles else "user"
+    return UserResponse.model_validate(user).model_copy(update={"role": role})

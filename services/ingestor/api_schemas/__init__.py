@@ -1,4 +1,5 @@
 from . import (
+    auth,
     contract_drift,
     etl,
     insights,
@@ -10,6 +11,7 @@ from . import (
 
 
 __all__ = [
+    "auth",
     "contract_drift",
     "etl",
     "insights",

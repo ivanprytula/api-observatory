@@ -115,4 +115,3 @@ See [`.github/proven-solutions.md`](proven-solutions.md) for project-level defau
 ## Skill Discovery
 
 For a lightweight catalog of all available skills, see `../agent-forge/skills/manifest.json` or `../agent-forge/skills/index.md`. Load the full `SKILL.md` only when the task matches the skill's trigger.
-

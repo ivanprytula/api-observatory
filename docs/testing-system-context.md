@@ -6,6 +6,7 @@ context each lane/profile requires, and where the wiring lives.
 ## 1. Taxonomy
 
 ### Lanes (just/testing.just → scripts/test/run-lane.sh)
+
 | Lane | Just recipe | Runner | Runtime needs |
 |------|-------------|--------|---------------|
 | unit | `test-unit` | `run-lane.sh unit` | None (uv extras only) |
@@ -17,6 +18,7 @@ context each lane/profile requires, and where the wiring lives.
 | api | `test-api` | `bru run` | Running local stack |
 
 ### Profiles (just/testing.just → scripts/test/run-profile.sh)
+
 | Profile | Just recipe | Runner | Env flags set |
 |---------|-------------|--------|---------------|
 | core | `test-core` | `run-profile.sh core` | All optional caps OFF |
@@ -26,17 +28,20 @@ context each lane/profile requires, and where the wiring lives.
 | full-optional | `test-full-optional` | `run-full-optional.sh` | `RLS_ENABLED=true`, `BROKER_ENABLED=true`, `NOTIFICATIONS_ENABLED=true`, `NOTIFICATION_DELIVERY_MODE=broker`, `ANTHROPIC_ENABLED=false` |
 
 ## 2. Pytest Markers (pyproject.toml)
-```
+
+```text
 unit, integration, core, capability_rls, capability_broker, capability_ai,
 full_optional, demo, contract, e2e, chaos, browser, live, mongo, ws_lab
 ```
 
 Default `addopts` in pyproject.toml:
-```
+
+```text
 --cov=services/ingestor --cov-report=term-missing --cov-report=html -q -m 'not e2e and not demo'
 ```
 
 ## 3. System-Context Env Flags
+
 These toggle capability slices in the ingestor and tests:
 
 | Flag | Default | Meaning |
@@ -54,14 +59,17 @@ These toggle capability slices in the ingestor and tests:
 | `AUTH_DEMO_ROUTES_ENABLED` | `false` | Demo auth routes |
 
 ## 4. Docker Compose Topology
+
 File: `docker-compose.yml`
 
 Always-on:
+
 - `ingestor-db` (PostgreSQL, port 5432)
 - `ingestor` (FastAPI, port 8000, depends on ingestor-db)
 - `dashboard` (Streamlit, port 8501, depends on ingestor)
 
 Optional profiles:
+
 | Profile | Services |
 |---------|----------|
 | `cache` | `cache` (Redis, port 6379) |
@@ -76,6 +84,7 @@ Optional profiles:
 Network: single `api-obs` bridge.
 
 ## 5. CI Matrix (.github/workflows/ci.yml)
+
 | Job | Trigger | Services | Env |
 |-----|---------|----------|-----|
 | `unit` | Always when app/delivery changes | None | `DATABASE_URL_TEST=sqlite+aiosqlite:///:memory:` |
@@ -85,6 +94,7 @@ Network: single `api-obs` bridge.
 | `dashboard-tests` | After code-quality | None | Runs `services/dashboard/tests` |
 
 Capability matrix:
+
 | Profile | Marker | RLS | Broker | Notifications | Anthropic |
 |---------|--------|-----|--------|---------------|-----------|
 | rls | `capability_rls` | true | false | false | false |
@@ -93,6 +103,7 @@ Capability matrix:
 | full-optional | `full_optional` | true | true | true | true |
 
 ## 6. Key Entrypoints
+
 - `Justfile` — core recipes (doctor, dev-up, db-migrate, etc.)
 - `just/testing.just` — all test recipes
 - `scripts/test/run-lane.sh` — unit/integration/e2e/live dispatch
@@ -102,6 +113,7 @@ Capability matrix:
 - `pyproject.toml` — pytest markers, coverage, ruff, ty config
 
 ## 7. Deferred / Post-MVP (conftest.py collect_ignore_glob)
+
 - `services/ingestor/tests/integration/scrapers/test_*.py`
 - `tests/e2e/scrapers/test_*.py`
 - `services/ingestor/tests/unit/storage/test_mongo_operations.py`

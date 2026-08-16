@@ -10,15 +10,15 @@ Global rules for agents working in this repository. Generic behavior rules live 
 
 Read the relevant skill file before producing significant code in that area:
 
-- **Python** → `../agent-forge/skills/python/SKILL.md` + `pydantic.instructions.md`
+- **Python** → `../agent-forge/instructions/python.instructions.md` + `pydantic.instructions.md`
 - **FastAPI** → `../agent-forge/skills/fastapi-testing/SKILL.md` + `fastapi.instructions.md`
-- **SQL** → `../agent-forge/skills/sql/SKILL.md`
-- **Testing** → `../agent-forge/skills/pytest-coverage/SKILL.md`
-- **Docker** → `../agent-forge/skills/docker/SKILL.md`
-- **Bash** → `../agent-forge/skills/bash/SKILL.md`
-- **Security** → `../agent-forge/skills/security-and-owasp/SKILL.md`
-- **Design/architecture** → `../agent-forge/skills/design-patterns/SKILL.md` + `solid-principles/SKILL.md`
-- **Async** → `../agent-forge/skills/async-patterns/SKILL.md`
+- **SQL** → `../agent-forge/instructions/sql.instructions.md`
+- **Testing** → `../agent-forge/instructions/tests.instructions.md`
+- **Docker** → `../agent-forge/instructions/containerization-docker-best-practices.instructions.md`
+- **Bash** → `../agent-forge/instructions/bash.instructions.md`
+- **Security** → `../agent-forge/instructions/security-and-owasp.instructions.md`
+- **Design/architecture** → `../agent-forge/instructions/design-patterns.instructions.md` + `../agent-forge/instructions/solid-principles.instructions.md`
+- **Async** → `../agent-forge/instructions/async-patterns.instructions.md`
 - **project architecture** → `docs/PROJECT_CONTEXT.md` + `docs/02-architecture/engineering-topics.md`
 
 ## Instruction sync rule
@@ -30,7 +30,7 @@ Whenever you add or update an instruction file listed in **Progressive-loading r
 Shared agent standards are maintained in `agent-forge`:
 
 - Git workflow → `../agent-forge/instructions/git-workflow.instructions.md`
-- Repo standards → `../agent-forge/skills/repo-standards/SKILL.md`
+- Repo standards → `../agent-forge/instructions/agent-behavior.instructions.md`
 
 ## CLI vs MCP boundary
 
@@ -42,4 +42,4 @@ For a lightweight catalog of all available skills, see `../agent-forge/skills/ma
 
 ## Skill-not-found fallback
 
-If no skill trigger matches, search `../agent-forge/skills/manifest.json` by keyword or escalate to the `self-improving-agent` skill at `../agent-forge/skills/self-improving-agent/SKILL.md`.
+If no skill trigger matches, search `../agent-forge/skills/manifest.json` by keyword or escalate to the `self-improving-agent` instructions at `../agent-forge/instructions/self-improving-agent.instructions.md`.

@@ -94,6 +94,25 @@ async def delete_user(session: AsyncSession, user_id: int) -> User | None:
     return user
 
 
+async def update_user(
+    session: AsyncSession,
+    user_id: int,
+    email: str | None = None,
+    is_active: bool | None = None,
+) -> User | None:
+    """Update mutable fields of a user by primary key."""
+    user = await get_user_by_id(session, user_id)
+    if user is None:
+        return None
+    if email is not None:
+        user.email = email
+    if is_active is not None:
+        user.is_active = is_active
+    await session.commit()
+    await session.refresh(user)
+    return user
+
+
 async def count_active_admins(
     session: AsyncSession,
     exclude_username: str | None = None,

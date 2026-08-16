@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from libs.contracts.schemas import (
     BackgroundBatchSubmitResponse,
@@ -52,7 +52,6 @@ class ObservationRequest(BaseModel):
     }
 
     source: str = Field(
-        ...,
         min_length=SOURCE_MIN_LENGTH,
         max_length=SOURCE_MAX_LENGTH,
         description=(
@@ -70,7 +69,6 @@ class ObservationRequest(BaseModel):
         examples=["2024-01-15T10:00:00", "2024-06-01T09:30:00.123"],
     )
     data: dict[str, Any] = Field(
-        ...,
         description=(
             "Arbitrary JSON payload carrying domain-specific data. "
             "No schema is enforced at the API layer; downstream validators may apply rules."
@@ -209,22 +207,21 @@ class UpdateObservationRequest(BaseModel):
 
 
 class ObservationResponse(BaseModel):
-    id: int = Field(..., description="Auto-incremented primary key.")
-    source: str = Field(..., description="Origin identifier, as provided on creation.")
-    timestamp: datetime = Field(..., description="Observation timestamp (naive UTC).")
+    id: int = Field(description="Auto-incremented primary key.")
+    source: str = Field(description="Origin identifier, as provided on creation.")
+    timestamp: datetime = Field(description="Observation timestamp (naive UTC).")
     raw_data: dict[str, Any] = Field(
-        ...,
         description="The original data payload as stored.",
         examples=[{"temperature": 22.5, "humidity": 60}],
     )
     tags: list[str] = Field(
-        ..., description="Labels applied to this observation (always lowercase)."
+        description="Labels applied to this observation (always lowercase)."
     )
     processed: bool = Field(
-        ..., description="True if the observation has been marked as processed."
+        description="True if the observation has been marked as processed."
     )
     # audit columns from TimestampMixin
-    created_at: datetime = Field(..., description="Row creation timestamp (UTC).")
+    created_at: datetime = Field(description="Row creation timestamp (UTC).")
     updated_at: datetime | None = Field(
         None, description="Last update timestamp (UTC), or null if never updated."
     )
@@ -237,7 +234,7 @@ class ObservationResponse(BaseModel):
 
 class BatchObservationsRequest(BaseModel):
     observations: list[ObservationRequest] = Field(
-        ..., min_length=MIN_BATCH_SIZE, max_length=MAX_BATCH_SIZE
+        min_length=MIN_BATCH_SIZE, max_length=MAX_BATCH_SIZE
     )
 
 
@@ -282,11 +279,11 @@ class EnrichResponse(BaseModel):
 class ObservationClassification(BaseModel):
     """Pydantic structured output for observation analysis."""
 
-    category: str = Field(..., description="The main category of the observation")
-    priority: int = Field(..., ge=1, le=5, description="Priority level 1-5")
-    summary: str = Field(..., description="Short summary of the observation")
+    category: str = Field(description="The main category of the observation")
+    priority: int = Field(ge=1, le=5, description="Priority level 1-5")
+    summary: str = Field(description="Short summary of the observation")
     sentiment: str = Field(
-        ..., description="Sentiment analysis: positive, negative, or neutral"
+        description="Sentiment analysis: positive, negative, or neutral"
     )
 
 
@@ -395,7 +392,7 @@ class VectorSearchReindexRecentRequest(BaseModel):
 class VectorSearchQueryRequest(BaseModel):
     """Request payload for semantic search over indexed observations."""
 
-    query: str = Field(..., min_length=1, description="Semantic search query text.")
+    query: str = Field(min_length=1, description="Semantic search query text.")
     top_k: int = Field(
         default=VECTOR_SEARCH_DEFAULT_TOP_K,
         ge=1,
@@ -426,86 +423,4 @@ __all__ = [
     "VectorSearchQueryResponse",
     "VectorSearchIndexResponse",
     "VectorSearchHealthResponse",
-    # Auth schemas
-    "UserCreate",
-    "UserResponse",
-    "UserListResponse",
-    "TokenResponse",
-    "RefreshRequest",
-    "LogoutRequest",
-    "RoleAssignment",
 ]
-
-
-# ============================================================================
-# Auth schemas
-# ============================================================================
-
-ROLE_PATTERN = r"^(user|manager|admin)$"
-# Authorized role names for the RBAC policy.
-
-
-class UserCreate(BaseModel):
-    """Request body for user registration."""
-
-    username: str = Field(..., min_length=3, max_length=64)
-    email: EmailStr
-    password: str = Field(..., min_length=8, max_length=128)
-    role: str = Field(
-        "user",
-        pattern=ROLE_PATTERN,
-        description="Ignored on public registration; an administrator assigns roles.",
-    )
-    tenant_id: int | None = Field(
-        None,
-        description="Ignored on public registration; an administrator assigns tenants.",
-    )
-
-
-class RoleAssignment(BaseModel):
-    """Request body for assigning a role to a user (internal endpoint)."""
-
-    role: str = Field(..., pattern=ROLE_PATTERN)
-
-
-class UserResponse(BaseModel):
-    """Public user representation (never exposes password_hash)."""
-
-    model_config = {"from_attributes": True}
-
-    id: int
-    username: str
-    email: str
-    role: str | None = None
-    tenant_id: int | None
-    is_active: bool
-    created_at: datetime
-
-
-class TokenResponse(BaseModel):
-    """OAuth2 token response."""
-
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-
-
-class RefreshRequest(BaseModel):
-    """Refresh token request body."""
-
-    refresh_token: str
-
-
-class LogoutRequest(BaseModel):
-    """Optional logout request body — pass refresh_token to revoke it."""
-
-    refresh_token: str | None = None
-
-
-class UserListResponse(BaseModel):
-    """Paginated list of users."""
-
-    users: list[UserResponse]
-    total: int
-
-    model_config = {"from_attributes": False}
