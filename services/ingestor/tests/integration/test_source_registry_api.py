@@ -320,6 +320,7 @@ class TestSourceHealth:
             latency_ms=120.5,
             sla_breach=False,
             error=None,
+            checked_at="2024-01-01T00:00:00Z",
         )
         with patch(
             "services.ingestor.routers.source_registry.probe_source_health",
@@ -346,6 +347,7 @@ class TestSourceHealth:
             latency_ms=10001.0,
             sla_breach=True,
             error="Connection refused",
+            checked_at="2024-01-01T00:00:00Z",
         )
         with patch(
             "services.ingestor.routers.source_registry.probe_source_health",

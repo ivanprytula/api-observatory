@@ -25,7 +25,7 @@ try:
     from aiokafka.errors import KafkaError
 except ModuleNotFoundError:
     AIOKafkaProducer = None  # ty:ignore[invalid-assignment]
-    KafkaError = Exception  # ty:ignore[invalid-assignment]
+    KafkaError = Exception
 
 from libs.contracts.events import (
     EVENT_DOC_SCRAPED,

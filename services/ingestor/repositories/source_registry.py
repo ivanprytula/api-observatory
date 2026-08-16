@@ -286,6 +286,7 @@ async def probe_source_health(
             latency_ms=elapsed_ms,
             sla_breach=True,
             error=str(exc),
+            checked_at=_utcnow().isoformat(),
         )
 
     try:
@@ -306,6 +307,7 @@ async def probe_source_health(
             latency_ms=elapsed_ms,
             sla_breach=True,
             error=str(exc),
+            checked_at=_utcnow().isoformat(),
         )
 
     elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
@@ -317,4 +319,5 @@ async def probe_source_health(
         latency_ms=elapsed_ms,
         sla_breach=elapsed_ms > threshold,
         error=None,
+        checked_at=_utcnow().isoformat(),
     )

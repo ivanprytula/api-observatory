@@ -488,7 +488,7 @@ services:
 
   # Disposable API rehearsal only; it is not parity or deployment evidence.
   floci-aws:
-    image: floci/floci:latest
+    image: floci/floci:1.6.0
     container_name: api-obs-floci-aws
     profiles: [aws]
     ports:

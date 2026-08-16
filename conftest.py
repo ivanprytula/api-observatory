@@ -16,8 +16,6 @@ collect_ignore_glob = [
     # Advanced PostgreSQL features (post-MVP optimization)
     "services/ingestor/tests/integration/observations/test_materialized_views_and_partitioning.py",
     "services/ingestor/tests/integration/observations/test_cte_window_functions.py",
-    # JWT + RBAC advanced auth (post-MVP auth hardening)
-    "services/ingestor/tests/integration/observations/test_v2_jwt_rbac.py",
     # Background processing async tasks (post-MVP feature)
     "services/ingestor/tests/integration/test_background_processing_api.py",
     # Pub/Sub events (post-MVP streaming feature)

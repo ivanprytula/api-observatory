@@ -104,7 +104,7 @@ database layers so one tenant never sees another's data.
 2. All repository queries filter by `tenant_id`.
 3. When `RLS_ENABLED=true`, PostgreSQL RLS policies enforce the same filter at
    the storage layer as a defense-in-depth guarantee.
-4. `jwt_role_guard` enforces `viewer` / `writer` / `admin` roles on every
+4. `casbin_guard` enforces `viewer` / `writer` / `admin` roles on every
    non-auth route.
 
 **Evidence**:

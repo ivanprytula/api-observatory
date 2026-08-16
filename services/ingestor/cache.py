@@ -33,6 +33,7 @@ from services.ingestor.constants import (
     CACHE_TTL_LIST,
     CACHE_TTL_OBSERVATION,
 )
+from services.ingestor.core.utils import redact_url_password
 
 
 if TYPE_CHECKING:
@@ -64,7 +65,7 @@ async def connect_cache(cache_url: str) -> None:
     _client = Redis.from_url(cache_url, decode_responses=True)
     # Ping to verify connection
     await _client.ping()
-    logger.info("cache_connected", extra={"url": cache_url})
+    logger.info("cache_connected", extra={"url": redact_url_password(cache_url)})
 
 
 async def disconnect_cache() -> None:

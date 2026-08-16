@@ -46,7 +46,6 @@ htmlcov/
 nosetests.xml
 coverage.xml
 *.cover
-*.py,cover
 .hypothesis/
 .pytest_cache/
 cover/
@@ -231,3 +230,6 @@ event.json
 .githooks/
 .learnings/
 .codex/
+
+# Playwright MCP artifacts
+.playwright-mcp/

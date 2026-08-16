@@ -46,6 +46,7 @@ from typing import Any
 from redis.asyncio import Redis
 
 from services.ingestor.config import settings
+from services.ingestor.core.utils import redact_url_password
 
 
 logger = logging.getLogger(__name__)
@@ -73,7 +74,7 @@ async def connect_pubsub(cache_url: str) -> None:
     global _pubsub_client
     _pubsub_client = Redis.from_url(cache_url, decode_responses=True)
     await _pubsub_client.ping()
-    logger.info("pubsub_connected", extra={"url": cache_url})
+    logger.info("pubsub_connected", extra={"url": redact_url_password(cache_url)})
 
 
 async def disconnect_pubsub() -> None:

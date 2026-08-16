@@ -1,38 +1,11 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Index, Integer, String
+from sqlalchemy import JSON, DateTime, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from services.ingestor.core.utils import _utcnow
 from services.ingestor.database import Base
 from services.ingestor.models.base import TimestampMixin
-
-
-class ApiKey(Base, TimestampMixin):
-    """Tenant-scoped API key with fine-grained permission scopes."""
-
-    __tablename__ = "api_keys"
-    __table_args__ = (
-        Index("ix_api_keys_prefix", "key_prefix"),
-        Index("ix_api_keys_tenant_id", "tenant_id"),
-        Index("ix_api_keys_is_active", "is_active"),
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    key_prefix: Mapped[str] = mapped_column(String(16), nullable=False)
-    key_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    tenant_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    scopes: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-
-    def __repr__(self) -> str:
-        return (
-            f"<ApiKey id={self.id} prefix={self.key_prefix!r} "
-            f"tenant_id={self.tenant_id} active={self.is_active}>"
-        )
 
 
 class SecurityAuditEvent(Base):

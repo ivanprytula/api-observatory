@@ -94,7 +94,7 @@ async def _consume(key: str) -> tuple[bool, float, int | None]:
         retry_after = (
             math.ceil(_local_bucket.seconds_until_token(key)) if not allowed else None
         )
-    return bool(int(allowed)), float(remaining), int(retry_after) or None
+    return bool(int(allowed)), float(remaining), retry_after or None
 
 
 async def enforce_v1_token_bucket(

@@ -429,9 +429,11 @@ __all__ = [
     # Auth schemas
     "UserCreate",
     "UserResponse",
+    "UserListResponse",
     "TokenResponse",
     "RefreshRequest",
     "LogoutRequest",
+    "RoleAssignment",
 ]
 
 
@@ -439,7 +441,7 @@ __all__ = [
 # Auth schemas
 # ============================================================================
 
-ROLE_PATTERN = r"^(viewer|writer|operator|tenant_admin|admin)$"
+ROLE_PATTERN = r"^(user|manager|admin)$"
 # Authorized role names for the RBAC policy.
 
 
@@ -450,7 +452,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
     role: str = Field(
-        "viewer",
+        "user",
         pattern=ROLE_PATTERN,
         description="Ignored on public registration; an administrator assigns roles.",
     )
@@ -474,7 +476,7 @@ class UserResponse(BaseModel):
     id: int
     username: str
     email: str
-    role: str
+    role: str | None = None
     tenant_id: int | None
     is_active: bool
     created_at: datetime
@@ -498,3 +500,12 @@ class LogoutRequest(BaseModel):
     """Optional logout request body — pass refresh_token to revoke it."""
 
     refresh_token: str | None = None
+
+
+class UserListResponse(BaseModel):
+    """Paginated list of users."""
+
+    users: list[UserResponse]
+    total: int
+
+    model_config = {"from_attributes": False}

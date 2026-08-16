@@ -1,75 +1,97 @@
 # .dockerignore for Python/FastAPI project
+
+# Bytecode / compiled Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# Database files
 *.db
 *.sqlite3
+
+# Logs
 *.log
+
+# Coverage reports
 *.coverage
 .coverage*
 .cache/
+
+# Test caches
 .pytest_cache/
+.mypy_cache/
+.hypothesis/
+
+# Virtual environment (massive, kills build context)
+.venv/
+
+# Environment files
 .env
 .env.*
+
+# Editors / IDE
 .vscode/
 .idea/
+.cursor/
 *.swp
 *.swo
 .DS_Store
+
+# Node
 node_modules/
+
+# Build artifacts
 dist/
 build/
 .eggs/
 *.egg-info/
 *.egg
 
-# Python tooling caches (large, never needed in images)
-.mypy_cache/
-.ruff_cache/
-.pytest_cache/
-
-# Virtual environment (massive, kills build context)
-.venv/
-
-# Agent tooling data (large, irrelevant)
+# Agent / AI tooling artifacts (large, irrelevant in images)
 .kilo/
 .copilot/
-
-# Streamlit local config (needed in dashboard image for theme)
-# .streamlit/
+.learnings/
+.codex/
+.playwright-mcp/
+.remember/
+.pre-commit-cache/
 
 # Terraform state/cache
 .terraform/
 
-# Exclude test and local dev files
-*.md
-learning_docs/
-tests/
-scripts/
-bruno/
-examples/
+# Streamlit local config (needed in dashboard image for theme)
+# .streamlit/
 
-# Exclude repo metadata and docs (large, never needed in images)
+# Repo metadata (never needed in images)
 .git/
 .github/
+
+# Documentation
 docs/
 _archive/
+*.md
 
-# Exclude sensitive and generated root files
+# Local dev / planning artifacts
+.local-dev/
+learning_docs/
+examples/
+scripts/
+bruno/
+event.json
 secrets-findings.json
 
-# Exclude Docker artifacts
-Dockerfile*
-.dockerignore
+# Task runner and orchestration (not needed in images)
+Justfile
+justfile
+docker-compose*.yml
 
-# Exclude local volumes
+# Local volumes
 pg_data/
-.local-dev/
 
 # Coverage reports
 htmlcov/
-.coverage/
+cover/
 
 # Generated certificates (HTTPS setup)
 infra/certs/

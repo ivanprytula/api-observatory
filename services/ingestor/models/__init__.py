@@ -14,7 +14,7 @@ from services.ingestor.models.events import (
 )
 from services.ingestor.models.incidents import DependencyIncident
 from services.ingestor.models.observations import Observation, ObservationArchive
-from services.ingestor.models.security import AbuseSignal, ApiKey, SecurityAuditEvent
+from services.ingestor.models.security import AbuseSignal, SecurityAuditEvent
 from services.ingestor.models.sources import ProviderHealthSample, SourceProfile
 from services.ingestor.models.tenants import Tenant, User, UserTenant
 
@@ -37,8 +37,7 @@ __all__ = [
     "ContractBaseline",
     "DriftEvent",
     "AgentRun",
-    "ApiKey",
-    "SecurityAuditEvent",
     "AbuseSignal",
+    "SecurityAuditEvent",
     "ProviderHealthSample",
 ]

@@ -267,3 +267,25 @@ async def get_dlq_events(
     )
     result = await session.execute(stmt)
     return list(result.scalars().all())
+
+
+async def claim_pending_events(
+    session: AsyncSession,
+    batch_size: int,
+) -> list[ProcessedEvent]:
+    """Atomically claim a batch of pending events using SELECT FOR UPDATE SKIP LOCKED."""
+    stmt = (
+        select(ProcessedEvent)
+        .where(ProcessedEvent.status == "pending")
+        .with_for_update(skip_locked=True)
+        .limit(batch_size)
+    )
+    result = await session.execute(stmt)
+    events = result.scalars().all()
+
+    for event in events:
+        event.status = "processing"
+        event.processing_attempts += 1
+
+    await session.commit()
+    return list(events)

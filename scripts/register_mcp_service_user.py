@@ -30,7 +30,7 @@ DEFAULT_USERNAME = "mcp-service"
 # TLDs like .local/.test/.invalid are rejected, so a placeholder domain must be
 # a real one (matches bruno/auth/1-register.bru's own admin@example.com).
 DEFAULT_EMAIL_DOMAIN = "example.com"
-DEFAULT_ROLE = "writer"  # minimum role satisfying resume_agent_run's jwt_role_guard
+DEFAULT_ROLE = "user"
 
 
 def register(

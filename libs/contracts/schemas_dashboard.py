@@ -154,6 +154,7 @@ class SourceHealthResponse(BaseModel):
     error: str | None = Field(
         None, description="Error description if the source was unreachable."
     )
+    checked_at: str = Field(..., description="Timestamp when the source was probed.")
 
 
 # ---------------------------------------------------------------------------

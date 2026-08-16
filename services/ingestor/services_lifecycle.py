@@ -14,6 +14,7 @@ import logging
 from importlib import import_module
 
 from services.ingestor.config import settings
+from services.ingestor.core.utils import redact_url_password
 
 
 logger = logging.getLogger(__name__)
@@ -56,7 +57,10 @@ async def initialize_external_services() -> None:
                 await cache.connect_cache(settings.cache_url)
                 logger.info(
                     "cache_connected",
-                    extra={"service": "cache", "url": settings.cache_url},
+                    extra={
+                        "service": "cache",
+                        "url": redact_url_password(settings.cache_url),
+                    },
                 )
                 # Phase 13.4: Warm list cache for top N sources
                 await _warm_list_cache()
@@ -75,7 +79,10 @@ async def initialize_external_services() -> None:
                 await pubsub.connect_pubsub(settings.cache_url)
                 logger.info(
                     "pubsub_connected",
-                    extra={"service": "cache-pubsub", "url": settings.cache_url},
+                    extra={
+                        "service": "cache-pubsub",
+                        "url": redact_url_password(settings.cache_url),
+                    },
                 )
         except Exception as e:
             logger.warning(
@@ -91,7 +98,10 @@ async def initialize_external_services() -> None:
                 await events.connect_producer(settings.broker_url)
                 logger.info(
                     "events_producer_connected",
-                    extra={"service": "broker", "broker": settings.broker_url},
+                    extra={
+                        "service": "broker",
+                        "broker": redact_url_password(settings.broker_url),
+                    },
                 )
         except Exception as e:
             logger.warning(

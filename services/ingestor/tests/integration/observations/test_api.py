@@ -63,7 +63,8 @@ async def test_readyz_reports_cache_ok_when_connected(
 async def test_readyz_reports_cache_unreachable_when_enabled_but_not_connected(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Readiness probe reports cache=unreachable when cache_enabled=true but Redis client is None."""
+    """Readiness probe reports cache=unreachable when cache_enabled=true
+    but Redis client is None."""
     from services.ingestor import cache
     from services.ingestor import main as main_module
 
