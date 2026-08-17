@@ -6,7 +6,7 @@ authors = [{ name = "Ivan Prytula", email = "ivanprytula.dev@gmail.com" }]
 maintainers = [{ name = "Ivan Prytula", email = "ivanprytula.dev@gmail.com" }]
 dependencies = [
   "fastapi>=0.141.1",
-  "uvicorn[standard]>=0.51.0",
+  "uvicorn[standard]>=0.52.3",
   "slowapi>=0.1.10",
   "sqlalchemy[asyncio]>=2.0.51",
   "asyncpg>=0.30.0",
