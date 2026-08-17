@@ -122,7 +122,7 @@ dev = [
   "respx>=0.22.0",
   # testcontainers: auto-provision postgres:17-bookworm for local integration tests
   # (Docker must be running; CI uses GHA service container instead)
-  "testcontainers[postgres,redis]>=4.14.2",
+  "testcontainers[postgres,redis]>=4.15.0",
   "pygments>=2.20.0",
   "httpx>=0.28.1",
   "aiosqlite>=0.20.0",                      # async SQLite for tests (no real PG needed)
