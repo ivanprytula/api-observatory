@@ -64,7 +64,7 @@ etl = [
   "polars[rtcompat]>=1.30.0",
 ]
 monitoring = [
-  "sentry-sdk[fastapi]>=2.19.2",
+  "sentry-sdk[fastapi]>=2.68.0",
 ]
 http = [
   "aiohttp>=3.14.3",
@@ -85,7 +85,7 @@ full = [
   "langchain-anthropic>=1.5.4",
   "pandas>=3.0.5",
   "polars[rtcompat]>=1.30.0",
-  "sentry-sdk[fastapi]>=2.19.2",
+  "sentry-sdk[fastapi]>=2.68.0",
   "aiohttp>=3.14.3",
   "pgvector>=0.3.0",
   "fastmcp>=0.4.0",
