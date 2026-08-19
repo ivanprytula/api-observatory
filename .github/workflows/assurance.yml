@@ -115,6 +115,9 @@ jobs:
     services:
       postgres:
         image: dhi.io/pgvector:0.8-pg17-debian13@sha256:d91ee73792106b6d657af8803a12670b871c8ef9bc70516d853867a53f941734
+        credentials:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
         env:
           POSTGRES_DB: api_obs_ingestor_performance
           POSTGRES_PASSWORD: postgres
