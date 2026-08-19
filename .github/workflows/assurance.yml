@@ -114,7 +114,7 @@ jobs:
     timeout-minutes: 15
     services:
       postgres:
-        image: pgvector/pgvector:pg17-trixie
+        image: dhi.io/pgvector:0.8-pg17-debian13@sha256:d91ee73792106b6d657af8803a12670b871c8ef9bc70516d853867a53f941734
         env:
           POSTGRES_DB: api_obs_ingestor_performance
           POSTGRES_PASSWORD: postgres
@@ -141,6 +141,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Set up uv
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0

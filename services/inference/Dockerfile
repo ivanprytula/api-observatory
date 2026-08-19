@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-FROM python:3.14-slim@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4 AS base
+FROM dhi.io/python:3.14-debian13@sha256:aa0ca597178dc1f272f15ed23a213becab317bd8c47af82694a497a51dc8cee6 AS base
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 COPY --from=ghcr.io/astral-sh/uv:0.12.3 /uv /usr/local/bin/uv
 WORKDIR /app
@@ -9,13 +9,14 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 FROM base AS builder
 
+# hadolint ignore=DL3008
 # Install system deps needed to build asyncpg/psycopg
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get upgrade -y --no-install-recommends && apt-get install -y --no-install-recommends \
-    build-essential=12.12 \
-    libpq-dev=17.10-0+deb13u1 \
-    && rm -rf /var/lib/apt/lists/*
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/* # hadolint ignore=DL3008
 
 # Install inference-specific deps, including the shared tracing helper's OTel dependencies.
 COPY services/inference/pyproject.toml .
@@ -24,7 +25,7 @@ RUN uv sync --no-dev --no-install-project && \
     "from fastembed import TextEmbedding; TextEmbedding(model_name='BAAI/bge-small-en-v1.5')"
 
 # Stage 2: slim production image
-FROM python:3.14-slim@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4 AS runtime
+FROM dhi.io/python:3.14-debian13@sha256:aa0ca597178dc1f272f15ed23a213becab317bd8c47af82694a497a51dc8cee6 AS runtime
 WORKDIR /app
 
 ARG CONTRACTS_VERSION=unknown

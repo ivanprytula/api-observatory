@@ -8,12 +8,13 @@ readonly SCRIPT_DIR
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 readonly PROJECT_ROOT
 
-readonly PYTHON_IMAGE="python:3.14-slim"
-readonly PGVECTOR_IMAGE="pgvector/pgvector:pg17-trixie"
+readonly PYTHON_IMAGE="dhi.io/python:3.14-debian13"
+readonly PGVECTOR_IMAGE="dhi.io/pgvector:0.8-pg17-debian13"
 readonly PYTHON_DOCKERFILES=(
   "Dockerfile"
   "services/inference/Dockerfile"
   "services/dashboard/Dockerfile"
+  "services/ingestor/tests/harness/Dockerfile"
 )
 readonly PGVECTOR_DOCKERFILES=("infra/database/Dockerfile")
 

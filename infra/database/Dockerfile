@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1.4
-# pgvector/pgvector:pg17-trixie — postgres:17 with pgvector pre-installed on newer Debian.
+# dhi.io/pgvector:0.8-pg17-debian13 — postgres:17 with pgvector pre-installed on hardened Debian 13.
 # no manual compilation required.
 # Base-image digests are updated with `just update-base-image-digest`.
 
-FROM pgvector/pgvector:pg17-trixie@sha256:724a4041afdb1750446e3f6b5cfa8f3b0ac5a2cf538ddfa6bfee4f94c2fa85c6
+FROM dhi.io/pgvector:0.8-pg17-debian13@sha256:d91ee73792106b6d657af8803a12670b871c8ef9bc70516d853867a53f941734
 
 ARG CONTRACTS_VERSION=unknown
 LABEL org.opencontainers_image.source="https://github.com/ivan-pi/rpi-api-observatory" \
