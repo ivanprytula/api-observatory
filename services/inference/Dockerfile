@@ -9,14 +9,13 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 FROM base AS builder
 
-# hadolint ignore=DL3008
 # Install system deps needed to build asyncpg/psycopg
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get upgrade -y --no-install-recommends && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/* # hadolint ignore=DL3008
+    build-essential=12.12 \
+    libpq-dev=17.10-0+deb13u1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install inference-specific deps, including the shared tracing helper's OTel dependencies.
 COPY services/inference/pyproject.toml .
