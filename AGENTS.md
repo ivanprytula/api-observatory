@@ -6,6 +6,16 @@ Global rules for agents working in this repository. Generic behavior rules live 
 
 - `docker compose up` with `--pull` followed immediately by service names breaks because `--pull` takes an optional argument (`always`/`missing`/`never`). Always use `--pull=always` or place `--wait` before `--pull` so service names aren't consumed as the pull mode.
 
+## Docker cleanup
+
+After test builds or smoke tests with running containers, clean up Docker resources:
+
+- Stop services: `docker compose down`
+- Prune stopped containers: `docker container prune -f`
+- Prune unused images: `docker image prune -f`
+- Prune unused volumes: `docker volume prune -f`
+- Prune unused networks: `docker network prune -f`
+
 ## Progressive-loading routes
 
 Read the relevant skill file before producing significant code in that area:
