@@ -15,4 +15,4 @@ RUN apt-get update \
 	&& rm -rf /var/lib/apt/lists/*
 
 HEALTHCHECK --interval=10s --timeout=3s --retries=6 \
-  CMD pg_isready -U postgres
+  CMD ["pg_isready", "-U", "postgres"]

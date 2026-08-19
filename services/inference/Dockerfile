@@ -19,14 +19,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 # Install inference-specific deps, including the shared tracing helper's OTel dependencies.
 COPY services/inference/pyproject.toml .
-RUN uv sync --no-dev --no-install-project
-
-# Pre-download the embedding model into the image so first request isn't a
-# cold-start network fetch — matches this service's env default model.
-# HF_HUB_DISABLE_XET: force plain HTTPS downloads from huggingface.co/resolve
-# instead of HF's Xet CAS backend, which redirects through several rotating
-# CDN subdomains that are awkward to allowlist in restricted network setups.
-RUN HF_HUB_DISABLE_XET=1 /app/.venv/bin/python -c \
+RUN uv sync --no-dev --no-install-project && \
+    HF_HUB_DISABLE_XET=1 /app/.venv/bin/python -c \
     "from fastembed import TextEmbedding; TextEmbedding(model_name='BAAI/bge-small-en-v1.5')"
 
 # Stage 2: slim production image
@@ -60,11 +54,11 @@ COPY --chown=appuser:appgroup services/inference/alembic.ini ./alembic.ini
 COPY --chown=appuser:appgroup services/inference/alembic/ ./alembic/
 COPY --chown=appuser:appgroup services/inference/ ./services/inference/
 
-USER appuser
+USER 10001
 
 EXPOSE 8001
 
 HEALTHCHECK --interval=5s --timeout=3s --retries=5 --start-period=10s \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')" || exit 1
+  CMD ["/bin/sh", "-c", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8001/health\")'"]
 
 CMD ["uvicorn", "services.inference.main:app", "--host", "0.0.0.0", "--port", "8001"]

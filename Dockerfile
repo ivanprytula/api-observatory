@@ -56,7 +56,7 @@ COPY --chown=appuser:appgroup alembic.ini ./
 COPY --chown=appuser:appgroup alembic/ ./alembic/
 COPY --chown=appuser:appgroup services/ingestor/ ./services/ingestor/
 
-USER appuser
+USER 10001
 
 # Port for FastAPI
 EXPOSE 8000

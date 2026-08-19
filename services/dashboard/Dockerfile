@@ -42,13 +42,13 @@ COPY --chown=appuser:appgroup libs/contracts/ ./libs/contracts/
 COPY --chown=appuser:appgroup services/dashboard/ ./services/dashboard/
 COPY --chown=appuser:appgroup .streamlit/ .streamlit/
 
-USER appuser
+USER 10001
 
 # Streamlit default port
 EXPOSE 8501
 
 HEALTHCHECK --interval=5s --timeout=3s --retries=3 --start-period=10s \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health')" || exit 1
+  CMD ["/bin/sh", "-c", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8501/_stcore/health\")'"]
 
 # Entry point: new modular structure (was monolithic streamlit_app.py)
 CMD ["streamlit", "run", "services/dashboard/ui/streamlit/app.py", \
