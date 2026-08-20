@@ -654,13 +654,13 @@ class TestContractBaselineLifecycle:
 
         async def _other_tenant() -> dict[str, Any]:
             return {
-                "sub": "other-tenant-writer",
+                "sub": "other-tenant-manager",
                 "tenant_id": 99,
             }
 
         app.dependency_overrides[verify_jwt_token] = _other_tenant
         get_casbin_enforcer().add_role_for_user_in_domain(
-            "other-tenant-writer", "writer", "99"
+            "other-tenant-manager", "manager", "99"
         )
         try:
             response = await client.get(

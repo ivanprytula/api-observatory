@@ -41,10 +41,10 @@ async def test_tenant_can_only_read_own_incidents(
     own_id = await _seed_incident(db, tenant_id=10, name="tenant-ten")
     other_id = await _seed_incident(db, tenant_id=20, name="tenant-twenty")
 
-    async def tenant_viewer() -> dict:
-        return {"sub": "viewer-10", "tenant_id": 10}
+    async def tenant_user() -> dict:
+        return {"sub": "tenant-user-10", "tenant_id": 10}
 
-    app.dependency_overrides[verify_jwt_token] = tenant_viewer
+    app.dependency_overrides[verify_jwt_token] = tenant_user
     response = await client.get("/api/v1/incidents")
     assert response.status_code == 200
     assert [item["id"] for item in response.json()["items"]] == [own_id]
@@ -53,16 +53,16 @@ async def test_tenant_can_only_read_own_incidents(
     assert hidden.status_code == 404
 
 
-async def test_tenant_operator_cannot_change_another_tenants_incident(
+async def test_tenant_user_cannot_change_another_tenants_incident(
     client: AsyncClient, db: AsyncSession
 ) -> None:
     other_id = await _seed_incident(db, tenant_id=20, name="tenant-twenty")
 
-    async def tenant_operator() -> dict:
-        return {"sub": "operator-10", "tenant_id": 10}
+    async def tenant_user() -> dict:
+        return {"sub": "tenant-user-10", "tenant_id": 10}
 
-    app.dependency_overrides[verify_jwt_token] = tenant_operator
-    get_casbin_enforcer().add_role_for_user_in_domain("operator-10", "user", "10")
+    app.dependency_overrides[verify_jwt_token] = tenant_user
+    get_casbin_enforcer().add_role_for_user_in_domain("tenant-user-10", "user", "10")
     for action in ("acknowledge", "resolve"):
         response = await client.post(f"/api/v1/incidents/{other_id}/{action}")
         assert response.status_code == 404
@@ -84,20 +84,20 @@ async def test_admin_can_read_incidents_across_tenants(
     assert {item["id"] for item in response.json()["items"]} == {first_id, second_id}
 
 
-async def test_operator_acknowledges_and_resolves_incident(
+async def test_tenant_user_acknowledges_and_resolves_incident(
     client: AsyncClient, db: AsyncSession
 ) -> None:
     incident_id = await _seed_incident(db, tenant_id=30, name="tenant-thirty")
 
-    async def tenant_operator() -> dict:
-        return {"sub": "operator-30", "tenant_id": 30}
+    async def tenant_user() -> dict:
+        return {"sub": "tenant-user-30", "tenant_id": 30}
 
-    app.dependency_overrides[verify_jwt_token] = tenant_operator
-    get_casbin_enforcer().add_role_for_user_in_domain("operator-30", "user", "30")
+    app.dependency_overrides[verify_jwt_token] = tenant_user
+    get_casbin_enforcer().add_role_for_user_in_domain("tenant-user-30", "user", "30")
     acknowledged = await client.post(f"/api/v1/incidents/{incident_id}/acknowledge")
     assert acknowledged.status_code == 200
     assert acknowledged.json()["status"] == "acknowledged"
-    assert acknowledged.json()["acknowledged_by"] == "operator-30"
+    assert acknowledged.json()["acknowledged_by"] == "tenant-user-30"
 
     resolved = await client.post(f"/api/v1/incidents/{incident_id}/resolve")
     assert resolved.status_code == 200

@@ -8,4 +8,5 @@ from tests import fixtures_shared as shared
 
 
 globals().update({name: getattr(shared, name) for name in shared.__all__})
+
 __all__ = shared.__all__

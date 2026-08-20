@@ -201,6 +201,26 @@ class Settings(BaseSettings):
         ),
     )
 
+    # ============ Global superadmin (cross-tenant SRE / break-glass) ============
+    superadmin_subject: str = Field(
+        default="root",
+        description="Reserved JWT subject for the global superadmin (bypasses RBAC + RLS).",
+    )
+
+    superadmin_password: str | None = Field(
+        default=None,
+        description=(
+            "Plaintext password (argon2-hashed at seed time) for the global "
+            "superadmin, created on first startup if absent. Omit to disable "
+            "root bootstrapping."
+        ),
+    )
+
+    superadmin_email: str | None = Field(
+        default=None,
+        description="Email for the global superadmin (defaults to <subject>@example.com).",
+    )
+
     # ============ Cache Backend ============
     cache_url: str = Field(
         default="redis://localhost:6379/0",

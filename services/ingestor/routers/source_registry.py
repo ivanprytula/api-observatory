@@ -53,7 +53,9 @@ def set_scheduler(scheduler: Any) -> None:
 
 type DbDep = Annotated[AsyncSession, Depends(get_db)]
 type JwtDep = Annotated[dict[str, Any], Depends(verify_jwt_token)]
-type AdminJwtDep = Annotated[dict[str, Any], Depends(casbin_guard("admin"))]
+type ManagerAdminJwtDep = Annotated[
+    dict[str, Any], Depends(casbin_guard("manager", "admin"))
+]
 
 # ---------------------------------------------------------------------------
 # Shared error-response docs
@@ -95,7 +97,7 @@ _R422 = {
     responses={**_R409, **_R422},
 )
 async def register_source(
-    payload: SourceProfileCreate, db: DbDep, claims: AdminJwtDep
+    payload: SourceProfileCreate, db: DbDep, claims: ManagerAdminJwtDep
 ) -> SourceProfileResponse:
     """Register a new external data source in the registry.
 
@@ -227,7 +229,7 @@ async def get_source(source_id: int, db: DbDep, _: JwtDep) -> SourceProfileRespo
     responses={**_R404, **_R422},
 )
 async def patch_source(
-    source_id: int, patch: SourceProfileUpdate, db: DbDep, _: AdminJwtDep
+    source_id: int, patch: SourceProfileUpdate, db: DbDep, _: ManagerAdminJwtDep
 ) -> SourceProfileResponse:
     """Partially update a source profile.
 
@@ -270,7 +272,7 @@ async def patch_source(
     summary="Deactivate (soft-delete) a source profile",
     responses={**_R404},
 )
-async def delete_source(source_id: int, db: DbDep, _: AdminJwtDep) -> None:
+async def delete_source(source_id: int, db: DbDep, _: ManagerAdminJwtDep) -> None:
     """Mark a source profile as deleted.
 
     The row is retained for audit purposes; it will no longer appear in list

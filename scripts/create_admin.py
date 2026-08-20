@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Create a user and optionally promote them to a non-viewer role.
+"""Create a user and optionally promote them to a non-default role.
 
 Idempotent for registration (treats 409 as success). Promotion requires
 ``INTERNAL_JWT_SECRET`` to generate a short-lived internal token.
 
 Usage:
-    # Create a viewer (default):
+    # Create a regular user (default):
     uv run python scripts/create_admin.py --username alice --password s3cret
 
     # Create and promote to admin in one shot:
     uv run python scripts/create_admin.py --username alice --password s3cret --role admin
 
-    # Promote an existing user to operator:
-    uv run python scripts/create_admin.py --username bob --role operator --promote-only
+    # Promote an existing user to manager:
+    uv run python scripts/create_admin.py --username bob --role manager --promote-only
 """
 
 from __future__ import annotations
@@ -112,9 +112,9 @@ def main(argv: list[str] | None = None) -> int:
     email = args.email or f"{args.username}@{DEFAULT_EMAIL_DOMAIN}"
 
     if not args.promote_only:
-        register_user(args.ingestor_url, args.username, email, args.password, "viewer")
+        register_user(args.ingestor_url, args.username, email, args.password, "user")
 
-    if args.role != "viewer":
+    if args.role != "user":
         promote_user(
             args.ingestor_url,
             args.username,

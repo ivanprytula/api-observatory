@@ -26,6 +26,35 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_ROLE = "user"
 
+# Role tiers — update this dict when adding a new role. Unknown roles silently
+# receive priority 0, which means they never win in resolve_effective_role's
+# max() and are effectively invisible to API consumers.
+_ROLE_PRIORITY: dict[str, int] = {"admin": 3, "manager": 2, "user": 1}
+
+
+def resolve_effective_role(roles: set[str]) -> str:
+    """Return the highest-priority role from an unordered Casbin role set.
+
+    Roles absent from ``_ROLE_PRIORITY`` receive priority 0 (lower than any
+    known tier), so they never surface as the effective role.
+    """
+    if not roles:
+        return DEFAULT_ROLE
+    return max(roles, key=lambda role: _ROLE_PRIORITY.get(role.lower(), 0))
+
+
+def is_superuser(subject: str | None) -> bool:
+    """True when the subject is the reserved global superadmin (root).
+
+    The superadmin bypasses all Casbin enforcement via the model matcher, so it
+    needs no g-rules and is tenant-agnostic. This single predicate is the source
+    of truth used by three surfaces:
+    - the Casbin matcher function (``is_superuser(r.sub)``),
+    - ``casbin_guard`` (audit-logged short-circuit), and
+    - ``TenantMiddleware`` (RLS bypass).
+    """
+    return bool(subject) and subject == settings.superadmin_subject
+
 
 # ============================================================================
 # JWT helpers
@@ -435,6 +464,7 @@ def get_casbin_enforcer() -> Enforcer:
 
             _casbin_enforcer = Enforcer(model_path, FileAdapter(policy_path))
     _casbin_enforcer.add_named_domain_matching_func("g", key_match)
+    _casbin_enforcer.add_function("is_superuser", is_superuser)
     return _casbin_enforcer
 
 
@@ -449,8 +479,20 @@ def casbin_guard(*required_roles: str):
     async def _guard(
         claims: dict[str, Any] = Depends(verify_jwt_token),
     ) -> dict[str, Any]:
-        enforcer = get_casbin_enforcer()
         sub = claims.get("sub") or ""
+        if is_superuser(sub):
+            await emit_security_audit_event(
+                event_type="authz.sudo",
+                action="authorize",
+                decision="allow",
+                actor_type="superadmin",
+                actor_id=sub,
+                tenant_id=claims.get("tenant_id"),
+                metadata_json={"required_roles": list(normalized_required)},
+            )
+            return claims
+
+        enforcer = get_casbin_enforcer()
         tenant_id = claims.get("tenant_id")
         domain = str(tenant_id) if tenant_id is not None else "*"
 

@@ -28,6 +28,37 @@ def get_user_role() -> str | None:
     return role_context.get()
 
 
+def resolve_tenant_from_jwt(token_str: str) -> tuple[int | None, str | None]:
+    """Decode a JWT and return (tenant_id, user_role).
+
+    This is the single place that maps a verified token to RBAC context.
+    Returns (None, None) on any decode or auth error so the caller can
+    fall back gracefully.
+    """
+    from services.ingestor.auth import (
+        decode_jwt_claims,
+        get_casbin_enforcer,
+        is_superuser,
+        resolve_effective_role,
+    )
+
+    payload = decode_jwt_claims(token_str)
+    tenant_id = payload.get("tenant_id")
+    sub = payload.get("sub")
+    if tenant_id is not None and not isinstance(tenant_id, int):
+        tenant_id = int(tenant_id)
+    if is_superuser(sub):
+        return tenant_id, "admin"
+    if sub and tenant_id is not None:
+        enforcer = get_casbin_enforcer()
+        domain = str(tenant_id)
+        casbin_roles = set(enforcer.get_roles_for_user_in_domain(sub, domain))
+        return tenant_id, resolve_effective_role(casbin_roles) if casbin_roles else None
+    if sub:
+        return tenant_id, payload.get("role")
+    return tenant_id, None
+
+
 class TenantMiddleware:
     """Middleware that extracts tenant_id and user_role from request headers/tokens.
 
@@ -60,31 +91,7 @@ class TenantMiddleware:
         if auth_header and auth_header.lower().startswith("bearer "):
             token_str = auth_header[7:].strip()
             try:
-                from services.ingestor.auth import (
-                    decode_jwt_claims,
-                    get_casbin_enforcer,
-                )
-
-                payload = decode_jwt_claims(token_str)
-                tenant_id = payload.get("tenant_id")
-                sub = payload.get("sub")
-                if tenant_id is not None and not isinstance(tenant_id, int):
-                    tenant_id = int(tenant_id)
-                if sub and tenant_id is not None:
-                    enforcer = get_casbin_enforcer()
-                    domain = str(tenant_id)
-                    casbin_roles = set(
-                        enforcer.get_roles_for_user_in_domain(sub, domain)
-                    )
-                    user_role = (
-                        "admin"
-                        if "admin" in casbin_roles
-                        else (list(casbin_roles)[0] if casbin_roles else None)
-                    )
-                elif sub:
-                    user_role = payload.get("role")
-                else:
-                    user_role = None
+                tenant_id, user_role = resolve_tenant_from_jwt(token_str)
             except Exception as exc:
                 logger.debug(
                     "jwt_tenant_context_unavailable", extra={"error": str(exc)}

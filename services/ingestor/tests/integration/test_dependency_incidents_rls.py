@@ -56,7 +56,7 @@ async def test_incident_rls_scopes_reads_writes_and_admin_access(
     ) == [101, 202, None]
 
     await db.commit()
-    db.info.update(rls_enabled=True, tenant_id=101, user_role="viewer")
+    db.info.update(rls_enabled=True, tenant_id=101, user_role="user")
     await db.execute(text("SET ROLE test_app_api_user"))
     assert list(
         await db.scalars(text("SELECT tenant_id FROM dependency_incidents ORDER BY id"))
@@ -87,7 +87,7 @@ async def test_incident_rls_scopes_reads_writes_and_admin_access(
     )
 
     await db.commit()
-    db.info.update(tenant_id=None, user_role="viewer")
+    db.info.update(tenant_id=None, user_role="user")
     await db.execute(text("SET ROLE test_app_api_user"))
     assert list(
         await db.scalars(text("SELECT tenant_id FROM dependency_incidents ORDER BY id"))

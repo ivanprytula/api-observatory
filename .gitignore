@@ -179,6 +179,8 @@ cython_debug/
 .kilo/
 .cursor/
 .claude/settings.local.json
+.opencode/
+opencode.jsonc
 
 # Mac OS
 .DS_Store

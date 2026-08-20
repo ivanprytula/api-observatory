@@ -371,7 +371,7 @@ def _auto_provision_postgres() -> Generator[None]:
     Only starts if a database-dependent fixture is requested.
     """
     if "DATABASE_URL_TEST" not in os.environ and shutil.which("docker"):
-        from testcontainers.postgres import PostgresContainer  # noqa: PLC0415
+        from testcontainers.community.postgres import PostgresContainer  # noqa: PLC0415
 
         tc = PostgresContainer("pgvector/pgvector:pg17")
         tc.start()

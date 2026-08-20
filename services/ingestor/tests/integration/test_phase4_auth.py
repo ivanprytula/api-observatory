@@ -53,17 +53,17 @@ async def test_v1_analytics_rejects_anonymous_request(client: AsyncClient) -> No
     assert response.json()["detail"] == "Missing Authorization header"
 
 
-async def test_v1_admin_operation_rejects_viewer(
+async def test_v1_admin_operation_rejects_non_admin_user(
     client: AsyncClient,
 ) -> None:
-    """A valid viewer JWT cannot run an administrative operation."""
+    """A valid non-admin JWT cannot run an administrative operation."""
     previous = app.dependency_overrides.get(verify_jwt_token)
 
-    async def _viewer_claims() -> dict[str, Any]:
-        return {"sub": "viewer"}
+    async def _standard_user_claims() -> dict[str, Any]:
+        return {"sub": "regular-user"}
 
-    app.dependency_overrides[verify_jwt_token] = _viewer_claims
-    get_casbin_enforcer().add_role_for_user_in_domain("viewer", "viewer", "*")
+    app.dependency_overrides[verify_jwt_token] = _standard_user_claims
+    get_casbin_enforcer().add_role_for_user_in_domain("regular-user", "user", "*")
     try:
         response = await client.post("/api/v1/analytics/refresh-materialized-view")
     finally:
@@ -112,15 +112,15 @@ async def test_jwt_tenant_claim_beats_conflicting_header(
     assert observation.tenant_id == 7
 
 
-async def test_public_registration_creates_viewer_with_personal_tenant(
+async def test_public_registration_creates_user_with_personal_tenant(
     client: AsyncClient,
 ) -> None:
-    """Public signup always creates an unassigned viewer account with auto-provisioned tenant."""
+    """Public signup always creates a user account with an auto-provisioned tenant."""
     response = await client.post(
         "/api/v1/auth/register",
         json={
-            "username": "phase4-viewer",
-            "email": "phase4-viewer@example.com",
+            "username": "phase4-user",
+            "email": "phase4-user@example.com",
             "password": "safe-password-123",
         },
     )

@@ -127,7 +127,9 @@ type AdminSessionDep = Annotated[dict[str, Any], Depends(session_role_guard("adm
 # same casbin_guard pattern applied in production routers.
 type JwtDep = Annotated[dict[str, Any], Depends(verify_jwt_token)]
 type WriterJwtDep = Annotated[dict[str, Any], Depends(casbin_guard("user", "admin"))]
-type AdminJwtDep = Annotated[dict[str, Any], Depends(casbin_guard("admin"))]
+type ManagerAdminJwtDep = Annotated[
+    dict[str, Any], Depends(casbin_guard("manager", "admin"))
+]
 
 
 # ---------------------------------------------------------------------------
@@ -365,7 +367,9 @@ async def archive_observation(
     status_code=status.HTTP_204_NO_CONTENT,
     responses={**_R401, **_R403, **_R404},
 )
-async def delete_observation(observation_id: int, db: DbDep, _: AdminJwtDep) -> None:
+async def delete_observation(
+    observation_id: int, db: DbDep, _: ManagerAdminJwtDep
+) -> None:
     """Hard-delete a observation.
 
     Invalidates any cached version.

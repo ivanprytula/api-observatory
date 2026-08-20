@@ -18,16 +18,12 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.ingestor.auth import get_casbin_enforcer, verify_jwt_token
+from services.ingestor.auth import verify_jwt_token
 from services.ingestor.main import app
 from services.ingestor.models import AgentRun, Observation, User
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.capability_ai]
-
-
-async def _viewer_claims() -> dict[str, str]:
-    return {"sub": "viewer-user"}
 
 
 async def _create_user(db: AsyncSession, *, username: str) -> User:
@@ -199,7 +195,7 @@ class TestResumeAgentRun:
 
 class TestAgentRouterAuth:
     """Both routes require a JWT; resume additionally requires
-    writer/admin/tenant_admin. The shared `client` fixture pre-authenticates
+    user/admin. The shared `client` fixture pre-authenticates
     every request as admin, so these tests
     manipulate `app.dependency_overrides` directly to exercise the real
     unauthenticated/under-privileged paths."""
@@ -233,21 +229,3 @@ class TestAgentRouterAuth:
                 app.dependency_overrides[verify_jwt_token] = saved
 
         assert response.status_code == 401
-
-    async def test_resume_agent_run_denies_viewer_role(
-        self, client: AsyncClient, db: AsyncSession
-    ) -> None:
-        agent_run = await _create_agent_run(db, status="awaiting_review")
-
-        saved = app.dependency_overrides.get(verify_jwt_token)
-        app.dependency_overrides[verify_jwt_token] = _viewer_claims
-        get_casbin_enforcer().add_role_for_user_in_domain("viewer-user", "viewer", "*")
-        try:
-            response = await client.post(
-                f"/api/v1/agent/runs/{agent_run.id}/resume", json={"approve": True}
-            )
-        finally:
-            if saved is not None:
-                app.dependency_overrides[verify_jwt_token] = saved
-
-        assert response.status_code == 403

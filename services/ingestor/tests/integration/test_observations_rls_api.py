@@ -216,11 +216,12 @@ async def test_admin_rls_bypass(db: AsyncSession, client: AsyncClient):
             "password": "adminpassword123",
         },
     )
-    # Manually promote to admin in DB (since register defaults to viewer)
-    await db.execute(
-        text("UPDATE users SET role = 'admin' WHERE username = :u"), {"u": username}
-    )
-    await db.commit()
+    # Promote to admin via Casbin (the users.role column was removed in the RBAC migration)
+    from services.ingestor.auth import assign_user_role
+    from services.ingestor.repositories.users import get_user_by_username
+
+    _admin_user = await get_user_by_username(db, username)
+    await assign_user_role(db, username, "admin", tenant_id=_admin_user.tenant_id)
 
     # 2. Setup Data (Tenant 10 and 11)
     await db.execute(text("DELETE FROM observations"))

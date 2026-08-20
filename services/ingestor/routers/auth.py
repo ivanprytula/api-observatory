@@ -29,6 +29,7 @@ from services.ingestor.auth import (
     create_session,
     delete_session,
     get_user_roles_in_domain,
+    resolve_effective_role,
     revoke_refresh_token,
     verify_jwt_token,
     verify_refresh_token,
@@ -143,9 +144,7 @@ async def register(body: UserCreate, db: DbDep) -> UserResponse:
             detail="Username or email already registered.",
         ) from None
     logger.info("user_registered", extra={"username": body.username})
-    user_roles = await get_user_roles_in_domain(db, user.username, user.tenant_id)
-    role = list(user_roles)[0] if user_roles else "user"
-    return UserResponse.model_validate(user).model_copy(update={"role": role})
+    return UserResponse.model_validate(user).model_copy(update={"role": "user"})
 
 
 @router.post(
@@ -194,7 +193,7 @@ async def assign_role(
         },
     )
     user_roles = await get_user_roles_in_domain(db, user.username, user.tenant_id)
-    role = list(user_roles)[0] if user_roles else "user"
+    role = resolve_effective_role(user_roles)
     return UserResponse.model_validate(user).model_copy(update={"role": role})
 
 
@@ -352,7 +351,7 @@ async def me(claims: JwtDep, db: DbDep) -> UserResponse:
             detail="User not found or inactive.",
         )
     user_roles = await get_user_roles_in_domain(db, user.username, user.tenant_id)
-    role = list(user_roles)[0] if user_roles else "user"
+    role = resolve_effective_role(user_roles)
     return UserResponse.model_validate(user).model_copy(update={"role": role})
 
 
@@ -495,7 +494,7 @@ async def create_admin(
         extra={"username": body.username, "by": username},
     )
     user_roles = await get_user_roles_in_domain(db, user.username, user.tenant_id)
-    role = list(user_roles)[0] if user_roles else "user"
+    role = resolve_effective_role(user_roles)
     return UserResponse.model_validate(user).model_copy(update={"role": role})
 
 
@@ -534,7 +533,7 @@ async def list_users_route(
     responses = []
     for u in users:
         user_roles = await get_user_roles_in_domain(db, u.username, u.tenant_id)
-        role = list(user_roles)[0] if user_roles else "user"
+        role = resolve_effective_role(user_roles)
         responses.append(
             UserResponse.model_validate(u).model_copy(update={"role": role})
         )
@@ -614,5 +613,5 @@ async def update_user_route(
         extra={"user_id": user_id, "by": username},
     )
     user_roles = await get_user_roles_in_domain(db, user.username, user.tenant_id)
-    role = list(user_roles)[0] if user_roles else "user"
+    role = resolve_effective_role(user_roles)
     return UserResponse.model_validate(user).model_copy(update={"role": role})

@@ -28,4 +28,4 @@ class AgentRunResumeRequest(BaseModel):
     # No reviewer_user_id field here on purpose: it's derived server-side from
     # the caller's authenticated JWT (`sub` -> User.id lookup in the router),
     # never taken from the request body — a client-supplied reviewer id would
-    # let any writer/admin token attribute an approval to an arbitrary user.
+    # let any user/admin token attribute an approval to an arbitrary user.

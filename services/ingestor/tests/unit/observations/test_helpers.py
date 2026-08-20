@@ -100,7 +100,7 @@ class TestApplyTenantFilter:
         with (
             patch(
                 "services.ingestor.repositories.observations_crud.get_user_role",
-                return_value="viewer",
+                return_value="user",
             ),
             patch(
                 "services.ingestor.repositories.observations_crud.get_tenant_id",
@@ -119,7 +119,7 @@ class TestApplyTenantFilter:
         with (
             patch(
                 "services.ingestor.repositories.observations_crud.get_user_role",
-                return_value="viewer",
+                return_value="user",
             ),
             patch(
                 "services.ingestor.repositories.observations_crud.get_tenant_id",

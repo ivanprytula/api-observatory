@@ -36,7 +36,7 @@ from services.ingestor.core.background_workers import (
     BackgroundTaskStatus,
     BackgroundWorkerPool,
 )
-from services.ingestor.core.bootstrap import bootstrap_initial_admin
+from services.ingestor.core.bootstrap import bootstrap_initial_admin, ensure_superadmin
 from services.ingestor.core.logging import set_cid, setup_logging
 from services.ingestor.core.scheduler import JobScheduler
 from services.ingestor.core.sentry import setup_sentry
@@ -216,10 +216,12 @@ async def lifespan(app: FastAPI):
     # Initialize external services (Cache, Broker, MongoDB)
     await initialize_external_services()
 
-    # Bootstrap initial admin user on first startup (idempotent; skip if admin exists)
+    # Bootstrap initial admin user and global superadmin on first startup
+    # (idempotent; skip if they already exist)
     try:
         async with AsyncSessionLocal() as session:
             await bootstrap_initial_admin(session)
+            await ensure_superadmin(session)
     except Exception as exc:
         logger.warning(
             "initial_admin_bootstrap_failed",
