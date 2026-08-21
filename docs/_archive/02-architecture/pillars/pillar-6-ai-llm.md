@@ -4,7 +4,7 @@ Track: E — Archive and Historical Snapshots
 
 **Tier**: Middle (🟡 partial) → Senior (🟡 LangGraph shipped)
 **Project**: The 2025-2030 multiplier
-**Implementation**: `services/ingestor/agent/`, `services/ingestor/routers/agent.py`
+**Implementation**: `services/ingestor/agent/`, `services/ingestor/api/routes/agent.py`
 
 ---
 
@@ -15,7 +15,7 @@ Track: E — Archive and Historical Snapshots
 | LangGraph `StateGraph` — 5 nodes         | `services/ingestor/agent/graph.py`    | ✅ Done |
 | Async node implementations               | `services/ingestor/agent/nodes.py`    | ✅ Done |
 | `AgentState` TypedDict                   | `services/ingestor/agent/state.py`    | ✅ Done |
-| 4 FastAPI agent endpoints                | `services/ingestor/routers/agent.py`  | ✅ Done |
+| 4 FastAPI agent endpoints                | `services/ingestor/api/routes/agent.py`  | ✅ Done |
 | RAG via pgvector (fetch_context node)    | `services/ingestor/vector_search.py`  | ✅ Done |
 | OpenAI structured output (classify node) | `services/ingestor/agent/nodes.py`    | ✅ Done |
 | Cache HITL checkpointing                 | `compile_with_checkpointer()` factory | ✅ Done |
@@ -283,7 +283,7 @@ across the pause/resume boundary.
 
 ### FastAPI Agent Endpoints
 
-Location: `services/ingestor/routers/agent.py`
+Location: `services/ingestor/api/routes/agent.py`
 
 | Method | Path                         | Description                                     |
 | ------ | ---------------------------- | ----------------------------------------------- |

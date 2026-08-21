@@ -61,7 +61,7 @@ Get rolling-window reliability metrics for any API:
 The rolling-window endpoint is `GET /api/v1/scorecards/{source_id}?days=7`.
 
 Full API details live in the [OpenAPI UI](http://127.0.0.1:8000/docs) and
-[`services/ingestor/routers/scorecards.py`](../../services/ingestor/routers/scorecards.py).
+[`services/ingestor/api/routes/scorecards.py`](../../services/ingestor/api/routes/scorecards.py).
 Scorecards use a single PostgreSQL `PERCENTILE_CONT` query — no materialization.
 
 ---
@@ -78,7 +78,7 @@ When APIs change their response structure, the system detects and classifies the
 Drift events are visible via REST regardless of WebSocket.
 
 Full API details live in the [OpenAPI UI](http://127.0.0.1:8000/docs) and
-[`services/ingestor/routers/contract_drift.py`](../../services/ingestor/routers/contract_drift.py).
+[`services/ingestor/api/routes/contract_drift.py`](../../services/ingestor/api/routes/contract_drift.py).
 
 ---
 

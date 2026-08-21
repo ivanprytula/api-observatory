@@ -150,12 +150,12 @@ prove that tenant boundaries and schema evolution are tested.
 
 2. Follow the implementation in this order:
 
-   - [`scorecards.py`](../../services/ingestor/routers/scorecards.py) accepts a health sample.
+   - [`scorecards.py`](../../services/ingestor/api/routes/scorecards.py) accepts a health sample.
    - [`incident_lifecycle.py`](../../services/ingestor/incident_lifecycle.py) applies the incident
      policy.
    - [`incidents.py`](../../services/ingestor/repositories/incidents.py) persists deduplication and
      state transitions.
-   - [`routers/incidents.py`](../../services/ingestor/routers/incidents.py) scopes list, read,
+   - [`routers/incidents.py`](../../services/ingestor/api/routes/incidents.py) scopes list, read,
      acknowledge, and resolve actions to the caller's tenant before the database query.
    - [`bab88abe6c35_enable_dependency_incidents_rls.py`](../../alembic/versions/bab88abe6c35_enable_dependency_incidents_rls.py)
      adds the opt-in PostgreSQL policy as a second boundary.

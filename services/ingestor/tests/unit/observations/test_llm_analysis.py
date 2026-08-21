@@ -26,10 +26,10 @@ def mock_observation():
 
 @pytest.mark.integration
 class TestLLMAnalysis:
-    @patch("services.ingestor.routers.observations.settings")
-    @patch("services.ingestor.routers.observations.get_observation_op")
+    @patch("services.ingestor.api.routes.observations.settings")
+    @patch("services.ingestor.api.routes.observations.get_observation_op")
     @patch(
-        "services.ingestor.routers.observations.vs_bridge.search_observation_documents"
+        "services.ingestor.api.routes.observations.vs_bridge.search_observation_documents"
     )
     @patch("openai.AsyncOpenAI")
     async def test_analyze_observation_success(
@@ -77,8 +77,8 @@ class TestLLMAnalysis:
         mock_search.assert_called_once()
         mock_openai_instance.beta.chat.completions.parse.assert_called_once()
 
-    @patch("services.ingestor.routers.observations.settings")
-    @patch("services.ingestor.routers.observations.get_observation_op")
+    @patch("services.ingestor.api.routes.observations.settings")
+    @patch("services.ingestor.api.routes.observations.get_observation_op")
     @patch("openai.AsyncOpenAI")
     async def test_analyze_observation_stream_success(
         self,
@@ -115,8 +115,8 @@ class TestLLMAnalysis:
         assert "data: chunk1" in content
         assert "data: chunk2" in content
 
-    @patch("services.ingestor.routers.observations.settings")
-    @patch("services.ingestor.routers.observations.get_observation_op")
+    @patch("services.ingestor.api.routes.observations.settings")
+    @patch("services.ingestor.api.routes.observations.get_observation_op")
     async def test_analyze_observation_disabled(
         self, mock_get_observation, mock_settings, mock_observation, client: AsyncClient
     ):
@@ -129,8 +129,8 @@ class TestLLMAnalysis:
         assert response.status_code == 501
         assert "disabled" in response.json()["detail"]
 
-    @patch("services.ingestor.routers.observations.settings")
-    @patch("services.ingestor.routers.observations.get_observation_op")
+    @patch("services.ingestor.api.routes.observations.settings")
+    @patch("services.ingestor.api.routes.observations.get_observation_op")
     async def test_analyze_observation_missing_key(
         self, mock_get_observation, mock_settings, mock_observation, client: AsyncClient
     ):

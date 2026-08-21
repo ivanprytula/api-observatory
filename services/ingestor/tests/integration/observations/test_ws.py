@@ -8,9 +8,13 @@ from unittest.mock import AsyncMock, patch
 import jwt
 import pytest
 
+from services.ingestor.api.routes.ws import (
+    _manager,
+    _stream_events,
+    observations_stream,
+)
 from services.ingestor.core.auth import create_jwt_token
 from services.ingestor.core.config import settings
-from services.ingestor.routers.ws import _manager, _stream_events, observations_stream
 
 
 @pytest.fixture(autouse=True)
@@ -76,7 +80,7 @@ async def test_ws_valid_token_accepted() -> None:
     with (
         patch.object(settings, "jwt_secret", "test-secret"),
         patch(
-            "services.ingestor.routers.ws._idle_until_disconnect",
+            "services.ingestor.api.routes.ws._idle_until_disconnect",
             AsyncMock(),
         ),
     ):
@@ -133,7 +137,7 @@ async def test_ws_auth_disabled_accepts_any_token() -> None:
     with (
         patch.object(settings, "jwt_secret", ""),
         patch(
-            "services.ingestor.routers.ws._idle_until_disconnect",
+            "services.ingestor.api.routes.ws._idle_until_disconnect",
             AsyncMock(),
         ),
     ):
@@ -155,7 +159,7 @@ async def test_ws_auth_disabled_ignores_invalid_token() -> None:
     with (
         patch.object(settings, "jwt_secret", ""),
         patch(
-            "services.ingestor.routers.ws._idle_until_disconnect",
+            "services.ingestor.api.routes.ws._idle_until_disconnect",
             AsyncMock(),
         ),
     ):
@@ -182,7 +186,7 @@ async def test_ws_cache_disabled_sends_info_and_idles() -> None:
     with (
         patch.object(settings, "jwt_secret", ""),
         patch(
-            "services.ingestor.routers.ws._idle_until_disconnect",
+            "services.ingestor.api.routes.ws._idle_until_disconnect",
             AsyncMock(),
         ) as mock_idle,
     ):
@@ -214,7 +218,7 @@ async def test_ws_manager_tracks_connection_lifecycle() -> None:
     with (
         patch.object(settings, "jwt_secret", ""),
         patch(
-            "services.ingestor.routers.ws._idle_until_disconnect",
+            "services.ingestor.api.routes.ws._idle_until_disconnect",
             AsyncMock(),
         ),
     ):
@@ -245,7 +249,7 @@ async def test_ws_disconnect_during_idle_handled_gracefully() -> None:
     with (
         patch.object(settings, "jwt_secret", ""),
         patch(
-            "services.ingestor.routers.ws._idle_until_disconnect",
+            "services.ingestor.api.routes.ws._idle_until_disconnect",
             _simulate_disconnect,
         ),
     ):
@@ -287,7 +291,7 @@ async def test_ws_forwards_drift_event_to_client() -> None:
     ws_mock.send_json = AsyncMock()
 
     with patch(
-        "services.ingestor.routers.ws.pubsub.subscribe_events",
+        "services.ingestor.api.routes.ws.pubsub.subscribe_events",
         return_value=_fake_events([drift_event]),
     ):
         await _stream_events(ws_mock)
@@ -309,7 +313,7 @@ async def test_ws_forwards_multiple_events_in_order() -> None:
     ws_mock.send_json = AsyncMock()
 
     with patch(
-        "services.ingestor.routers.ws.pubsub.subscribe_events",
+        "services.ingestor.api.routes.ws.pubsub.subscribe_events",
         return_value=_fake_events(events),
     ):
         await _stream_events(ws_mock)
@@ -347,7 +351,7 @@ async def test_ws_stream_handles_client_disconnect() -> None:
     ws_mock.send_json = _send_then_disconnect
 
     with patch(
-        "services.ingestor.routers.ws.pubsub.subscribe_events",
+        "services.ingestor.api.routes.ws.pubsub.subscribe_events",
         return_value=_events_then_hang(),
     ):
         await _stream_events(ws_mock)
@@ -375,7 +379,7 @@ async def test_ws_full_flow_with_cache_enabled() -> None:
         patch.object(settings, "jwt_secret", ""),
         patch.object(settings, "cache_enabled", True),
         patch(
-            "services.ingestor.routers.ws.pubsub.subscribe_events",
+            "services.ingestor.api.routes.ws.pubsub.subscribe_events",
             return_value=_fake_events([event]),
         ),
     ):

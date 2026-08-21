@@ -14,8 +14,8 @@ provider failure does not roll back the application event that caused the notifi
 
 The notification API and subscription API are registered in:
 
-- [`services/ingestor/routers/notifications.py`](../../services/ingestor/routers/notifications.py)
-- [`services/ingestor/routers/subscriptions.py`](../../services/ingestor/routers/subscriptions.py)
+- [`services/ingestor/api/routes/notifications.py`](../../services/ingestor/api/routes/notifications.py)
+- [`services/ingestor/api/routes/subscriptions.py`](../../services/ingestor/api/routes/subscriptions.py)
 
 Focused proof lives in
 [`test_notifications.py`](../../services/ingestor/tests/unit/core/test_notifications.py),

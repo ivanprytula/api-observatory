@@ -87,7 +87,7 @@ requirement.
 - [`.env.example`](../../.env.example) is a public, credential-free template.
 - `.env` is ignored, generated locally, and contains passwords and signing/token secrets. The
   generator replaces it atomically with user-only permissions (`0600`); never commit or share it.
-- [`services/ingestor/config.py`](../../services/ingestor/config.py) owns ingestor defaults,
+- [`services/ingestor/core/config.py`](../../services/ingestor/core/config.py) owns ingestor defaults,
   validation, feature flags, and secret classification.
 - [`compose.yml`](../../compose.yml) owns service wiring, ports, profiles, and
   container-to-container addresses.

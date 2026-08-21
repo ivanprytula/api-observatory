@@ -323,7 +323,7 @@ class TestSourceHealth:
             checked_at="2024-01-01T00:00:00Z",
         )
         with patch(
-            "services.ingestor.routers.source_registry.probe_source_health",
+            "services.ingestor.api.routes.source_registry.probe_source_health",
             new=AsyncMock(return_value=mock_result),
         ):
             response = await client.get(f"/api/v1/sources/{source_id}/health")
@@ -350,7 +350,7 @@ class TestSourceHealth:
             checked_at="2024-01-01T00:00:00Z",
         )
         with patch(
-            "services.ingestor.routers.source_registry.probe_source_health",
+            "services.ingestor.api.routes.source_registry.probe_source_health",
             new=AsyncMock(return_value=mock_result),
         ):
             response = await client.get(f"/api/v1/sources/{source_id}/health")

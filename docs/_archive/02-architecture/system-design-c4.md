@@ -77,8 +77,8 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-    Router["API routers\nservices/ingestor/routers/"]
-    Security["Security and auth\nservices/ingestor/security/\nauth.py"]
+    Router["API routers\nservices/ingestor/api/routes/"]
+    Security["Security and auth\nservices/ingestor/core/security/\nauth.py"]
     Jobs["Schedulers and jobs\nservices/ingestor/jobs.py\njobs_registry.py"]
     Repos["Repositories\nservices/ingestor/repositories/"]
     Obs["Observability\nmetrics + tracing + logging"]

@@ -60,7 +60,7 @@ components; see the Containers diagram for their boundaries and ownership.
 
 ## Router / Feature Map
 
-Routers live under `services/ingestor/routers/` — the source layout is canonical, not this map.
+Routers live under `services/ingestor/api/routes/` — the source layout is canonical, not this map.
 The table groups them by domain; per-router status and priority live in the
 [evergreen engineering evidence map](engineering-topics.md), and the opt-in learning lab is
 mounted only when `AUTH_DEMO_ROUTES_ENABLED=true`. Auth is JWT/API-key gated by default with role

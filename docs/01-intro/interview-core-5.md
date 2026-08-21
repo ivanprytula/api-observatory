@@ -49,11 +49,11 @@ writes to PostgreSQL, and publishes an event for downstream consumers.
 
 **Evidence**:
 
-- `services/ingestor/routers/observations.py` — production CRUD routes
+- `services/ingestor/api/routes/observations.py` — production CRUD routes
 - `services/ingestor/repositories/observations.py` — dedup insert
 - `services/ingestor/events.py` — Kafka publisher (fail-open)
 - `services/ingestor/pubsub.py` — Redis pub/sub bridge
-- `services/ingestor/routers/ws.py` — WebSocket fan-out
+- `services/ingestor/api/routes/ws.py` — WebSocket fan-out
 
 **Interview line**: "PostgreSQL is the source of truth. The write path is
 synchronous and fails fast. Redis pub/sub is an optional fail-open side effect
@@ -79,7 +79,7 @@ detects drift, opens an incident, and the LangGraph agent triages it.
 
 **Evidence**:
 
-- `services/ingestor/routers/contract_drift.py` — snapshot and drift endpoints
+- `services/ingestor/api/routes/contract_drift.py` — snapshot and drift endpoints
 - `services/ingestor/repositories/contract_drift.py` — baseline storage
 - `services/ingestor/agent/` — LangGraph triage graph
 - `services/ingestor/repositories/incidents.py` — incident lifecycle
@@ -110,8 +110,8 @@ database layers so one tenant never sees another's data.
 **Evidence**:
 
 - `services/ingestor/core/tenant.py` — tenant context and middleware
-- `services/ingestor/security/authorization.py` — RBAC evaluation
-- `services/ingestor/database.py` — session.info tenant tagging
+- `services/ingestor/core/security/authorization.py` — RBAC evaluation
+- `services/ingestor/core/database.py` — session.info tenant tagging
 - `alembic/versions/*_enable_observations_rls.py` — RLS migration
 - `tests/integration/test_observations_rls.py` — cross-tenant leak test
 

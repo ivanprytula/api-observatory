@@ -52,7 +52,7 @@ for _name in _ROUTER_MODULES:
         if _name in _ADMIN_PROTECTED_ROUTERS:
             dependencies.append(Depends(casbin_guard("admin")))
         api_router.include_router(
-            importlib.import_module(f"services.ingestor.routers.{_name}").router,
+            importlib.import_module(f"services.ingestor.api.routes.{_name}").router,
             dependencies=dependencies,
         )
     except ModuleNotFoundError as exc:
@@ -62,6 +62,6 @@ for _name in _ROUTER_MODULES:
         )
 
 if settings.websocket_enabled:
-    from services.ingestor.routers import ws as ws_router
+    from services.ingestor.api.routes import ws as ws_router
 
     api_router.include_router(ws_router.router)

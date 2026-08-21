@@ -312,7 +312,7 @@ Phase 1 Flows:
 
 ### 🔀 FastAPI Application Layer
 
-**Location**: \`ingestor/main.py\`, \`ingestor/routers/\`
+**Location**: \`ingestor/main.py\`, \`ingestor/api/routes/\`
 
 Responsibilities:
 
@@ -448,7 +448,7 @@ See `Justfile` for compose commands to run individual services.
 Development:
 
 ```text
-2026-04-16 11:18:05 | INFO | ingestor/routers/observations.py:45:create_observation | [cid-123] observation created
+2026-04-16 11:18:05 | INFO | ingestor/api/routes/observations.py:45:create_observation | [cid-123] observation created
 ```
 
 Production:
@@ -521,7 +521,7 @@ graph TB
         RecordsRouter["🔀 Records Router<br/>/api/v1/observations"]
     end
 
-    subgraph Scrapers["🕷️ Scraper Service (ingestor/routers/scraper.py)"]
+    subgraph Scrapers["🕷️ Scraper Service (ingestor/api/routes/scraper.py)"]
         ScraperRouter["POST /api/v1/scrape/{source}"]
         Factory["🏭 ScraperFactory"]
         HTTPScraper["HTTPScraper<br/>(httpx)"]
@@ -1348,8 +1348,8 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-    Router["API routers\nservices/ingestor/routers/"]
-    Security["Security and auth\nservices/ingestor/security/"]
+    Router["API routers\nservices/ingestor/api/routes/"]
+    Security["Security and auth\nservices/ingestor/core/security/"]
     Jobs["Schedulers and jobs\nservices/ingestor/jobs.py"]
     Repos["Repositories\nservices/ingestor/repositories/"]
     Obs["Observability\nmetrics + tracing + logging"]
@@ -1432,7 +1432,7 @@ The platform was developed across 8 learning pillars. Each pillar is a domain kn
 
 ## Related Documents
 
-- [API Routes](../../services/ingestor/routers/observations.py)
+- [API Routes](../../services/ingestor/api/routes/observations.py)
 - [Database Models](../../services/ingestor/models.py)
 - [Performance Benchmarks](../../services/ingestor/tests/integration/observations/test_performance.py)
 - [Technology Decisions](decisions.md) — full decision trees and ADR index

@@ -63,7 +63,7 @@ notifications while occurrence counts continue to increase.
 - Model and policy: [`models/`](../../services/ingestor/models/) and
   [`repositories/incidents.py`](../../services/ingestor/repositories/incidents.py)
 - Application orchestration: [`incident_lifecycle.py`](../../services/ingestor/incident_lifecycle.py)
-- API: [`routers/incidents.py`](../../services/ingestor/routers/incidents.py)
+- API: [`routers/incidents.py`](../../services/ingestor/api/routes/incidents.py)
 - Migration: [`c61518e0a57e_add_dependency_incidents.py`](../../alembic/versions/c61518e0a57e_add_dependency_incidents.py)
 - Dashboard: [`panels/incidents.py`](../../services/dashboard/ui/streamlit/panels/incidents.py)
 

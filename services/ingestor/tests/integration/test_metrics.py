@@ -15,8 +15,8 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from services.ingestor.api.routes import observations_v2
 from services.ingestor.core.database import get_db
-from services.ingestor.routers import observations_v2
 from tests.shared.payloads import OBSERVATION_API
 
 

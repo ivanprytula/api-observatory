@@ -21,7 +21,7 @@ mechanisms remain available only in the opt-in learning lab, gated by
 | Session cookie | Dashboard / admin UI               | Stateful session, `HttpOnly`      |
 
 Authentication settings and their environment mappings are owned by
-[`config.py`](../../services/ingestor/config.py); safe configuration shape is documented in
+[`config.py`](../../services/ingestor/core/config.py); safe configuration shape is documented in
 [`.env.example`](../../.env.example). This includes optional documentation credentials, JWT
 signing keys, and the opt-in authentication lab flag.
 
@@ -84,7 +84,7 @@ This prevents accidental deployment with:
 - Unsigned JWT tokens (empty `JWT_SECRET`)
 - Predictable session keys
 
-The check is implemented in `services/ingestor/security/` and runs in the lifespan startup hook.
+The check is implemented in `services/ingestor/core/security/` and runs in the lifespan startup hook.
 
 ---
 

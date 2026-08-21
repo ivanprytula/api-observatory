@@ -260,7 +260,7 @@ async def lifespan(app: FastAPI):
             )
             await _background_workers.start()
             importlib.import_module(
-                "services.ingestor.routers.background_processing"
+                "services.ingestor.api.routes.background_processing"
             ).set_worker_pool(_background_workers)
             logger.info(
                 "background_workers_started",
@@ -276,7 +276,7 @@ async def lifespan(app: FastAPI):
             )
     else:
         importlib.import_module(
-            "services.ingestor.routers.background_processing"
+            "services.ingestor.api.routes.background_processing"
         ).set_worker_pool(None)
 
     # Initialize the LangGraph incident-triage agent (Phase 3) — fail-open,
@@ -294,13 +294,15 @@ async def lifespan(app: FastAPI):
     try:
         await _scheduler.start(AsyncSessionLocal)
         # Inject scheduler into health router for health check endpoints
-        from services.ingestor.routers import health_ingestion_jobs as health_router
+        from services.ingestor.api.routes import health_ingestion_jobs as health_router
 
         health_router.set_scheduler(_scheduler)
 
         # Inject scheduler into source_registry so newly registered sources
         # can get a probe job scheduled immediately (not just at next restart)
-        from services.ingestor.routers import source_registry as source_registry_router
+        from services.ingestor.api.routes import (
+            source_registry as source_registry_router,
+        )
 
         source_registry_router.set_scheduler(_scheduler)
         logger.info(
