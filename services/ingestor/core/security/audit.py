@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from services.ingestor.database import AsyncSessionLocal
+from services.ingestor.core.database import AsyncSessionLocal
 from services.ingestor.repositories.security_audit import append_security_audit_event
 
 

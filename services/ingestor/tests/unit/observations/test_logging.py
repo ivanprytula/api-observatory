@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 from services.ingestor.core.logging import get_cid, set_cid, setup_logging
 
 

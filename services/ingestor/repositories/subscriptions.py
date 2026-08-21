@@ -14,12 +14,12 @@ from services.ingestor.api_schemas.subscriptions import (
     NotificationRule,
     SuppressionWindow,
 )
-from services.ingestor.config import settings
 from services.ingestor.constants import (
     SUBSCRIPTION_DEFAULT_CHANNELS,
     SUBSCRIPTION_DEFAULT_ESCALATION_MINUTES,
     SUBSCRIPTION_DEFAULT_SUPPRESSION_MINUTES,
 )
+from services.ingestor.core.config import settings
 from services.ingestor.models import DriftEvent, SourceProfile
 
 

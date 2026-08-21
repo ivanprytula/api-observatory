@@ -17,12 +17,12 @@ from services.ingestor.api_schemas.source_registry import (
     SourceProfileUpdate,
     SourceSummaryResponse,
 )
-from services.ingestor.auth import casbin_guard, verify_jwt_token
 from services.ingestor.constants import (
     API_V1_PREFIX,
     MAX_PAGE_SIZE,
 )
-from services.ingestor.database import get_db
+from services.ingestor.core.auth import casbin_guard, verify_jwt_token
+from services.ingestor.core.database import get_db
 from services.ingestor.jobs_registry import register_source_probe_jobs
 from services.ingestor.repositories.source_registry import (
     create_source_profile,

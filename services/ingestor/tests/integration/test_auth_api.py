@@ -153,7 +153,7 @@ async def test_logout_returns_204(session_id: str | None, client: AsyncClient) -
     """Logout always returns 204 regardless of whether a session exists."""
     import fakeredis
 
-    import services.ingestor.auth as auth_module
+    import services.ingestor.core.auth as auth_module
 
     fake = fakeredis.aioredis.FakeRedis(decode_responses=True)
     with patch.object(auth_module, "_session_client", fake):
@@ -191,7 +191,7 @@ async def test_assign_role_with_admin_token(client: AsyncClient) -> None:
 
 async def test_assign_role_missing_token_returns_401(client: AsyncClient) -> None:
     """Role assignment without a JWT is rejected."""
-    from services.ingestor.auth import verify_jwt_token
+    from services.ingestor.core.auth import verify_jwt_token
     from services.ingestor.main import app
 
     app.dependency_overrides.pop(verify_jwt_token, None)
@@ -213,7 +213,7 @@ async def test_assign_role_missing_token_returns_401(client: AsyncClient) -> Non
 
 async def test_assign_role_non_admin_token_returns_403(client: AsyncClient) -> None:
     """A non-admin JWT is rejected for role assignment."""
-    from services.ingestor.auth import get_casbin_enforcer, verify_jwt_token
+    from services.ingestor.core.auth import get_casbin_enforcer, verify_jwt_token
     from services.ingestor.main import app
 
     async def _user_jwt() -> dict[str, Any]:
@@ -291,7 +291,7 @@ async def test_delete_self_returns_403(client: AsyncClient) -> None:
 
 async def test_delete_last_admin_returns_403(client: AsyncClient) -> None:
     """Deleting yourself when you are the sole active admin is rejected as self-delete."""
-    from services.ingestor.auth import get_casbin_enforcer, verify_jwt_token
+    from services.ingestor.core.auth import get_casbin_enforcer, verify_jwt_token
     from services.ingestor.main import app
 
     admin1 = {**_USER, "username": "admin1", "email": "admin1@example.com"}
@@ -335,7 +335,7 @@ async def test_delete_last_admin_returns_403(client: AsyncClient) -> None:
 
 async def test_delete_user_missing_token_returns_401(client: AsyncClient) -> None:
     """Deleting a user without a JWT is rejected."""
-    from services.ingestor.auth import verify_jwt_token
+    from services.ingestor.core.auth import verify_jwt_token
     from services.ingestor.main import app
 
     victim = {**_USER, "username": "victim-user", "email": "victim@example.com"}

@@ -90,7 +90,7 @@ class HttpScraper:
 
         Wait timeout is enforced via asyncio.wait_for to prevent zombie scraper tasks.
         """
-        from services.ingestor.config import settings
+        from services.ingestor.core.config import settings
         from services.ingestor.scrapers import ScraperTimeoutError
 
         url = f"{_BASE_URL}{_POSTS_PATH}"

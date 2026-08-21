@@ -30,9 +30,9 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from services.ingestor.config import settings
 from services.ingestor.core.bootstrap import bootstrap_initial_admin, ensure_superadmin
-from services.ingestor.database import AsyncSessionLocal, engine
+from services.ingestor.core.config import settings
+from services.ingestor.core.database import AsyncSessionLocal, engine
 
 
 logger = logging.getLogger("seed_admin")

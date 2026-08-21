@@ -9,11 +9,11 @@ import httpx
 
 from libs.contracts.events import NotificationDeliveryRequestedV1
 from libs.platform.resilience import DependencyResilience
-from services.ingestor.config import settings
 from services.ingestor.constants import (
     NOTIFICATION_SEVERITY_INFO,
     NOTIFICATION_SEVERITY_WARNING,
 )
+from services.ingestor.core.config import settings
 from services.ingestor.models import NotificationDelivery
 
 

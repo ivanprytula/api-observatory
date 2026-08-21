@@ -16,7 +16,7 @@ from fastapi import Cookie, Depends, Header, HTTPException, status
 from jwt.exceptions import DecodeError, ExpiredSignatureError, InvalidSignatureError
 
 from libs.platform.auth import _emit_security_audit_event as emit_security_audit_event
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 
 
 if TYPE_CHECKING:

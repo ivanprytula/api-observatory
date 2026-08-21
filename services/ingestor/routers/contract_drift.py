@@ -19,9 +19,13 @@ from services.ingestor.api_schemas.contract_drift import (
     DriftEventListResponse,
     DriftEventResponse,
 )
-from services.ingestor.auth import casbin_guard, get_casbin_enforcer, verify_jwt_token
 from services.ingestor.constants import API_V1_PREFIX, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
-from services.ingestor.database import get_db
+from services.ingestor.core.auth import (
+    casbin_guard,
+    get_casbin_enforcer,
+    verify_jwt_token,
+)
+from services.ingestor.core.database import get_db
 from services.ingestor.repositories.contract_drift import (
     accept_contract_baseline,
     create_contract_snapshot,

@@ -50,8 +50,8 @@ from fastapi import (
 )
 
 from services.ingestor import pubsub
-from services.ingestor.auth import verify_jwt_token_str
-from services.ingestor.config import settings
+from services.ingestor.core.auth import verify_jwt_token_str
+from services.ingestor.core.config import settings
 
 
 logger = logging.getLogger(__name__)

@@ -9,7 +9,7 @@ Tests for:
 
 import pytest
 
-from services.ingestor.config import Settings
+from services.ingestor.core.config import Settings
 
 
 # ---------------------------------------------------------------------------

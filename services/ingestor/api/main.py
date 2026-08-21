@@ -11,8 +11,8 @@ import logging
 
 from fastapi import APIRouter, Depends
 
-from services.ingestor.auth import casbin_guard
-from services.ingestor.config import settings
+from services.ingestor.core.auth import casbin_guard
+from services.ingestor.core.config import settings
 from services.ingestor.rate_limiting_token_bucket import enforce_v1_token_bucket
 
 

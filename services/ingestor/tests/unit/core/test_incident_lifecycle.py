@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.ingestor.api_schemas.scorecards import HealthSampleCreate
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 from services.ingestor.incident_lifecycle import record_health_sample
 from services.ingestor.models import (
     DependencyIncident,

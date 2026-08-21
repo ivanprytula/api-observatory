@@ -12,7 +12,7 @@ from libs.contracts.events import (
     NotificationDeliveryRequestedV1,
 )
 from services.ingestor.api_schemas.scorecards import HealthSampleCreate
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 from services.ingestor.incident_lifecycle import (
     enqueue_incident_notification_requests,
     record_health_sample,

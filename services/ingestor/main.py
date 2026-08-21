@@ -29,17 +29,18 @@ from libs.platform.tracing import setup_tracing
 from libs.version import get_contracts_version, get_service_version, get_version_payload
 from services.ingestor.api.main import api_router
 from services.ingestor.cache import get_redis_client
-from services.ingestor.config import settings
 from services.ingestor.constants import APP_DESCRIPTION, HEALTH_RATE_LIMIT
 from services.ingestor.core.background_workers import (
     BackgroundTaskStatus,
     BackgroundWorkerPool,
 )
+from services.ingestor.core.config import settings
+from services.ingestor.core.database import AsyncSessionLocal, engine, get_db
 from services.ingestor.core.logging import set_cid, setup_logging
 from services.ingestor.core.scheduler import JobScheduler
+from services.ingestor.core.security.audit import emit_security_audit_event
 from services.ingestor.core.sentry import setup_sentry
 from services.ingestor.core.tenant import TenantMiddleware
-from services.ingestor.database import AsyncSessionLocal, engine, get_db
 from services.ingestor.events import publish_event_bytes
 from services.ingestor.fetch import close_http_client
 
@@ -66,7 +67,6 @@ from services.ingestor.notification_outbox_publisher import (
 )
 from services.ingestor.notifications import notify_background_task_failed
 from services.ingestor.rate_limiting import limiter
-from services.ingestor.security.audit import emit_security_audit_event
 from services.ingestor.services_lifecycle import (
     cleanup_external_services,
     initialize_external_services,

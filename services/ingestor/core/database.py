@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 from services.ingestor.core.tenant import role_context, tenant_context
 
 

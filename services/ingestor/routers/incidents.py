@@ -11,9 +11,13 @@ from services.ingestor.api_schemas.incidents import (
     DependencyIncidentListResponse,
     DependencyIncidentResponse,
 )
-from services.ingestor.auth import casbin_guard, get_casbin_enforcer, verify_jwt_token
 from services.ingestor.constants import API_V1_PREFIX, MAX_PAGE_SIZE
-from services.ingestor.database import get_db
+from services.ingestor.core.auth import (
+    casbin_guard,
+    get_casbin_enforcer,
+    verify_jwt_token,
+)
+from services.ingestor.core.database import get_db
 from services.ingestor.metrics import dependency_incident_transitions_total
 from services.ingestor.repositories.incidents import (
     acknowledge_incident,

@@ -6,12 +6,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import services.ingestor.notifications as notifications
-from services.ingestor.config import settings
 from services.ingestor.constants import (
     NOTIFICATION_SEVERITY_CRITICAL,
     NOTIFICATION_SEVERITY_INFO,
     NOTIFICATION_SEVERITY_WARNING,
 )
+from services.ingestor.core.config import settings
 from services.ingestor.models import NotificationDelivery
 
 

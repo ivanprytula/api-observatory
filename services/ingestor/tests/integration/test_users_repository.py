@@ -11,7 +11,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.ingestor.auth import get_casbin_enforcer
+from services.ingestor.core.auth import get_casbin_enforcer
 from services.ingestor.models import Tenant, UserTenant
 from services.ingestor.repositories.users import create_user, update_user_role
 

@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 from fastapi import HTTPException
 
-from services.ingestor.auth import (
+from services.ingestor.core.auth import (
     casbin_guard,
     create_jwt_token,
     create_refresh_token,
@@ -30,14 +30,14 @@ class TestBearerToken:
 
     async def test_valid_token_returns_credentials(self) -> None:
         """Correct bearer token returns the token string."""
-        with patch("services.ingestor.auth.settings") as mock_settings:
+        with patch("services.ingestor.core.auth.settings") as mock_settings:
             mock_settings.api_v1_bearer_token = "secret-token"
             result = await verify_bearer_token("Bearer secret-token")
         assert result == "secret-token"
 
     async def test_missing_header_raises_401(self) -> None:
         """No Authorization header raises 401."""
-        with patch("services.ingestor.auth.settings") as mock_settings:
+        with patch("services.ingestor.core.auth.settings") as mock_settings:
             mock_settings.api_v1_bearer_token = "secret-token"
             with pytest.raises(HTTPException) as exc:
                 await verify_bearer_token(None)
@@ -45,7 +45,7 @@ class TestBearerToken:
 
     async def test_wrong_scheme_raises_401(self) -> None:
         """Non-Bearer scheme (e.g., Basic) raises 401."""
-        with patch("services.ingestor.auth.settings") as mock_settings:
+        with patch("services.ingestor.core.auth.settings") as mock_settings:
             mock_settings.api_v1_bearer_token = "secret-token"
             with pytest.raises(HTTPException) as exc:
                 await verify_bearer_token("Basic secret-token")
@@ -53,7 +53,7 @@ class TestBearerToken:
 
     async def test_invalid_token_raises_403(self) -> None:
         """Wrong token value raises 403 Forbidden."""
-        with patch("services.ingestor.auth.settings") as mock_settings:
+        with patch("services.ingestor.core.auth.settings") as mock_settings:
             mock_settings.api_v1_bearer_token = "secret-token"
             with pytest.raises(HTTPException) as exc:
                 await verify_bearer_token("Bearer wrong-token")
@@ -61,7 +61,7 @@ class TestBearerToken:
 
     async def test_auth_disabled_returns_public(self) -> None:
         """When api_v1_bearer_token is not set, any request returns 'public'."""
-        with patch("services.ingestor.auth.settings") as mock_settings:
+        with patch("services.ingestor.core.auth.settings") as mock_settings:
             mock_settings.api_v1_bearer_token = None
             result = await verify_bearer_token(None)
         assert result == "public"
@@ -158,7 +158,7 @@ class TestJWT:
 
         import jwt as pyjwt
 
-        from services.ingestor.config import settings
+        from services.ingestor.core.config import settings
 
         expired_payload = {
             "sub": "user-4",
@@ -187,7 +187,7 @@ class TestJWT:
         import jwt as pyjwt
 
         old_secret = "old-secret-1234567890"
-        with patch("services.ingestor.auth.settings") as mock_settings:
+        with patch("services.ingestor.core.auth.settings") as mock_settings:
             mock_settings.jwt_secret = "new-secret-0987654321"
             mock_settings.jwt_previous_secrets = old_secret
             mock_settings.jwt_algorithm = "HS256"
@@ -231,7 +231,7 @@ class TestRefreshToken:
         """Expired refresh token raises 401."""
         import jwt as pyjwt
 
-        from services.ingestor.config import settings
+        from services.ingestor.core.config import settings
 
         expired_payload = {
             "sub": "user-99",

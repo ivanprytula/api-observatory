@@ -9,7 +9,7 @@ from pwdlib import PasswordHash
 from pwdlib.hashers.argon2 import Argon2Hasher
 from pwdlib.hashers.bcrypt import BcryptHasher
 
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 from services.ingestor.models import User
 from services.ingestor.repositories.users import (
     count_active_admins,

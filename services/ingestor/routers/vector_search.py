@@ -21,9 +21,9 @@ from services.ingestor.api_schemas.observations import (
     VectorSearchQueryResponse,
     VectorSearchReindexRecentRequest,
 )
-from services.ingestor.auth import casbin_guard
 from services.ingestor.constants import API_V1_PREFIX
-from services.ingestor.database import get_db
+from services.ingestor.core.auth import casbin_guard
+from services.ingestor.core.database import get_db
 from services.ingestor.models import Observation
 
 

@@ -13,7 +13,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.ingestor.auth import (
+from services.ingestor.core.auth import (
     create_jwt_token,
     get_casbin_enforcer,
     verify_jwt_token,

@@ -8,7 +8,7 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.ingestor.cache import redis_lock
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 from services.ingestor.metrics import (
     retention_observations_archived_total,
     retention_observations_deleted_total,

@@ -13,7 +13,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.ingestor.database import get_db
+from services.ingestor.core.database import get_db
 from services.ingestor.jobs import get_ingestion_health
 
 

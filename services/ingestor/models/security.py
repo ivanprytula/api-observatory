@@ -3,8 +3,8 @@ from datetime import datetime
 from sqlalchemy import JSON, DateTime, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
+from services.ingestor.core.database import Base
 from services.ingestor.core.utils import _utcnow
-from services.ingestor.database import Base
 from services.ingestor.models.base import TimestampMixin
 
 

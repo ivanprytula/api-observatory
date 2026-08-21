@@ -45,7 +45,7 @@ from typing import Any
 
 from redis.asyncio import Redis
 
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 from services.ingestor.core.utils import redact_url_password
 
 

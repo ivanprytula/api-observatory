@@ -24,7 +24,8 @@ from services.ingestor.api_schemas.auth import (
     UserResponse,
     UserUpdate,
 )
-from services.ingestor.auth import (
+from services.ingestor.constants import API_V1_PREFIX
+from services.ingestor.core.auth import (
     casbin_guard,
     create_jwt_token,
     create_refresh_token,
@@ -36,9 +37,8 @@ from services.ingestor.auth import (
     verify_jwt_token,
     verify_refresh_token,
 )
-from services.ingestor.config import settings
-from services.ingestor.constants import API_V1_PREFIX
-from services.ingestor.database import get_db
+from services.ingestor.core.config import settings
+from services.ingestor.core.database import get_db
 from services.ingestor.rate_limiting_token_bucket import enforce_public_v1_token_bucket
 from services.ingestor.repositories.users import (
     count_active_admins,
@@ -177,7 +177,7 @@ async def assign_role(
         403 if the caller is not an admin.
         404 if the target user does not exist.
     """
-    from services.ingestor.auth import assign_user_role
+    from services.ingestor.core.auth import assign_user_role
 
     await assign_user_role(db, username, body.role)
     user = await get_user_by_username(db, username)
@@ -240,7 +240,7 @@ async def delete_user_route(
             detail="Users cannot delete themselves.",
         )
 
-    from services.ingestor.auth import has_role_in_domain
+    from services.ingestor.core.auth import has_role_in_domain
 
     if await has_role_in_domain(db, user.username, "admin", user.tenant_id):
         remaining_admins = await count_active_admins(db, exclude_username=user.username)

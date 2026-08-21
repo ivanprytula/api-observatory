@@ -12,8 +12,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
+from services.ingestor.core.database import Base
 from services.ingestor.core.utils import _utcnow
-from services.ingestor.database import Base
 from services.ingestor.models.base import TimestampMixin
 
 

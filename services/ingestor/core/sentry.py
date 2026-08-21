@@ -6,7 +6,7 @@ import logging
 from types import ModuleType
 from typing import Any
 
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 
 
 sentry_sdk_module: ModuleType | None = None

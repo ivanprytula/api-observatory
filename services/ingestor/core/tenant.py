@@ -35,7 +35,7 @@ def resolve_tenant_from_jwt(token_str: str) -> tuple[int | None, str | None]:
     Returns (None, None) on any decode or auth error so the caller can
     fall back gracefully.
     """
-    from services.ingestor.auth import (
+    from services.ingestor.core.auth import (
         decode_jwt_claims,
         get_casbin_enforcer,
         is_superuser,

@@ -14,7 +14,7 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 from services.ingestor.main import app
 
 

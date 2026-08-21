@@ -9,10 +9,10 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.ingestor.auth import casbin_guard
 from services.ingestor.constants import API_V1_PREFIX
+from services.ingestor.core.auth import casbin_guard
+from services.ingestor.core.database import get_db
 from services.ingestor.core.tenant import get_tenant_id
-from services.ingestor.database import get_db
 from services.ingestor.models import Observation
 
 

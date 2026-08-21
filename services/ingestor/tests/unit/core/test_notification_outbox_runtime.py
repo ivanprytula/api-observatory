@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from services.ingestor import events
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 from services.ingestor.notification_outbox_publisher import (
     OutboxPublishBatchResult,
     SessionFactory,

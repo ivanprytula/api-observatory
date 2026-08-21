@@ -64,7 +64,7 @@ from services.ingestor.constants import (
     UPSERT_MODE_STRICT,
     V1_RATE_LIMIT,
 )
-from services.ingestor.database import get_db
+from services.ingestor.core.database import get_db
 from services.ingestor.metrics import (
     enrich_duration_seconds,
     observations_created_total,

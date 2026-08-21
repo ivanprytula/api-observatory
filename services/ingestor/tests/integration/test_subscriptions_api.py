@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 
 
 pytestmark = pytest.mark.integration

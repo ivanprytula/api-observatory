@@ -18,7 +18,6 @@ from services.ingestor.api_schemas.reporting import (
     FreshnessSLAResponse,
     MetricSeriesListResponse,
 )
-from services.ingestor.auth import casbin_guard
 from services.ingestor.constants import (
     API_V1_PREFIX,
     MAX_PAGE_SIZE,
@@ -33,7 +32,8 @@ from services.ingestor.constants import (
     REPORTING_MAX_DAYS,
     REPORTING_MAX_SLA_THRESHOLD_HOURS,
 )
-from services.ingestor.database import get_db
+from services.ingestor.core.auth import casbin_guard
+from services.ingestor.core.database import get_db
 from services.ingestor.repositories.reporting import (
     create_export_job,
     get_cost_value_chart,

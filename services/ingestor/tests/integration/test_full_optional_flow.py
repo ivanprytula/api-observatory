@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from libs.contracts.events import NotificationDeliveryRequestedV1
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 from services.ingestor.models import AgentRun, OutboxEvent
 from services.ingestor.notification_delivery_consumer import (
     NotificationProviderError,

@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 from services.ingestor.jobs import archive_old_observations
 from services.ingestor.models import Observation, ObservationArchive
 

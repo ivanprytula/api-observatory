@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from importlib import import_module
 
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 from services.ingestor.core.utils import redact_url_password
 
 
@@ -125,7 +125,7 @@ async def _warm_list_cache() -> None:
             CACHE_WARM_TOP_N_SOURCES,
             DEFAULT_PAGE_SIZE,
         )
-        from services.ingestor.database import AsyncSessionLocal
+        from services.ingestor.core.database import AsyncSessionLocal
         from services.ingestor.models import Observation
 
         async with AsyncSessionLocal() as session:

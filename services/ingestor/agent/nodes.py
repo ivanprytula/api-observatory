@@ -27,8 +27,8 @@ from services.ingestor import vector_search as vs_bridge
 from services.ingestor.agent.llm import get_chat_model
 from services.ingestor.agent.schemas import DraftAnalysis, SeverityClassification
 from services.ingestor.agent.state import AgentState
-from services.ingestor.config import settings
 from services.ingestor.constants import NOTIFICATION_SEVERITY_WARNING
+from services.ingestor.core.config import settings
 
 
 logger = logging.getLogger(__name__)
@@ -124,7 +124,7 @@ async def _index_this_incident(observation_id: int) -> None:
     """Index the triggering Observation so future runs' RAG search can find
     it as a prior similar incident. Own DB session — nodes run out-of-band,
     not on a request-scoped session."""
-    from services.ingestor.database import AsyncSessionLocal
+    from services.ingestor.core.database import AsyncSessionLocal
     from services.ingestor.repositories.observations import get_observation
 
     async with AsyncSessionLocal() as session:

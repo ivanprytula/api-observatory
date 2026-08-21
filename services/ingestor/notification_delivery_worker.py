@@ -17,8 +17,8 @@ from aiokafka import AIOKafkaConsumer, ConsumerRecord, TopicPartition
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from libs.contracts.events import TOPIC_NOTIFICATION_DELIVERY_REQUESTS_V1
-from services.ingestor.config import settings
-from services.ingestor.database import AsyncSessionLocal
+from services.ingestor.core.config import settings
+from services.ingestor.core.database import AsyncSessionLocal
 from services.ingestor.notification_delivery_consumer import (
     DeliverNotification,
     accept_notification_request,

@@ -12,7 +12,7 @@ import asyncio
 from sqlalchemy import text
 from tenacity import retry, stop_after_attempt, wait_fixed
 
-from services.ingestor.database import engine
+from services.ingestor.core.database import engine
 
 
 @retry(stop=stop_after_attempt(60), wait=wait_fixed(1))

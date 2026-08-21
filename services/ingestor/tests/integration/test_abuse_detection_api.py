@@ -8,7 +8,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.ingestor.auth import get_casbin_enforcer, verify_jwt_token
+from services.ingestor.core.auth import get_casbin_enforcer, verify_jwt_token
 from services.ingestor.main import app
 
 

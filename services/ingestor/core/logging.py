@@ -25,7 +25,7 @@ from typing import Any
 import structlog
 from structlog.stdlib import ProcessorFormatter
 
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 
 
 def _get_trace_id() -> str | None:

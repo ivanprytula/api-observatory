@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, Float, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from services.ingestor.database import Base
+from services.ingestor.core.database import Base
 from services.ingestor.models.base import TimestampMixin
 
 

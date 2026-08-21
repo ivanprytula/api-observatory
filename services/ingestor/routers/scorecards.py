@@ -13,7 +13,6 @@ from services.ingestor.api_schemas.scorecards import (
     ProviderScorecard,
     ScorecardListResponse,
 )
-from services.ingestor.auth import casbin_guard, verify_jwt_token
 from services.ingestor.constants import (
     API_V1_PREFIX,
     MAX_PAGE_SIZE,
@@ -24,7 +23,8 @@ from services.ingestor.constants import (
     SCORECARD_SLO_MAX_PCT,
     SCORECARD_SLO_MIN_PCT,
 )
-from services.ingestor.database import get_db
+from services.ingestor.core.auth import casbin_guard, verify_jwt_token
+from services.ingestor.core.database import get_db
 from services.ingestor.incident_lifecycle import record_health_sample
 from services.ingestor.repositories.scorecards import get_scorecard, list_scorecards
 

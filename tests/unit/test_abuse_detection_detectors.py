@@ -7,7 +7,7 @@ from services.ingestor.constants import (
     ABUSE_SEVERITY_HIGH,
     ABUSE_SEVERITY_MEDIUM,
 )
-from services.ingestor.security.abuse_detection import (
+from services.ingestor.core.security.abuse_detection import (
     evaluate_key_suspicion,
     evaluate_source_noise,
     is_high_or_above,

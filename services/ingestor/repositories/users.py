@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.ingestor.auth import get_casbin_enforcer
+from services.ingestor.core.auth import get_casbin_enforcer
 from services.ingestor.models import Tenant, User, UserTenant, _utcnow
 
 

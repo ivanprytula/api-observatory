@@ -12,9 +12,9 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
+from services.ingestor.core.database import AsyncSessionLocal
 from services.ingestor.core.utils import _utcnow
-from services.ingestor.database import AsyncSessionLocal
 from services.ingestor.models import AgentRun
 
 

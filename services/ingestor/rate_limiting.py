@@ -5,7 +5,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from starlette.requests import Request
 
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 
 
 def get_user_or_ip_address(request: Request) -> str:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 
 
 @pytest.mark.integration

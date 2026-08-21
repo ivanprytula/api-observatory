@@ -41,7 +41,7 @@ from services.ingestor.constants import (
     ABUSE_SIGNAL_NOISY_SOURCE,
     ABUSE_SIGNAL_SUSPICIOUS_KEY,
 )
-from services.ingestor.database import AsyncSessionLocal
+from services.ingestor.core.database import AsyncSessionLocal
 from services.ingestor.repositories.abuse_detection import create_signal
 
 

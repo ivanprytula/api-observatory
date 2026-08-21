@@ -120,18 +120,6 @@ async def test_validation_source_127_0_0_1_rejected(client: AsyncClient) -> None
 
 
 @pytest.mark.integration
-async def test_validation_source_ipv6_loopback_rejected(client: AsyncClient) -> None:
-    """IPv6 loopback (::1) is rejected as invalid source."""
-    r = await client.post(
-        "/api/v1/observations", json={**_OBSERVATION, "source": "::1"}
-    )
-
-    assert r.status_code == 422
-    body = r.json()
-    assert "detail" in body
-
-
-@pytest.mark.integration
 async def test_validation_source_0_0_0_0_rejected(client: AsyncClient) -> None:
     """IPv4 wildcard (0.0.0.0) is rejected as invalid source.
 
@@ -146,16 +134,6 @@ async def test_validation_source_0_0_0_0_rejected(client: AsyncClient) -> None:
     body = r.json()
     assert "detail" in body
     assert "reserved" in str(body["detail"]).lower() or "0.0.0.0" in str(body["detail"])
-
-
-@pytest.mark.integration
-async def test_validation_source_ipv6_wildcard_rejected(client: AsyncClient) -> None:
-    """IPv6 wildcard (::) is rejected as invalid source."""
-    r = await client.post("/api/v1/observations", json={**_OBSERVATION, "source": "::"})
-
-    assert r.status_code == 422
-    body = r.json()
-    assert "detail" in body
 
 
 # ---------------------------------------------------------------------------

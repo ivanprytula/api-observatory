@@ -12,8 +12,8 @@ from sqlalchemy import create_engine, pool
 
 import services.ingestor.models  # noqa: F401 — registers all ORM models to Base.metadata
 from alembic import context
-from services.ingestor.config import settings
-from services.ingestor.database import Base
+from services.ingestor.core.config import settings
+from services.ingestor.core.database import Base
 
 
 config = context.config

@@ -8,13 +8,13 @@ from typing import Annotated, Any
 from fastapi import Depends, HTTPException, Request, Response, status
 from redis.exceptions import RedisError
 
-from services.ingestor.auth import verify_jwt_token
 from services.ingestor.cache import get_redis_client
-from services.ingestor.config import settings
 from services.ingestor.constants import (
     V1_TOKEN_BUCKET_CAPACITY,
     V1_TOKEN_BUCKET_REFILL_PER_SEC,
 )
+from services.ingestor.core.auth import verify_jwt_token
+from services.ingestor.core.config import settings
 from services.ingestor.rate_limiting_advanced import TokenBucketLimiter
 
 

@@ -66,7 +66,7 @@ async def test_bearer_claims_take_priority_and_set_admin_role(
         seen["role"] = get_user_role()
 
     monkeypatch.setattr(
-        "services.ingestor.auth.decode_jwt_claims",
+        "services.ingestor.core.auth.decode_jwt_claims",
         lambda _token: {"tenant_id": "7", "sub": "admin-user"},
     )
 
@@ -75,7 +75,7 @@ async def test_bearer_claims_take_priority_and_set_admin_role(
             return ["admin"]
 
     monkeypatch.setattr(
-        "services.ingestor.auth.get_casbin_enforcer",
+        "services.ingestor.core.auth.get_casbin_enforcer",
         lambda: _FakeEnforcer(),
     )
 
@@ -112,7 +112,7 @@ async def test_invalid_bearer_token_falls_back_to_global_context(
     def _raise(_token: str) -> dict[str, Any]:
         raise ValueError("invalid token")
 
-    monkeypatch.setattr("services.ingestor.auth.decode_jwt_claims", _raise)
+    monkeypatch.setattr("services.ingestor.core.auth.decode_jwt_claims", _raise)
 
     await TenantMiddleware(app)(
         _scope([(b"authorization", b"Bearer invalid-token")]),

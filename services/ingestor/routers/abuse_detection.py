@@ -19,9 +19,9 @@ from services.ingestor.api_schemas.abuse_detection import (
     AbuseSignalResponse,
     AbuseSummaryResponse,
 )
-from services.ingestor.auth import casbin_guard
 from services.ingestor.constants import API_V1_PREFIX, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
-from services.ingestor.database import get_db
+from services.ingestor.core.auth import casbin_guard
+from services.ingestor.core.database import get_db
 from services.ingestor.repositories import abuse_detection as repo
 
 

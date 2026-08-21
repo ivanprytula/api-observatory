@@ -8,7 +8,7 @@ from typing import Any
 
 from libs.platform.resilience import DependencyResilience
 from libs.platform.retry import RetryBudget
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 from services.ingestor.fetch import get_http_client
 from services.ingestor.models import Observation
 

@@ -4,8 +4,8 @@ from typing import Any
 
 import pytest
 
-from services.ingestor.config import settings
 from services.ingestor.core import sentry as sentry_module
+from services.ingestor.core.config import settings
 
 
 pytestmark = pytest.mark.unit

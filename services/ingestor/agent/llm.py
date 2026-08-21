@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 
 
 if TYPE_CHECKING:

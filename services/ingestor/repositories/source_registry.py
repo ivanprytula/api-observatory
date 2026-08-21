@@ -18,12 +18,12 @@ from services.ingestor.api_schemas.source_registry import (
     SourceProfileUpdate,
     SourceSummaryResponse,
 )
-from services.ingestor.config import settings
 from services.ingestor.constants import (
     SOURCE_HEALTH_TIMEOUT_SECONDS,
     SOURCE_HEALTH_UNHEALTHY_THRESHOLD_MS,
     SSRF_HTTPS_PORTS,
 )
+from services.ingestor.core.config import settings
 from services.ingestor.models import SourceProfile, _utcnow
 
 

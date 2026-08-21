@@ -217,7 +217,7 @@ async def test_admin_rls_bypass(db: AsyncSession, client: AsyncClient):
         },
     )
     # Promote to admin via Casbin (the users.role column was removed in the RBAC migration)
-    from services.ingestor.auth import assign_user_role
+    from services.ingestor.core.auth import assign_user_role
     from services.ingestor.repositories.users import get_user_by_username
 
     _admin_user = await get_user_by_username(db, username)

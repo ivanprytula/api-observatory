@@ -11,13 +11,13 @@ from typing import Annotated, Any
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.ingestor.auth import (
+from services.ingestor.core.auth import (
     casbin_guard,
     verify_bearer_token,
     verify_jwt_token,
     verify_session,
 )
-from services.ingestor.database import get_db
+from services.ingestor.core.database import get_db
 from services.ingestor.rate_limiting_token_bucket import enforce_v1_token_bucket
 from services.ingestor.repositories.users import get_user_by_username
 

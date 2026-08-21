@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, patch
 import jwt
 import pytest
 
-from services.ingestor.auth import create_jwt_token
-from services.ingestor.config import settings
+from services.ingestor.core.auth import create_jwt_token
+from services.ingestor.core.config import settings
 from services.ingestor.routers.ws import _manager, _stream_events, observations_stream
 
 

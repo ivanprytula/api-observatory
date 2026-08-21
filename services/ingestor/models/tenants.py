@@ -1,7 +1,7 @@
 from sqlalchemy import Boolean, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from services.ingestor.database import Base
+from services.ingestor.core.database import Base
 from services.ingestor.models.base import TimestampMixin
 
 

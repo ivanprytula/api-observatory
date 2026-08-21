@@ -65,10 +65,10 @@ os.environ.setdefault("SERVICE_VERSION", "test-service")
 os.environ.setdefault("CONTRACTS_VERSION", "test-contracts")
 os.environ["API_V1_BEARER_TOKEN"] = ""
 
-from services.ingestor.auth import verify_jwt_token  # noqa: E402
-from services.ingestor.config import Settings  # noqa: E402
+from services.ingestor.core.auth import verify_jwt_token  # noqa: E402
+from services.ingestor.core.config import Settings  # noqa: E402
+from services.ingestor.core.database import Base, get_db  # noqa: E402
 from services.ingestor.core.tenant import role_context, tenant_context  # noqa: E402
-from services.ingestor.database import Base, get_db  # noqa: E402
 from services.ingestor.main import app  # noqa: E402
 from tests.shared.payloads import OBSERVATION_API  # noqa: E402
 
@@ -225,7 +225,7 @@ async def _clear_observations(session: AsyncSession) -> None:
 def _clear_casbin() -> None:
     """Remove all Casbin policies and role assignments from the enforcer,
     then re-seed the default RBAC role hierarchy."""
-    from services.ingestor.auth import get_casbin_enforcer
+    from services.ingestor.core.auth import get_casbin_enforcer
 
     enforcer = get_casbin_enforcer()
     enforcer.remove_filtered_policy(0, "", "", "", "")
@@ -338,14 +338,14 @@ async def client_with_cache(
     app.dependency_overrides[verify_jwt_token] = _mock_jwt
 
     # Seed Casbin so casbin_guard allows the default test user.
-    from services.ingestor.auth import get_casbin_enforcer
+    from services.ingestor.core.auth import get_casbin_enforcer
 
     enforcer = get_casbin_enforcer()
     enforcer.add_role_for_user_in_domain("testuser", "admin", "*")
 
     # Inject fake cache into cache module and auth module
     cache._client = fake_cache
-    from services.ingestor import auth
+    from services.ingestor.core import auth
 
     auth._session_client = fake_cache
 
@@ -522,12 +522,12 @@ async def client(db: AsyncSession, fake_cache) -> AsyncGenerator[AsyncClient]:
 
     app.dependency_overrides[verify_jwt_token] = _mock_jwt
 
-    from services.ingestor.auth import get_casbin_enforcer
+    from services.ingestor.core.auth import get_casbin_enforcer
 
     enforcer = get_casbin_enforcer()
     enforcer.add_role_for_user_in_domain("testuser", "admin", "*")
 
-    from services.ingestor import auth
+    from services.ingestor.core import auth
 
     auth._session_client = fake_cache
 

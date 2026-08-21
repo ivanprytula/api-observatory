@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from services.ingestor import jobs
 from services.ingestor.api_schemas.observations import ObservationRequest
-from services.ingestor.database import AsyncSessionLocal
+from services.ingestor.core.database import AsyncSessionLocal
 from services.ingestor.metrics import (
     background_jobs_active,
     background_jobs_in_queue,

@@ -16,7 +16,7 @@ from libs.contracts.events import (
     NotificationDeliveryRequestedV1,
     NotificationTriggerType,
 )
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 from services.ingestor.core.utils import _aware_utc
 from services.ingestor.metrics import dependency_incident_transitions_total
 from services.ingestor.notifications import (

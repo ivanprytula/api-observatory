@@ -18,7 +18,7 @@ from libs.contracts.events import (
     TOPIC_NOTIFICATION_DELIVERY_DLQ_V1,
     TOPIC_NOTIFICATION_DELIVERY_REQUESTS_V1,
 )
-from services.ingestor.config import settings
+from services.ingestor.core.config import settings
 from services.ingestor.models import _utcnow
 from services.ingestor.repositories.messaging import (
     claim_pending_outbox_events,

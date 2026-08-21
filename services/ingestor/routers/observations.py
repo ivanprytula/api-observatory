@@ -24,7 +24,12 @@ from services.ingestor.api_schemas.observations import (
     SessionResponse,
     UpdateObservationRequest,
 )
-from services.ingestor.auth import (
+from services.ingestor.constants import (
+    API_V1_PREFIX,
+    DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE,
+)
+from services.ingestor.core.auth import (
     DEFAULT_ROLE,
     casbin_guard,
     create_session,
@@ -32,13 +37,8 @@ from services.ingestor.auth import (
     verify_jwt_token,
     verify_session,
 )
-from services.ingestor.config import settings
-from services.ingestor.constants import (
-    API_V1_PREFIX,
-    DEFAULT_PAGE_SIZE,
-    MAX_PAGE_SIZE,
-)
-from services.ingestor.database import get_db
+from services.ingestor.core.config import settings
+from services.ingestor.core.database import get_db
 from services.ingestor.metrics import (
     batch_size_histogram,
     cache_hits_total,

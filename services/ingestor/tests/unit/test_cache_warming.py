@@ -6,7 +6,7 @@ from typing import TypedDict
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from services.ingestor.database import Base
+from services.ingestor.core.database import Base
 from services.ingestor.models import Observation
 from services.ingestor.services_lifecycle import _warm_list_cache
 
@@ -90,7 +90,7 @@ async def test_warm_list_cache_populates_top_sources(
         await session.commit()
 
     monkeypatch.setattr(
-        "services.ingestor.database.AsyncSessionLocal", session_factory_fixture
+        "services.ingestor.core.database.AsyncSessionLocal", session_factory_fixture
     )
 
     calls: list[WarmCall] = []
@@ -132,7 +132,7 @@ async def test_warm_list_cache_fails_open_on_query_error(
             raise RuntimeError("db unavailable")
 
     monkeypatch.setattr(
-        "services.ingestor.database.AsyncSessionLocal", BrokenSessionFactory()
+        "services.ingestor.core.database.AsyncSessionLocal", BrokenSessionFactory()
     )
 
     # Should not raise.

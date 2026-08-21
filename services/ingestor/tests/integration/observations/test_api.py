@@ -101,7 +101,7 @@ async def test_readyz_returns_503_when_db_unreachable() -> None:
 
     from httpx import ASGITransport
 
-    from services.ingestor.database import get_db
+    from services.ingestor.core.database import get_db
     from services.ingestor.main import app
 
     # Mock AsyncSession that raises when execute() is called
