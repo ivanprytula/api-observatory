@@ -226,6 +226,9 @@ secrets-findings.json
 docs/.plans/
 docs/_archive/
 
+# CI-generated artifacts
+requirements-audit.txt
+
 # act local event payload
 event.json
 

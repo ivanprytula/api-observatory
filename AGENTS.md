@@ -57,3 +57,15 @@ For a lightweight catalog of all available skills, see `../agent-forge/skills/ma
 ## Skill-not-found fallback
 
 If no skill trigger matches, search `../agent-forge/skills/manifest.json` by keyword or escalate to the `self-improving-agent` instructions at `../agent-forge/instructions/self-improving-agent.instructions.md`.
+
+## Pre-commit & CI guardrails
+
+- **Never run `pip-audit` manually.** It is a manual-stage hook. Run it only via `uv run pre-commit run pip-audit --all-files` or in CI.
+- **Never run `pre-commit run --all-files` on every keystroke.** Run it only before commit or when explicitly debugging hooks.
+- **Use `just test-unit` for fast feedback.** Do not invoke `pytest` directly with raw arguments.
+- **Use `just test-<lane>` or `just test-<profile>` for scoped runs.** Do not run `pytest` without lane/profile markers.
+- **Use `just doctor` when environment checks fail.** Do not manually inspect system requirements.
+- **Do not hand-craft secret values.** Remind users to use `just generate-secrets` instead.
+- **Use `just db-migrate` after schema changes.** Do not run `alembic upgrade head` directly.
+- **Use `just` recipes instead of raw `docker compose`.** All compose flags (including `--pull=always` gotcha) are encoded in recipes.
+- **Use `uv run ...` for all Python execution.** Do not use `python -c` or `python3 -c`.

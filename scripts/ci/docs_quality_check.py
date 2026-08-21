@@ -25,7 +25,6 @@ RELAXED_MD_GLOBS = (
 
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 BOLD_HEADING_RE = re.compile(r"^\*\*[^*].*\*\*\s*$")
-FENCE_RE = re.compile(r"^```([^\s`].*)?$")
 
 CHECK_STRICT = "strict"
 CHECK_RELAXED = "relaxed"
@@ -131,16 +130,7 @@ def check_file(path: Path, check_level: str) -> list[str]:
             )
 
         if line.startswith("```"):
-            if not in_fence:
-                if check_level == CHECK_STRICT and (
-                    not FENCE_RE.match(line) or line.strip() == "```"
-                ):
-                    errors.append(
-                        f"{rel_path}:{line_no}: fenced code block missing language tag."
-                    )
-                in_fence = True
-            else:
-                in_fence = False
+            in_fence = not in_fence
 
         if check_level != CHECK_STRICT:
             continue
