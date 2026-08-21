@@ -76,7 +76,7 @@ Optional profiles:
 | `broker` | `broker` (Redpanda, ports 9092/8082), `notification-consumer` |
 | `inference` | `inference-db` (PostgreSQL, port 5433), `inference` (port 8001) |
 | `monitoring` | `prometheus`, `grafana`, `loki`, `promtail`, `tempo`, `alertmanager`, `mailpit` |
-| `ingress` | `edge` (nginx, ports 80/443) |
+| `ingress` | `edge` (Traefik, ports 80/443) |
 | `security` | `trivy`, `checkov`, `gitleaks`, `hadolint` |
 | `aws` | `floci-aws` (LocalStack, port 4566) |
 

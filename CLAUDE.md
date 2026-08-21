@@ -4,7 +4,7 @@
 
 - **Primary**: Python 3.14, FastAPI (async), SQLAlchemy 2 (async), Pydantic v2
 - **Dashboard**: Streamlit
-- **Infra**: Docker Compose, nginx, PostgreSQL, Redis, Kafka (optional)
+- **Infra**: Docker Compose, Traefik (local ingress), nginx (AWS ingress), PostgreSQL, Redis, Kafka (optional)
 - **Testing**: pytest + pytest-asyncio, SQLite in-memory (default), PostgreSQL via testcontainers
 - **Linting**: ruff (format + check), bandit, gitleaks
 - **Package manager**: uv

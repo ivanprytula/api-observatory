@@ -1,0 +1,31 @@
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certificates:
+          - certFile: /etc/traefik/certs/localhost+2.pem
+            keyFile: /etc/traefik/certs/localhost+2-key.pem
+
+ping:
+  entryPoint: websecure
+
+api:
+  dashboard: false
+  insecure: false
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true

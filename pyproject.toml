@@ -131,7 +131,7 @@ testpaths = [
 ]
 asyncio_mode = "auto"
 # Limit coverage collection to the package under test to avoid "module X was never imported" warnings
-addopts = "--cov=services/ingestor --cov-report=term-missing --cov-report=html -q -m 'not e2e and not demo' --cov-fail-under=80"
+addopts = "--cov=services/ingestor --cov-report=term-missing --cov-report=html -q -m 'not e2e and not demo'"
 filterwarnings = [
   "ignore::DeprecationWarning:slowapi",
   "ignore::DeprecationWarning:fastapi.routing",

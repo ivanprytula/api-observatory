@@ -100,7 +100,7 @@ main() {
 
   info "Ingress smoke test: $(gateway_url)"
   check_status 'GET /readyz' '^200$' "$(gateway_url)/readyz"
-  check_status 'GET /edge-status' '^200$' "$(gateway_url)/edge-status"
+  check_status 'GET /ping' '^200$' "$(gateway_url)/ping"
   check_status 'GET /' '^2[0-9][0-9]$|^3[0-9][0-9]$' "$(gateway_url)/"
   check_status 'GET /dashboard/_stcore/health' '^2[0-9][0-9]$|^3[0-9][0-9]$' "$(gateway_url)/dashboard/_stcore/health"
   check_status 'GET /api/docs' '^2[0-9][0-9]$|^3[0-9][0-9]$' "$(gateway_url)/api/docs"

@@ -88,6 +88,14 @@ services:
     ports:
       - '9092:9092'
       - '8082:8082'
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.broker.rule=PathPrefix(`/broker/`)
+      - traefik.http.routers.broker.entrypoints=websecure
+      - traefik.http.routers.broker.tls=true
+      - traefik.http.routers.broker.service=broker-svc
+      - traefik.http.routers.broker.middlewares=secure-headers
+      - traefik.http.services.broker-svc.loadbalancer.server.port=8082
     healthcheck:
       test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
       start_period: 30s
@@ -153,6 +161,28 @@ services:
       start_period: 10s
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.ingestor-api.rule=PathPrefix(`/api/`)
+      - traefik.http.routers.ingestor-api.entrypoints=websecure
+      - traefik.http.routers.ingestor-api.tls=true
+      - traefik.http.routers.ingestor-api.service=ingestor-svc
+      - traefik.http.routers.ingestor-api.middlewares=ingestor-rate-limit,secure-headers
+      - traefik.http.middlewares.ingestor-rate-limit.ratelimit.average=20
+      - traefik.http.middlewares.ingestor-rate-limit.ratelimit.burst=40
+      - traefik.http.routers.ingestor-abuse.rule=PathPrefix(`/api/v1/abuse/`)
+      - traefik.http.routers.ingestor-abuse.entrypoints=websecure
+      - traefik.http.routers.ingestor-abuse.tls=true
+      - traefik.http.routers.ingestor-abuse.service=ingestor-svc
+      - traefik.http.routers.ingestor-abuse.middlewares=ingestor-abuse-rate-limit,secure-headers
+      - traefik.http.middlewares.ingestor-abuse-rate-limit.ratelimit.average=5
+      - traefik.http.middlewares.ingestor-abuse-rate-limit.ratelimit.burst=10
+      - traefik.http.routers.ingestor-health.rule=Path(`/healthz`) || Path(`/readyz`) || Path(`/metrics`)
+      - traefik.http.routers.ingestor-health.entrypoints=websecure
+      - traefik.http.routers.ingestor-health.tls=true
+      - traefik.http.routers.ingestor-health.service=ingestor-svc
+      - traefik.http.routers.ingestor-health.middlewares=secure-headers
+      - traefik.http.services.ingestor-svc.loadbalancer.server.port=8000
     deploy:
       restart_policy:
         condition: on-failure
@@ -326,6 +356,15 @@ services:
       INGESTOR_URL: http://ingestor:8000
     ports:
       - '8501:8501'
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.dashboard.rule=Path(`/`) || PathPrefix(`/dashboard/`)
+      - traefik.http.routers.dashboard.entrypoints=websecure
+      - traefik.http.routers.dashboard.tls=true
+      - traefik.http.routers.dashboard.service=dashboard-svc
+      - traefik.http.routers.dashboard.middlewares=dashboard-strip,secure-headers
+      - traefik.http.middlewares.dashboard-strip.stripprefix.prefixes=/dashboard/
+      - traefik.http.services.dashboard-svc.loadbalancer.server.port=8501
     depends_on:
       ingestor:
         condition: service_healthy
@@ -346,22 +385,26 @@ services:
       - api-obs
 
   edge:
-    image: nginx:1.27-alpine
+    image: traefik:v3.4
     container_name: api-obs-edge
     profiles: [ingress]
     ports:
       - '80:80'
       - '443:443'
     volumes:
-      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./infra/certs:/etc/nginx/certs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./infra/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./infra/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - ./infra/certs:/etc/traefik/certs:ro
+    command:
+      - --configfile=/etc/traefik/traefik.yml
     depends_on:
       ingestor:
         condition: service_healthy
       dashboard:
         condition: service_healthy
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://127.0.0.1:80/edge-status']
+      test: ['CMD', 'curl', '-f', 'http://127.0.0.1:80/ping']
       start_period: 10s
     security_opt: [no-new-privileges:true]
     deploy:
@@ -600,7 +643,7 @@ services:
 #   - floci-aws (AWS emulator, optional via --profile aws)
 #
 # Host access:
-#   - edge:80, 443 → localhost:80, 443 — optional HTTPS ingress (via nginx)
+#   - edge:80, 443 → localhost:80, 443 — optional HTTPS ingress (via Traefik)
 #   - ingestor:8000 → localhost:8000 — direct HTTP (debug only, not prod-like)
 #   - dashboard:8501 → localhost:8501 — direct HTTP (debug only, not prod-like)
 #   - ingestor-db:5432 → localhost:5432
