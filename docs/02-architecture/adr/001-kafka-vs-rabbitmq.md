@@ -85,7 +85,7 @@ Chosen: Redpanda
 
 ## Implementation
 
-**Phase 1**: Add Redpanda service to `docker-compose.yml`
+**Phase 1**: Add Redpanda service to `compose.yml`
 
 ```yaml
 broker:

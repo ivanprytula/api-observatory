@@ -3,7 +3,7 @@
 import secrets
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from services.ingestor.constants import (
@@ -481,6 +481,37 @@ class Settings(BaseSettings):
         case_sensitive=False,  # DATABASE_URL and database_url both work
         extra="ignore",  # Ignore unknown env vars
     )
+
+    @model_validator(mode="after")
+    def _check_default_secret(self) -> "Settings":
+        if self.environment.lower() in {"production", "prod"}:
+            if not self.jwt_secret or self.jwt_secret in (
+                "changethis",
+                "CHANGETHIS",
+                "changeme",
+                "CHANGEME",
+            ):
+                raise ValueError(
+                    "JWT_SECRET must be set to a strong value in production. "
+                    "Current value looks like a placeholder."
+                )
+            if self.database_url and any(
+                p in self.database_url for p in ("localhost", "127.0.0.1", "postgres")
+            ):
+                raise ValueError(
+                    "DATABASE_URL must point to a production database, not localhost."
+                )
+            if self.superadmin_password and self.superadmin_password in (
+                "changethis",
+                "CHANGETHIS",
+                "changeme",
+                "CHANGEME",
+            ):
+                raise ValueError(
+                    "SUPERADMIN_PASSWORD must be set to a strong value in production. "
+                    "Current value looks like a placeholder."
+                )
+        return self
 
 
 # Singleton instance

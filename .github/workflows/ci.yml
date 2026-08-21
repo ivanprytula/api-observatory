@@ -54,7 +54,7 @@ jobs:
               - 'uv.lock'
               - '.python-version'
               - 'Dockerfile'
-              - 'docker-compose*.yml'
+              - 'compose*.yml'
               - 'release/**'
               - '.github/workflows/ci.yml'
               - '.github/workflows/publish-images.yml'
@@ -80,7 +80,7 @@ jobs:
               - '.python-version'
             deployable_images:
               - 'Dockerfile'
-              - 'docker-compose*.yml'
+              - 'compose*.yml'
               - '.dockerignore'
               - 'pyproject.toml'
               - 'uv.lock'

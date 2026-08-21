@@ -17,7 +17,7 @@ restart the application services before starting monitoring.
 | Exceptions | Optional Sentry integration when explicitly configured | External |
 
 Tempo replaced the Jaeger design found in older planning material. The active topology is
-defined by [`docker-compose.yml`](../../docker-compose.yml) and
+defined by [`compose.yml`](../../compose.yml) and
 [`infra/monitoring/`](../../infra/monitoring/).
 
 ## Metrics
@@ -29,7 +29,7 @@ queue depth, retention, authentication, and other bounded operational work.
 
 Operational queries and alert thresholds are owned by the provisioned Grafana dashboards and
 [`infra/monitoring/rules/`](../../infra/monitoring/rules/). The
-[Compose topology](../../docker-compose.yml) owns their runtime references, and the
+[Compose topology](../../compose.yml) owns their runtime references, and the
 Justfile owns supported validation syntax.
 
 ## Traces and Correlation
@@ -78,7 +78,7 @@ failure exercise.
 
 Start the opt-in monitoring profile through the
 [`dev-up-monitoring` target](../../Justfile), then inspect the monitoring services and the ingestor
-`/metrics` endpoint. The [Compose topology](../../docker-compose.yml) owns profile and service
+`/metrics` endpoint. The [Compose topology](../../compose.yml) owns profile and service
 details.
 
 This proves local wiring only. A production SLO claim requires a deployed workload,

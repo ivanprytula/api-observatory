@@ -14,6 +14,7 @@ from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.openapi.utils import get_openapi
+from fastapi.routing import APIRoute
 from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
@@ -74,6 +75,10 @@ from services.ingestor.services_lifecycle import (
 
 # Type alias for database dependency
 type DbDep = Annotated[AsyncSession, Depends(get_db)]
+
+
+def _custom_generate_unique_id(route: APIRoute) -> str:
+    return f"{route.tags[0]}-{route.name}"
 
 
 # ---------------------------------------------------------------------------
@@ -494,6 +499,7 @@ app = FastAPI(
     description=APP_DESCRIPTION,
     lifespan=lifespan,
     openapi_tags=_OPENAPI_TAGS,
+    generate_unique_id_function=_custom_generate_unique_id,
 )
 
 # Attach limiter to app (required by slowapi)

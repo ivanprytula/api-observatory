@@ -192,7 +192,7 @@ resource "aws_volume_attachment" "postgres_data" {
 }
 
 # ─── Monitoring EBS Volumes ──────────────────────────────────────────────────
-# Cloud-parity counterpart of the named Docker volumes in docker-compose.yml
+  # Cloud-parity counterpart of the named Docker volumes in compose.yml
 # and the /mnt/ebs/<svc> bind mounts in deployment/aws-mvp/docker-compose.yml.
 # Each volume backs one monitoring tool's data dir. You must also format and
 # mount each at /mnt/ebs/<svc> on the instance (extend user_data / bootstrap).

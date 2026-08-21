@@ -83,6 +83,7 @@ Notes:
 
   ```python
   from services.ingestor.auth import assign_user_role
+
   await assign_user_role(db, username="alice", role="manager", tenant_id=10)
   ```
 

@@ -1,0 +1,50 @@
+name: guard-dependencies
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  guard:
+    name: Guard dependency files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect dependency changes
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          changed=$(git diff --name-only "$base" "$head" | grep -E '^(pyproject\.toml|uv\.lock)$' || true)
+          if [ -n "$changed" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check author
+        if: steps.changes.outputs.changed == 'true'
+        id: author
+        shell: bash
+        run: |
+          actor="${{ github.event.pull_request.user.login }}"
+          owner="${{ github.repository_owner }}"
+          if [[ "$actor" == "dependabot[bot]" ]] || [[ "$actor" == "renovate[bot]" ]] || [[ "$actor" == "$owner" ]]; then
+            echo "authorized=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "authorized=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Close unauthorized PR
+        if: steps.changes.outputs.changed == 'true' && steps.author.outputs.authorized != 'true'
+        shell: bash
+        run: |
+          gh pr close "${{ github.event.pull_request.number }}" \
+            -c "Dependency changes (pyproject.toml / uv.lock) can only be submitted by org members or bots."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

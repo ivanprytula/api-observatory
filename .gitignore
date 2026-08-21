@@ -186,7 +186,7 @@ opencode.jsonc
 .DS_Store
 
 # Infrastructure / Local tests
-docker-compose.override.yml
+compose.override.yml
 
 # Terraform
 *.tfstate

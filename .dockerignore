@@ -85,7 +85,7 @@ secrets-findings.json
 # Task runner and orchestration (not needed in images)
 Justfile
 justfile
-docker-compose*.yml
+compose*.yml
 
 # Local volumes
 pg_data/

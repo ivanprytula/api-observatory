@@ -5,10 +5,12 @@ from __future__ import annotations
 import logging
 from typing import Annotated, Any
 
-from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
+from pwdlib import PasswordHash
+from pwdlib.exceptions import UnknownHashError
+from pwdlib.hashers.argon2 import Argon2Hasher
+from pwdlib.hashers.bcrypt import BcryptHasher
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -60,7 +62,7 @@ router = APIRouter(
 type DbDep = Annotated[AsyncSession, Depends(get_db)]
 type JwtDep = Annotated[dict[str, Any], Depends(verify_jwt_token)]
 
-_ph = PasswordHasher()
+_ph = PasswordHash((Argon2Hasher(), BcryptHasher()))
 
 _R404 = {
     404: {
@@ -287,8 +289,10 @@ async def login(
             detail="Invalid credentials.",
         )
     try:
-        _ph.verify(user.password_hash, form.password)
-    except VerifyMismatchError:
+        valid = _ph.verify(user.password_hash, form.password)
+    except UnknownHashError:
+        valid = False
+    if not valid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials.",

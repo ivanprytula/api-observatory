@@ -1,5 +1,5 @@
 # Production-like overrides (resource constraints + runtime security)
-# Usage: docker compose -f docker-compose.yml -f docker-compose.prod-like.yml up
+# Usage: docker compose -f compose.yml -f compose.deploy.yml up
 #
 # What this adds on top of the base:
 #   - read_only: true      → immutable container filesystem

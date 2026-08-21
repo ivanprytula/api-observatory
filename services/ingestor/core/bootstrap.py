@@ -5,7 +5,9 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from argon2 import PasswordHasher
+from pwdlib import PasswordHash
+from pwdlib.hashers.argon2 import Argon2Hasher
+from pwdlib.hashers.bcrypt import BcryptHasher
 
 from services.ingestor.config import settings
 from services.ingestor.models import User
@@ -20,7 +22,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
-_ph = PasswordHasher()
+_ph = PasswordHash((Argon2Hasher(), BcryptHasher()))
 
 
 async def bootstrap_initial_admin(session: AsyncSession) -> None:
@@ -71,7 +73,7 @@ async def ensure_superadmin(session: AsyncSession) -> User | None:
     role assignment. Idempotent: safe to call on every startup.
 
     Requires ``SUPERADMIN_PASSWORD`` to be set; no-op otherwise. Root authenticates
-    like any user via ``/auth/token`` (argon2 hash + JWT with ``tenant_id=None``),
+    like any user via ``/auth/token`` (pwdlib-managed hash + JWT with ``tenant_id=None``),
     so no separate credential store or setup script is required.
 
     Returns the superadmin ``User`` if it exists (created or pre-existing), or

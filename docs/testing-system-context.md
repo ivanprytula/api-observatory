@@ -60,7 +60,7 @@ These toggle capability slices in the ingestor and tests:
 
 ## 4. Docker Compose Topology
 
-File: `docker-compose.yml`
+File: `compose.yml`
 
 Always-on:
 

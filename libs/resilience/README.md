@@ -13,6 +13,7 @@ from libs.resilience.http_client import AsyncResilientHTTPClient, ResilientHTTPE
 cb = CircuitBreaker(failure_threshold=3, recovery_timeout=30)
 client = AsyncResilientHTTPClient(circuit_breaker=cb)
 
+
 async def fetch():
     try:
         resp = await client.get("https://example.local/health")
@@ -23,10 +24,10 @@ async def fetch():
     finally:
         await client.close()
 
+
 # --- Decorator style ---
 @circuit_breaker(failure_threshold=5, recovery_timeout=60)
-async def call_downstream(payload: dict) -> dict:
-    ...
+async def call_downstream(payload: dict) -> dict: ...
 ```
 
 ## Testing

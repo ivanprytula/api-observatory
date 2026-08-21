@@ -16,7 +16,7 @@ dependencies = [
   "python-json-logger>=4.1.0",
   "structlog>=24.4.0",
   "pyjwt>=2.10.0",
-  "argon2-cffi>=23.1.0",
+  "pwdlib[argon2,bcrypt]>=0.3.1",
   "alembic>=1.19.1",
   "httpx>=0.28.1",
   "prometheus-fastapi-instrumentator>=8.1.0",
@@ -131,7 +131,7 @@ testpaths = [
 ]
 asyncio_mode = "auto"
 # Limit coverage collection to the package under test to avoid "module X was never imported" warnings
-addopts = "--cov=services/ingestor --cov-report=term-missing --cov-report=html -q -m 'not e2e and not demo'"
+addopts = "--cov=services/ingestor --cov-report=term-missing --cov-report=html -q -m 'not e2e and not demo' --cov-fail-under=80"
 filterwarnings = [
   "ignore::DeprecationWarning:slowapi",
   "ignore::DeprecationWarning:fastapi.routing",
@@ -206,6 +206,10 @@ lines-after-imports = 2
 [tool.ruff.lint.pycodestyle]
 max-doc-length = 100
 max-line-length = 100
+
+[tool.ty]
+[tool.ty.src]
+exclude = [".venv"]
 
 [[tool.ty.overrides]]
 include = [

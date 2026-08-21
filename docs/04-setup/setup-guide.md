@@ -89,7 +89,7 @@ requirement.
   generator replaces it atomically with user-only permissions (`0600`); never commit or share it.
 - [`services/ingestor/config.py`](../../services/ingestor/config.py) owns ingestor defaults,
   validation, feature flags, and secret classification.
-- [`docker-compose.yml`](../../docker-compose.yml) owns service wiring, ports, profiles, and
+- [`compose.yml`](../../compose.yml) owns service wiring, ports, profiles, and
   container-to-container addresses.
 
 The local namespace is intentionally explicit: Docker images and containers use `api-obs-*`,

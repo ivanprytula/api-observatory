@@ -22,7 +22,7 @@ paths = [
   ".gitignore",
   ".pre-commit-config.yaml",
   "Justfile",
-  "docker-compose.yml",
+  "compose.yml",
   # Historical files (refactored/removed, only exist in git history)
   "services/ingestor/routers/records.py",
   "app/routers/records.py",
