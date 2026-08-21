@@ -46,6 +46,10 @@ Shared agent standards are maintained in `agent-forge`:
 
 Prefer mature CLIs (`docker compose`, `just`, `uv`, `alembic`, `psql`) for infrastructure and one-off commands. Use MCP only for stateful, permission-aware access to the observatory API.
 
+## Python execution
+
+For running Python modules, scripts, and tests in the shell, use `uv run ...`, not `python -c ...` or `python3 -c ...`.
+
 ## Skill discovery
 
 For a lightweight catalog of all available skills, see `../agent-forge/skills/manifest.json` or `../agent-forge/skills/index.md`. Load the full `SKILL.md` only when the task matches the skill's trigger.

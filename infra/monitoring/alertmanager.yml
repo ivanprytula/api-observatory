@@ -25,8 +25,8 @@ route:
 receivers:
   - name: email-admin
     email_configs:
-      - to: 'admin@datazoo.local'
-        from: 'alertmanager@datazoo.local'
+      - to: 'admin@api-observatory.local'
+        from: 'alertmanager@api-observatory.local'
         smarthost: 'mailpit:1025'
         require_tls: false
         send_resolved: true

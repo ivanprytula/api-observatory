@@ -78,9 +78,7 @@ def test_deploy_ssm_payload_shape() -> None:
             instance_id="i-1234567890abcdef0",
             contract_version="1",
             compose_path=compose,
-            prometheus_path=prometheus,
             rollout_path=rollout,
-            alb_target_group_arn="arn:aws:elasticloadbalancing:eu-central-1:123456789012:targetgroup/api-observatory/abc123",
         )
 
         assert payload["instanceIds"] == ["i-1234567890abcdef0"]
@@ -93,7 +91,6 @@ def test_deploy_ssm_payload_shape() -> None:
         else:
             pytest.fail("deployment.env command not found in payload")
         assert "CACHE_IMAGE=" in env_text
-        assert "ALB_TARGET_GROUP_ARN=" in env_text
         assert any("rollout.sh" in cmd for cmd in payload["commands"])
 
 

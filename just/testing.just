@@ -93,10 +93,6 @@ test-capability-broker:
 test-capability-ai:
     bash "{{justfile_directory()}}/scripts/test/run-profile.sh" ai
 
-# Requires Docker only; starts and removes its own deterministic harness, never the local stack.
-test-full-optional:
-    bash "{{justfile_directory()}}/scripts/test/run-full-optional.sh"
-
 # Requires Docker only when selected fixtures need it; excludes public live probes and labs.
 test-e2e:
     bash "{{justfile_directory()}}/scripts/test/run-lane.sh" e2e

@@ -25,7 +25,7 @@ context each lane/profile requires, and where the wiring lives.
 | rls | `test-capability-rls` | `run-profile.sh rls` | `RLS_ENABLED=true` |
 | broker | `test-capability-broker` | `run-profile.sh broker` | `BROKER_ENABLED=true`, `NOTIFICATIONS_ENABLED=true`, `NOTIFICATION_DELIVERY_MODE=broker` |
 | ai | `test-capability-ai` | `run-profile.sh ai` | `ANTHROPIC_ENABLED=false` |
-| full-optional | `test-full-optional` | `run-full-optional.sh` | `RLS_ENABLED=true`, `BROKER_ENABLED=true`, `NOTIFICATIONS_ENABLED=true`, `NOTIFICATION_DELIVERY_MODE=broker`, `ANTHROPIC_ENABLED=false` |
+| full-optional | `test-full-optional` | direct pytest | `RLS_ENABLED=true`, `BROKER_ENABLED=true`, `NOTIFICATIONS_ENABLED=true`, `NOTIFICATION_DELIVERY_MODE=broker`, `ANTHROPIC_ENABLED=false` |
 
 ## 2. Pytest Markers (pyproject.toml)
 
@@ -79,7 +79,6 @@ Optional profiles:
 | `ingress` | `edge` (nginx, ports 80/443) |
 | `security` | `trivy`, `checkov`, `gitleaks`, `hadolint` |
 | `aws` | `floci-aws` (LocalStack, port 4566) |
-| `test-harness` | `test-harness` (defined in `docker-compose.test.yml`) |
 
 Network: single `api-obs` bridge.
 
@@ -108,7 +107,6 @@ Capability matrix:
 - `just/testing.just` — all test recipes
 - `scripts/test/run-lane.sh` — unit/integration/e2e/live dispatch
 - `scripts/test/run-profile.sh` — core/rls/broker/ai dispatch
-- `scripts/test/run-full-optional.sh` — composed RLS+broker+AI harness
 - `conftest.py` — root pytest ignores (deferred post-MVP slices)
 - `pyproject.toml` — pytest markers, coverage, ruff, ty config
 

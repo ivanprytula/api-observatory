@@ -1,0 +1,12 @@
+---
+- name: Bootstrap AWS MVP ingestor host
+  hosts: app
+  become: true
+  vars:
+    ebs_mount_point: /mnt/ebs/postgres
+  roles:
+    - common
+    - docker
+    - ebs-mount
+    - nginx
+    - mvp

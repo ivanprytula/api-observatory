@@ -34,3 +34,87 @@ services:
       interval: 10s
       timeout: 3s
       retries: 6
+
+  # ── Monitoring (parity with local `monitoring` profile) ─────────────────────
+  # Each data dir is bound to an EBS volume mounted at /mnt/ebs/<svc> on the
+  # EC2 host (see aws-sandbox/main.tf). This is the persistent counterpart of
+  # the named Docker volumes in the root docker-compose.yml. Without these
+  # mounts the data lives in the container layer and is lost on every redeploy.
+
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    volumes:
+      - ../../infra/monitoring/prometheus.local.yml:/etc/prometheus/prometheus.yml:ro
+      - ../../infra/monitoring/rules/alert.local.rules.yml:/etc/prometheus/rules/alert.rules.yml:ro
+      - /mnt/ebs/prometheus:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    ports: ['127.0.0.1:9090:9090']
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    volumes:
+      - ../../infra/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ../../infra/monitoring/grafana/provisioning/dashboards/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ../../infra/monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+      - /mnt/ebs/grafana:/var/lib/grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-changeme}
+    ports: ['127.0.0.1:3000:3000']
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.4.2
+    volumes:
+      - /mnt/ebs/loki:/loki
+    command: ['-config.file=/etc/loki/local-config.yaml']
+    # EBS mounts are root-owned; the Loki image runs as uid 10001, so run as
+    # root here (mirrors the local fix) or chown /mnt/ebs/loki at bootstrap.
+    user: "0"
+    ports: ['127.0.0.1:3100:3100']
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:3.4.2
+    volumes:
+      - ../../infra/monitoring/promtail.yml:/etc/promtail/promtail.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /mnt/ebs/promtail:/tmp
+    command: ['-config.file=/etc/promtail/promtail.yml']
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:2.7.2
+    volumes:
+      - ../../infra/monitoring/tempo.yml:/etc/tempo.yml:ro
+      - /mnt/ebs/tempo:/tmp/tempo
+    # EBS mounts are root-owned; the Tempo image runs as uid 10001, so run as
+    # root here (mirrors the local fix) or chown /mnt/ebs/tempo at bootstrap.
+    user: "0"
+    command: ['-config.file=/etc/tempo.yml']
+    ports: ['127.0.0.1:3200:3200', '127.0.0.1:4317:4317']
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    volumes:
+      - ../../infra/monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - /mnt/ebs/alertmanager:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    ports: ['127.0.0.1:9093:9093']
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:v1.24
+    volumes:
+      - /mnt/ebs/mailpit:/data
+    environment:
+      MP_DATABASE: /data/mailpit.db
+    ports: ['127.0.0.1:8025:8025']
+    restart: unless-stopped

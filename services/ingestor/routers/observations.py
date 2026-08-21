@@ -255,8 +255,8 @@ async def get_observation(
     Check cache first (Cache); on miss, fetch from DB and cache for 1 hour.
     Cache connection errors are transparent (fail-open).
     """
-    # Try cache first
-    cached_observation = await cache.get_observation(observation_id)
+    # Try cache first (L1 in-process LRU + L2 Redis)
+    cached_observation = await cache.get_observation_with_lru(observation_id)
     if cached_observation is not None:
         cache_hits_total.labels(operation="get").inc()
         return cached_observation
@@ -327,7 +327,7 @@ async def process_observation(
             status_code=status.HTTP_404_NOT_FOUND, detail="Observation not found"
         )
     # Invalidate cache so next read gets fresh data
-    await cache.invalidate_observation(observation_id)
+    await cache.invalidate_observation_all_layers(observation_id)
     return ObservationResponse.model_validate(observation)
 
 
@@ -382,7 +382,7 @@ async def delete_observation(
             status_code=status.HTTP_404_NOT_FOUND, detail="Observation not found"
         )
     # Invalidate cache since observation no longer exists
-    await cache.invalidate_observation(observation_id)
+    await cache.invalidate_observation_all_layers(observation_id)
     logger.info("observation_deleted", extra={"id": observation_id})
 
 
@@ -488,7 +488,7 @@ async def delete_observation_secured(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Observation not found"
         )
-    await cache.invalidate_observation(observation_id)
+    await cache.invalidate_observation_all_layers(observation_id)
 
 
 # ============================================================================

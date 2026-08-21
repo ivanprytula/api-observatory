@@ -1,0 +1,52 @@
+---
+- name: Detect attached EBS device
+  ansible.builtin.shell: |
+    lsblk -dpno NAME,SIZE,TYPE | awk -v size="20G" '$2 == size && $3 == "disk" {print $1}' | head -n1
+  register: ebs_device_cmd
+  changed_when: false
+
+- name: Set EBS device fact
+  ansible.builtin.set_fact:
+    ebs_device: "{{ ebs_device_cmd.stdout | trim }}"
+
+- name: Fail if EBS device not found
+  ansible.builtin.fail:
+    msg: "No 20G EBS device found. Check Terraform volume attachment."
+  when: ebs_device == ""
+
+- name: Check for existing filesystem on EBS device
+  ansible.builtin.shell: blkid -o value -s TYPE "{{ ebs_device }}"
+  register: fs_type
+  failed_when: false
+  changed_when: false
+
+- name: Format EBS device with ext4
+  ansible.builtin.command: mkfs.ext4 -F "{{ ebs_device }}"
+  when: fs_type.rc != 0 or fs_type.stdout == ""
+
+- name: Create PostgreSQL mount point
+  ansible.builtin.file:
+    path: "{{ ebs_mount_point }}"
+    state: directory
+    mode: "0755"
+
+- name: Get filesystem UUID
+  ansible.builtin.shell: blkid -o value -s UUID "{{ ebs_device }}"
+  register: fs_uuid
+  changed_when: false
+
+- name: Persist mount in /etc/fstab by UUID
+  ansible.builtin.mount:
+    path: "{{ ebs_mount_point }}"
+    src: "UUID={{ fs_uuid.stdout }}"
+    fstype: ext4
+    opts: defaults,nofail
+    state: mounted
+
+- name: Ensure PostgreSQL UID 999 owns mount point
+  ansible.builtin.file:
+    path: "{{ ebs_mount_point }}"
+    owner: 999
+    group: 999
+    mode: "0755"
+    state: directory

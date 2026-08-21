@@ -22,6 +22,8 @@ _CORE_SECRET_KEYS = (
     "JWT_SECRET",
     "API_V1_BEARER_TOKEN",
     "INTERNAL_JWT_SECRET",
+    "GRAFANA_ADMIN_PASSWORD",
+    "MAILPIT_PASSWORD",
 )
 _GENERATION_COMMENT = re.compile(
     r"^# Generated at \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2} UTC "

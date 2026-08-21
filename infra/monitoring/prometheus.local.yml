@@ -3,7 +3,7 @@ global:
   evaluation_interval: 15s
   external_labels:
     env: local
-    project: data-zoo
+    project: api-observatory
 
 rule_files:
   - /etc/prometheus/rules/*.yml
@@ -14,6 +14,12 @@ alerting:
         - targets: ['alertmanager:9093']
 
 scrape_configs:
+  # NOTE: The dashboard service (Streamlit) is intentionally NOT a scrape
+  # target. It is a metrics *consumer* — it fetches /metrics from the
+  # ingestor and parses them for display — not a metrics *exporter*.
+  # Streamlit does not natively expose a /metrics endpoint, so scraping it
+  # would always result in "down" targets and 404 errors.
+
   - job_name: prometheus
     static_configs:
       - targets: ['localhost:9090']
@@ -27,12 +33,6 @@ scrape_configs:
       - source_labels: [__address__]
         target_label: instance
         replacement: ingestor
-
-  - job_name: dashboard
-    static_configs:
-      - targets: ['dashboard:8003']
-    metrics_path: /metrics
-    scrape_interval: 30s
 
   - job_name: inference
     static_configs:

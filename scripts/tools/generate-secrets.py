@@ -8,6 +8,8 @@ By default this generates all supported local values:
 * Redis password
 * API bearer token
 * public and internal JWT signing secrets
+* Grafana admin password
+* Mailpit password
 
 The generated values are written to ``.env.generated`` in the repository root. Copy
 the secrets you want into your ``.env`` manually. The generated file is permissioned
@@ -53,6 +55,16 @@ def jwt_secret(bits: int = 512) -> str:
     return secrets.token_hex(bits // 8)
 
 
+def grafana_password(length: int = 30) -> str:
+    """Return a Grafana admin password safe for unescaped environment variables."""
+    return db_password(length)
+
+
+def mailpit_password(length: int = 30) -> str:
+    """Return a Mailpit password safe for unescaped environment variables."""
+    return db_password(length)
+
+
 def api_token(length: int = 48) -> str:
     """Return a bearer token safe for environment-variable parsing."""
     return _password(_SAFE_NO_AMBIG + "_-", length)
@@ -65,6 +77,8 @@ _SECRET_GENERATORS: dict[str, Callable[[], str]] = {
     "JWT_SECRET": jwt_secret,
     "API_V1_BEARER_TOKEN": api_token,
     "INTERNAL_JWT_SECRET": lambda: jwt_secret(384),
+    "GRAFANA_ADMIN_PASSWORD": grafana_password,
+    "MAILPIT_PASSWORD": mailpit_password,
 }
 
 
@@ -107,6 +121,16 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Generate INTERNAL_JWT_SECRET only.",
     )
+    parser.add_argument(
+        "--grafana",
+        action="store_true",
+        help="Generate GRAFANA_ADMIN_PASSWORD only.",
+    )
+    parser.add_argument(
+        "--mailpit",
+        action="store_true",
+        help="Generate MAILPIT_PASSWORD only.",
+    )
     return parser.parse_args()
 
 
@@ -118,6 +142,8 @@ def _selected_keys(args: argparse.Namespace) -> tuple[str, ...]:
         "jwt": "JWT_SECRET",
         "api_token": "API_V1_BEARER_TOKEN",
         "internal_jwt": "INTERNAL_JWT_SECRET",
+        "grafana": "GRAFANA_ADMIN_PASSWORD",
+        "mailpit": "MAILPIT_PASSWORD",
     }
     selected = tuple(env_var for flag, env_var in flags.items() if getattr(args, flag))
     if selected:

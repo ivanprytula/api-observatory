@@ -24,9 +24,7 @@ def build_ssm_payload(
     instance_id: str,
     contract_version: str,
     compose_path: Path,
-    prometheus_path: Path,
     rollout_path: Path,
-    alb_target_group_arn: str | None = None,
 ) -> dict[str, object]:
     lock = json.loads(lock_path.read_text(encoding="utf-8"))
 
@@ -41,8 +39,6 @@ def build_ssm_payload(
     profiles = lock.get("enabled_profiles", [])
     if isinstance(profiles, list):
         lines.append(f"ENABLED_PROFILES={','.join(profiles)}")
-    if alb_target_group_arn:
-        lines.append(f"ALB_TARGET_GROUP_ARN={alb_target_group_arn}")
 
     deployment_env = base64.b64encode("\n".join(lines).encode("utf-8")).decode("ascii")
 
@@ -50,10 +46,7 @@ def build_ssm_payload(
         f'test "$(head -n 1 /opt/api-observatory-mvp/.platform-contract-version)" '
         f'= "{contract_version}"'
     )
-    render = (
-        "/usr/local/sbin/api-observatory-mvp-render-env "
-        "ingestor-db ingestor dashboard cache backup"
-    )
+    render = "/usr/local/sbin/api-observatory-mvp-render-env ingestor-db ingestor cache"
     commands = [
         version_check,
         "install -d -m 0700 /opt/api-observatory-mvp/.runtime",
@@ -64,8 +57,6 @@ def build_ssm_payload(
         "chmod 0600 .runtime/deployment.env",
         f"echo {base64.b64encode(compose_path.read_bytes()).decode('ascii')} "
         "| base64 -d > docker-compose.yml",
-        f"echo {base64.b64encode(prometheus_path.read_bytes()).decode('ascii')} "
-        "| base64 -d > prometheus.yml",
         f"echo {base64.b64encode(rollout_path.read_bytes()).decode('ascii')} "
         "| base64 -d > rollout.sh",
         "chmod 0700 rollout.sh",
@@ -83,10 +74,8 @@ def main() -> int:
     parser.add_argument("--instance-id", type=str, required=True)
     parser.add_argument("--contract-version", type=str, required=True)
     parser.add_argument("--compose", type=Path, required=True)
-    parser.add_argument("--prometheus", type=Path, required=True)
     parser.add_argument("--rollout", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--alb-target-group-arn", type=str, default=None)
     args = parser.parse_args()
 
     payload = build_ssm_payload(
@@ -95,9 +84,7 @@ def main() -> int:
         args.instance_id,
         args.contract_version,
         args.compose,
-        args.prometheus,
         args.rollout,
-        args.alb_target_group_arn,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")

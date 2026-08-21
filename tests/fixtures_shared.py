@@ -228,8 +228,8 @@ def _clear_casbin() -> None:
     from services.ingestor.auth import get_casbin_enforcer
 
     enforcer = get_casbin_enforcer()
-    enforcer.remove_filtered_policy("", "", "", "")
-    enforcer.remove_filtered_grouping_policy("", "", "", "")
+    enforcer.remove_filtered_policy(0, "", "", "", "")
+    enforcer.remove_filtered_grouping_policy(0, "", "", "", "")
     enforcer.add_policy("user", "*", "*", "access")
     enforcer.add_policy("manager", "*", "*", "access")
     enforcer.add_policy("admin", "*", "*", "access")

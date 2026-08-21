@@ -25,7 +25,7 @@ from starlette.responses import JSONResponse
 from libs.platform.auth import set_security_audit_emitter
 from libs.platform.http_timeout import RequestTimeoutMiddleware
 from libs.platform.tracing import setup_tracing
-from libs.version import get_contracts_version, get_version_payload
+from libs.version import get_contracts_version, get_service_version, get_version_payload
 from services.ingestor.auth import (
     casbin_guard,
 )
@@ -36,7 +36,6 @@ from services.ingestor.core.background_workers import (
     BackgroundTaskStatus,
     BackgroundWorkerPool,
 )
-from services.ingestor.core.bootstrap import bootstrap_initial_admin, ensure_superadmin
 from services.ingestor.core.logging import set_cid, setup_logging
 from services.ingestor.core.scheduler import JobScheduler
 from services.ingestor.core.sentry import setup_sentry
@@ -216,17 +215,10 @@ async def lifespan(app: FastAPI):
     # Initialize external services (Cache, Broker, MongoDB)
     await initialize_external_services()
 
-    # Bootstrap initial admin user and global superadmin on first startup
-    # (idempotent; skip if they already exist)
-    try:
-        async with AsyncSessionLocal() as session:
-            await bootstrap_initial_admin(session)
-            await ensure_superadmin(session)
-    except Exception as exc:
-        logger.warning(
-            "initial_admin_bootstrap_failed",
-            extra={"error": str(exc)},
-        )
+    # NOTE: Initial admin + global superadmin seeding is intentionally NOT done
+    # here. It runs as a dedicated, decoupled step (`just db-init` / the sidecar
+    # `migrate` service) after migrations are applied, so the app makes no
+    # assumptions about schema existence at startup. See scripts/seed_admin.py.
 
     if notification_outbox_publisher_enabled():
         _notification_outbox_publisher_task = asyncio.create_task(
@@ -477,13 +469,6 @@ _OPENAPI_TAGS: list[dict[str, str]] = [
         ),
     },
     {
-        "name": "api-keys",
-        "description": (
-            "Tenant-aware API key lifecycle management with scoped permissions, "
-            "expiry, and revocation support."
-        ),
-    },
-    {
         "name": "abuse-detection",
         "description": (
             "Automated and manual abuse signal management. Detects noisy sources "
@@ -660,6 +645,15 @@ def _openapi_with_auth_contract() -> dict[str, Any]:
         "scheme": "bearer",
         "bearerFormat": "JWT",
     }
+    security_schemes["OAuth2Password"] = {
+        "type": "oauth2",
+        "flows": {
+            "password": {
+                "tokenUrl": "/api/v1/auth/token",
+                "scopes": {},
+            }
+        },
+    }
 
     for path, path_item in openapi_schema["paths"].items():
         if not _is_protected_v1_path(path):
@@ -667,7 +661,10 @@ def _openapi_with_auth_contract() -> dict[str, Any]:
         for operation in path_item.values():
             if not isinstance(operation, dict):
                 continue
-            operation["security"] = [{"BearerAuth": []}]
+            operation["security"] = [
+                {"BearerAuth": []},
+                {"OAuth2Password": []},
+            ]
             responses = operation.setdefault("responses", {})
             responses["401"] = deepcopy(_UNAUTHORIZED_RESPONSE)
             responses["403"] = deepcopy(_FORBIDDEN_RESPONSE)
@@ -732,7 +729,7 @@ async def readyz(db: DbDep) -> dict[str, object]:
 
     checks["websocket"] = "enabled" if settings.websocket_enabled else "disabled"
 
-    svc_version = os.getenv("SERVICE_VERSION") or settings.app_version
+    svc_version = get_service_version()
     try:
         contracts_version = get_contracts_version()
     except RuntimeError as e:

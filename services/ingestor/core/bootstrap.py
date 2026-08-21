@@ -63,7 +63,7 @@ async def bootstrap_initial_admin(session: AsyncSession) -> None:
     )
 
 
-async def ensure_superadmin(session: AsyncSession) -> None:
+async def ensure_superadmin(session: AsyncSession) -> User | None:
     """Create the reserved global superadmin if configured and absent.
 
     The superadmin is tenant-less (no Tenant/UserTenant row) and bypasses Casbin
@@ -73,15 +73,18 @@ async def ensure_superadmin(session: AsyncSession) -> None:
     Requires ``SUPERADMIN_PASSWORD`` to be set; no-op otherwise. Root authenticates
     like any user via ``/auth/token`` (argon2 hash + JWT with ``tenant_id=None``),
     so no separate credential store or setup script is required.
+
+    Returns the superadmin ``User`` if it exists (created or pre-existing), or
+    ``None`` when superadmin creation is not configured.
     """
     if not settings.superadmin_password:
-        return
+        return None
 
     subject = settings.superadmin_subject
     existing = await get_user_by_username(session, subject)
     if existing is not None:
         logger.info("ensure_superadmin_skipped", extra={"reason": "subject_exists"})
-        return
+        return existing
 
     email = settings.superadmin_email or f"{subject}@example.com"
     password_hash = _ph.hash(settings.superadmin_password)
@@ -98,9 +101,10 @@ async def ensure_superadmin(session: AsyncSession) -> None:
     except Exception as exc:
         await session.rollback()
         logger.error("ensure_superadmin_failed", extra={"error": str(exc)})
-        return
+        return None
 
     logger.info(
         "ensure_superadmin_complete",
         extra={"username": user.username, "user_id": user.id},
     )
+    return user

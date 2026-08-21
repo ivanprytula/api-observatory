@@ -101,17 +101,30 @@ def test_openapi_documents_protected_v1_auth_contract() -> None:
     """Every protected v1 operation advertises bearer auth and JSON auth errors."""
     schema = app.openapi()
     bearer_scheme = schema["components"]["securitySchemes"]["BearerAuth"]
+    oauth2_scheme = schema["components"]["securitySchemes"]["OAuth2Password"]
 
     assert bearer_scheme == {
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
     }
+    assert oauth2_scheme == {
+        "type": "oauth2",
+        "flows": {
+            "password": {
+                "tokenUrl": "/api/v1/auth/token",
+                "scopes": {},
+            }
+        },
+    }
 
     operations = _operations(schema)
     assert operations
     for operation in operations:
-        assert operation["security"] == [{"BearerAuth": []}]
+        assert operation["security"] == [
+            {"BearerAuth": []},
+            {"OAuth2Password": []},
+        ]
         for status_code in ("401", "403"):
             response = operation["responses"][status_code]
             assert response["content"]["application/json"]["schema"] == {

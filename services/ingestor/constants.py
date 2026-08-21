@@ -273,7 +273,6 @@ APP_DESCRIPTION: str = (
     "security headers, and rate limiting on sensitive endpoints.\n\n"
     "**Representative endpoints:**\n"
     "- `POST /api/v1/observations` — core observation creation w/ fixed-window rate limiting\n"
-    "- `POST /api/v1/api-keys` — issue scoped tenant API keys\n"
     "- `GET /api/v1/sources` — manage external source profiles\n"
     "- `GET /api/v1/contracts/sources/{source_id}/drift-events` — inspect\n"
     "  compatibility drift signals\n"

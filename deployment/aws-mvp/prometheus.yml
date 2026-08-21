@@ -1,8 +1,10 @@
 global: {scrape_interval: 15s}
+# NOTE: The dashboard service (Streamlit) is intentionally NOT a scrape
+# target. It is a metrics *consumer* — it fetches /metrics from the
+# ingestor and parses them for display — not a metrics *exporter*.
+# Streamlit does not natively expose a /metrics endpoint, so scraping it
+# would always result in "down" targets and 404 errors.
 scrape_configs:
   - job_name: ingestor
     metrics_path: /metrics
     static_configs: [{targets: [ingestor:8000]}]
-  - job_name: dashboard
-    metrics_path: /metrics
-    static_configs: [{targets: [dashboard:8501]}]

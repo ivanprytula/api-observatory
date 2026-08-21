@@ -79,7 +79,6 @@ jobs:
           INSTANCE_ID: ${{ vars.AWS_EC2_INSTANCE_ID_DEV }}
           REGISTRY: ${{ vars.AWS_ECR_REGISTRY }}
           CONTRACTS_VERSION: ${{ steps.contracts-version.outputs.contracts_version }}
-          ALB_TARGET_GROUP_ARN: ${{ vars.AWS_ALB_TARGET_GROUP_ARN }}
         run: |
           set -euo pipefail
           uv run python scripts/ci/deploy_ssm.py \
@@ -88,9 +87,7 @@ jobs:
             --instance-id "${INSTANCE_ID}" \
             --contract-version "${CONTRACTS_VERSION}" \
             --compose deployment/aws-mvp/docker-compose.yml \
-            --prometheus deployment/aws-mvp/prometheus.yml \
             --rollout deployment/aws-mvp/rollout.sh \
-            ${{ vars.AWS_ALB_TARGET_GROUP_ARN != '' && format('--alb-target-group-arn "{0}"', vars.AWS_ALB_TARGET_GROUP_ARN) || '' }} \
             --output "${RUNNER_TEMP}/ssm-payload.json"
 
       - name: Deploy committed desired state through SSM

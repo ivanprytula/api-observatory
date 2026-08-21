@@ -27,7 +27,7 @@ jobs:
             --extra ai --extra messaging --extra etl
 
       - name: Run deterministic composed flow
-        run: just test-full-optional
+        run: env RLS_ENABLED=true BROKER_ENABLED=true NOTIFICATIONS_ENABLED=true NOTIFICATION_DELIVERY_MODE=broker ANTHROPIC_ENABLED=false uv run --extra ai --extra messaging pytest services/ingestor/tests/integration/test_full_optional_flow.py -q
 
       - name: Run WebSocket Lab tests
         run: uv run pytest services/ingestor/tests -q -m ws_lab

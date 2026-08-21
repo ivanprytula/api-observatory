@@ -10,7 +10,7 @@
     }
   ],
   "annotations": { "list": [] },
-  "description": "Golden signals (latency, traffic, errors, saturation) for all Data Zoo services",
+  "description": "Golden signals (latency, traffic, errors, saturation) for all API Observatory services",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -308,12 +308,12 @@
   ],
   "refresh": "30s",
   "schemaVersion": 39,
-  "tags": ["data-zoo", "golden-signals", "slo"],
+  "tags": ["api-observatory", "golden-signals", "slo"],
   "templating": { "list": [] },
   "time": { "from": "now-1h", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Data Zoo — SLO Dashboard",
-  "uid": "data-zoo-slo",
+  "title": "API Observatory — SLO Dashboard",
+  "uid": "api-observatory-slo",
   "version": 1
 }
