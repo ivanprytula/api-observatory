@@ -65,3 +65,8 @@ if settings.websocket_enabled:
     from services.ingestor.api.routes import ws as ws_router
 
     api_router.include_router(ws_router.router)
+
+if settings.auth_demo_routes_enabled:
+    from services.ingestor.api.routes.observations import demo_router
+
+    api_router.include_router(demo_router)
