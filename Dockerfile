@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1.4
-FROM dhi.io/python:3.14-debian13@sha256:aa0ca597178dc1f272f15ed23a213becab317bd8c47af82694a497a51dc8cee6 AS base
+FROM dhi.io/python:3.14-debian13-dev@sha256:1977c4a9624171ef582e641eb6f67adfc3f4b3ec0cb59345876f1928cda6f698 AS base
+ENV DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-COPY --from=ghcr.io/astral-sh/uv:0.12.3 /uv /usr/local/bin/uv
+COPY --from=dhi.io/uv:debian-13-0@sha256:1ee4bf660dfd7e31bbb6eba8adb17d85dec1ff2fb3280e077067d8dc1537d472 /uv /usr/local/bin/uv
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -12,9 +13,9 @@ FROM base AS builder
 # Install system dependencies for asyncpg/postgresql
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get upgrade -y --no-install-recommends && apt-get install -y --no-install-recommends \
-    build-essential=12.12 \
-    libpq-dev=17.10-0+deb13u1 \
+    apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install deps first (better layer caching)
@@ -28,22 +29,19 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --no-dev --frozen --no-install-project --extra ai --extra tracing --extra messaging
 
 # Stage 2: Final image — slim, no build tools, non-root user
-FROM dhi.io/python:3.14-debian13@sha256:aa0ca597178dc1f272f15ed23a213becab317bd8c47af82694a497a51dc8cee6 AS runtime
+FROM dhi.io/python:3.14-debian13-dev@sha256:1977c4a9624171ef582e641eb6f67adfc3f4b3ec0cb59345876f1928cda6f698 AS runtime
+ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 
 ARG CONTRACTS_VERSION=unknown
-LABEL org.opencontainers_image.source="https://github.com/ivan-pi/rpi-api-observatory" \
-      org.opencontainers_image.licenses="MIT" \
+LABEL org.opencontainers_image.source="https://github.com/ivanprytula/api-observatory" \
+      org.opencontainers_image.licenses="Apache-2.0" \
       org.opencontainers_image.revision="${CONTRACTS_VERSION}" \
       api-observatory.contracts.version="${CONTRACTS_VERSION}"
 
-# Create non-root user for security
-RUN groupadd --gid 10001 appgroup && \
-    useradd --uid 10001 --gid appgroup --shell /bin/false --no-create-home appuser
-
 # Copy Python environment and runtime libs from builder
-COPY --from=builder --chown=appuser:appgroup /app/.venv /app/.venv
-COPY --from=builder --chown=appuser:appgroup /usr/lib/x86_64-linux-gnu/libpq* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder --chown=65532:65532 /app/.venv /app/.venv
+COPY --from=builder --chown=65532:65532 /usr/lib/x86_64-linux-gnu/libpq* /usr/lib/x86_64-linux-gnu/
 # HOME set to /tmp for Streamlit config/cache (read_only rootfs compatible)
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app" \
@@ -51,12 +49,13 @@ ENV PATH="/app/.venv/bin:$PATH" \
     HOME="/tmp"
 
 # Copy source code — most frequently changed files last for cache efficiency
-COPY --chown=appuser:appgroup libs/ ./libs/
-COPY --chown=appuser:appgroup alembic.ini ./
-COPY --chown=appuser:appgroup alembic/ ./alembic/
-COPY --chown=appuser:appgroup services/ingestor/ ./services/ingestor/
+COPY --chown=65532:65532 libs/ ./libs/
+COPY --chown=65532:65532 alembic.ini ./
+COPY --chown=65532:65532 alembic/ ./alembic/
+COPY --chown=65532:65532 services/ingestor/ ./services/ingestor/
+COPY --chown=65532:65532 scripts/seed_admin.py ./scripts/seed_admin.py
 
-USER 10001
+USER 65532
 
 # Port for FastAPI
 EXPOSE 8000

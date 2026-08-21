@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-FROM dhi.io/python:3.14-debian13@sha256:aa0ca597178dc1f272f15ed23a213becab317bd8c47af82694a497a51dc8cee6
+FROM dhi.io/python:3.14-debian13-dev@sha256:1977c4a9624171ef582e641eb6f67adfc3f4b3ec0cb59345876f1928cda6f698
 
 WORKDIR /app
 
@@ -9,12 +9,9 @@ LABEL org.opencontainers_image.source="https://github.com/ivan-pi/rpi-api-observ
       org.opencontainers_image.revision="${CONTRACTS_VERSION}" \
       api-observatory.contracts.version="${CONTRACTS_VERSION}"
 
-RUN groupadd --gid 10001 appgroup && \
-    useradd --uid 10001 --gid appgroup --shell /bin/false --no-create-home appuser
-
 COPY services/ingestor/tests/harness/test_harness_server.py /app/server.py
 
-USER appuser
+USER 65532
 
 EXPOSE 8080
 CMD ["python", "/app/server.py"]

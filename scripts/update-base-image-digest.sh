@@ -9,7 +9,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 readonly PROJECT_ROOT
 
 readonly PYTHON_IMAGE="dhi.io/python:3.14-debian13"
-readonly PGVECTOR_IMAGE="dhi.io/pgvector:0.8-pg17-debian13"
+readonly PGVECTOR_IMAGE="dhi.io/pgvector:0.8-pg17-debian13-dev"
 readonly PYTHON_DOCKERFILES=(
   "Dockerfile"
   "services/inference/Dockerfile"

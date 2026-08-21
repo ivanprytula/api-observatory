@@ -12,10 +12,20 @@ db-reset confirmation_flag="" confirmation="":
     docker compose rm -sfv ingestor ingestor-db cache || true
     docker volume rm -f api-obs-ingestor-postgres-data api-observatory_ingestor_postgres_data || true
     docker compose up -d --build --wait ingestor-db cache ingestor dashboard
-    echo "stack reset and ready — run 'just db-migrate' before using it"
+    echo "stack reset and ready — run 'just db-init' (migrate + seed admin) before using it"
 
 db-migrate:
     docker compose run --rm --no-deps ingestor alembic upgrade head
+
+# Seed the initial admin + global superadmin (idempotent; no-op if credentials
+# are unset). Decoupled from app startup — run after `db-migrate`. See
+# scripts/seed_admin.py.
+seed-admin:
+    docker compose run --rm --no-deps ingestor python scripts/seed_admin.py
+
+# Ordered pre-serving init: apply schema migrations, then seed admin accounts.
+# Chained so seed never runs against a pre-migration (empty) schema.
+db-init: db-migrate seed-admin
 
 db-backup:
     bash infra/scripts/backup.sh

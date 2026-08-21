@@ -76,7 +76,8 @@ _archive/
 .local-dev/
 learning_docs/
 examples/
-scripts/
+scripts/*
+!scripts/seed_admin.py
 bruno/
 event.json
 secrets-findings.json

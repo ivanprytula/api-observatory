@@ -51,7 +51,7 @@ dev:
 
 dev-up:
     docker compose up -d --build --wait --pull=always ingestor-db cache ingestor dashboard
-    echo "stack ready — run 'just db-migrate' before using http://127.0.0.1:8000 or http://127.0.0.1:8501"
+    echo "stack ready — run 'just db-init' (migrate + seed admin) before using http://127.0.0.1:8000 or http://127.0.0.1:8501"
 
 dev-up-cache:
     #!/usr/bin/env bash
@@ -75,7 +75,7 @@ dev-up-broker:
 
 dev-up-inference:
     docker compose --profile inference up -d --build --pull --wait ingestor-db ingestor dashboard inference-db inference
-    echo "inference stack ready — run 'just db-migrate' and 'just db-inference-migrate' before testing"
+    echo "inference stack ready — run 'just db-init' and 'just db-inference-migrate' before testing"
 
 dev-up-extended:
     #!/usr/bin/env bash
@@ -90,7 +90,7 @@ dev-up-extended:
         exit 1
     fi
     docker compose --profile cache --profile broker --profile inference up -d --build --pull --wait ingestor-db cache broker ingestor dashboard inference-db inference
-    echo "extended stack ready — run 'just db-migrate' and 'just db-inference-migrate' before testing"
+    echo "extended stack ready — run 'just db-init' and 'just db-inference-migrate' before testing"
 
 dev-up-monitoring:
     #!/usr/bin/env bash

@@ -3,22 +3,22 @@
 # removes all state after the smoke check.
 services:
   ingestor-db:
-    image: dhi.io/pgvector:0.8-pg17-debian13@sha256:d91ee73792106b6d657af8803a12670b871c8ef9bc70516d853867a53f941734
+    image: dhi.io/pgvector:0.8-pg17-debian13-dev@sha256:bebc78fa7124cf0cc1e38233d87197606aea45e288ec68841a84ae9f3300b529
     environment:
       POSTGRES_DB: api_obs_ingestor
       POSTGRES_PASSWORD: postgres
       POSTGRES_USER: postgres
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      test: ['CMD', 'pg_isready', '-U', 'postgres']
 
   inference-db:
-    image: dhi.io/pgvector:0.8-pg17-debian13@sha256:d91ee73792106b6d657af8803a12670b871c8ef9bc70516d853867a53f941734
+    image: dhi.io/pgvector:0.8-pg17-debian13-dev@sha256:bebc78fa7124cf0cc1e38233d87197606aea45e288ec68841a84ae9f3300b529
     environment:
       POSTGRES_DB: api_obs_inference
       POSTGRES_PASSWORD: postgres
       POSTGRES_USER: postgres
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      test: ['CMD', 'pg_isready', '-U', 'postgres']
 
   ingestor:
     build:

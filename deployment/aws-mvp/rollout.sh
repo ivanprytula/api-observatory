@@ -5,8 +5,6 @@ readonly COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
 readonly DEPLOYMENT_ENV_FILE="${DEPLOYMENT_ENV_FILE:-.runtime/deployment.env}"
 readonly PREVIOUS_ENV_FILE="${DEPLOYMENT_ENV_FILE}.previous"
 previous_ingestor=""
-previous_dashboard=""
-previous_inference=""
 previous_cache=""
 rollback_needed=true
 profile_args=()
@@ -39,12 +37,12 @@ current_image() { local id; id="$(compose ps -q "$1")"; [[ -z "$id" ]] || docker
 
 rollback() {
   [[ "$rollback_needed" == true ]] || return
-  if [[ -z "$previous_ingestor" || -z "$previous_dashboard" || -z "$previous_cache" || ! -r "$PREVIOUS_ENV_FILE" ]]; then
+  if [[ -z "$previous_ingestor" || -z "$previous_cache" || ! -r "$PREVIOUS_ENV_FILE" ]]; then
     compose down --remove-orphans || true
     rm -f "${DEPLOYMENT_ENV_FILE}"
     return
   fi
-  error "Restoring previous images: ingestor=${previous_ingestor}, dashboard=${previous_dashboard}, inference=${previous_inference:-not-running}, cache=${previous_cache:-not-running}"
+  error "Restoring previous images: ingestor=${previous_ingestor}, cache=${previous_cache:-not-running}"
   mv "${PREVIOUS_ENV_FILE}" "${DEPLOYMENT_ENV_FILE}"
   configure_profiles "${DEPLOYMENT_ENV_FILE}"
   compose up -d --wait --wait-timeout 120
@@ -70,27 +68,15 @@ main() {
   [[ -r "$DEPLOYMENT_ENV_FILE" ]] || { error "Missing desired-state deployment env."; exit 1; }
   configure_profiles "${DEPLOYMENT_ENV_FILE}"
   previous_ingestor="$(current_image ingestor)"
-  previous_dashboard="$(current_image dashboard)"
-  previous_inference="$(current_image inference)"
   previous_cache="$(current_image cache)"
-  if [[ -n "${ALB_TARGET_GROUP_ARN:-}" ]]; then
-    aws elbv2 deregister-targets --target-group-arn "${ALB_TARGET_GROUP_ARN}" --targets Id="$(curl -s http://169.254.169.254/latest/meta-data/instance-id)" >/dev/null 2>&1 || true
-  fi
   compose pull
   compose up -d --wait ingestor-db
   compose run --rm --no-deps ingestor alembic upgrade head
-  if profile_enabled inference; then
-    compose up -d --wait inference-db
-    compose run --rm --no-deps inference alembic upgrade head
-  fi
   compose up -d --wait --wait-timeout 120
-  wait_for_redis
-  wait_for http://127.0.0.1:8000/readyz
-  wait_for http://127.0.0.1:8501/_stcore/health
-  if profile_enabled inference; then
-    wait_for http://127.0.0.1:8001/readyz
+  if profile_enabled cache; then
+    wait_for_redis
   fi
-  compose exec -T dashboard python -c "import urllib.request; urllib.request.urlopen('http://ingestor:8000/readyz', timeout=5)"
+  wait_for http://127.0.0.1:8000/readyz
   compose exec -T ingestor python -c '
 import urllib.request
 from services.ingestor.auth import create_jwt_token
@@ -98,9 +84,6 @@ token = create_jwt_token("mvp-smoke", {"roles": ["admin"]})
 request = urllib.request.Request("http://127.0.0.1:8000/api/v1/scorecards", headers={"Authorization": f"Bearer {token}"})
 urllib.request.urlopen(request, timeout=5).close()
 '
-  if [[ -n "${ALB_TARGET_GROUP_ARN:-}" ]]; then
-    aws elbv2 register-targets --target-group-arn "${ALB_TARGET_GROUP_ARN}" --targets Id="$(curl -s http://169.254.169.254/latest/meta-data/instance-id)" >/dev/null 2>&1 || true
-  fi
   rollback_needed=false
   rm -f "$PREVIOUS_ENV_FILE"
 }
