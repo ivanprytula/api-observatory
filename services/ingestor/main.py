@@ -26,9 +26,7 @@ from libs.platform.auth import set_security_audit_emitter
 from libs.platform.http_timeout import RequestTimeoutMiddleware
 from libs.platform.tracing import setup_tracing
 from libs.version import get_contracts_version, get_service_version, get_version_payload
-from services.ingestor.auth import (
-    casbin_guard,
-)
+from services.ingestor.api.main import api_router
 from services.ingestor.cache import get_redis_client
 from services.ingestor.config import settings
 from services.ingestor.constants import APP_DESCRIPTION, HEALTH_RATE_LIMIT
@@ -67,8 +65,6 @@ from services.ingestor.notification_outbox_publisher import (
 )
 from services.ingestor.notifications import notify_background_task_failed
 from services.ingestor.rate_limiting import limiter
-from services.ingestor.rate_limiting_token_bucket import enforce_v1_token_bucket
-from services.ingestor.routers import ws as ws_router
 from services.ingestor.security.audit import emit_security_audit_event
 from services.ingestor.services_lifecycle import (
     cleanup_external_services,
@@ -550,50 +546,7 @@ if settings.otel_enabled:
         service_name=settings.otel_service_name,
     )
 
-_ROUTER_MODULES = [
-    "auth",
-    "agent",
-    "observations",
-    "analytics",
-    "background_processing",
-    "notifications",
-    "vector_search",
-    "health_ingestion_jobs",
-    "source_registry",
-    "contract_drift",
-    "insights",
-    "incidents",
-    "subscriptions",
-    "reporting",
-    "scorecards",
-    "etl",
-    "abuse_detection",
-]
-_ADMIN_PROTECTED_ROUTERS = {
-    "background_processing",
-    "health_ingestion_jobs",
-    "notifications",
-    "etl",
-}
-
-for _name in _ROUTER_MODULES:
-    try:
-        dependencies = [] if _name == "auth" else [Depends(enforce_v1_token_bucket)]
-        if _name in _ADMIN_PROTECTED_ROUTERS:
-            dependencies.append(Depends(casbin_guard("admin")))
-        app.include_router(
-            importlib.import_module(f"services.ingestor.routers.{_name}").router,
-            dependencies=dependencies,
-        )
-    except ModuleNotFoundError as exc:
-        logger.warning(
-            "router_unavailable",
-            extra={"router": _name, "missing_module": str(exc)},
-        )
-
-
-if settings.websocket_enabled:
-    app.include_router(ws_router.router)
+app.include_router(api_router)
 
 
 # ---------------------------------------------------------------------------
