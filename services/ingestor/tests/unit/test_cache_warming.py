@@ -17,7 +17,7 @@ pytestmark = pytest.mark.unit
 class WarmCall(TypedDict):
     """Captured args passed to set_observations_list during warmup."""
 
-    source: str
+    source_id: int
     skip: int
     limit: int
     size: int
@@ -50,37 +50,37 @@ async def test_warm_list_cache_populates_top_sources(
         session.add_all(
             [
                 Observation(
-                    source="alpha",
+                    source_id=1,
                     timestamp=now - timedelta(minutes=1),
                     raw_data={"n": 1},
                     tags=["a"],
                 ),
                 Observation(
-                    source="alpha",
+                    source_id=1,
                     timestamp=now - timedelta(minutes=2),
                     raw_data={"n": 2},
                     tags=["a"],
                 ),
                 Observation(
-                    source="alpha",
+                    source_id=1,
                     timestamp=now - timedelta(minutes=3),
                     raw_data={"n": 3},
                     tags=["a"],
                 ),
                 Observation(
-                    source="beta",
+                    source_id=2,
                     timestamp=now - timedelta(minutes=4),
                     raw_data={"n": 4},
                     tags=["b"],
                 ),
                 Observation(
-                    source="beta",
+                    source_id=2,
                     timestamp=now - timedelta(minutes=5),
                     raw_data={"n": 5},
                     tags=["b"],
                 ),
                 Observation(
-                    source="gamma",
+                    source_id=3,
                     timestamp=now - timedelta(minutes=6),
                     raw_data={"n": 6},
                     tags=["g"],
@@ -96,11 +96,11 @@ async def test_warm_list_cache_populates_top_sources(
     calls: list[WarmCall] = []
 
     async def fake_set_observations_list(
-        source: str, skip: int, limit: int, data: list
+        source_id: int, skip: int, limit: int, data: list
     ) -> None:
         calls.append(
             {
-                "source": source,
+                "source_id": source_id,
                 "skip": skip,
                 "limit": limit,
                 "size": len(data),
@@ -114,8 +114,8 @@ async def test_warm_list_cache_populates_top_sources(
     await _warm_list_cache()
 
     assert calls
-    assert calls[0]["source"] == "alpha"
-    assert {c["source"] for c in calls} == {"alpha", "beta", "gamma"}
+    assert calls[0]["source_id"] == 1
+    assert {c["source_id"] for c in calls} == {1, 2, 3}
     for call in calls:
         assert call["skip"] == 0
         assert call["limit"] == 100

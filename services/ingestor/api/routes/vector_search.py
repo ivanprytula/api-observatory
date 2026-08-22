@@ -25,6 +25,7 @@ from services.ingestor.constants import API_V1_PREFIX
 from services.ingestor.core.auth import casbin_guard
 from services.ingestor.core.database import get_db
 from services.ingestor.models import Observation
+from services.ingestor.repositories.source_registry import resolve_source_id_by_name
 
 
 logger = logging.getLogger(__name__)
@@ -176,7 +177,9 @@ async def index_recent_observations_for_vector_search(
     """Index a recent window of active observations for operational backfill."""
     stmt = select(Observation).where(Observation.deleted_at.is_(None))
     if payload.source is not None:
-        stmt = stmt.where(Observation.source == payload.source)
+        source_id = await resolve_source_id_by_name(db, payload.source)
+        if source_id is not None:
+            stmt = stmt.where(Observation.source_id == source_id)
 
     stmt = stmt.order_by(Observation.timestamp.desc()).limit(payload.limit)
     observations = list((await db.execute(stmt)).scalars().all())

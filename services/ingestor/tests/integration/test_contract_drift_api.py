@@ -409,7 +409,7 @@ class TestIncidentAutoCreationOnDrift:
 
         incident = (
             await db.execute(
-                select(Observation).where(Observation.source == source_name)
+                select(Observation).where(Observation.source_id == source_id)
             )
         ).scalar_one()
         assert incident.tags == ["incident", drift_event["severity"]]
@@ -458,7 +458,7 @@ class TestIncidentAutoCreationOnDrift:
 
         incident = (
             await db.execute(
-                select(Observation).where(Observation.source == source_name)
+                select(Observation).where(Observation.source_id == source_id)
             )
         ).scalar_one_or_none()
         assert incident is None

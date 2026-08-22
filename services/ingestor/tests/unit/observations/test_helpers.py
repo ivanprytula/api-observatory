@@ -278,9 +278,15 @@ class TestCreateObservationsBatchNaive:
         mock_session.refresh = AsyncMock()
         mock_session.tenant_id = None
 
-        with patch(
-            "services.ingestor.repositories.observations_crud.get_tenant_id",
-            return_value=42,
+        with (
+            patch(
+                "services.ingestor.repositories.observations_crud.get_tenant_id",
+                return_value=42,
+            ),
+            patch(
+                "services.ingestor.repositories.observations_crud._resolve_source_id",
+                return_value=1,
+            ),
         ):
             reqs = [
                 ObservationRequest(
@@ -319,9 +325,15 @@ class TestGetObservations:
 
         mock_session.execute = AsyncMock(side_effect=execute_side_effect)
 
-        with patch(
-            "services.ingestor.repositories.observations_crud.get_user_role",
-            return_value="admin",
+        with (
+            patch(
+                "services.ingestor.repositories.observations_crud.get_user_role",
+                return_value="admin",
+            ),
+            patch(
+                "services.ingestor.repositories.observations_crud._resolve_source_id",
+                return_value=1,
+            ),
         ):
             observations, total = await get_observations(
                 mock_session, skip=0, limit=10, source="api"
@@ -434,9 +446,15 @@ class TestGetObservationsByDateRange:
         start = datetime(2025, 1, 1)
         end = datetime(2025, 1, 2)
 
-        with patch(
-            "services.ingestor.repositories.observations_crud.get_user_role",
-            return_value="admin",
+        with (
+            patch(
+                "services.ingestor.repositories.observations_crud.get_user_role",
+                return_value="admin",
+            ),
+            patch(
+                "services.ingestor.repositories.observations_crud._resolve_source_id",
+                return_value=1,
+            ),
         ):
             observations = await get_observations_by_date_range(
                 mock_session, start=start, end=end, source="api"

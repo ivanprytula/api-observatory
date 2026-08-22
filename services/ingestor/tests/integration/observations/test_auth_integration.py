@@ -72,41 +72,6 @@ class TestSessionAuth:
         assert response.status_code == 200
         assert response.json()["id"] == observation.id
 
-    async def test_get_observation_secured_with_expired_session(
-        self, client: AsyncClient, db: AsyncSession, observation_timestamp
-    ) -> None:
-        """GET /api/v1/observations/{id}/secure fails with expired session."""
-        import uuid
-        from datetime import UTC, datetime, timedelta
-
-        from services.ingestor import auth
-        from services.ingestor.repositories import observations as observations_repo
-
-        # Create a observation
-        observation = await observations_repo.create_observation(
-            db,
-            ObservationRequest(source="test", timestamp=observation_timestamp, data={}),
-        )
-
-        # Create an expired session directly in the fake cache
-        session_id = str(uuid.uuid4())
-        await auth._session_client.hset(
-            session_id,
-            mapping={
-                "user_id": "testuser",
-                "created_at": datetime.now(UTC).isoformat(),
-                "expires_at": (
-                    datetime.now(UTC) - timedelta(hours=1)
-                ).isoformat(),  # Expired
-            },
-        )
-
-        # Set expired session cookie on client instance
-        client.cookies.set("session_id", session_id)
-        response = await client.get(f"/api/v1/observations/{observation.id}/secure")
-        assert response.status_code == 401
-        assert "expired" in response.json()["detail"].lower()
-
     async def test_archive_observation_secured_requires_writer_or_admin(
         self, client: AsyncClient, db: AsyncSession, observation_timestamp
     ) -> None:

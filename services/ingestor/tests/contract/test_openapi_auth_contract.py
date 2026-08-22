@@ -11,7 +11,6 @@ import schemathesis
 from hypothesis import Phase, find, settings
 from starlette_testclient import TestClient
 
-from services.ingestor import auth as ingestor_auth
 from services.ingestor.main import (
     _PUBLIC_V1_AUTH_PATHS,
     _is_protected_v1_path,
@@ -30,35 +29,11 @@ async def _contract_lifespan(_: Any) -> AsyncIterator[None]:
     yield
 
 
-async def _discard_security_audit_event(
-    *,
-    event_type: str,
-    action: str,
-    decision: str,
-    actor_type: str,
-    actor_id: str | None = None,
-    tenant_id: int | None = None,
-    reason: str | None = None,
-    resource_type: str | None = None,
-    resource_id: str | int | None = None,
-    correlation_id: str | None = None,
-    ip_address: str | None = None,
-    user_agent: str | None = None,
-    metadata_json: dict | None = None,
-) -> None:
-    """Keep denied-request audit persistence outside this HTTP contract gate."""
-
-
 @pytest.fixture(scope="module", autouse=True)
 def _isolate_application_hooks() -> Iterator[None]:
     """Keep contract-only hooks scoped to selected contract tests."""
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(app.router, "lifespan_context", _contract_lifespan)
-    monkeypatch.setattr(
-        ingestor_auth,
-        "emit_security_audit_event",
-        _discard_security_audit_event,
-    )
     try:
         yield
     finally:

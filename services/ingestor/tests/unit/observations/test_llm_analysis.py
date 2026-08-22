@@ -15,7 +15,7 @@ from services.ingestor.models import Observation
 def mock_observation():
     return Observation(
         id=1,
-        source="test-source",
+        source_id=1,
         timestamp=datetime.now(UTC).replace(tzinfo=None),
         raw_data={"key": "value"},
         tags=["test"],

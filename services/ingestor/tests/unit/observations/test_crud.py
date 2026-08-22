@@ -33,6 +33,13 @@ def _make_result(scalars_all=None, scalar_one=None):
     return result
 
 
+def _mock_resolve_source_id(return_value: int = 42):
+    return patch(
+        "services.ingestor.repositories.observations_crud._resolve_source_id",
+        return_value=return_value,
+    )
+
+
 # ---------------------------------------------------------------------------
 # create_observation
 # ---------------------------------------------------------------------------
@@ -48,9 +55,12 @@ class TestCreateObservation:
         mock_session.commit = AsyncMock()
         mock_session.refresh = AsyncMock()
 
-        with patch(
-            "services.ingestor.repositories.observations_crud.get_tenant_id",
-            return_value="tenant-1",
+        with (
+            _mock_resolve_source_id(),
+            patch(
+                "services.ingestor.repositories.observations_crud.get_tenant_id",
+                return_value="tenant-1",
+            ),
         ):
             await create_observation(
                 mock_session,
@@ -71,9 +81,12 @@ class TestCreateObservation:
         mock_session.commit = AsyncMock()
         mock_session.refresh = AsyncMock()
 
-        with patch(
-            "services.ingestor.repositories.observations_crud.get_tenant_id",
-            return_value="custom-tenant",
+        with (
+            _mock_resolve_source_id(),
+            patch(
+                "services.ingestor.repositories.observations_crud.get_tenant_id",
+                return_value="custom-tenant",
+            ),
         ):
             result = await create_observation(
                 mock_session,
@@ -118,9 +131,12 @@ class TestCreateObservationsBatch:
             for i in range(3)
         ]
 
-        with patch(
-            "services.ingestor.repositories.observations_crud.get_tenant_id",
-            return_value="tenant-1",
+        with (
+            _mock_resolve_source_id(return_value=1),
+            patch(
+                "services.ingestor.repositories.observations_crud.get_tenant_id",
+                return_value="tenant-1",
+            ),
         ):
             await create_observations_batch(mock_session, requests)
 
@@ -228,7 +244,7 @@ class TestUpdateObservation:
         mock_session = MagicMock()
         mock_observation = MagicMock(spec=Observation)
         mock_observation.id = 1
-        mock_observation.source = "old-source"
+        mock_observation.source_id = 1
         mock_observation.timestamp = "2024-01-01T00:00:00"
         mock_observation.raw_data = {"old": "data"}
         mock_observation.tags = None
@@ -237,25 +253,27 @@ class TestUpdateObservation:
         mock_session.commit = AsyncMock()
         mock_session.refresh = AsyncMock()
 
-        result = await update_observation(
-            mock_session,
-            1,
-            UpdateObservationRequest(source="new-source"),
-        )
+        with _mock_resolve_source_id(return_value=42):
+            result = await update_observation(
+                mock_session,
+                1,
+                UpdateObservationRequest(source="new-source"),
+            )
 
         assert result is mock_observation
-        assert mock_observation.source == "new-source"
+        assert mock_observation.source_id == 42
         assert mock_observation.timestamp == "2024-01-01T00:00:00"  # unchanged
 
     async def test_update_observation_not_found(self) -> None:
         mock_session = MagicMock()
         mock_session.get = AsyncMock(return_value=None)
 
-        result = await update_observation(
-            mock_session,
-            999,
-            UpdateObservationRequest(source="new-source"),
-        )
+        with _mock_resolve_source_id():
+            result = await update_observation(
+                mock_session,
+                999,
+                UpdateObservationRequest(source="new-source"),
+            )
 
         assert result is None
         mock_session.commit.assert_not_called()
@@ -265,7 +283,7 @@ class TestUpdateObservation:
         mock_session = MagicMock()
         mock_observation = MagicMock(spec=Observation)
         mock_observation.id = 1
-        mock_observation.source = "src"
+        mock_observation.source_id = 7
         mock_observation.timestamp = "2024-01-01T00:00:00"
         mock_observation.raw_data = {"key": "val"}
         mock_observation.tags = ["tag1"]
@@ -274,14 +292,15 @@ class TestUpdateObservation:
         mock_session.commit = AsyncMock()
         mock_session.refresh = AsyncMock()
 
-        await update_observation(
-            mock_session,
-            1,
-            UpdateObservationRequest(tags=["tag2", "tag3"]),
-        )
+        with _mock_resolve_source_id():
+            await update_observation(
+                mock_session,
+                1,
+                UpdateObservationRequest(tags=["tag2", "tag3"]),
+            )
 
         assert mock_observation.tags == ["tag2", "tag3"]
-        assert mock_observation.source == "src"  # unchanged
+        assert mock_observation.source_id == 7  # unchanged
 
 
 # ---------------------------------------------------------------------------
@@ -422,9 +441,12 @@ class TestUpsertObservation:
         mock_session.commit = AsyncMock()
         mock_session.refresh = AsyncMock()
 
-        with patch(
-            "services.ingestor.repositories.observations_crud.get_tenant_id",
-            return_value="tenant-1",
+        with (
+            _mock_resolve_source_id(return_value=1),
+            patch(
+                "services.ingestor.repositories.observations_crud.get_tenant_id",
+                return_value="tenant-1",
+            ),
         ):
             result, created = await upsert_observation(
                 mock_session,
@@ -449,9 +471,12 @@ class TestUpsertObservation:
         mock_session.execute = AsyncMock(return_value=_make_result(scalar_one=existing))
         mock_session.refresh = AsyncMock()
 
-        with patch(
-            "services.ingestor.repositories.observations_crud.get_tenant_id",
-            return_value="tenant-1",
+        with (
+            _mock_resolve_source_id(return_value=1),
+            patch(
+                "services.ingestor.repositories.observations_crud.get_tenant_id",
+                return_value="tenant-1",
+            ),
         ):
             result, created = await upsert_observation(
                 mock_session,

@@ -61,6 +61,7 @@ from services.ingestor.repositories.observations import (
 from services.ingestor.repositories.observations import (
     get_observation as get_observation_op,
 )
+from services.ingestor.repositories.source_registry import resolve_source_name
 
 
 logger = logging.getLogger(__name__)
@@ -155,12 +156,24 @@ async def create_observation_endpoint(
     """
     observation = await create_observation(db, body)
     observations_created_total.labels(endpoint="single").inc()
-    # Publish event after successful DB write (Observer pattern — fail-open)
+    source_name = await resolve_source_name(db, observation.source_id)
     await events.publish_observation_created(
         observation_id=observation.id,
-        payload={"source": observation.source},
+        payload={"source": source_name},
     )
-    return ObservationResponse.model_validate(observation)
+    return ObservationResponse.model_validate(
+        {
+            "id": observation.id,
+            "source": source_name,
+            "timestamp": observation.timestamp,
+            "raw_data": observation.raw_data,
+            "tags": observation.tags,
+            "processed": observation.processed,
+            "created_at": observation.created_at,
+            "updated_at": observation.updated_at,
+            "deleted_at": observation.deleted_at,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -527,9 +540,8 @@ async def analyze_observation(
         )
 
     # RAG: Search for similar observations to provide context
-    query_text = (
-        f"Source: {observation.source}, Data: {json.dumps(observation.raw_data)}"
-    )
+    source_name = await resolve_source_name(db, observation.source_id)
+    query_text = f"Source: {source_name}, Data: {json.dumps(observation.raw_data)}"
     try:
         context_results = await vs_bridge.search_observation_documents(
             query=query_text,
@@ -554,7 +566,7 @@ async def analyze_observation(
     user_prompt = (
         f"Context from similar observations:\n{context_text}\n\n"
         f"Observation to analyze:\n"
-        f"Source: {observation.source}\n"
+        f"Source: {source_name}\n"
         f"Timestamp: {observation.timestamp}\n"
         f"Data: {json.dumps(observation.raw_data)}\n"
         f"Tags: {', '.join(observation.tags)}"
@@ -609,14 +621,14 @@ async def analyze_observation_stream(
             detail="LLM analysis is disabled or OPENAI_API_KEY is missing",
         )
 
+    source_name = await resolve_source_name(db, observation.source_id)
+
     from openai import AsyncOpenAI
 
     client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     async def event_gen() -> AsyncGenerator[str]:
         try:
-            # Plan pattern: client.stream("POST", ...) or client.chat.completions.create(...)
-            # We'll use the standard completions stream
             stream = await client.chat.completions.create(
                 model=settings.openai_model,
                 messages=[
@@ -626,7 +638,7 @@ async def analyze_observation_stream(
                     },
                     {
                         "role": "user",
-                        "content": f"Source: {observation.source}, "
+                        "content": f"Source: {source_name}, "
                         f"Data: {json.dumps(observation.raw_data)}",
                     },
                 ],

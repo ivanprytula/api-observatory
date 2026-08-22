@@ -17,6 +17,16 @@ from services.ingestor.models import SourceProfile
 from services.ingestor.repositories.source_registry import validate_source_base_url
 
 
+def _build_auth_headers(profile: SourceProfile) -> dict[str, str]:
+    """Build outbound auth headers from a source profile's auth config."""
+    return build_auth_headers(
+        profile.auth_type,
+        profile.api_key,
+        profile.auth_header_name,
+        profile.auth_username,
+    )
+
+
 logger = logging.getLogger(__name__)
 
 _source_probe_breakers: dict[int, CircuitBreaker] = {}
@@ -97,12 +107,7 @@ async def run_source_probe(db: AsyncSession, source_id: int) -> dict[str, Any]:
 
     async def _do_probe_head() -> httpx.Response:
         client = await get_http_client()
-        headers = build_auth_headers(
-            profile.auth_type,
-            profile.api_key,
-            profile.auth_header_name,
-            profile.auth_username,
-        )
+        headers = _build_auth_headers(profile)
         return await client.head(
             target_url, headers=headers, timeout=SOURCE_HEALTH_TIMEOUT_SECONDS
         )
@@ -188,12 +193,7 @@ async def run_source_contract_snapshot(
 
     try:
         client = await get_http_client()
-        headers = build_auth_headers(
-            profile.auth_type,
-            profile.api_key,
-            profile.auth_header_name,
-            profile.auth_username,
-        )
+        headers = _build_auth_headers(profile)
         response = await breaker.call(
             lambda: client.get(
                 target_url, headers=headers, timeout=SOURCE_HEALTH_TIMEOUT_SECONDS

@@ -1,4 +1,4 @@
-"""Async repository for AbuseSignal persistence.
+"""Async repository for SecurityEvent persistence (abuse category).
 
 All functions follow the project convention:
 - ``db: AsyncSession`` is the **first positional** parameter
@@ -20,7 +20,7 @@ from services.ingestor.api_schemas.abuse_detection import (
     AbuseSummaryResponse,
     AbuseTopActor,
 )
-from services.ingestor.models import AbuseSignal
+from services.ingestor.models import SecurityEvent
 
 
 # ---------------------------------------------------------------------------
@@ -28,7 +28,7 @@ from services.ingestor.models import AbuseSignal
 # ---------------------------------------------------------------------------
 
 
-def _to_response(row: AbuseSignal) -> AbuseSignalResponse:
+def _to_response(row: SecurityEvent) -> AbuseSignalResponse:
     return AbuseSignalResponse.model_validate(row)
 
 
@@ -42,8 +42,9 @@ async def create_signal(
     *,
     payload: AbuseSignalCreate,
 ) -> AbuseSignalResponse:
-    """Persist a new AbuseSignal row and return the full response schema."""
-    row = AbuseSignal(
+    """Persist a new SecurityEvent (category='abuse') and return the full response schema."""
+    row = SecurityEvent(
+        category="abuse",
         signal_type=payload.signal_type,
         actor_type=payload.actor_type,
         actor_id=payload.actor_id,
@@ -69,7 +70,12 @@ async def resolve_signal(
     notes: str | None = None,
 ) -> AbuseSignalResponse | None:
     """Mark a signal as resolved. Returns None if not found or already resolved."""
-    result = await db.execute(select(AbuseSignal).where(AbuseSignal.id == signal_id))
+    result = await db.execute(
+        select(SecurityEvent).where(
+            SecurityEvent.id == signal_id,
+            SecurityEvent.category == "abuse",
+        )
+    )
     row = result.scalar_one_or_none()
     if row is None or row.resolved_at is not None:
         return None
@@ -94,9 +100,12 @@ async def get_signal(
     tenant_id: int | None = None,
 ) -> AbuseSignalResponse | None:
     """Return a single signal by id, optionally scoped to a tenant."""
-    stmt = select(AbuseSignal).where(AbuseSignal.id == signal_id)
+    stmt = select(SecurityEvent).where(
+        SecurityEvent.id == signal_id,
+        SecurityEvent.category == "abuse",
+    )
     if tenant_id is not None:
-        stmt = stmt.where(AbuseSignal.tenant_id == tenant_id)
+        stmt = stmt.where(SecurityEvent.tenant_id == tenant_id)
     result = await db.execute(stmt)
     row = result.scalar_one_or_none()
     return _to_response(row) if row else None
@@ -120,19 +129,19 @@ async def list_signals(
     ``tenant_id`` scopes results to a specific tenant.
     ``resolved=True`` returns only resolved signals; ``resolved=False`` open only.
     """
-    stmt = select(AbuseSignal)
+    stmt = select(SecurityEvent).where(SecurityEvent.category == "abuse")
     if tenant_id is not None:
-        stmt = stmt.where(AbuseSignal.tenant_id == tenant_id)
+        stmt = stmt.where(SecurityEvent.tenant_id == tenant_id)
     if signal_type is not None:
-        stmt = stmt.where(AbuseSignal.signal_type == signal_type)
+        stmt = stmt.where(SecurityEvent.signal_type == signal_type)
     if severity is not None:
-        stmt = stmt.where(AbuseSignal.severity == severity)
+        stmt = stmt.where(SecurityEvent.severity == severity)
     if actor_type is not None:
-        stmt = stmt.where(AbuseSignal.actor_type == actor_type)
+        stmt = stmt.where(SecurityEvent.actor_type == actor_type)
     if resolved is True:
-        stmt = stmt.where(AbuseSignal.resolved_at.isnot(None))
+        stmt = stmt.where(SecurityEvent.resolved_at.isnot(None))
     elif resolved is False:
-        stmt = stmt.where(AbuseSignal.resolved_at.is_(None))
+        stmt = stmt.where(SecurityEvent.resolved_at.is_(None))
 
     # Total count (before pagination)
     count_stmt = select(func.count()).select_from(stmt.subquery())
@@ -146,7 +155,7 @@ async def list_signals(
 
     # Paginated items, newest first
     stmt = (
-        stmt.order_by(AbuseSignal.created_at.desc())
+        stmt.order_by(SecurityEvent.created_at.desc())
         .offset(effective_offset)
         .limit(effective_page_size)
     )
@@ -163,13 +172,13 @@ async def get_summary(
 
     # Base filter
     def _base(resolved: bool):
-        stmt = select(AbuseSignal)
+        stmt = select(SecurityEvent).where(SecurityEvent.category == "abuse")
         if tenant_id is not None:
-            stmt = stmt.where(AbuseSignal.tenant_id == tenant_id)
+            stmt = stmt.where(SecurityEvent.tenant_id == tenant_id)
         if resolved:
-            stmt = stmt.where(AbuseSignal.resolved_at.isnot(None))
+            stmt = stmt.where(SecurityEvent.resolved_at.isnot(None))
         else:
-            stmt = stmt.where(AbuseSignal.resolved_at.is_(None))
+            stmt = stmt.where(SecurityEvent.resolved_at.is_(None))
         return stmt
 
     # Open count
@@ -188,12 +197,15 @@ async def get_summary(
 
     # Open count by severity
     sev_stmt = (
-        select(AbuseSignal.severity, func.count().label("cnt"))
-        .where(AbuseSignal.resolved_at.is_(None))
-        .group_by(AbuseSignal.severity)
+        select(SecurityEvent.severity, func.count().label("cnt"))
+        .where(
+            SecurityEvent.category == "abuse",
+            SecurityEvent.resolved_at.is_(None),
+        )
+        .group_by(SecurityEvent.severity)
     )
     if tenant_id is not None:
-        sev_stmt = sev_stmt.where(AbuseSignal.tenant_id == tenant_id)
+        sev_stmt = sev_stmt.where(SecurityEvent.tenant_id == tenant_id)
     sev_rows = (await db.execute(sev_stmt)).all()
     by_severity = [
         AbuseSeverityCount(severity=row.severity, count=row.cnt) for row in sev_rows
@@ -202,18 +214,21 @@ async def get_summary(
     # Top actors (by total signal count, unresolved only)
     actors_stmt = (
         select(
-            AbuseSignal.actor_type,
-            AbuseSignal.actor_id,
+            SecurityEvent.actor_type,
+            SecurityEvent.actor_id,
             func.count().label("cnt"),
-            func.max(AbuseSignal.severity).label("latest_severity"),
+            func.max(SecurityEvent.severity).label("latest_severity"),
         )
-        .where(AbuseSignal.resolved_at.is_(None))
-        .group_by(AbuseSignal.actor_type, AbuseSignal.actor_id)
+        .where(
+            SecurityEvent.category == "abuse",
+            SecurityEvent.resolved_at.is_(None),
+        )
+        .group_by(SecurityEvent.actor_type, SecurityEvent.actor_id)
         .order_by(func.count().desc())
         .limit(10)
     )
     if tenant_id is not None:
-        actors_stmt = actors_stmt.where(AbuseSignal.tenant_id == tenant_id)
+        actors_stmt = actors_stmt.where(SecurityEvent.tenant_id == tenant_id)
     actor_rows = (await db.execute(actors_stmt)).all()
     top_actors = [
         AbuseTopActor(

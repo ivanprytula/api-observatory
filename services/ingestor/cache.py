@@ -467,7 +467,7 @@ class LruObservationCache:
 
     def __repr__(self) -> str:
         return (
-            f"LruObservationCache(capacity={self._capacity}, "
+            f"{self.__class__.__name__}(capacity={self._capacity}, "
             f"size={self.size}, "
             f"hit_ratio={self.hit_ratio:.2%})"
         )

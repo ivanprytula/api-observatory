@@ -333,40 +333,6 @@ class TestMaterializedViews:
 
 
 @pytest.mark.postgresonly
-class TestObservationArchive:
-    """Verify the Phase 3A relational observation archive exists."""
-
-    async def test_observations_archive_table_exists(
-        self, postgresql_async_session: AsyncSession
-    ):
-        """Verify observations_archive partitioned table exists."""
-        result = await postgresql_async_session.execute(
-            text("""
-                SELECT EXISTS(
-                  SELECT 1 FROM information_schema.tables
-                  WHERE table_name = 'observations_archive'
-                )
-            """)
-        )
-        exists = result.scalar()
-        assert exists, "Archive table observations_archive not found"
-
-    async def test_observations_archive_has_retention_columns(
-        self, postgresql_async_session: AsyncSession
-    ):
-        """Verify the archive preserves lifecycle and retention metadata."""
-        result = await postgresql_async_session.execute(
-            text("""
-                SELECT column_name
-                FROM information_schema.columns
-                WHERE table_name = 'observations_archive'
-            """)
-        )
-        columns = {row[0] for row in result.fetchall()}
-        assert {"id", "timestamp", "deleted_at", "archived_at"} <= columns
-
-
-@pytest.mark.postgresonly
 class TestSoftDeleteColumns:
     """Verify soft-delete columns present on all expected tables."""
 

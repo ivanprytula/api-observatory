@@ -49,7 +49,7 @@ class _FakeHttpClient:
 def _build_observation() -> Observation:
     return Observation(
         id=42,
-        source="vector.example",
+        source_id=1,
         timestamp=datetime(2026, 4, 23, 12, 0, 0),
         raw_data={"summary": "semantic text", "value": 99},
         tags=["alpha", "beta"],
@@ -63,7 +63,7 @@ def test_build_observation_search_document_contains_searchable_text() -> None:
     document = vector_search.build_observation_search_document(observation)
 
     assert document["id"] == 42
-    assert "source: vector.example" in document["text"]
+    assert "source_id: 1" in document["text"]
     assert '"summary": "semantic text"' in document["text"]
     assert document["metadata"]["tags"] == ["alpha", "beta"]
 

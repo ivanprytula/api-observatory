@@ -367,3 +367,117 @@ class TestSourceHealth:
         """Health probe for a nonexistent source returns 404."""
         response = await client.get("/api/v1/sources/999999/health")
         assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/sources/{source_id}/jobs/stop & /jobs/start
+# ---------------------------------------------------------------------------
+class TestSourceJobsStopStart:
+    """POST /api/v1/sources/{source_id}/jobs/stop — pause scheduled jobs."""
+
+    async def test_stop_source_jobs_pauses_scheduled_jobs(
+        self, client: AsyncClient
+    ) -> None:
+        """Stop endpoint pauses all jobs for a source."""
+        from unittest.mock import MagicMock
+
+        from services.ingestor.api.routes.source_registry import set_scheduler
+
+        scheduler = MagicMock()
+        scheduler.running = True
+        set_scheduler(scheduler)
+
+        create_resp = await client.post("/api/v1/sources", json=_SOURCE)
+        source_id = create_resp.json()["id"]
+
+        response = await client.post(f"/api/v1/sources/{source_id}/jobs/stop")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["source_id"] == source_id
+        assert body["action"] == "stopped"
+        assert f"probe_source_{source_id}" in body["jobs"]
+        assert f"contract_snapshot_source_{source_id}" in body["jobs"]
+
+        # Verify scheduler methods were called
+        scheduler.pause_job.assert_any_call(f"probe_source_{source_id}")
+        scheduler.pause_job.assert_any_call(f"contract_snapshot_source_{source_id}")
+
+        set_scheduler(None)
+
+    async def test_start_source_jobs_resumes_scheduled_jobs(
+        self, client: AsyncClient
+    ) -> None:
+        """Start endpoint resumes all jobs for a source."""
+        from unittest.mock import MagicMock
+
+        from services.ingestor.api.routes.source_registry import set_scheduler
+
+        scheduler = MagicMock()
+        scheduler.running = True
+        set_scheduler(scheduler)
+
+        create_resp = await client.post("/api/v1/sources", json=_SOURCE)
+        source_id = create_resp.json()["id"]
+
+        response = await client.post(f"/api/v1/sources/{source_id}/jobs/start")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["source_id"] == source_id
+        assert body["action"] == "started"
+        assert f"probe_source_{source_id}" in body["jobs"]
+        assert f"contract_snapshot_source_{source_id}" in body["jobs"]
+
+        # Verify scheduler methods were called
+        scheduler.resume_job.assert_any_call(f"probe_source_{source_id}")
+        scheduler.resume_job.assert_any_call(f"contract_snapshot_source_{source_id}")
+
+        set_scheduler(None)
+
+    async def test_start_stop_idempotent(self, client: AsyncClient) -> None:
+        """Stop/start can be called multiple times and returns 200."""
+        from unittest.mock import MagicMock
+
+        from services.ingestor.api.routes.source_registry import set_scheduler
+
+        scheduler = MagicMock()
+        scheduler.running = True
+        set_scheduler(scheduler)
+
+        create_resp = await client.post("/api/v1/sources", json=_SOURCE)
+        source_id = create_resp.json()["id"]
+
+        # Stop twice
+        resp1 = await client.post(f"/api/v1/sources/{source_id}/jobs/stop")
+        resp2 = await client.post(f"/api/v1/sources/{source_id}/jobs/stop")
+        assert resp1.status_code == 200
+        assert resp2.status_code == 200
+
+        # Start twice
+        resp3 = await client.post(f"/api/v1/sources/{source_id}/jobs/start")
+        resp4 = await client.post(f"/api/v1/sources/{source_id}/jobs/start")
+        assert resp3.status_code == 200
+        assert resp4.status_code == 200
+
+        set_scheduler(None)
+
+    async def test_stop_nonexistent_source_returns_404(
+        self, client: AsyncClient
+    ) -> None:
+        """Stop for a nonexistent source returns 404."""
+        response = await client.post("/api/v1/sources/999999/jobs/stop")
+        assert response.status_code == 404
+
+    async def test_stop_when_scheduler_not_initialized_returns_503(
+        self, client: AsyncClient
+    ) -> None:
+        """Stop returns 503 when scheduler is None."""
+        from services.ingestor.api.routes.source_registry import set_scheduler
+
+        set_scheduler(None)
+
+        create_resp = await client.post("/api/v1/sources", json=_SOURCE)
+        source_id = create_resp.json()["id"]
+
+        response = await client.post(f"/api/v1/sources/{source_id}/jobs/stop")
+        assert response.status_code == 503

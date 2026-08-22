@@ -16,6 +16,7 @@ from services.ingestor.core.config import settings
 from services.ingestor.core.database import AsyncSessionLocal
 from services.ingestor.core.utils import _utcnow
 from services.ingestor.models import AgentRun
+from services.ingestor.repositories.source_registry import resolve_source_name
 
 
 if TYPE_CHECKING:
@@ -162,14 +163,15 @@ async def _build_initial_state(agent_run_id: int) -> dict[str, Any] | None:
             return None
 
         raw_data = observation.raw_data or {}
+        source_name = await resolve_source_name(session, observation.source_id)
         incident_summary = (
-            f"source={observation.source}, event_type={raw_data.get('event_type')}, "
+            f"source={source_name}, event_type={raw_data.get('event_type')}, "
             f"severity={raw_data.get('severity')}, summary={raw_data.get('summary')}"
         )
         state: AgentState = {
             "agent_run_id": agent_run.id,
             "observation_id": observation.id,
-            "source": observation.source,
+            "source": source_name,
             "incident_summary": incident_summary,
             "rule_based_severity": raw_data.get("severity", "unknown"),
             "event_type": raw_data.get("event_type", "unknown"),

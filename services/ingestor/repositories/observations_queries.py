@@ -12,6 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from services.ingestor.api_schemas.observations import EnrichedObservation
 from services.ingestor.fetch import fetch_with_retry
 from services.ingestor.models import Observation
+from services.ingestor.repositories.source_registry import (
+    resolve_source_id_by_name,
+    resolve_source_name,
+)
 
 
 def _encode_cursor(observation_id: int, timestamp: datetime) -> str:
@@ -63,7 +67,9 @@ async def get_observations_cursor_paginated(
         )
 
     if source:
-        query = query.where(Observation.source == source)
+        resolved_id = await resolve_source_id_by_name(session, source)
+        if resolved_id is not None:
+            query = query.where(Observation.source_id == resolved_id)
 
     query = query.limit(limit + 1)
     result = await session.execute(query)
@@ -96,10 +102,11 @@ async def get_observations_with_tag_counts_naive(
     data = []
     for observation in observations:
         tag_count = len(observation.tags) if observation.tags else 0
+        source_name = await resolve_source_name(session, observation.source_id)
         data.append(
             {
                 "id": observation.id,
-                "source": observation.source,
+                "source": source_name,
                 "timestamp": observation.timestamp.isoformat(),
                 "tag_count": tag_count,
             }
@@ -114,7 +121,7 @@ async def get_observations_with_tag_counts(
     query = (
         select(
             Observation.id,
-            Observation.source,
+            Observation.source_id,
             Observation.timestamp,
             Observation.tags,
         )
@@ -125,10 +132,16 @@ async def get_observations_with_tag_counts(
     result = await session.execute(query)
     rows = result.all()
 
+    # Batch-resolve source names
+    source_ids = {row.source_id for row in rows}
+    source_name_map = {
+        sid: await resolve_source_name(session, sid) for sid in source_ids
+    }
+
     return [
         {
             "id": row.id,
-            "source": row.source,
+            "source": source_name_map[row.source_id],
             "timestamp": row.timestamp.isoformat(),
             "tag_count": len(row.tags) if row.tags else 0,
         }
@@ -151,6 +164,12 @@ async def enrich_observations_concurrent(
     )
     observations_by_id: dict[int, Observation] = {
         r.id: r for r in result.scalars().all()
+    }
+
+    # Pre-resolve source names to avoid N+1 lookups inside concurrent tasks
+    source_name_map = {
+        sid: await resolve_source_name(session, sid)
+        for sid in {obs.source_id for obs in observations_by_id.values()}
     }
 
     async def enrich_one(observation_id: int) -> EnrichedObservation:
@@ -176,7 +195,7 @@ async def enrich_observations_concurrent(
                 )
                 return EnrichedObservation(
                     observation_id=observation_id,
-                    source=observation.source,
+                    source=source_name_map[observation.source_id],
                     external_title=data.get("title"),
                     external_body=data.get("body"),
                     enriched=True,
@@ -188,7 +207,7 @@ async def enrich_observations_concurrent(
                 )
                 return EnrichedObservation(
                     observation_id=observation_id,
-                    source=observation.source,
+                    source=source_name_map[observation.source_id],
                     enriched=False,
                     error=str(exc),
                 )

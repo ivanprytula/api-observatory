@@ -14,6 +14,10 @@ from services.ingestor.core.auth import casbin_guard
 from services.ingestor.core.database import get_db
 from services.ingestor.core.tenant import get_tenant_id
 from services.ingestor.models import Observation
+from services.ingestor.repositories.source_registry import (
+    resolve_source_id_by_name,
+    resolve_source_name,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -49,6 +53,12 @@ async def get_summary(
     )
     observations = result.scalars().all()
 
+    # Pre-resolve all source names to avoid N+1 lookups
+    all_source_ids = {obs.source_id for obs in observations}
+    source_name_map = {
+        sid: await resolve_source_name(db, sid) for sid in all_source_ids
+    }
+
     # Hourly bucketing in Python (dialect-agnostic — avoids date_trunc)
     hourly: dict[datetime, list[Observation]] = defaultdict(list)
     for observation in observations:
@@ -67,7 +77,7 @@ async def get_summary(
         avg_value = round(sum(values) / len(values), 4) if values else None
         min_value = min(values) if values else None
         max_value = max(values) if values else None
-        unique_sources = len({r.source for r in hour_observations})
+        unique_sources = len({source_name_map[r.source_id] for r in hour_observations})
         processed_pct = (
             round(processed_count / observation_count * 100, 2)
             if observation_count
@@ -109,13 +119,16 @@ async def get_percentile(
     Returns observations for the given source with their percentile rank
     calculated in Python to stay DB-agnostic in tests.
     """
-    result = await db.execute(
+    source_id = await resolve_source_id_by_name(db, source)
+    query = (
         select(Observation)
         .where(Observation.deleted_at.is_(None))
-        .where(Observation.source == source)
         .order_by(Observation.timestamp.desc())
         .limit(100)
     )
+    if source_id is not None:
+        query = query.where(Observation.source_id == source_id)
+    result = await db.execute(query)
     observations = result.scalars().all()
 
     total = len(observations)
@@ -171,6 +184,12 @@ async def get_top_by_source(
     )
     observations = result.scalars().all()
 
+    # Pre-resolve all source names to avoid N+1 lookups
+    all_source_ids = {obs.source_id for obs in observations}
+    source_name_map = {
+        sid: await resolve_source_name(db, sid) for sid in all_source_ids
+    }
+
     # Group and rank within each source
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for observation in observations:
@@ -179,7 +198,7 @@ async def get_top_by_source(
             if isinstance(observation.raw_data, dict)
             else None
         )
-        grouped[observation.source].append(
+        grouped[source_name_map[observation.source_id]].append(
             {
                 "id": observation.id,
                 "timestamp": observation.timestamp.isoformat(),
@@ -299,6 +318,12 @@ async def _compute_stats_from_base(
     )
     observations = result.scalars().all()
 
+    # Pre-resolve all source names to avoid N+1 lookups
+    all_source_ids = {obs.source_id for obs in observations}
+    source_name_map = {
+        sid: await resolve_source_name(db, sid) for sid in all_source_ids
+    }
+
     hourly: dict[datetime, list[Observation]] = defaultdict(list)
     for observation in observations:
         hour = observation.timestamp.replace(minute=0, second=0, microsecond=0)
@@ -317,7 +342,7 @@ async def _compute_stats_from_base(
         avg_value = round(sum(values) / len(values), 4) if values else None
         min_value = min(values) if values else None
         max_value = max(values) if values else None
-        sources = {r.source for r in hour_observations}
+        sources = {source_name_map[r.source_id] for r in hour_observations}
         processed_pct = (
             round(processed_count / observation_count * 100, 2)
             if observation_count
@@ -512,13 +537,19 @@ async def _compute_timeseries_fallback(
     )
     observations_list = result.scalars().all()
 
+    # Pre-resolve all source names to avoid N+1 lookups
+    all_source_ids = {obs.source_id for obs in observations_list}
+    source_name_map = {
+        sid: await resolve_source_name(db, sid) for sid in all_source_ids
+    }
+
     daily: dict[str, dict[str, Any]] = defaultdict(
         lambda: {"daily_count": 0, "sources": defaultdict(int)}
     )
     for observation in observations_list:
         day_key = observation.timestamp.strftime("%Y-%m-%d")
         daily[day_key]["daily_count"] += 1
-        daily[day_key]["sources"][observation.source] += 1
+        daily[day_key]["sources"][source_name_map[observation.source_id]] += 1
 
     sorted_days = sorted(daily.keys(), reverse=True)
     timeseries = []

@@ -446,7 +446,7 @@ async def create_contract_snapshot(
 
             if _requires_incident_response(event_type, severity):
                 incident = Observation(
-                    source=source.name,
+                    source_id=source.id,
                     timestamp=_utcnow(),
                     raw_data={
                         "drift_event_id": drift_event.id,

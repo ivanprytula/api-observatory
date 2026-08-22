@@ -23,6 +23,7 @@ from services.ingestor.constants import (
     SOURCE_HEALTH_UNHEALTHY_THRESHOLD_MS,
     SSRF_HTTPS_PORTS,
 )
+from services.ingestor.core.auth_headers import build_auth_headers
 from services.ingestor.core.config import settings
 from services.ingestor.models import SourceProfile, _utcnow
 
@@ -124,6 +125,10 @@ async def create_source_profile(
         latency_threshold_ms=payload.latency_threshold_ms,
         incident_failure_threshold=payload.incident_failure_threshold,
         incident_cooldown_seconds=payload.incident_cooldown_seconds,
+        auth_type=payload.auth_type,
+        api_key=payload.api_key,
+        auth_header_name=payload.auth_header_name,
+        auth_username=payload.auth_username,
     )
     db.add(profile)
     await db.commit()
@@ -179,6 +184,43 @@ async def get_source_profile(
     if not include_deleted:
         stmt = stmt.where(SourceProfile.deleted_at.is_(None))
     return (await db.execute(stmt)).scalar_one_or_none()
+
+
+async def get_source_profile_by_name(
+    db: AsyncSession, source_name: str, *, include_deleted: bool = False
+) -> SourceProfile | None:
+    """Fetch a single source profile by its unique name.
+
+    Args:
+        db: Active async database session.
+        source_name: Registry name of the source.
+
+    Returns:
+        SourceProfile if found, else None.
+    """
+    stmt = select(SourceProfile).where(SourceProfile.name == source_name)
+    if not include_deleted:
+        stmt = stmt.where(SourceProfile.deleted_at.is_(None))
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
+async def resolve_source_name(db: AsyncSession, source_id: int) -> str:
+    """Resolve a ``source_id`` to its human-readable name.
+
+    Falls back to ``f"source_{source_id}"`` when the profile is missing,
+    so callers never receive ``None``.
+    """
+    profile = await get_source_profile(db, source_id)
+    return profile.name if profile else f"source_{source_id}"
+
+
+async def resolve_source_id_by_name(db: AsyncSession, source_name: str) -> int | None:
+    """Resolve a source name to its primary key ``id``.
+
+    Returns ``None`` when the profile is not found.
+    """
+    profile = await get_source_profile_by_name(db, source_name)
+    return profile.id if profile else None
 
 
 async def update_source_profile(
@@ -256,7 +298,8 @@ async def probe_source_health(
     """Perform a live HTTP HEAD/GET probe against the source URL.
 
     Issues a HEAD request (falls back to GET on 405) and measures round-trip
-    latency. No auth headers are sent — this is a connectivity probe only.
+    latency. Auth headers are sent when the source profile is configured with
+    outbound credentials.
 
     Args:
         db: Active async database session (unused directly, kept for consistency).
@@ -270,6 +313,12 @@ async def probe_source_health(
     )
     threshold = profile.latency_threshold_ms or SOURCE_HEALTH_UNHEALTHY_THRESHOLD_MS
     start = time.perf_counter()
+    headers = build_auth_headers(
+        profile.auth_type,
+        profile.api_key,
+        profile.auth_header_name,
+        profile.auth_username,
+    )
 
     # Re-validate the target URL immediately before the outbound request.
     # This defeats DNS-rebinding: the IP space is checked again at request
@@ -293,10 +342,10 @@ async def probe_source_health(
         async with httpx.AsyncClient(
             timeout=SOURCE_HEALTH_TIMEOUT_SECONDS, follow_redirects=False
         ) as http:
-            response = await http.head(target_url)
+            response = await http.head(target_url, headers=headers)
             # Some servers reject HEAD; fall back to GET with no body read
             if response.status_code == 405:
-                response = await http.get(target_url)
+                response = await http.get(target_url, headers=headers)
     except Exception as exc:
         elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
         return SourceHealthResponse(

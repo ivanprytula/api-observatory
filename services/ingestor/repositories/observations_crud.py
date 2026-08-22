@@ -13,15 +13,27 @@ from services.ingestor.api_schemas.observations import (
 from services.ingestor.core.tenant import get_tenant_id, get_user_role
 from services.ingestor.models import (
     Observation,
+    SourceProfile,
     _utcnow,
 )
+
+
+async def _resolve_source_id(session: AsyncSession, source_name: str) -> int:
+    result = await session.execute(
+        select(SourceProfile.id).where(SourceProfile.name == source_name)
+    )
+    source_id = result.scalar_one_or_none()
+    if source_id is None:
+        raise ValueError(f"Source profile '{source_name}' not found")
+    return source_id
 
 
 async def create_observation(
     session: AsyncSession, request: ObservationRequest
 ) -> Observation:
+    source_id = await _resolve_source_id(session, request.source)
     observation = Observation(
-        source=request.source,
+        source_id=source_id,
         timestamp=request.timestamp,
         raw_data=request.data,
         tags=request.tags,
@@ -40,15 +52,16 @@ async def create_observations_batch(
     if not requests:
         return []
 
+    source_ids = [await _resolve_source_id(session, r.source) for r in requests]
     insert_data = [
         {
-            "source": r.source,
+            "source_id": sid,
             "timestamp": r.timestamp,
             "raw_data": r.data,
             "tags": r.tags,
             "tenant_id": get_tenant_id(),
         }
-        for r in requests
+        for r, sid in zip(requests, source_ids, strict=True)
     ]
 
     stmt = insert(Observation).values(insert_data).returning(Observation)
@@ -66,15 +79,16 @@ async def create_observations_batch_naive(
     if not requests:
         return []
 
+    source_ids = [await _resolve_source_id(session, r.source) for r in requests]
     observations = [
         Observation(
-            source=r.source,
+            source_id=sid,
             timestamp=r.timestamp,
             raw_data=r.data,
             tags=r.tags,
             tenant_id=get_tenant_id(),
         )
-        for r in requests
+        for r, sid in zip(requests, source_ids, strict=True)
     ]
     session.add_all(observations)
     await session.commit()
@@ -118,8 +132,9 @@ async def get_observations(
         .limit(limit)
     )
     if source:
-        count_q = count_q.where(Observation.source == source)
-        data_q = data_q.where(Observation.source == source)
+        source_id = await _resolve_source_id(session, source)
+        count_q = count_q.where(Observation.source_id == source_id)
+        data_q = data_q.where(Observation.source_id == source_id)
 
     count_q, _ = _apply_tenant_filter(count_q)
     data_q, _ = _apply_tenant_filter(data_q)
@@ -146,7 +161,8 @@ async def get_observations_by_date_range(
         .order_by(Observation.timestamp.desc(), Observation.id.desc())
     )
     if source:
-        query = query.where(Observation.source == source)
+        source_id = await _resolve_source_id(session, source)
+        query = query.where(Observation.source_id == source_id)
 
     query, _ = _apply_tenant_filter(query)
 
@@ -189,7 +205,7 @@ async def update_observation(
         return None
 
     if request.source is not None:
-        observation.source = request.source
+        observation.source_id = await _resolve_source_id(session, request.source)
     if request.timestamp is not None:
         observation.timestamp = request.timestamp
     if request.data is not None:
@@ -229,13 +245,14 @@ async def upsert_observation(
     session: AsyncSession,
     request: ObservationRequest,
 ) -> tuple[Observation, bool]:
-    """Insert a observation or return the existing one on (source, timestamp) conflict."""
+    """Insert a observation or return the existing one on (source_id, timestamp) conflict."""
     import logging
 
     logger = logging.getLogger(__name__)
 
+    source_id = await _resolve_source_id(session, request.source)
     observation = Observation(
-        source=request.source,
+        source_id=source_id,
         timestamp=request.timestamp,
         raw_data=request.data,
         tags=request.tags,
@@ -248,29 +265,29 @@ async def upsert_observation(
         await session.refresh(observation)
         logger.info(
             "upsert_created",
-            extra={"source": request.source, "timestamp": str(request.timestamp)},
+            extra={"source_id": source_id, "timestamp": str(request.timestamp)},
         )
         return observation, True
     except IntegrityError:
         await session.rollback()
         result = await session.execute(
             select(Observation).where(
-                Observation.source == request.source,
+                Observation.source_id == source_id,
                 Observation.timestamp == request.timestamp,
                 Observation.deleted_at.is_(None),
             )
         )
         existing = result.scalar_one_or_none()
         assert existing is not None, (
-            f"Unique constraint violation on (source, timestamp) but no active "
-            f"observation found for source={request.source}, timestamp={request.timestamp}. "
+            f"Unique constraint violation on (source_id, timestamp) but no active "
+            f"observation found for source_id={source_id}, timestamp={request.timestamp}. "
             f"This can only occur if the observation was soft-deleted between INSERT and "
             f"SELECT (extreme race condition)."
         )
         logger.info(
             "upsert_conflict",
             extra={
-                "source": request.source,
+                "source_id": source_id,
                 "timestamp": str(request.timestamp),
                 "existing_id": existing.id,
             },

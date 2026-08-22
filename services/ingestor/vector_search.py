@@ -36,7 +36,7 @@ def build_observation_search_document(observation: Observation) -> dict[str, Any
     tags_text = ", ".join(observation.tags) if observation.tags else ""
 
     text_parts = [
-        f"source: {observation.source}",
+        f"source_id: {observation.source_id}",
         f"timestamp: {observation.timestamp.isoformat()}",
         f"tags: {tags_text}",
         f"data: {raw_data_json}",
@@ -46,7 +46,7 @@ def build_observation_search_document(observation: Observation) -> dict[str, Any
         "id": observation.id,
         "text": "\n".join(text_parts),
         "metadata": {
-            "source": observation.source,
+            "source_id": observation.source_id,
             "timestamp": observation.timestamp.isoformat(),
             "tags": observation.tags,
             "processed": observation.processed,

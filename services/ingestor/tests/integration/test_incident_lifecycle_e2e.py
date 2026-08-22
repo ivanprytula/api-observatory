@@ -44,7 +44,7 @@ def _make_profile(
 def _failing_http_client() -> AsyncMock:
     """Mock HTTP client that always raises a connection error."""
     client = AsyncMock()
-    client.get = AsyncMock(side_effect=httpx.ConnectError("connection refused"))
+    client.head = AsyncMock(side_effect=httpx.ConnectError("connection refused"))
     return client
 
 
@@ -53,8 +53,7 @@ def _error_response_client(status_code: int = 503) -> AsyncMock:
     client = AsyncMock()
     resp = MagicMock(spec=httpx.Response)
     resp.status_code = status_code
-    resp.content = b"service unavailable"
-    client.get = AsyncMock(return_value=resp)
+    client.head = AsyncMock(return_value=resp)
     return client
 
 

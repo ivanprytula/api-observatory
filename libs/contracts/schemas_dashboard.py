@@ -120,6 +120,10 @@ class SourceProfileResponse(BaseModel):
     incident_cooldown_seconds: int = Field(
         ..., description="Notification cooldown for one active incident."
     )
+    auth_type: str = Field("none", description="Outbound auth mode.")
+    auth_header_name: str = Field(
+        "Authorization", description="Auth header name for header or bearer auth."
+    )
     created_at: datetime = Field(..., description="Registration timestamp (UTC).")
     updated_at: datetime | None = Field(None, description="Last modification (UTC).")
 

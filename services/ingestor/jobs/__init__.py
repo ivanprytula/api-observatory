@@ -25,7 +25,6 @@ from services.ingestor.jobs.queue import (
     get_job_queue,
     set_job_queue,
 )
-from services.ingestor.jobs.retention import archive_old_observations
 from services.ingestor.repositories import observations as crud
 
 
@@ -38,7 +37,6 @@ __all__ = [
     "ingest_api_single",
     "ingest_api_batch",
     "ingest_scheduled_batch_example",
-    "archive_old_observations",
     "get_ingestion_health",
     "get_http_client",
     "crud",

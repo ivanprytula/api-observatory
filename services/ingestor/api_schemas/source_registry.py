@@ -74,6 +74,25 @@ class SourceProfileCreate(BaseModel):
         le=86400,
         description="Minimum interval between notifications for one active incident.",
     )
+    auth_type: str = Field(
+        "none",
+        description="Outbound auth mode: none, bearer, header, or basic.",
+    )
+    api_key: str | None = Field(
+        None,
+        max_length=2048,
+        description="Secret value (API key, bearer token, or basic password).",
+    )
+    auth_header_name: str = Field(
+        "Authorization",
+        max_length=128,
+        description="Header name when auth_type is header or bearer.",
+    )
+    auth_username: str | None = Field(
+        None,
+        max_length=255,
+        description="Username for basic auth.",
+    )
 
     @field_validator("health_check_path")
     @classmethod
@@ -110,6 +129,16 @@ class SourceProfileUpdate(BaseModel):
     )
     incident_cooldown_seconds: int | None = Field(
         None, ge=0, le=86400, description="Updated notification cooldown."
+    )
+    auth_type: str | None = Field(None, description="Outbound auth mode.")
+    api_key: str | None = Field(
+        None, max_length=2048, description="Secret value (write-only)."
+    )
+    auth_header_name: str | None = Field(
+        None, max_length=128, description="Header name for header or bearer auth."
+    )
+    auth_username: str | None = Field(
+        None, max_length=255, description="Basic auth username (write-only)."
     )
 
     @field_validator("health_check_path")

@@ -314,3 +314,108 @@ async def source_health(source_id: int, db: DbDep, _: JwtDep) -> SourceHealthRes
         )
 
     return await probe_source_health(db, profile)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/sources/{source_id}/jobs/stop — stop scheduled jobs
+# ---------------------------------------------------------------------------
+_R503 = {
+    503: {
+        "description": "Scheduler not initialized.",
+        "content": {
+            "application/json": {"example": {"detail": "Scheduler not initialized."}}
+        },
+    }
+}
+_R403 = {
+    403: {
+        "description": "Insufficient permissions (requires manager or admin role).",
+        "content": {"application/json": {"example": {"detail": "Forbidden"}}},
+    }
+}
+
+
+@router.post(
+    "/{source_id}/jobs/stop",
+    summary="Stop all scheduled jobs for a source",
+    responses={**_R403, **_R404, **_R503},
+)
+async def stop_source_jobs(
+    source_id: int, db: DbDep, claims: ManagerAdminJwtDep
+) -> dict[str, Any]:
+    """Pause all scheduled probe and snapshot jobs for a source.
+
+    This is a runtime-only operation. After restart, active sources will
+    have their jobs re-registered automatically.
+    """
+    profile = await get_source_profile(db, source_id)
+    if profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Source not found."
+        )
+
+    if _scheduler is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Scheduler not initialized.",
+        )
+
+    probe_job_name = f"probe_source_{source_id}"
+    snapshot_job_name = f"contract_snapshot_source_{source_id}"
+    jobs = [probe_job_name, snapshot_job_name]
+
+    _scheduler.pause_job(probe_job_name)
+    _scheduler.pause_job(snapshot_job_name)
+
+    return {
+        "source_id": source_id,
+        "action": "stopped",
+        "jobs": jobs,
+        "scheduler_running": _scheduler.running,
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/sources/{source_id}/jobs/start — start scheduled jobs
+# ---------------------------------------------------------------------------
+@router.post(
+    "/{source_id}/jobs/start",
+    summary="Start all scheduled jobs for a source",
+    responses={**_R403, **_R404, **_R503},
+)
+async def start_source_jobs(
+    source_id: int, db: DbDep, claims: ManagerAdminJwtDep
+) -> dict[str, Any]:
+    """Resume (or activate) all scheduled probe and snapshot jobs for a source.
+
+    If jobs exist in the scheduler registry but were never activated into
+    the live APScheduler engine, they will be activated on resume.
+
+    This is a runtime-only operation. After restart, active sources will
+    have their jobs re-registered automatically.
+    """
+    profile = await get_source_profile(db, source_id)
+    if profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Source not found."
+        )
+
+    if _scheduler is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Scheduler not initialized.",
+        )
+
+    probe_job_name = f"probe_source_{source_id}"
+    snapshot_job_name = f"contract_snapshot_source_{source_id}"
+    jobs = [probe_job_name, snapshot_job_name]
+
+    _scheduler.resume_job(probe_job_name)
+    _scheduler.resume_job(snapshot_job_name)
+
+    return {
+        "source_id": source_id,
+        "action": "started",
+        "jobs": jobs,
+        "scheduler_running": _scheduler.running,
+    }
