@@ -89,7 +89,7 @@ flask-cors==6.0.5 ; sys_platform == 'linux'
     # via locust
 flask-login==0.6.3 ; sys_platform == 'linux'
     # via locust
-gevent==25.9.1 ; sys_platform == 'linux'
+gevent==26.8.0 ; sys_platform == 'linux'
     # via
     #   geventhttpclient
     #   locust
