@@ -300,7 +300,6 @@ class TestJobsRegistry:
         # Should have registered example jobs
         assert len(scheduler._jobs) > 0
         assert "ingest_scheduled_batch_example" in scheduler._jobs
-        assert "archive_old_observations" in scheduler._jobs
 
     def test_registered_jobs_have_correct_config(self) -> None:
         """Test that registered jobs have correct configuration."""
@@ -312,11 +311,6 @@ class TestJobsRegistry:
         assert batch_job.timeout_seconds == 300
         assert "batch" in batch_job.tags
         assert "example" in batch_job.tags
-
-        archive_job = scheduler._jobs["archive_old_observations"]
-        assert archive_job.max_retries == 2
-        assert archive_job.timeout_seconds == 600
-        assert "archive" in archive_job.tags
 
     @pytest.mark.asyncio
     async def test_register_source_probe_jobs_only_active(
@@ -436,3 +430,146 @@ class TestSchedulerIntegration:
             assert scheduler._scheduler.get_job("late_job") is not None
         finally:
             await scheduler.stop()
+
+
+# ============================================================================
+# Job Control Tests
+# ============================================================================
+
+
+class TestJobSchedulerControl:
+    """Test suite for pause/resume job control methods."""
+
+    @pytest.mark.asyncio
+    async def test_pause_job_pauses_running_job(self) -> None:
+        """Pausing a running job sets next_run_time to None."""
+        scheduler = JobScheduler()
+
+        @scheduler.job(name="controlled_job", trigger=IntervalTrigger(hours=1))
+        async def handler(db: AsyncSession) -> dict:
+            return {}
+
+        mock_session_factory = AsyncMock()
+        mock_session_factory.return_value = AsyncMock(spec=AsyncSession)
+
+        await scheduler.start(mock_session_factory)
+        try:
+            apscheduler_job = scheduler._scheduler.get_job("controlled_job")
+            assert apscheduler_job is not None
+            assert apscheduler_job.next_run_time is not None
+
+            scheduler.pause_job("controlled_job")
+
+            apscheduler_job = scheduler._scheduler.get_job("controlled_job")
+            assert apscheduler_job.next_run_time is None
+        finally:
+            await scheduler.stop()
+
+    @pytest.mark.asyncio
+    async def test_resume_job_resumes_paused_job(self) -> None:
+        """Resuming a paused job sets next_run_time to a future datetime."""
+        scheduler = JobScheduler()
+
+        @scheduler.job(name="controlled_job", trigger=IntervalTrigger(hours=1))
+        async def handler(db: AsyncSession) -> dict:
+            return {}
+
+        mock_session_factory = AsyncMock()
+        mock_session_factory.return_value = AsyncMock(spec=AsyncSession)
+
+        await scheduler.start(mock_session_factory)
+        try:
+            scheduler.pause_job("controlled_job")
+            apscheduler_job = scheduler._scheduler.get_job("controlled_job")
+            assert apscheduler_job.next_run_time is None
+
+            scheduler.resume_job("controlled_job")
+
+            apscheduler_job = scheduler._scheduler.get_job("controlled_job")
+            assert apscheduler_job.next_run_time is not None
+        finally:
+            await scheduler.stop()
+
+    @pytest.mark.asyncio
+    async def test_pause_nonexistent_job_is_noop(self) -> None:
+        """Pausing a job that was never activated is a no-op."""
+        scheduler = JobScheduler()
+
+        @scheduler.job(name="inactive_job", trigger=IntervalTrigger(hours=1))
+        async def handler(db: AsyncSession) -> dict:
+            return {}
+
+        mock_session_factory = AsyncMock()
+        mock_session_factory.return_value = AsyncMock(spec=AsyncSession)
+
+        await scheduler.start(mock_session_factory)
+        try:
+            # Job exists in self._jobs but was not activated (trigger=None check)
+            # Use a job name that doesn't exist anywhere
+            scheduler.pause_job("never_registered_job")
+        finally:
+            await scheduler.stop()
+
+    @pytest.mark.asyncio
+    async def test_resume_job_activates_unwired_job(self) -> None:
+        """Resume should activate a job that exists in self._jobs but not APScheduler."""
+        scheduler = JobScheduler()
+
+        @scheduler.job(name="unwired_job", trigger=IntervalTrigger(hours=1))
+        async def handler(db: AsyncSession) -> dict:
+            return {}
+
+        mock_session_factory = AsyncMock()
+        mock_session_factory.return_value = AsyncMock(spec=AsyncSession)
+
+        # Register job but don't start scheduler — job is in self._jobs but not APScheduler
+        assert "unwired_job" in scheduler._jobs
+        assert scheduler._scheduler.get_job("unwired_job") is None
+
+        # Now start the scheduler and manually remove the APScheduler job
+        # to simulate the "never activated" edge case
+        await scheduler.start(mock_session_factory)
+        try:
+            # Remove from APScheduler but keep in self._jobs
+            scheduler._scheduler.remove_job("unwired_job")
+            assert "unwired_job" in scheduler._jobs
+            assert scheduler._scheduler.get_job("unwired_job") is None
+
+            scheduler.resume_job("unwired_job")
+
+            apscheduler_job = scheduler._scheduler.get_job("unwired_job")
+            assert apscheduler_job is not None
+            assert apscheduler_job.next_run_time is not None
+        finally:
+            await scheduler.stop()
+
+    @pytest.mark.asyncio
+    async def test_resume_nonexistent_job_logs_warning(self) -> None:
+        """Resuming a job that doesn't exist anywhere logs a warning."""
+        scheduler = JobScheduler()
+
+        mock_session_factory = AsyncMock()
+        mock_session_factory.return_value = AsyncMock(spec=AsyncSession)
+
+        await scheduler.start(mock_session_factory)
+        try:
+            # Should not raise, just log a warning
+            scheduler.resume_job("nonexistent_job")
+            assert not scheduler.has_job("nonexistent_job")
+        finally:
+            await scheduler.stop()
+
+    def test_has_job_returns_true_for_registered_job(self) -> None:
+        """has_job returns True for registered jobs."""
+        scheduler = JobScheduler()
+
+        @scheduler.job(name="test_job", trigger=IntervalTrigger(hours=1))
+        async def handler(db: AsyncSession) -> dict:
+            return {}
+
+        assert scheduler.has_job("test_job") is True
+
+    def test_has_job_returns_false_for_unknown_job(self) -> None:
+        """has_job returns False for unknown jobs."""
+        scheduler = JobScheduler()
+        assert scheduler.has_job("unknown_job") is False

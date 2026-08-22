@@ -57,9 +57,6 @@ from services.ingestor.metrics import (  # noqa: F401 — imported to register m
     job_executions_total,
     observations_created_total,
     observations_upsert_conflicts_total,
-    retention_observations_archived_total,
-    retention_observations_deleted_total,
-    retention_runs_total,
 )
 from services.ingestor.notification_outbox_publisher import (
     notification_outbox_publisher_enabled,

@@ -55,24 +55,6 @@ def register_jobs(scheduler: JobScheduler) -> None:
         """
         return await job_handlers.ingest_scheduled_batch_example(db)
 
-    # ========================================================================
-    # Maintenance Jobs (Archive, Cleanup)
-    # ========================================================================
-
-    @scheduler.job(
-        name="archive_old_observations",
-        trigger=None,  # Disabled by default; enable with CronTrigger(hour=3, minute=0)
-        max_retries=2,
-        timeout_seconds=600,
-        tags={"archive", "maintenance"},
-    )
-    async def archive_job(db: AsyncSession) -> dict[str, Any]:
-        """Archive old observations to cold storage (Pillar 5 implementation).
-
-        Enable by setting trigger=CronTrigger(hour=3, minute=0) or similar.
-        """
-        return await job_handlers.archive_old_observations(db)
-
     logger.info(
         "jobs_registered",
         extra={

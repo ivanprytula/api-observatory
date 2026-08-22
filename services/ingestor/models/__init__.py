@@ -13,10 +13,11 @@ from services.ingestor.models.events import (
     ProcessedEvent,
 )
 from services.ingestor.models.incidents import DependencyIncident
-from services.ingestor.models.observations import Observation, ObservationArchive
-from services.ingestor.models.security import AbuseSignal, SecurityAuditEvent
+from services.ingestor.models.notifications import NotificationChannel
+from services.ingestor.models.observations import Observation
+from services.ingestor.models.security import SecurityEvent
 from services.ingestor.models.sources import ProviderHealthSample, SourceProfile
-from services.ingestor.models.tenants import Tenant, User, UserTenant
+from services.ingestor.models.tenants import Tenant, TenantConfig, User, UserTenant
 
 
 __all__ = [
@@ -27,17 +28,17 @@ __all__ = [
     "InboxConsumption",
     "NotificationDelivery",
     "Observation",
-    "ObservationArchive",
     "Tenant",
     "User",
     "UserTenant",
+    "TenantConfig",
     "SourceProfile",
     "DependencyIncident",
     "ContractSnapshot",
     "ContractBaseline",
     "DriftEvent",
     "AgentRun",
-    "AbuseSignal",
-    "SecurityAuditEvent",
+    "SecurityEvent",
     "ProviderHealthSample",
+    "NotificationChannel",
 ]

@@ -3,7 +3,6 @@
 Coverage:
 - API single/batch ingestion
 - Scheduled batch ingestion template
-- Archive job template
 - Idempotency tracking
 - Error handling and retries
 """
@@ -19,7 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from libs.platform.retry import IdempotencyKeyTracker
 from services.ingestor.api_schemas.observations import ObservationRequest
 from services.ingestor.jobs import (
-    archive_old_observations,
     ingest_api_batch,
     ingest_api_single,
     ingest_scheduled_batch_example,
@@ -256,21 +254,3 @@ class TestScheduledBatchIngestion:
             assert result["inserted"] == 1
             assert result["errors"] == 0
             assert "duration_seconds" in result
-
-
-# ============================================================================
-# Archive Job Tests
-# ============================================================================
-
-
-class TestArchiveJob:
-    @pytest.mark.asyncio
-    async def test_archive_old_observations_reports_empty_dry_run(
-        self,
-        db: AsyncSession,
-    ) -> None:
-        result = await archive_old_observations(db)
-
-        assert result["status"] == "empty"
-        assert result["archived"] == 0
-        assert result["deleted"] == 0
