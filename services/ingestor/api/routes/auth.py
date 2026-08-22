@@ -289,7 +289,7 @@ async def login(
             detail="Invalid credentials.",
         )
     try:
-        valid = _ph.verify(user.password_hash, form.password)
+        valid = _ph.verify(form.password, user.password_hash)
     except UnknownHashError:
         valid = False
     if not valid:

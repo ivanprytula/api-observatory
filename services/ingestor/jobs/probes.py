@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import time
 from datetime import UTC, datetime
@@ -11,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from libs.platform.circuit_breaker import CircuitBreaker, CircuitOpenError
 from services.ingestor.api_schemas.scorecards import HealthSampleCreate
 from services.ingestor.constants import SOURCE_HEALTH_TIMEOUT_SECONDS
+from services.ingestor.core.auth_headers import build_auth_headers
 from services.ingestor.fetch import get_http_client
 from services.ingestor.incident_lifecycle import record_health_sample
 from services.ingestor.models import SourceProfile
@@ -95,19 +95,25 @@ async def run_source_probe(db: AsyncSession, source_id: int) -> dict[str, Any]:
     start = time.monotonic()
     sampled_at = datetime.now(UTC)
 
-    async def _do_probe_get() -> httpx.Response:
+    async def _do_probe_head() -> httpx.Response:
         client = await get_http_client()
-        return await client.get(target_url, timeout=SOURCE_HEALTH_TIMEOUT_SECONDS)
+        headers = build_auth_headers(
+            profile.auth_type,
+            profile.api_key,
+            profile.auth_header_name,
+            profile.auth_username,
+        )
+        return await client.head(
+            target_url, headers=headers, timeout=SOURCE_HEALTH_TIMEOUT_SECONDS
+        )
 
     status_code: int | None = None
-    body_hash: str | None = None
     error_message: str | None = None
     is_success = False
 
     try:
-        response = await breaker.call(_do_probe_get)
+        response = await breaker.call(_do_probe_head)
         status_code = response.status_code
-        body_hash = hashlib.sha256(response.content).hexdigest()
         is_success = 200 <= response.status_code < 400
         if not is_success:
             error_message = f"upstream_status_{response.status_code}"
@@ -130,7 +136,7 @@ async def run_source_probe(db: AsyncSession, source_id: int) -> dict[str, Any]:
             latency_ms=elapsed_ms,
             is_success=is_success,
             http_status=status_code,
-            response_body_hash=body_hash,
+            response_body_hash=None,
             error_message=error_message,
             region=None,
             tenant_id=profile.tenant_id,
@@ -142,7 +148,7 @@ async def run_source_probe(db: AsyncSession, source_id: int) -> dict[str, Any]:
         "target_url": target_url,
         "status_code": status_code,
         "latency_ms": elapsed_ms,
-        "response_body_hash": body_hash,
+        "response_body_hash": None,
         "is_success": is_success,
     }
 
@@ -182,8 +188,16 @@ async def run_source_contract_snapshot(
 
     try:
         client = await get_http_client()
+        headers = build_auth_headers(
+            profile.auth_type,
+            profile.api_key,
+            profile.auth_header_name,
+            profile.auth_username,
+        )
         response = await breaker.call(
-            lambda: client.get(target_url, timeout=SOURCE_HEALTH_TIMEOUT_SECONDS)
+            lambda: client.get(
+                target_url, headers=headers, timeout=SOURCE_HEALTH_TIMEOUT_SECONDS
+            )
         )
         response.raise_for_status()
         payload = response.json()

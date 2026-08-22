@@ -130,22 +130,22 @@ async def _warm_list_cache() -> None:
 
         async with AsyncSessionLocal() as session:
             stmt = (
-                select(Observation.source, func.count(Observation.id).label("cnt"))
-                .group_by(Observation.source)
+                select(Observation.source_id, func.count(Observation.id).label("cnt"))
+                .group_by(Observation.source_id)
                 .order_by(text("cnt DESC"))
                 .limit(CACHE_WARM_TOP_N_SOURCES)
             )
             result = await session.execute(stmt)
             rows = result.all()
 
-        for source, _ in rows:
+        for source_id, _ in rows:
             try:
                 async with AsyncSessionLocal() as session:
                     from sqlalchemy import select as sa_select
 
                     observations_result = await session.execute(
                         sa_select(Observation)
-                        .where(Observation.source == source)
+                        .where(Observation.source_id == source_id)
                         .order_by(Observation.id.desc())
                         .limit(DEFAULT_PAGE_SIZE)
                     )
@@ -153,21 +153,22 @@ async def _warm_list_cache() -> None:
                     data = [
                         {
                             "id": r.id,
-                            "source": r.source,
+                            "source_id": r.source_id,
                             "timestamp": r.timestamp.isoformat(),
                         }
                         for r in page
                     ]
                     await set_observations_list(
-                        source=source, skip=0, limit=DEFAULT_PAGE_SIZE, data=data
+                        source=source_id, skip=0, limit=DEFAULT_PAGE_SIZE, data=data
                     )
                     logger.info(
-                        "cache_warm_source", extra={"source": source, "rows": len(data)}
+                        "cache_warm_source",
+                        extra={"source_id": source_id, "rows": len(data)},
                     )
             except Exception as exc:
                 logger.warning(
                     "cache_warm_source_error",
-                    extra={"source": source, "error": str(exc)},
+                    extra={"source_id": source_id, "error": str(exc)},
                 )
 
     except Exception as exc:

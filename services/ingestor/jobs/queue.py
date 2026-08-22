@@ -182,7 +182,7 @@ class PriorityJobQueue:
         return len(self._heap)
 
     def __repr__(self) -> str:
-        return f"PriorityJobQueue(size={self.size})"
+        return f"{self.__class__.__name__}(size={self.size})"
 
 
 _default_queue = PriorityJobQueue()

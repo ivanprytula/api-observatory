@@ -416,7 +416,7 @@ class BitArrayBloomFilter(UrlSeenStrategy):
 
     def __repr__(self) -> str:
         return (
-            f"BitArrayBloomFilter("
+            f"{self.__class__.__name__}("
             f"capacity={self._capacity}, fp_rate={self._fp_rate}, "
             f"m={self._m} bits, k={self._k} hashes, "
             f"fill={self.fill_ratio:.2%}, items≈{self._count})"

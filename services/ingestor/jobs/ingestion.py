@@ -9,6 +9,7 @@ from services.ingestor.api_schemas.observations import ObservationRequest
 from services.ingestor.cache import redis_lock
 from services.ingestor.models import Observation
 from services.ingestor.repositories import observations as crud
+from services.ingestor.repositories.source_registry import resolve_source_name
 
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,7 @@ async def ingest_api_single(
         "ingest_api_single_created",
         extra={
             "observation_id": observation.id,
-            "source": observation.source,
+            "source": await resolve_source_name(db, observation.source_id),
             "idempotency_key": idempotency_key,
         },
     )

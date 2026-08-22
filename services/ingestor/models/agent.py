@@ -1,6 +1,13 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Index, Integer, String
+from sqlalchemy import (
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from services.ingestor.core.database import Base
@@ -17,7 +24,9 @@ class AgentRun(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    observation_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    observation_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("observations.id", ondelete="RESTRICT"), nullable=False
+    )
     status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
     root_cause_hypothesis: Mapped[str | None] = mapped_column(
         String(2048), nullable=True
@@ -30,6 +39,6 @@ class AgentRun(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         return (
-            f"<AgentRun id={self.id} observation_id={self.observation_id} "
+            f"<{self.__class__.__name__} id={self.id} observation_id={self.observation_id} "
             f"status={self.status!r}>"
         )

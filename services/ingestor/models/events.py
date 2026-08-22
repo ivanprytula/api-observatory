@@ -5,6 +5,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    ForeignKey,
     Index,
     Integer,
     String,
@@ -13,10 +14,10 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from services.ingestor.core.database import Base
-from services.ingestor.models.base import TimestampMixin
+from services.ingestor.models.base import EventRecordMixin, TimestampMixin
 
 
-class ProcessedEvent(Base, TimestampMixin):
+class ProcessedEvent(Base, TimestampMixin, EventRecordMixin):
     """Tracks consumed Kafka events with processing state and idempotency."""
 
     __tablename__ = "processed_events"
@@ -42,10 +43,9 @@ class ProcessedEvent(Base, TimestampMixin):
         Boolean, default=False, nullable=False
     )
     dlq_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
-class OutboxEvent(Base, TimestampMixin):
+class OutboxEvent(Base, TimestampMixin, EventRecordMixin):
     """Transactional outbox event for reliable publish-after-commit workflows."""
 
     __tablename__ = "outbox_events"
@@ -68,7 +68,6 @@ class OutboxEvent(Base, TimestampMixin):
     event_type: Mapped[str] = mapped_column(String(128), nullable=False)
     payload: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
-    tenant_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     publish_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_error: Mapped[str | None] = mapped_column(String(512), nullable=True)
@@ -77,7 +76,7 @@ class OutboxEvent(Base, TimestampMixin):
     claim_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
 
-class InboxConsumption(Base, TimestampMixin):
+class InboxConsumption(Base, TimestampMixin, EventRecordMixin):
     """Inbox deduplication observation keyed by (consumer_name, message_id)."""
 
     __tablename__ = "inbox_consumptions"
@@ -113,10 +112,9 @@ class InboxConsumption(Base, TimestampMixin):
     last_error_category: Mapped[str | None] = mapped_column(String(32), nullable=True)
     last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_error_detail: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
-class NotificationDelivery(Base, TimestampMixin):
+class NotificationDelivery(Base, TimestampMixin, EventRecordMixin):
     """Durable per-channel delivery, retry, and terminal outcome state."""
 
     __tablename__ = "notification_deliveries"
@@ -155,11 +153,22 @@ class NotificationDelivery(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    inbox_consumption_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    inbox_consumption_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("inbox_consumptions.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
     message_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    incident_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    source_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    tenant_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    incident_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("dependency_incidents.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    source_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("source_profiles.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
     event_type: Mapped[str] = mapped_column(String(128), nullable=False)
     severity: Mapped[str] = mapped_column(String(32), nullable=False)
     channel: Mapped[str] = mapped_column(String(32), nullable=False)

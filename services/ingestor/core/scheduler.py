@@ -243,3 +243,51 @@ class JobScheduler:
                 apscheduler_job.next_run_time if apscheduler_job else None
             )
         return result
+
+    def has_job(self, job_name: str) -> bool:
+        """Check if a job is registered in the scheduler.
+
+        Args:
+            job_name: Name of the job.
+
+        Returns:
+            True if the job is registered.
+        """
+        return job_name in self._jobs
+
+    def pause_job(self, job_name: str) -> None:
+        """Pause a running APScheduler job.
+
+        If the job is not found in APScheduler (e.g. not yet activated),
+        this is a no-op.
+
+        Args:
+            job_name: Name of the job to pause.
+        """
+        apscheduler_job = self._scheduler.get_job(job_name)
+        if apscheduler_job is not None:
+            self._scheduler.pause_job(job_name)
+            logger.info("job_paused", extra={"job_name": job_name})
+
+    def resume_job(self, job_name: str) -> None:
+        """Resume a paused APScheduler job.
+
+        If the job is not found in self._jobs, logs a warning and returns.
+        If the job is registered but not yet activated in APScheduler,
+        activates it first.
+
+        Args:
+            job_name: Name of the job to resume.
+        """
+        job_obj = self._jobs.get(job_name)
+        if job_obj is None:
+            logger.warning("resume_job_not_found", extra={"job_name": job_name})
+            return
+
+        apscheduler_job = self._scheduler.get_job(job_name)
+        if apscheduler_job is not None:
+            self._scheduler.resume_job(job_name)
+            logger.info("job_resumed", extra={"job_name": job_name})
+        else:
+            self._activate_job(job_name, job_obj)
+            logger.info("job_activated_on_resume", extra={"job_name": job_name})

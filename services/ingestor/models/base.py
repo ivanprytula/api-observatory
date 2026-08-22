@@ -2,6 +2,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     DateTime,
+    Integer,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -23,3 +24,14 @@ class TimestampMixin:
         DateTime, default=_utcnow, onupdate=_utcnow, nullable=True
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class EventRecordMixin:
+    """Shared record-lifecycle columns for event tables.
+
+    - processed_at: NULL until the event has been fully processed
+    - tenant_id: optional tenant scoping (not all event streams require it)
+    """
+
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    tenant_id: Mapped[int | None] = mapped_column(Integer, nullable=True)

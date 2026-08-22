@@ -1,6 +1,14 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, CheckConstraint, DateTime, Index, Integer, String
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from services.ingestor.core.database import Base
@@ -28,7 +36,9 @@ class DependencyIncident(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    source_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("source_profiles.id", ondelete="RESTRICT"), nullable=False
+    )
     tenant_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     trigger_type: Mapped[str] = mapped_column(String(32), nullable=False)
     fingerprint: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -55,6 +65,6 @@ class DependencyIncident(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         return (
-            f"<DependencyIncident id={self.id} source_id={self.source_id} "
+            f"<{self.__class__.__name__} id={self.id} source_id={self.source_id} "
             f"trigger_type={self.trigger_type!r} status={self.status!r}>"
         )

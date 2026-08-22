@@ -1,6 +1,15 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, Index, Integer, String, text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from services.ingestor.core.database import Base
@@ -31,7 +40,9 @@ class SourceProfile(Base, TimestampMixin):
         Integer, default=60, nullable=False
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    tenant_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tenant_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
+    )
     latency_threshold_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
     incident_failure_threshold: Mapped[int] = mapped_column(
         Integer, default=2, nullable=False
@@ -39,9 +50,15 @@ class SourceProfile(Base, TimestampMixin):
     incident_cooldown_seconds: Mapped[int] = mapped_column(
         Integer, default=900, nullable=False
     )
+    auth_type: Mapped[str] = mapped_column(String(16), default="none", nullable=False)
+    api_key: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    auth_header_name: Mapped[str] = mapped_column(
+        String(128), default="Authorization", nullable=False
+    )
+    auth_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     def __repr__(self) -> str:
-        return f"<SourceProfile id={self.id} name={self.name!r}>"
+        return f"<{self.__class__.__name__} id={self.id} name={self.name!r}>"
 
 
 class ProviderHealthSample(Base, TimestampMixin):
@@ -56,7 +73,9 @@ class ProviderHealthSample(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    source_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("source_profiles.id", ondelete="RESTRICT"), nullable=False
+    )
     sampled_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     latency_ms: Mapped[float] = mapped_column(Float, nullable=False)
     is_success: Mapped[bool] = mapped_column(Boolean, nullable=False)
@@ -64,10 +83,12 @@ class ProviderHealthSample(Base, TimestampMixin):
     response_body_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     error_message: Mapped[str | None] = mapped_column(String(512), nullable=True)
     region: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    tenant_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tenant_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
+    )
 
     def __repr__(self) -> str:
         return (
-            f"<ProviderHealthSample id={self.id} source_id={self.source_id} "
+            f"<{self.__class__.__name__} id={self.id} source_id={self.source_id} "
             f"sampled_at={self.sampled_at!r} success={self.is_success}>"
         )

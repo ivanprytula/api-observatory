@@ -5,6 +5,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     Float,
+    ForeignKey,
     Index,
     Integer,
     String,
@@ -27,7 +28,9 @@ class ContractSnapshot(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    source_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("source_profiles.id", ondelete="RESTRICT"), nullable=False
+    )
     schema_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     payload_schema: Mapped[dict] = mapped_column(JSON, nullable=False)
     schema_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -38,7 +41,7 @@ class ContractSnapshot(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         return (
-            f"<ContractSnapshot id={self.id} source_id={self.source_id} "
+            f"<{self.__class__.__name__} id={self.id} source_id={self.source_id} "
             f"fingerprint={self.schema_fingerprint[:8]}...>"
         )
 
@@ -64,11 +67,19 @@ class ContractBaseline(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    source_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    tenant_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    baseline_snapshot_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("source_profiles.id", ondelete="RESTRICT"), nullable=False
+    )
+    tenant_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
+    )
+    baseline_snapshot_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("contract_snapshots.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
     promoted_from_baseline_id: Mapped[int | None] = mapped_column(
-        Integer, nullable=True
+        Integer, ForeignKey("contract_baselines.id", ondelete="SET NULL"), nullable=True
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
@@ -80,14 +91,18 @@ class ContractBaseline(Base, TimestampMixin):
     acceptance_note: Mapped[str | None] = mapped_column(String(512), nullable=True)
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    candidate_snapshot_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    candidate_snapshot_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("contract_snapshots.id", ondelete="RESTRICT"), nullable=True
+    )
     candidate_schema_fingerprint: Mapped[str | None] = mapped_column(
         String(64), nullable=True
     )
     candidate_observation_count: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False
     )
-    candidate_drift_event_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    candidate_drift_event_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("drift_events.id", ondelete="RESTRICT"), nullable=True
+    )
     candidate_first_seen_at: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True
     )
@@ -97,7 +112,7 @@ class ContractBaseline(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         return (
-            f"<ContractBaseline id={self.id} source_id={self.source_id} "
+            f"<{self.__class__.__name__} id={self.id} source_id={self.source_id} "
             f"version={self.version} status={self.status!r}>"
         )
 
@@ -114,9 +129,19 @@ class DriftEvent(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    source_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    previous_snapshot_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    current_snapshot_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("source_profiles.id", ondelete="RESTRICT"), nullable=False
+    )
+    previous_snapshot_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("contract_snapshots.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    current_snapshot_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("contract_snapshots.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
     event_type: Mapped[str] = mapped_column(String(32), nullable=False)
     severity: Mapped[str] = mapped_column(String(32), nullable=False)
     added_fields: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
@@ -129,6 +154,6 @@ class DriftEvent(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         return (
-            f"<DriftEvent id={self.id} source_id={self.source_id} "
+            f"<{self.__class__.__name__} id={self.id} source_id={self.source_id} "
             f"event_type={self.event_type!r} severity={self.severity!r}>"
         )

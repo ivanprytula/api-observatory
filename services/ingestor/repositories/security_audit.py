@@ -1,4 +1,4 @@
-"""Append-only persistence for security audit events."""
+"""Append-only persistence for security audit events (SecurityEvent category='audit')."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.ingestor.models import SecurityAuditEvent, _utcnow
+from services.ingestor.models import SecurityEvent, _utcnow
 
 
 def _canonical_json(payload: dict) -> str:
@@ -29,7 +29,7 @@ def _compute_event_hash(
     tenant_id: int | None,
     resource_type: str | None,
     resource_id: str | None,
-    metadata_json: dict,
+    metadata: dict,
 ) -> str:
     """Compute a tamper-evident hash over event content and predecessor hash."""
     message = "|".join(
@@ -44,7 +44,7 @@ def _compute_event_hash(
             str(tenant_id) if tenant_id is not None else "",
             resource_type or "",
             resource_id or "",
-            _canonical_json(metadata_json),
+            _canonical_json(metadata),
         ]
     )
     return hashlib.sha256(message.encode("utf-8")).hexdigest()
@@ -66,13 +66,14 @@ async def append_security_audit_event(
     ip_address: str | None = None,
     user_agent: str | None = None,
     metadata_json: dict | None = None,
-) -> SecurityAuditEvent:
+) -> SecurityEvent:
     """Insert a security audit event and return the persisted row."""
     metadata = metadata_json or {}
 
     previous_result = await db.execute(
-        select(SecurityAuditEvent.event_hash)
-        .order_by(SecurityAuditEvent.id.desc())
+        select(SecurityEvent.event_hash)
+        .where(SecurityEvent.category == "audit")
+        .order_by(SecurityEvent.id.desc())
         .limit(1)
     )
     prev_event_hash = previous_result.scalar_one_or_none()
@@ -89,10 +90,11 @@ async def append_security_audit_event(
         tenant_id=tenant_id,
         resource_type=resource_type,
         resource_id=str(resource_id) if resource_id is not None else None,
-        metadata_json=metadata,
+        metadata=metadata,
     )
 
-    row = SecurityAuditEvent(
+    row = SecurityEvent(
+        category="audit",
         event_type=event_type,
         action=action,
         decision=decision,
@@ -105,7 +107,7 @@ async def append_security_audit_event(
         correlation_id=correlation_id,
         ip_address=ip_address,
         user_agent=user_agent,
-        metadata_json=metadata,
+        metadata=metadata,
         prev_event_hash=prev_event_hash,
         event_hash=event_hash,
         created_at=created_at,
