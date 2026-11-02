@@ -353,7 +353,7 @@ watchfiles==1.2.0 ; sys_platform == 'linux'
     # via uvicorn
 websocket-client==1.9.0 ; sys_platform == 'linux'
     # via python-socketio
-websockets==16.1 ; sys_platform == 'linux'
+websockets==17.3 ; sys_platform == 'linux'
     # via
     #   api-observatory
     #   uvicorn
