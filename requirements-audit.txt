@@ -75,7 +75,7 @@ email-validator==2.3.0 ; sys_platform == 'linux'
 fakeredis==2.37.0 ; sys_platform == 'linux'
 fastapi==0.141.1 ; sys_platform == 'linux'
     # via api-observatory
-filelock==3.32.2 ; sys_platform == 'linux'
+filelock==4.2.4 ; sys_platform == 'linux'
     # via
     #   cachecontrol
     #   python-discovery
