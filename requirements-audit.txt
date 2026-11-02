@@ -16,7 +16,7 @@ apscheduler==3.11.3 ; sys_platform == 'linux'
     # via api-observatory
 argon2-cffi==25.1.0 ; sys_platform == 'linux'
     # via api-observatory
-argon2-cffi-bindings==25.1.0 ; sys_platform == 'linux'
+argon2-cffi-bindings==26.1.0 ; sys_platform == 'linux'
     # via argon2-cffi
 asyncpg==0.31.0 ; sys_platform == 'linux'
     # via api-observatory
